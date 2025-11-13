@@ -1,0 +1,24 @@
+.axis {
+  padding: 4rem 2rem;
+  background-color: rgba(255, 255, 255, 0.05);
+  margin: 2rem 0;
+}
+
+.axis-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.axis-title {
+  color: #ffffff;
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.axis-description {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1.2rem;
+  line-height: 1.6;
+}
+
