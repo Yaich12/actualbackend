@@ -1,13 +1,15 @@
 .atlas {
-  padding: 4rem 2rem;
+  width: 100%;
+  padding: 4rem 0;
   background-color: rgba(255, 255, 255, 0.05);
   margin: 2rem 0;
 }
 
 .atlas-container {
-  max-width: 1200px;
+  max-width: 1120px;
   margin: 0 auto;
-  text-align: center;
+  padding: 0 2rem;
+  text-align: left;
 }
 
 .atlas-title {
@@ -20,5 +22,5 @@
   color: rgba(255, 255, 255, 0.9);
   font-size: 1.2rem;
   line-height: 1.6;
+  max-width: 640px;
 }
-

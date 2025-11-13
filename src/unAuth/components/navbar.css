@@ -1,43 +1,119 @@
 .navbar {
   width: 100%;
-  background-color: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  padding: 1rem 0;
-  position: sticky;
-  top: 0;
-  z-index: 100;
+  background-color: transparent;
+  padding: 1.5rem 0;
+  border-bottom: none;
 }
 
 .navbar-container {
-  max-width: 1200px;
+  max-width: 1120px;
   margin: 0 auto;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
   padding: 0 2rem;
+  width: 100%;
 }
 
 .navbar-logo {
-  font-size: 1.5rem;
-  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.75rem;
+  font-weight: 600;
   color: #ffffff;
+  text-decoration: none;
+  letter-spacing: -0.01em;
+}
+
+.navbar-logo-img {
+  height: 5.5rem;
+  width: auto;
+  display: block;
+}
+
+.navbar-logo-text {
+  display: inline-block;
+}
+
+.navbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
 }
 
 .navbar-menu {
   display: flex;
+  align-items: center;
   list-style: none;
-  gap: 2rem;
+  gap: 2.5rem;
   margin: 0;
   padding: 0;
 }
 
-.navbar-item {
+.navbar-item a {
   color: #ffffff;
-  cursor: pointer;
-  transition: opacity 0.3s ease;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: color 0.2s ease, opacity 0.2s ease;
 }
 
-.navbar-item:hover {
-  opacity: 0.8;
+.navbar-item a:hover {
+  color: rgba(255, 255, 255, 0.8);
+  opacity: 0.9;
 }
 
+.navbar-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  text-decoration: none;
+  background-color: #ffffff;
+  color: #667eea;
+  padding: 0.65rem 1.8rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.navbar-cta::after {
+  content: '\2197';
+  font-size: 0.95rem;
+}
+
+.navbar-cta:hover {
+  background-color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .navbar-container {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .navbar-right {
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.25rem;
+  }
+
+  .navbar-menu {
+    flex-wrap: wrap;
+    gap: 1.25rem;
+  }
+
+  .navbar-cta {
+    width: 100%;
+  }
+}

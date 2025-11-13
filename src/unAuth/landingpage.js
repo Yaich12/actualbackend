@@ -9,7 +9,6 @@ function LandingPage() {
   return (
     <div className="landing-page">
       <Navbar />
-      <h1 className="landing-title">Hello Landing Page</h1>
       <Atlas />
       <Axis />
       <Footer />
@@ -18,4 +17,3 @@ function LandingPage() {
 }
 
 export default LandingPage;
-

@@ -6,9 +6,9 @@
 }
 
 .footer-container {
-  max-width: 1200px;
+  max-width: 1120px;
   margin: 0 auto;
-  text-align: center;
+  text-align: left;
   padding: 0 2rem;
 }
 
@@ -17,4 +17,3 @@
   margin: 0;
   font-size: 0.9rem;
 }
-
