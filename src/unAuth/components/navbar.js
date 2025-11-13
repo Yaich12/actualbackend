@@ -2,9 +2,8 @@ import React from 'react';
 import './navbar.css';
 
 const menuItems = [
-  { label: 'Benefits', href: '#benefits' },
-  { label: 'Specifications', href: '#specifications' },
-  { label: 'How-to', href: '#how-to' },
+  { label: 'Features', href: '#benefits' },
+  { label: 'Pricing', href: '#specifications' },
   { label: 'Contact Us', href: '#contact' },
 ];
 
@@ -18,6 +17,7 @@ function Navbar() {
             alt="Selma logo"
             className="navbar-logo-img"
           />
+          <span className="navbar-logo-text">meget mere end bare et booking system</span>
         </a>
 
         <div className="navbar-right">
@@ -30,7 +30,7 @@ function Navbar() {
           </ul>
 
           <a className="navbar-cta" href="#learn-more">
-            Learn More
+            Try For Free
           </a>
         </div>
       </div>
