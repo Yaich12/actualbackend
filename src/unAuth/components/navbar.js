@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import './navbar.css';
 
 const menuItems = [
@@ -29,9 +30,9 @@ function Navbar() {
             ))}
           </ul>
 
-          <a className="navbar-cta" href="#learn-more">
+          <Link to="/booking" className="navbar-cta">
             Try For Free
-          </a>
+          </Link>
         </div>
       </div>
     </nav>
