@@ -1,0 +1,334 @@
+/* Modal Overlay */
+.addklient-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+/* Modal Container */
+.addklient-modal {
+  background-color: #ffffff;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 700px;
+  max-height: 95vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+
+/* Modal Header */
+.addklient-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.addklient-modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.addklient-close-btn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.addklient-close-btn:hover {
+  background-color: #f3f4f6;
+  color: #111827;
+}
+
+/* Form Container */
+.addklient-form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.addklient-form-section {
+  margin-bottom: 16px;
+}
+
+.addklient-form-section-half {
+  flex: 1;
+}
+
+.addklient-form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.addklient-form-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+/* Image Upload */
+.addklient-image-upload {
+  position: relative;
+}
+
+.addklient-image-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.addklient-image-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+  background-color: #f9fafb;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 80px;
+}
+
+.addklient-image-label:hover {
+  border-color: #3b82f6;
+  background-color: #eff6ff;
+}
+
+.addklient-upload-icon {
+  font-size: 32px;
+  color: #9ca3af;
+  margin-bottom: 4px;
+}
+
+.addklient-upload-text {
+  font-size: 14px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.addklient-image-preview {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.addklient-preview-img {
+  max-width: 100%;
+  max-height: 100px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+/* Input Fields */
+.addklient-input,
+.addklient-select,
+.addklient-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #111827;
+  background-color: #ffffff;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.addklient-input:focus,
+.addklient-select:focus,
+.addklient-textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.addklient-input::placeholder {
+  color: #9ca3af;
+}
+
+.addklient-input-margin-top {
+  margin-top: 8px;
+}
+
+/* Phone Input Group */
+.addklient-phone-group {
+  display: flex;
+  gap: 8px;
+}
+
+.addklient-phone-country {
+  flex: 0 0 80px;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #111827;
+  background-color: #ffffff;
+  cursor: pointer;
+}
+
+.addklient-phone-country:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.addklient-phone-input {
+  flex: 1;
+}
+
+/* Add Line Button */
+.addklient-add-line-btn {
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #3b82f6;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+
+.addklient-add-line-btn:hover {
+  color: #2563eb;
+}
+
+/* Select Dropdown */
+.addklient-select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+/* Textarea */
+.addklient-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Form Actions */
+.addklient-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.addklient-cancel-btn {
+  padding: 10px 20px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.addklient-cancel-btn:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.addklient-save-btn {
+  padding: 10px 20px;
+  border: none;
+  background-color: #3b82f6;
+  color: #ffffff;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.addklient-save-btn:hover {
+  background-color: #2563eb;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .addklient-modal-overlay {
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .addklient-modal {
+    max-width: 100%;
+    max-height: 95vh;
+    border-radius: 8px;
+  }
+
+  .addklient-form-row {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .addklient-form-section-half {
+    margin-bottom: 20px;
+  }
+}
+
+/* Scrollbar styling */
+.addklient-form::-webkit-scrollbar {
+  width: 8px;
+}
+
+.addklient-form::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.addklient-form::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.addklient-form::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+

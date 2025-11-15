@@ -2,58 +2,17 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../bookingpage.css';
 import './ydelser.css';
+import { services } from './servicesData';
+import AddNewServiceModal from './addnew/addnew';
 
 function Ydelser() {
   const navigate = useNavigate();
   const [activeNav, setActiveNav] = useState('ydelser');
   const [searchQuery, setSearchQuery] = useState('');
+  const [serviceList, setServiceList] = useState(services);
   const [selectedServices, setSelectedServices] = useState([]);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  // Dummy data
-  const [services] = useState([
-    {
-      id: 1,
-      navn: 'Eksempel på en ydelse',
-      varighed: '45 minutter',
-      pris: 10.00,
-      prisInklMoms: 12.50
-    },
-    {
-      id: 2,
-      navn: 'fodmassage',
-      varighed: '1 time',
-      pris: 500.00,
-      prisInklMoms: 625.00
-    },
-    {
-      id: 3,
-      navn: 'Konsultation',
-      varighed: '1 time',
-      pris: 600.00,
-      prisInklMoms: 750.00
-    },
-    {
-      id: 4,
-      navn: 'massage',
-      varighed: '1 time',
-      pris: 400.00,
-      prisInklMoms: 500.00
-    },
-    {
-      id: 5,
-      navn: 'Fysioterapi',
-      varighed: '30 minutter',
-      pris: 350.00,
-      prisInklMoms: 437.50
-    },
-    {
-      id: 6,
-      navn: 'Akupunktur',
-      varighed: '45 minutter',
-      pris: 450.00,
-      prisInklMoms: 562.50
-    }
-  ]);
 
   const handleNavClick = (navItem) => {
     setActiveNav(navItem);
@@ -66,7 +25,7 @@ function Ydelser() {
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedServices(services.map(s => s.id));
+      setSelectedServices(serviceList.map(s => s.id));
     } else {
       setSelectedServices([]);
     }
@@ -80,7 +39,7 @@ function Ydelser() {
     );
   };
 
-  const filteredServices = services.filter(service =>
+  const filteredServices = serviceList.filter(service =>
     service.navn.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -89,6 +48,22 @@ function Ydelser() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }).format(price);
+  };
+
+  const handleAddNewService = (formData) => {
+    const parsedPrice = parseFloat((formData.price || '').toString().replace(',', '.'));
+    const price = Number.isNaN(parsedPrice) ? 0 : parsedPrice;
+    const priceInclVat = formData.includeVat ? price : price * 1.25;
+
+    const newService = {
+      id: Date.now(),
+      navn: formData.name?.trim() || 'Ny ydelse',
+      varighed: formData.duration || '1 time',
+      pris: price,
+      prisInklMoms: priceInclVat,
+    };
+
+    setServiceList((prev) => [...prev, newService]);
   };
 
   return (
@@ -193,7 +168,11 @@ function Ydelser() {
                 <span className="sort-icon">☰</span>
                 Sorter ydelser
               </button>
-              <button className="create-service-btn">
+              <button
+                className="create-service-btn"
+                type="button"
+                onClick={() => setIsAddModalOpen(true)}
+              >
                 <span className="plus-icon">+</span>
                 Opret ny
               </button>
@@ -206,7 +185,7 @@ function Ydelser() {
               <input 
                 type="checkbox" 
                 id="select-all"
-                checked={selectedServices.length === services.length && services.length > 0}
+                checked={selectedServices.length === serviceList.length && serviceList.length > 0}
                 onChange={handleSelectAll}
               />
               <label htmlFor="select-all" className="select-all-label">
@@ -264,9 +243,13 @@ function Ydelser() {
           </div>
         </div>
       </div>
+      <AddNewServiceModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSubmit={handleAddNewService}
+      />
     </div>
   );
 }
 
 export default Ydelser;
-

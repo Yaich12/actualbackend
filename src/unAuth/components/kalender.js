@@ -11,7 +11,7 @@ function Axis() {
           <div className="axis-visual">
             <div className="axis-app-preview">
               <div className="axis-app-header">
-                <div className="axis-app-logo">terapeutbooking</div>
+                <div className="axis-app-logo"></div>
                 <div className="axis-app-nav">
                   <span className="axis-nav-item">Kalendere</span>
                   <span className="axis-nav-item">måned</span>

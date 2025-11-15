@@ -9,14 +9,14 @@ import './App.css';
 function App() {
   return (
     <Router>
-      <div className="app-container">
+    <div className="app-container">
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/booking" element={<BookingPage />} />
           <Route path="/booking/klienter" element={<Klientoversigt />} />
           <Route path="/booking/ydelser" element={<Ydelser />} />
         </Routes>
-      </div>
+    </div>
     </Router>
   );
 }

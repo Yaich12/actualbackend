@@ -2,65 +2,18 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../bookingpage.css';
 import './klientoversigt.css';
+import { clients as initialClients } from './clientsData';
+import AddKlient from './addklient/addklient';
 
 function Klientoversigt() {
   const navigate = useNavigate();
+  const [clients, setClients] = useState(initialClients);
   const [activeNav, setActiveNav] = useState('klienter');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortColumn, setSortColumn] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
+  const [showAddClient, setShowAddClient] = useState(false);
 
-  // Dummy data
-  const [clients] = useState([
-    {
-      id: 1,
-      navn: 'Jonas Yaich',
-      status: 'Aktiv',
-      email: 'Jona223j@gmail.com',
-      telefon: '',
-      cpr: '',
-      adresse: 'Rugmarken 6',
-      by: 'Rødekro',
-      postnummer: '6230',
-      land: 'Denmark'
-    },
-    {
-      id: 2,
-      navn: 'Anna Hansen',
-      status: 'Aktiv',
-      email: 'anna.hansen@email.com',
-      telefon: '+45 12 34 56 78',
-      cpr: '010190-1234',
-      adresse: 'Hovedgaden 42',
-      by: 'København',
-      postnummer: '2100',
-      land: 'Denmark'
-    },
-    {
-      id: 3,
-      navn: 'Peter Nielsen',
-      status: 'Inaktiv',
-      email: 'peter.n@email.com',
-      telefon: '+45 98 76 54 32',
-      cpr: '150285-5678',
-      adresse: 'Skovvej 15',
-      by: 'Aarhus',
-      postnummer: '8000',
-      land: 'Denmark'
-    },
-    {
-      id: 4,
-      navn: 'Maria Andersen',
-      status: 'Aktiv',
-      email: 'maria.a@email.com',
-      telefon: '+45 11 22 33 44',
-      cpr: '200392-9012',
-      adresse: 'Strandvejen 88',
-      by: 'Odense',
-      postnummer: '5000',
-      land: 'Denmark'
-    }
-  ]);
 
   const handleNavClick = (navItem) => {
     setActiveNav(navItem);
@@ -85,6 +38,26 @@ function Klientoversigt() {
     client.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
     client.by.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleAddClientSave = (formData) => {
+    const newClient = {
+      id: Date.now(),
+      navn: formData.navn,
+      status: 'Aktiv',
+      email: formData.email,
+      telefon: formData.telefon
+        ? `${formData.telefonLand} ${formData.telefon}`
+        : '',
+      cpr: formData.cpr,
+      adresse: formData.adresse,
+      by: formData.by,
+      postnummer: formData.postnummer,
+      land: formData.land || 'Danmark',
+    };
+
+    setClients((prev) => [...prev, newClient]);
+    setShowAddClient(false);
+  };
 
   return (
     <div className="booking-page">
@@ -193,7 +166,10 @@ function Klientoversigt() {
                 Eksporter CSV
                 <span className="dropdown-arrow">▼</span>
               </button>
-              <button className="add-client-btn">
+              <button 
+                className="add-client-btn"
+                onClick={() => setShowAddClient(true)}
+              >
                 <span className="add-icon">👤+</span>
                 Tilføj klient
               </button>
@@ -341,6 +317,14 @@ function Klientoversigt() {
           </div>
         </div>
       </div>
+
+      {/* Add Klient Modal */}
+      {showAddClient && (
+        <AddKlient
+          onClose={() => setShowAddClient(false)}
+          onSave={handleAddClientSave}
+        />
+      )}
     </div>
   );
 }
