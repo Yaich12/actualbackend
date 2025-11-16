@@ -531,6 +531,29 @@
   .booking-sidebar {
     width: 240px;
   }
+
+  .calendar-container {
+    padding: 16px;
+  }
+
+  .calendar-grid {
+    max-height: 150px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .calendar-grid::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .calendar-grid::-webkit-scrollbar-thumb {
+    background-color: rgba(17, 24, 39, 0.3);
+    border-radius: 999px;
+  }
+
+  .calendar-day-cell {
+    min-height: 90px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -542,6 +565,14 @@
     width: 100%;
     border-right: none;
     border-bottom: 1px solid #e5e7eb;
+  }
+
+  .calendar-grid {
+    max-height: 120px;
+  }
+
+  .calendar-day-cell {
+    min-height: 70px;
   }
   
   .topbar-center {
