@@ -1,0 +1,151 @@
+[debug] [2025-11-16T22:47:23.775Z] ----------------------------------------------------------------------
+[debug] [2025-11-16T22:47:23.781Z] Command:       /Users/jonasyaich/.nvm/versions/node/v24.11.0/bin/node /Users/jonasyaich/.nvm/versions/node/v24.11.0/bin/firebase emulators:start
+[debug] [2025-11-16T22:47:23.781Z] CLI Version:   14.25.0
+[debug] [2025-11-16T22:47:23.781Z] Platform:      darwin
+[debug] [2025-11-16T22:47:23.781Z] Node Version:  v24.11.0
+[debug] [2025-11-16T22:47:23.781Z] Time:          Sun Nov 16 2025 23:47:23 GMT+0100 (Central European Standard Time)
+[debug] [2025-11-16T22:47:23.781Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-11-16T22:47:23.881Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-11-16T22:47:23.881Z] > authorizing via signed-in user (jona223j@gmail.com)
+[info] i  emulators: Starting emulators: functions, hosting, extensions {"metadata":{"emulator":{"name":"hub"},"message":"Starting emulators: functions, hosting, extensions"}}
+[debug] [2025-11-16T22:47:23.883Z] Checked if tokens are valid: true, expires at: 1763335985211
+[debug] [2025-11-16T22:47:23.883Z] Checked if tokens are valid: true, expires at: 1763335985211
+[debug] [2025-11-16T22:47:23.883Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/actualbackend-3b454 [none]
+[debug] [2025-11-16T22:47:24.620Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/actualbackend-3b454 200
+[debug] [2025-11-16T22:47:24.620Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/actualbackend-3b454 {"projectNumber":"491793307002","projectId":"actualbackend-3b454","lifecycleState":"ACTIVE","name":"actualbackend","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2025-11-13T11:19:12.942491Z"}
+[debug] [2025-11-16T22:47:24.834Z] [logging] Logging Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[warn] ⚠  ui: Emulator UI unable to start on port 4000, starting on 4001 instead. {"metadata":{"emulator":{"name":"ui"},"message":"Emulator UI unable to start on port 4000, starting on 4001 instead."}}
+[warn] ⚠  hosting: Hosting Emulator unable to start on port 5000, starting on 5002 instead. {"metadata":{"emulator":{"name":"hosting"},"message":"Hosting Emulator unable to start on port 5000, starting on 5002 instead."}}
+[debug] [2025-11-16T22:47:24.834Z] [hosting] Hosting Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-11-16T22:47:24.834Z] assigned listening specs for emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4400},{"address":"::1","family":"IPv6","port":4400}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4500}],"ui":[{"address":"127.0.0.1","family":"IPv4","port":4001},{"address":"::1","family":"IPv6","port":4001}],"hosting":[{"address":"127.0.0.1","family":"IPv4","port":5002}]},"metadata":{"message":"assigned listening specs for emulators"}}
+[debug] [2025-11-16T22:47:24.836Z] Emulator locator file path: /var/folders/wb/bq3x_ckn2bzg2wkbh19vffg40000gn/T/hub-actualbackend-3b454.json
+[debug] [2025-11-16T22:47:24.837Z] [hub] writing locator at /var/folders/wb/bq3x_ckn2bzg2wkbh19vffg40000gn/T/hub-actualbackend-3b454.json
+[debug] [2025-11-16T22:47:24.839Z] [Extensions] Started Extensions emulator, this is a noop.
+[debug] [2025-11-16T22:47:24.949Z] [functions] Functions Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-11-16T22:47:24.949Z] [eventarc] Eventarc Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-11-16T22:47:24.949Z] [tasks] Cloud Tasks Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-11-16T22:47:24.949Z] late-assigned ports for functions and eventarc emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4400},{"address":"::1","family":"IPv6","port":4400}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4500}],"ui":[{"address":"127.0.0.1","family":"IPv4","port":4001},{"address":"::1","family":"IPv6","port":4001}],"hosting":[{"address":"127.0.0.1","family":"IPv4","port":5002}],"functions":[{"address":"127.0.0.1","family":"IPv4","port":5001}],"eventarc":[{"address":"127.0.0.1","family":"IPv4","port":9299}],"tasks":[{"address":"127.0.0.1","family":"IPv4","port":9499}]},"metadata":{"message":"late-assigned ports for functions and eventarc emulators"}}
+[warn] ⚠  functions: The following emulators are not running, calls to these services from the Functions emulator will affect production: apphosting, auth, firestore, database, pubsub, storage, dataconnect {"metadata":{"emulator":{"name":"functions"},"message":"The following emulators are not running, calls to these services from the Functions emulator will affect production: \u001b[1mapphosting, auth, firestore, database, pubsub, storage, dataconnect\u001b[22m"}}
+[debug] [2025-11-16T22:47:24.955Z] defaultcredentials: writing to file /Users/jonasyaich/.config/firebase/jona223j_gmail_com_application_default_credentials.json
+[debug] [2025-11-16T22:47:24.956Z] Setting GAC to /Users/jonasyaich/.config/firebase/jona223j_gmail_com_application_default_credentials.json {"metadata":{"emulator":{"name":"functions"},"message":"Setting GAC to /Users/jonasyaich/.config/firebase/jona223j_gmail_com_application_default_credentials.json"}}
+[debug] [2025-11-16T22:47:24.956Z] Checked if tokens are valid: true, expires at: 1763335985211
+[debug] [2025-11-16T22:47:24.956Z] Checked if tokens are valid: true, expires at: 1763335985211
+[debug] [2025-11-16T22:47:24.956Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454/adminSdkConfig [none]
+[debug] [2025-11-16T22:47:25.215Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454/adminSdkConfig 200
+[debug] [2025-11-16T22:47:25.215Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454/adminSdkConfig {"projectId":"actualbackend-3b454","storageBucket":"actualbackend-3b454.firebasestorage.app"}
+[debug] [2025-11-16T22:47:25.230Z] Checked if tokens are valid: true, expires at: 1763335985211
+[debug] [2025-11-16T22:47:25.230Z] Checked if tokens are valid: true, expires at: 1763335985211
+[debug] [2025-11-16T22:47:25.231Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/actualbackend-3b454/sites 
+[debug] [2025-11-16T22:47:26.062Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/actualbackend-3b454/sites 200
+[debug] [2025-11-16T22:47:26.063Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/actualbackend-3b454/sites {"sites":[{"name":"projects/actualbackend-3b454/sites/actualbackend-3b454","defaultUrl":"https://actualbackend-3b454.web.app","appId":"1:491793307002:web:0e9c4a0fbf419e40b4f2c3","type":"DEFAULT_SITE"}]}
+[debug] [2025-11-16T22:47:26.063Z] Checked if tokens are valid: true, expires at: 1763335985211
+[debug] [2025-11-16T22:47:26.063Z] Checked if tokens are valid: true, expires at: 1763335985211
+[debug] [2025-11-16T22:47:26.064Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454/webApps/1:491793307002:web:0e9c4a0fbf419e40b4f2c3/config [none]
+[debug] [2025-11-16T22:47:26.598Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454/webApps/1:491793307002:web:0e9c4a0fbf419e40b4f2c3/config 200
+[debug] [2025-11-16T22:47:26.598Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454/webApps/1:491793307002:web:0e9c4a0fbf419e40b4f2c3/config {"projectId":"actualbackend-3b454","appId":"1:491793307002:web:0e9c4a0fbf419e40b4f2c3","storageBucket":"actualbackend-3b454.firebasestorage.app","apiKey":"AIzaSyBXORQSis4xZS86kDCICfwwhU_yCJqaaLQ","authDomain":"actualbackend-3b454.firebaseapp.com","messagingSenderId":"491793307002","measurementId":"G-RY5MK2MJPF","projectNumber":"491793307002","version":"2"}
+[debug] [2025-11-16T22:47:26.612Z] Checked if tokens are valid: true, expires at: 1763335985211
+[debug] [2025-11-16T22:47:26.612Z] Checked if tokens are valid: true, expires at: 1763335985211
+[debug] [2025-11-16T22:47:26.613Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454 [none]
+[debug] [2025-11-16T22:47:26.958Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454 200
+[debug] [2025-11-16T22:47:26.959Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454 {"projectId":"actualbackend-3b454","projectNumber":"491793307002","displayName":"actualbackend","name":"projects/actualbackend-3b454","resources":{"hostingSite":"actualbackend-3b454"},"state":"ACTIVE","etag":"1_36ceda4e-8ab6-4bc9-b1ba-ed250f09862b"}
+[info] i  hosting[actualbackend-3b454]: Serving hosting files from: build {"metadata":{"emulator":{"name":"hosting"},"message":"Serving hosting files from: \u001b[1mbuild\u001b[22m"}}
+[info] ✔  hosting[actualbackend-3b454]: Local server: http://127.0.0.1:5002 {"metadata":{"emulator":{"name":"hosting"},"message":"Local server: \u001b[4m\u001b[1mhttp://127.0.0.1:5002\u001b[22m\u001b[24m"}}
+[debug] [2025-11-16T22:47:27.012Z] [Extensions] Connecting Extensions emulator, this is a noop.
+[info] i  functions: Watching "/Users/jonasyaich/Desktop/actualbackend/functions" for Cloud Functions... {"metadata":{"emulator":{"name":"functions"},"message":"Watching \"/Users/jonasyaich/Desktop/actualbackend/functions\" for Cloud Functions..."}}
+[debug] [2025-11-16T22:47:27.017Z] Customer code is not Node
+[debug] [2025-11-16T22:47:27.017Z] Validating python source
+[debug] [2025-11-16T22:47:27.017Z] Building python source
+[info] i  functions: Loaded environment variables from .env. 
+[debug] [2025-11-16T22:47:27.018Z] Could not find functions.yaml. Must use http discovery
+[debug] [2025-11-16T22:47:27.021Z] Running command with virtualenv: command=., args=["\"/Users/jonasyaich/Desktop/actualbackend/functions/venv/bin/activate\"","&&","python3.12","-c","\"import firebase_functions; import os; print(os.path.dirname(firebase_functions.__file__))\""]
+[debug] [2025-11-16T22:47:27.088Z] stdout: /Users/jonasyaich/Desktop/actualbackend/functions/venv/lib/python3.12/site-packages/firebase_functions
+
+[debug] [2025-11-16T22:47:27.091Z] Running admin server with args: ["python3.12","\"/Users/jonasyaich/Desktop/actualbackend/functions/venv/lib/python3.12/site-packages/firebase_functions/private/serving.py\""] and env: {"GCLOUD_PROJECT":"actualbackend-3b454","K_REVISION":"1","PORT":"80","GOOGLE_CLOUD_QUOTA_PROJECT":"actualbackend-3b454","FUNCTIONS_EMULATOR":"true","TZ":"UTC","FIREBASE_DEBUG_MODE":"true","FIREBASE_DEBUG_FEATURES":"{\"skipTokenVerification\":true,\"enableCors\":true}","FIREBASE_EMULATOR_HUB":"127.0.0.1:4400","CLOUD_EVENTARC_EMULATOR_HOST":"http://127.0.0.1:9299","CLOUD_TASKS_EMULATOR_HOST":"127.0.0.1:9499","FIREBASE_CONFIG":"{\"storageBucket\":\"actualbackend-3b454.firebasestorage.app\",\"projectId\":\"actualbackend-3b454\"}","GOOGLE_APPLICATION_CREDENTIALS":"/Users/jonasyaich/.config/firebase/jona223j_gmail_com_application_default_credentials.json","ADMIN_PORT":"8081"} in /Users/jonasyaich/Desktop/actualbackend/functions
+[debug] [2025-11-16T22:47:27.091Z] Running command with virtualenv: command=., args=["\"/Users/jonasyaich/Desktop/actualbackend/functions/venv/bin/activate\"","&&","python3.12","\"/Users/jonasyaich/Desktop/actualbackend/functions/venv/lib/python3.12/site-packages/firebase_functions/private/serving.py\""]
+[error]  * Tip: There are .env files present. Install python-dotenv to use them.
+
+[info]  * Serving Flask app 'serving'
+ * Debug mode: off
+
+[error] WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:8081
+
+[error] Press CTRL+C to quit
+
+[error] 127.0.0.1 - - [16/Nov/2025 22:47:27] "GET /__/functions.yaml HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Nov/2025 22:47:27] "GET /__/functions.yaml HTTP/1.1" 200 -
+
+[debug] [2025-11-16T22:47:27.604Z] Got response from /__/functions.yaml endpoints:
+  transcribe_audio:
+    availableMemoryMb: null
+    concurrency: null
+    cpu: gcf_gen1
+    entryPoint: transcribe_audio
+    httpsTrigger: {}
+    ingressSettings: null
+    labels: {}
+    maxInstances: 10
+    minInstances: null
+    platform: gcfv2
+    secretEnvironmentVariables: []
+    serviceAccountEmail: null
+    timeoutSeconds: null
+params: []
+requiredAPIs: []
+specVersion: v1alpha1
+
+[error] 127.0.0.1 - - [16/Nov/2025 22:47:27] "GET /__/quitquitquit HTTP/1.1" 200 -
+
+[error] INFO:werkzeug:127.0.0.1 - - [16/Nov/2025 22:47:27] "GET /__/quitquitquit HTTP/1.1" 200 -
+
+[error] /bin/sh: line 1: 39816 Terminated: 15          python3.12 "/Users/jonasyaich/Desktop/actualbackend/functions/venv/lib/python3.12/site-packages/firebase_functions/private/serving.py"
+
+[info] ✔  functions: Loaded functions definitions from source: transcribe_audio. {"metadata":{"emulator":{"name":"functions"},"message":"Loaded functions definitions from source: transcribe_audio."}}
+[info] ✔  functions[us-central1-transcribe_audio]: http function initialized (http://127.0.0.1:5001/actualbackend-3b454/us-central1/transcribe_audio). {"metadata":{"emulator":{"name":"functions"},"message":"\u001b[1mhttp\u001b[22m function initialized (http://127.0.0.1:5001/actualbackend-3b454/us-central1/transcribe_audio)."}}
+[debug] [2025-11-16T22:47:27.616Z] Could not find VSCode notification endpoint: FetchError: request to http://localhost:40001/vscode/notify failed, reason: . If you are not running the Firebase Data Connect VSCode extension, this is expected and not an issue.
+[info] 
+┌─────────────────────────────────────────────────────────────┐
+│ ✔  All emulators ready! It is now safe to connect your app. │
+│ i  View Emulator UI at http://127.0.0.1:4001/               │
+└─────────────────────────────────────────────────────────────┘
+
+┌────────────┬────────────────┬──────────────────────────────────┐
+│ Emulator   │ Host:Port      │ View in Emulator UI              │
+├────────────┼────────────────┼──────────────────────────────────┤
+│ Functions  │ 127.0.0.1:5001 │ http://127.0.0.1:4001/functions  │
+├────────────┼────────────────┼──────────────────────────────────┤
+│ Hosting    │ 127.0.0.1:5002 │ n/a                              │
+├────────────┼────────────────┼──────────────────────────────────┤
+│ Extensions │ 127.0.0.1:5001 │ http://127.0.0.1:4001/extensions │
+└────────────┴────────────────┴──────────────────────────────────┘
+  Emulator Hub host: 127.0.0.1 port: 4400
+  Other reserved ports: 4500
+┌─────────────────────────┬───────────────┬─────────────────────┐
+│ Extension Instance Name │ Extension Ref │ View in Emulator UI │
+└─────────────────────────┴───────────────┴─────────────────────┘
+Issues? Report them at https://github.com/firebase/firebase-tools/issues and attach the *-debug.log files.
+ 
+[debug] [2025-11-16T23:44:18.189Z] [work-queue] {"queuedWork":["/actualbackend-3b454/us-central1/transcribe_audio-2025-11-16T23:44:18.159Z"],"queueLength":1,"runningWork":[],"workRunningCount":0}
+[debug] [2025-11-16T23:44:18.234Z] [work-queue] {"queuedWork":[],"queueLength":0,"runningWork":["/actualbackend-3b454/us-central1/transcribe_audio-2025-11-16T23:44:18.159Z"],"workRunningCount":1}
+[debug] [2025-11-16T23:44:18.259Z] Accepted request POST /actualbackend-3b454/us-central1/transcribe_audio --> us-central1-transcribe_audio
+[debug] [2025-11-16T23:44:18.359Z] [functions] Runtime ready! Sending request! {"metadata":{"emulator":{"name":"functions"},"message":"[functions] Runtime ready! Sending request!"}}
+[debug] [2025-11-16T23:44:18.364Z] [functions] Got req.url=/actualbackend-3b454/us-central1/transcribe_audio, mapping to path=/ {"metadata":{"emulator":{"name":"functions"},"message":"[functions] Got req.url=/actualbackend-3b454/us-central1/transcribe_audio, mapping to path=/"}}
+[info] i  functions: Loaded environment variables from .env. 
+[debug] [2025-11-16T23:44:18.421Z] Running command with virtualenv: command=., args=["\"/Users/jonasyaich/Desktop/actualbackend/functions/venv/bin/activate\"","&&","functions-framework"]
+[debug] [2025-11-16T23:44:18.428Z] [worker-pool] addWorker(us-central1-transcribe_audio) {"metadata":{"emulator":{"name":"functions"},"message":"[worker-pool] addWorker(us-central1-transcribe_audio)"}}
+[debug] [2025-11-16T23:44:18.433Z] [worker-pool] Adding worker with key us-central1-transcribe_audio, total=1 {"metadata":{"emulator":{"name":"functions"},"message":"[worker-pool] Adding worker with key us-central1-transcribe_audio, total=1"}}
+[info] >  INFO:main:Incoming transcription request: method=GET content_type=None {"user":"INFO:main:Incoming transcription request: method=GET content_type=None","metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-transcribe_audio"},"extension":{},"message":"\u001b[90m> \u001b[39m INFO:main:Incoming transcription request: method=GET content_type=None"}}
+[debug] [2025-11-16T23:44:19.578Z] [worker-us-central1-transcribe_audio-9c85acd2-4e23-4381-bc41-e76fee19bf5d]: IDLE {"metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-transcribe_audio"},"extension":{},"message":"[worker-us-central1-transcribe_audio-9c85acd2-4e23-4381-bc41-e76fee19bf5d]: IDLE"}}
+[debug] [2025-11-16T23:44:19.578Z] [worker-pool] submitRequest(triggerId=us-central1-transcribe_audio) {"metadata":{"emulator":{"name":"functions"},"message":"[worker-pool] submitRequest(triggerId=us-central1-transcribe_audio)"}}
+[info] i  functions: Beginning execution of "us-central1-transcribe_audio" {"metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-transcribe_audio"},"extension":{},"message":"Beginning execution of \"us-central1-transcribe_audio\""}}
+[debug] [2025-11-16T23:44:19.580Z] [worker-us-central1-transcribe_audio-9c85acd2-4e23-4381-bc41-e76fee19bf5d]: BUSY {"metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-transcribe_audio"},"extension":{},"message":"[worker-us-central1-transcribe_audio-9c85acd2-4e23-4381-bc41-e76fee19bf5d]: BUSY"}}
+[info] >  INFO:main:Incoming transcription request: method=POST content_type=multipart/form-data; boundary=----WebKitFormBoundary7KDdMAn9PFiMyESB {"user":"INFO:main:Incoming transcription request: method=POST content_type=multipart/form-data; boundary=----WebKitFormBoundary7KDdMAn9PFiMyESB","metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-transcribe_audio"},"extension":{},"message":"\u001b[90m> \u001b[39m INFO:main:Incoming transcription request: method=POST content_type=multipart/form-data; boundary=----WebKitFormBoundary7KDdMAn9PFiMyESB"}}
+[info] >  INFO:main:Audio file received: name=recording.webm mimetype=audio/webm {"user":"INFO:main:Audio file received: name=recording.webm mimetype=audio/webm","metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-transcribe_audio"},"extension":{},"message":"\u001b[90m> \u001b[39m INFO:main:Audio file received: name=recording.webm mimetype=audio/webm"}}
+[info] >  INFO:main:OpenAI transcription succeeded: status=200 {"user":"INFO:main:OpenAI transcription succeeded: status=200","metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-transcribe_audio"},"extension":{},"message":"\u001b[90m> \u001b[39m INFO:main:OpenAI transcription succeeded: status=200"}}
+[debug] [2025-11-16T23:44:20.655Z] Finishing up request with event=pause {"metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-transcribe_audio"},"extension":{},"message":"Finishing up request with event=pause"}}
+[info] i  functions: Finished "us-central1-transcribe_audio" in 1076.051292ms {"metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-transcribe_audio"},"extension":{},"message":"Finished \"us-central1-transcribe_audio\" in 1076.051292ms"}}
+[debug] [2025-11-16T23:44:20.657Z] [worker-us-central1-transcribe_audio-9c85acd2-4e23-4381-bc41-e76fee19bf5d]: IDLE {"metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-transcribe_audio"},"extension":{},"message":"[worker-us-central1-transcribe_audio-9c85acd2-4e23-4381-bc41-e76fee19bf5d]: IDLE"}}
+[debug] [2025-11-16T23:44:20.657Z] Finishing up request with event=finish {"metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-transcribe_audio"},"extension":{},"message":"Finishing up request with event=finish"}}
+[debug] [2025-11-16T23:44:20.657Z] Finishing up request with event=close {"metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-transcribe_audio"},"extension":{},"message":"Finishing up request with event=close"}}
+[debug] [2025-11-16T23:44:20.658Z] [work-queue] {"queuedWork":[],"queueLength":0,"runningWork":[],"workRunningCount":0}

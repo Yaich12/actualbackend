@@ -1,8 +1,27 @@
 import React, { useRef, useState } from 'react';
 import './indlæg.css';
+import Whisper from './whisper';
 
-const OPENAI_API_KEY = process.env.REACT_APP_OPEN_API_KEY || '';
-const OPENAI_TRANSCRIBE_URL = 'https://api.openai.com/v1/audio/transcriptions';
+const PROJECT_ID = process.env.REACT_APP_PROJECT_ID || '';
+const FUNCTION_REGION = process.env.REACT_APP_FUNCTION_REGION || 'us-central1';
+
+const buildDefaultTranscribeUrl = () => {
+  if (!PROJECT_ID) {
+    return '';
+  }
+
+  if (
+    typeof window !== 'undefined' &&
+    window.location.hostname === 'localhost'
+  ) {
+    return `http://127.0.0.1:5001/${PROJECT_ID}/${FUNCTION_REGION}/transcribe_audio`;
+  }
+
+  return `https://${FUNCTION_REGION}-${PROJECT_ID}.cloudfunctions.net/transcribe_audio`;
+};
+
+const TRANSCRIBE_FUNCTION_URL =
+  process.env.REACT_APP_TRANSCRIBE_URL || buildDefaultTranscribeUrl();
 
 function Indlæg({ clientName, onClose, onSave }) {
   const [title, setTitle] = useState('');
@@ -12,6 +31,7 @@ function Indlæg({ clientName, onClose, onSave }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDictating, setIsDictating] = useState(false);
   const [dictationStatus, setDictationStatus] = useState('');
+  const [transcriptionResult, setTranscriptionResult] = useState(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
@@ -79,12 +99,13 @@ function Indlæg({ clientName, onClose, onSave }) {
         return;
       }
 
-      if (!OPENAI_API_KEY) {
-        setDictationStatus('Manglende OpenAI API-nøgle.');
+      if (!TRANSCRIBE_FUNCTION_URL) {
+        setDictationStatus('Manglende transskriptions-endpoint.');
         return;
       }
 
       setDictationStatus('Starter mikrofon...');
+      setTranscriptionResult(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
@@ -100,35 +121,9 @@ function Indlæg({ clientName, onClose, onSave }) {
 
       mediaRecorder.onstop = async () => {
         try {
-          setDictationStatus('Sender lyd til transskription...');
-
           const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-          const formData = new FormData();
-          formData.append('file', blob, 'recording.webm');
-          formData.append('model', 'gpt-4o-transcribe');
-          formData.append('response_format', 'text');
-
-          const response = await fetch(OPENAI_TRANSCRIBE_URL, {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${OPENAI_API_KEY}`,
-            },
-            body: formData,
-          });
-
-          if (!response.ok) {
-            throw new Error(`Server responded with ${response.status}`);
-          }
-
-          const data = await response.text();
-          const finalText = data?.trim();
-
-          if (finalText) {
-            setContent((prev) => (prev ? `${prev}\n${finalText}` : finalText));
-            setDictationStatus('Diktat indsat i journalen.');
-          } else {
-            setDictationStatus('Kunne ikke læse nogen tekst fra OpenAI.');
-          }
+          setDictationStatus('Forbereder lyd...');
+          await transcribeRecording(blob);
         } catch (error) {
           console.error('Transcription error:', error);
           setDictationStatus('Fejl under transskription.');
@@ -144,7 +139,7 @@ function Indlæg({ clientName, onClose, onSave }) {
 
       mediaRecorder.start();
       setIsDictating(true);
-      setDictationStatus('Lytter... klik på Mikrofon for at stoppe');
+      setDictationStatus('Lytter....');
     } catch (error) {
       console.error('Microphone error:', error);
       setDictationStatus('Kunne ikke få adgang til mikrofonen.');
@@ -153,6 +148,58 @@ function Indlæg({ clientName, onClose, onSave }) {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       }
+    }
+  };
+
+  const transcribeRecording = async (audioBlob) => {
+    if (!TRANSCRIBE_FUNCTION_URL) {
+      setDictationStatus('Manglende transskriptions-endpoint.');
+      return;
+    }
+
+    setDictationStatus('Genererer tekst...');
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'recording.webm');
+    formData.append('response_format', 'text');
+
+    try {
+      const response = await fetch(TRANSCRIBE_FUNCTION_URL, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorMessage = await response.text();
+        throw new Error(`Server ${response.status}: ${errorMessage}`);
+      }
+
+      const responseBody = await response.text();
+      console.log('Transcribe response:', responseBody);
+
+      let parsedResult = null;
+      if (responseBody?.trim()) {
+        try {
+          parsedResult = JSON.parse(responseBody);
+        } catch (jsonError) {
+          parsedResult = { text: responseBody.trim() };
+        }
+      }
+
+      if (parsedResult) {
+        setTranscriptionResult(parsedResult);
+        if (parsedResult.text) {
+          setContent((currentContent) => {
+            const suffix = currentContent ? '\n\n' : '';
+            return `${currentContent || ''}${suffix}${parsedResult.text}`;
+          });
+        }
+        setDictationStatus('Transskription modtaget.');
+      } else {
+        setDictationStatus('Kunne ikke læse nogen tekst fra svaret.');
+      }
+    } catch (error) {
+      console.error('Transcription error:', error);
+      setDictationStatus('Fejl under transskription.');
     }
   };
 
@@ -307,6 +354,7 @@ function Indlæg({ clientName, onClose, onSave }) {
               <p className="indlæg-dictation-status">{dictationStatus}</p>
             )}
           </div>
+          {transcriptionResult && <Whisper data={transcriptionResult} />}
         </div>
       </div>
 
