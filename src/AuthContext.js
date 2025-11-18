@@ -6,7 +6,8 @@ import React, {
   useState,
 } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { auth } from "./firebase";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { auth, db } from "./firebase";
 
 const AuthContext = createContext({
   user: null,
@@ -27,6 +28,34 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const userRef = doc(db, "users", user.uid);
+    const providerId = user.providerData?.[0]?.providerId ?? "password";
+    const creationTime = user.metadata?.creationTime
+      ? new Date(user.metadata.creationTime)
+      : null;
+
+    setDoc(
+      userRef,
+      {
+        uid: user.uid,
+        email: user.email ?? null,
+        displayName: user.displayName ?? null,
+        photoURL: user.photoURL ?? null,
+        providerId,
+        lastLoginAt: serverTimestamp(),
+        createdAt: creationTime ?? serverTimestamp(),
+      },
+      { merge: true }
+    ).catch((error) => {
+      console.error("Failed to sync user profile", error);
+    });
+  }, [user]);
+
   const signOutUser = () => signOut(auth);
 
   const value = useMemo(
@@ -42,4 +71,3 @@ export function AuthProvider({ children }) {
 }
 
 export const useAuth = () => useContext(AuthContext);
-

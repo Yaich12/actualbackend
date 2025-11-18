@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './bookingpage.css';
 import AppointmentForm from './appointment/appointment';
 import Journal from './Journal/journal';
+import { useAuth } from '../../AuthContext';
 
 function BookingPage() {
   const navigate = useNavigate();
+  const { user, signOutUser } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date(2025, 10, 1)); // November 2025
   const [viewMode, setViewMode] = useState('month');
   const [activeNav, setActiveNav] = useState('kalender');
@@ -141,12 +143,43 @@ function BookingPage() {
     setSelectedAppointment(null);
   };
 
+  const userIdentity = useMemo(() => {
+    if (!user) {
+      return {
+        name: 'Ikke logget ind',
+        email: 'Log ind for at fortsætte',
+        initials: '?',
+        photoURL: null,
+      };
+    }
+
+    const name = user.displayName || user.email || 'Selma bruger';
+    const email = user.email || '—';
+    const initialsSource = (user.displayName || user.email || '?').trim();
+    const initials = initialsSource
+      .split(/\s+/)
+      .map((part) => part[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
+
+    return {
+      name,
+      email,
+      initials,
+      photoURL: user.photoURL || null,
+    };
+  }, [user]);
+
   return (
     <div className="booking-page">
       {/* Top Navigation Bar */}
       <div className="booking-topbar">
         <div className="topbar-left">
-          <button className="topbar-logo-btn" onClick={() => navigate('/')}>
+          <button className="topbar-logo-btn" onClick={async () => {
+            await signOutUser();
+            navigate('/');
+          }}>
             Forside
           </button>
         </div>
@@ -260,8 +293,21 @@ function BookingPage() {
 
           {/* Clinic Section */}
           <div className="sidebar-clinic">
-            <div className="clinic-icon">👤</div>
-            <div className="clinic-name">Klinik Selma</div>
+            {userIdentity.photoURL ? (
+              <img
+                src={userIdentity.photoURL}
+                alt={userIdentity.name}
+                className="clinic-avatar"
+              />
+            ) : (
+              <div className="clinic-avatar clinic-avatar-placeholder">
+                {userIdentity.initials}
+              </div>
+            )}
+            <div className="clinic-user-details">
+              <div className="clinic-user-name">{userIdentity.name}</div>
+              <div className="clinic-user-email">{userIdentity.email}</div>
+            </div>
           </div>
         </div>
 
