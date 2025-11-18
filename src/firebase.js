@@ -1,11 +1,12 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
+// TODO: Add other SDKs you need:
+// e.g. import { getAuth } from "firebase/auth";
+// import { getFirestore } from "firebase/firestore";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// Your web app's Firebase configuration (measurementId is optional for v7.20.0+)
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_API_KEY,
   authDomain: process.env.REACT_APP_AUTH_DOMAIN,
@@ -13,18 +14,27 @@ const firebaseConfig = {
   storageBucket: process.env.REACT_APP_STORAGE_BUCKET,
   messagingSenderId: process.env.REACT_APP_MESSAGING_SENDER_ID,
   appId: process.env.REACT_APP_APP_ID,
-  measurementId: process.env.REACT_APP_MEASUREMENT_ID
+  measurementId: process.env.REACT_APP_MEASUREMENT_ID,
 };
 
 // Initialize Firebase
-let app;
-let analytics;
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
 
-try {
-  app = initializeApp(firebaseConfig);
-  analytics = getAnalytics(app);
-} catch (error) {
-  console.error('Firebase initialization error:', error);
+// Initialize Functions
+const functions = getFunctions(app);
+
+// Optional: connect to emulator when running locally
+if (
+  (typeof window !== "undefined" && window.location.hostname === "localhost") ||
+  process.env.REACT_APP_ENV === "local"
+) {
+  connectFunctionsEmulator(functions, "localhost", 5001);
 }
 
-export { app, analytics };
+export {
+  app,
+  analytics,
+  functions,
+  // ...export any other services you initialize here
+};
