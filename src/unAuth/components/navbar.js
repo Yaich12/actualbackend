@@ -1,20 +1,42 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import './navbar.css';
+
+const menuItems = [
+  { label: 'Features', href: '#benefits' },
+  { label: 'Pricing', href: '#specifications' },
+  { label: 'Contact Us', href: '#contact' },
+];
 
 function Navbar() {
   return (
     <nav className="navbar">
       <div className="navbar-container">
-        <div className="navbar-logo">Logo</div>
-        <ul className="navbar-menu">
-          <li className="navbar-item">Home</li>
-          <li className="navbar-item">About</li>
-          <li className="navbar-item">Contact</li>
-        </ul>
+        <a className="navbar-logo" href="/" aria-label="Selma home">
+          <img
+            src="/assets/selmalogo.png"
+            alt="Selma logo"
+            className="navbar-logo-img"
+          />
+          <span className="navbar-logo-text">meget mere end bare et booking system</span>
+        </a>
+
+        <div className="navbar-right">
+          <ul className="navbar-menu">
+            {menuItems.map((item) => (
+              <li key={item.label} className="navbar-item">
+                <a href={item.href}>{item.label}</a>
+              </li>
+            ))}
+          </ul>
+
+          <Link to="/booking" className="navbar-cta">
+            Try For Free
+          </Link>
+        </div>
       </div>
     </nav>
   );
 }
 
 export default Navbar;
-

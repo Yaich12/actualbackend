@@ -1,0 +1,276 @@
+/* Klientoversigt Main Content */
+.klientoversigt-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background-color: #ffffff;
+  padding: 0;
+}
+
+/* Page Header */
+.klientoversigt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-arrows,
+.title-arrow {
+  color: #6b7280;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.title-arrows {
+  margin-right: 4px;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.export-btn,
+.add-client-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.export-btn:hover,
+.add-client-btn:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.add-client-btn {
+  background-color: #3b82f6;
+  color: #ffffff;
+  border-color: #3b82f6;
+}
+
+.add-client-btn:hover {
+  background-color: #2563eb;
+  border-color: #2563eb;
+}
+
+.export-icon,
+.add-icon {
+  font-size: 16px;
+}
+
+.dropdown-arrow {
+  font-size: 10px;
+  margin-left: 4px;
+  color: #6b7280;
+}
+
+/* Filter Bar */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.filter-btn,
+.saved-filters-btn,
+.edit-columns-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-btn:hover,
+.saved-filters-btn:hover,
+.edit-columns-btn:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.bookmark-icon {
+  font-size: 14px;
+}
+
+.search-bar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  max-width: 300px;
+  margin-left: auto;
+}
+
+.search-icon-small {
+  font-size: 16px;
+  color: #6b7280;
+}
+
+.search-input-large {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+  color: #111827;
+}
+
+.search-input-large::placeholder {
+  color: #9ca3af;
+}
+
+/* Table Container */
+.table-container {
+  flex: 1;
+  overflow: auto;
+  background-color: #ffffff;
+}
+
+.clients-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.clients-table thead {
+  background-color: #f9fafb;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.clients-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.clients-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.clients-table th.sortable:hover {
+  background-color: #f3f4f6;
+}
+
+.sort-arrow {
+  margin-left: 6px;
+  color: #3b82f6;
+  font-size: 12px;
+}
+
+.checkbox-col {
+  width: 40px;
+  text-align: center;
+}
+
+.clients-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  color: #111827;
+  white-space: nowrap;
+}
+
+.clients-table tbody tr {
+  transition: background-color 0.2s;
+}
+
+.clients-table tbody tr:hover {
+  background-color: #f9fafb;
+}
+
+.clients-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Status Badge */
+.status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.status-badge.aktiv {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.status-badge.inaktiv {
+  background-color: #f3f4f6;
+  color: #6b7280;
+}
+
+/* Checkbox styling */
+.clients-table input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .clients-table {
+    font-size: 13px;
+  }
+  
+  .clients-table th,
+  .clients-table td {
+    padding: 10px 12px;
+  }
+}

@@ -1,0 +1,366 @@
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import './bookingpage.css';
+import AppointmentForm from './appointment/appointment';
+import Journal from './Journal/journal';
+
+function BookingPage() {
+  const navigate = useNavigate();
+  const [currentDate, setCurrentDate] = useState(new Date(2025, 10, 1)); // November 2025
+  const [viewMode, setViewMode] = useState('month');
+  const [activeNav, setActiveNav] = useState('kalender');
+  const [showAppointmentForm, setShowAppointmentForm] = useState(false);
+  const [appointments, setAppointments] = useState([
+    {
+      id: 1,
+      startDate: '13-11-2025',
+      startTime: '09:00',
+      endDate: '13-11-2025',
+      endTime: '10:00',
+      client: 'Jonas Yaich',
+      service: 'fodmassage',
+      notes: '',
+    },
+    {
+      id: 2,
+      startDate: '14-11-2025',
+      startTime: '13:45',
+      endDate: '14-11-2025',
+      endTime: '14:45',
+      client: 'Jonas Yaich',
+      service: 'fodmassage',
+      notes: '',
+    },
+  ]);
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
+
+  const monthNames = [
+    'januar', 'februar', 'marts', 'april', 'maj', 'juni',
+    'juli', 'august', 'september', 'oktober', 'november', 'december'
+  ];
+
+  const dayNames = ['SØN', 'MAN', 'TIR', 'ONS', 'TOR', 'FRE', 'LØR'];
+
+  const navigateMonth = (direction) => {
+    setCurrentDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(prev.getMonth() + direction);
+      return newDate;
+    });
+  };
+
+  const goToToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  const getWeekNumber = (date) => {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  };
+
+  const getCalendarWeeks = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay() === 0 ? 7 : firstDay.getDay(); // Monday = 1
+    
+    const weeks = [];
+    let currentWeek = [];
+    
+    // Add days from previous month
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+    for (let i = startingDayOfWeek - 1; i > 0; i--) {
+      currentWeek.push({
+        day: prevMonthLastDay - i + 1,
+        month: month - 1,
+        year: month === 0 ? year - 1 : year,
+        isCurrentMonth: false
+      });
+    }
+    
+    // Add days from current month
+    for (let i = 1; i <= daysInMonth; i++) {
+      currentWeek.push({
+        day: i,
+        month: month,
+        year: year,
+        isCurrentMonth: true
+      });
+      
+      if (currentWeek.length === 7) {
+        weeks.push(currentWeek);
+        currentWeek = [];
+      }
+    }
+    
+    // Add days from next month
+    let nextMonthDay = 1;
+    while (currentWeek.length < 7) {
+      currentWeek.push({
+        day: nextMonthDay,
+        month: month + 1,
+        year: month === 11 ? year + 1 : year,
+        isCurrentMonth: false
+      });
+      nextMonthDay++;
+    }
+    if (currentWeek.length > 0) {
+      weeks.push(currentWeek);
+    }
+    
+    return weeks;
+  };
+
+  const calendarWeeks = getCalendarWeeks();
+
+  const handleCreateAppointment = (appointment) => {
+    setAppointments((prev) => [...prev, appointment]);
+    setShowAppointmentForm(false);
+  };
+
+  const handleAppointmentClick = (appointment) => {
+    setSelectedClient(appointment.client);
+    setSelectedAppointment(appointment);
+    setShowAppointmentForm(false);
+  };
+
+  const handleCloseJournal = () => {
+    setSelectedClient(null);
+    setSelectedAppointment(null);
+  };
+
+  const handleCreateNextAppointment = () => {
+    setShowAppointmentForm(true);
+    setSelectedClient(null);
+    setSelectedAppointment(null);
+  };
+
+  return (
+    <div className="booking-page">
+      {/* Top Navigation Bar */}
+      <div className="booking-topbar">
+        <div className="topbar-left">
+          <button className="topbar-logo-btn" onClick={() => navigate('/')}>
+            Forside
+          </button>
+        </div>
+        <div className="topbar-center">
+          <button className={`topbar-tab ${viewMode === 'calendars' ? 'active' : ''}`}>
+            Kalendere
+          </button>
+          <button className={`topbar-tab ${viewMode === 'month' ? 'active' : ''}`}>
+            måned
+          </button>
+          <div className="topbar-navigation">
+            <button className="nav-arrow" onClick={() => navigateMonth(-1)}>←</button>
+            <button className="nav-today" onClick={goToToday}>i dag</button>
+            <button className="nav-arrow" onClick={() => navigateMonth(1)}>→</button>
+          </div>
+          <span className="current-month">
+            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+          </span>
+        </div>
+        <div className="topbar-right">
+          <button 
+            className="create-appointment-btn"
+            onClick={() => setShowAppointmentForm(!showAppointmentForm)}
+          >
+            <span className="plus-icon">+</span>
+            Opret aftale
+          </button>
+        </div>
+      </div>
+
+      <div className={`booking-content ${showAppointmentForm || selectedClient ? 'with-appointment-form' : ''}`}>
+        {/* Left Sidebar */}
+        <div className="booking-sidebar">
+          <div className="sidebar-search">
+            <span className="search-icon">🔍</span>
+            <input type="text" placeholder="Søg" className="search-input" />
+          </div>
+
+          <div className="sidebar-notifications">
+            <span className="bell-icon">🔔</span>
+            <span>Notifikationer</span>
+          </div>
+
+          <div className="sidebar-section">
+            <div className="section-label">KLINIK</div>
+            <nav className="sidebar-nav">
+              <button 
+                className={`nav-item ${activeNav === 'kalender' ? 'active' : ''}`}
+                onClick={() => setActiveNav('kalender')}
+              >
+                <span className="nav-icon calendar-icon">📅</span>
+                <span className="nav-text">Kalender</span>
+              </button>
+              <button 
+                className={`nav-item ${activeNav === 'klienter' ? 'active' : ''}`}
+                onClick={() => navigate('/booking/klienter')}
+              >
+                <span className="nav-icon">👤</span>
+                <span className="nav-text">Klienter</span>
+              </button>
+              <button 
+                className={`nav-item ${activeNav === 'ydelser' ? 'active' : ''}`}
+                onClick={() => navigate('/booking/ydelser')}
+              >
+                <span className="nav-icon">🏷️</span>
+                <span className="nav-text">Ydelser</span>
+              </button>
+              <button 
+                className={`nav-item ${activeNav === 'fakturaer' ? 'active' : ''}`}
+                onClick={() => setActiveNav('fakturaer')}
+              >
+                <span className="nav-icon">📄</span>
+                <span className="nav-text">Fakturaer</span>
+                <span className="nav-badge-launching">(launching soon)</span>
+              </button>
+              <button 
+                className={`nav-item ${activeNav === 'statistik' ? 'active' : ''}`}
+                onClick={() => setActiveNav('statistik')}
+              >
+                <span className="nav-icon">📊</span>
+                <span className="nav-text">Statistik</span>
+                <span className="nav-badge-launching">(launching soon)</span>
+              </button>
+              <button 
+                className={`nav-item ${activeNav === 'indstillinger' ? 'active' : ''}`}
+                onClick={() => setActiveNav('indstillinger')}
+              >
+                <span className="nav-icon">⚙️</span>
+                <span className="nav-text">Indstillinger</span>
+                <span className="nav-badge-launching">(launching soon)</span>
+              </button>
+              <button 
+                className={`nav-item ${activeNav === 'apps' ? 'active' : ''}`}
+                onClick={() => setActiveNav('apps')}
+              >
+                <span className="nav-icon">📱</span>
+                <span className="nav-text">Apps</span>
+                <span className="nav-badge-launching">(launching soon)</span>
+              </button>
+            </nav>
+          </div>
+
+          {/* Buy Full Access Banner */}
+          <div className="sidebar-banner">
+            <div className="banner-icon">🛒</div>
+            <div className="banner-content">
+              <div className="banner-title">Køb fuld adgang</div>
+              <div className="banner-subtitle">Du får 1 måned gratis</div>
+            </div>
+          </div>
+
+          {/* Clinic Section */}
+          <div className="sidebar-clinic">
+            <div className="clinic-icon">👤</div>
+            <div className="clinic-name">Klinik Selma</div>
+          </div>
+        </div>
+
+        {/* Main Calendar Area */}
+        <div className="booking-main">
+          <div className="calendar-container">
+            <div className="calendar-header">
+              <div className="week-number-header"></div>
+              {dayNames.map((dayName, index) => {
+                // Get the first day of the first week to show correct dates
+                const firstWeek = calendarWeeks[0];
+                const firstDay = firstWeek[index];
+                const dayNumber = firstDay.day;
+                const month = firstDay.month + 1;
+                return (
+                  <div key={index} className="calendar-day-header">
+                    {dayName} {dayNumber}/{month}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="calendar-grid">
+              {calendarWeeks.map((week, weekIndex) => {
+                const weekStartDate = new Date(week[0].year, week[0].month, week[0].day);
+                const weekNumber = getWeekNumber(weekStartDate);
+                return (
+                  <React.Fragment key={weekIndex}>
+                    <div className="week-number-cell">{weekNumber}</div>
+                    {week.map((day, dayIndex) => {
+                      const dayAppointments = appointments.filter((appointment) => {
+                        if (!appointment.startDate) return false;
+                        const [dayStr, monthStr, yearStr] = appointment.startDate.split('-');
+                        const appDay = parseInt(dayStr, 10);
+                        const appMonth = parseInt(monthStr, 10) - 1;
+                        const appYear = parseInt(yearStr, 10);
+                        return appDay === day.day && appMonth === day.month && appYear === day.year;
+                      });
+
+                      const isSelected = selectedAppointment && 
+                        selectedAppointment.startDate && 
+                        (() => {
+                          const [dayStr, monthStr, yearStr] = selectedAppointment.startDate.split('-');
+                          const appDay = parseInt(dayStr, 10);
+                          const appMonth = parseInt(monthStr, 10) - 1;
+                          const appYear = parseInt(yearStr, 10);
+                          return appDay === day.day && appMonth === day.month && appYear === day.year;
+                        })();
+
+                      return (
+                        <div 
+                          key={dayIndex} 
+                          className={`calendar-day-cell ${!day.isCurrentMonth ? 'other-month' : ''} ${isSelected ? 'selected-day' : ''}`}
+                        >
+                          <span className="day-number">{day.day}</span>
+                          {dayAppointments.length > 0 && (
+                            <div className="day-appointments">
+                              {dayAppointments.map((appointment) => (
+                                <span 
+                                  key={appointment.id} 
+                                  className="day-appointment-chip"
+                                  onClick={() => handleAppointmentClick(appointment)}
+                                  style={{ cursor: 'pointer' }}
+                                >
+                                  {appointment.startTime} {appointment.client ? `– ${appointment.client.split(' ')[0]}` : '– Aftale'}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Journal or Appointment Form */}
+        {selectedClient ? (
+          <div className="appointment-form-wrapper">
+            <Journal
+              selectedClient={selectedClient}
+              selectedAppointment={selectedAppointment}
+              onClose={handleCloseJournal}
+              onCreateAppointment={handleCreateNextAppointment}
+            />
+          </div>
+        ) : showAppointmentForm && (
+          <div className="appointment-form-wrapper">
+            <AppointmentForm
+              onClose={() => setShowAppointmentForm(false)}
+              onCreate={handleCreateAppointment}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default BookingPage;

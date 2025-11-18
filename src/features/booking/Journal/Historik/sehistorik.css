@@ -1,0 +1,244 @@
+.sehistorik-container {
+  width: 100%;
+  height: 100%;
+  background-color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sehistorik-header {
+  flex: 0 0 auto;
+  padding: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.sehistorik-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sehistorik-title-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sehistorik-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.sehistorik-client-name {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.sehistorik-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sehistorik-create-entry-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background-color: #3b82f6;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sehistorik-create-entry-btn:hover {
+  background-color: #2563eb;
+}
+
+.sehistorik-plus-icon {
+  font-size: 18px;
+  font-weight: 300;
+}
+
+.sehistorik-close-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.sehistorik-close-btn:hover {
+  background-color: #f3f4f6;
+  color: #111827;
+}
+
+.sehistorik-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.sehistorik-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.sehistorik-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sehistorik-entry-card {
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  transition: all 0.2s;
+}
+
+.sehistorik-entry-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-color: #d1d5db;
+}
+
+.sehistorik-entry-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.sehistorik-entry-title-section {
+  flex: 1;
+}
+
+.sehistorik-entry-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.sehistorik-entry-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 12px;
+}
+
+.sehistorik-icon-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+  color: #6b7280;
+}
+
+.sehistorik-icon-btn:hover {
+  background-color: #f3f4f6;
+  color: #111827;
+}
+
+.sehistorik-icon-btn.starred {
+  color: #fbbf24;
+}
+
+.sehistorik-icon-btn.locked {
+  color: #ef4444;
+}
+
+.sehistorik-entry-content {
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.6;
+  margin-bottom: 12px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.sehistorik-entry-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.sehistorik-open-overview-btn {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sehistorik-open-overview-btn:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .sehistorik-header-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .sehistorik-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .sehistorik-create-entry-btn {
+    flex: 1;
+  }
+
+  .sehistorik-entry-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .sehistorik-entry-actions {
+    margin-left: 0;
+    align-self: flex-end;
+  }
+}
+
