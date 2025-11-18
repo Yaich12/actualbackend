@@ -15,7 +15,7 @@ function Frontpage() {
           Din AI-assistent transskriberer journaler, hjælper med cases, tager opkald og styrer booking – så du kan være den fysioterapeut du blev uddannet til og udvikle dig til en bedre.
         </p>
         <div className="frontpage-buttons">
-          <Link to="/booking" className="frontpage-button primary">Start for free</Link>
+          <Link to="/signup" className="frontpage-button primary">Start for free</Link>
           <a href="#demo" className="frontpage-button secondary">Book a demo</a>
         </div>
       </div>
