@@ -11,8 +11,8 @@ const menuItems = [
 
 function Navbar() {
   const { user } = useAuth();
-  const ctaPath = user ? '/dashboard' : '/signup';
-  const ctaLabel = user ? 'Go to dashboard' : 'Try For Free';
+  const ctaPath = user ? '/booking' : '/signup';
+  const ctaLabel = user ? 'Go to booking' : 'Try For Free';
 
   return (
     <nav className="navbar">

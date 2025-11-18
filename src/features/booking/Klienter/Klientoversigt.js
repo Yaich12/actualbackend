@@ -4,9 +4,11 @@ import '../bookingpage.css';
 import './klientoversigt.css';
 import { clients as initialClients } from './clientsData';
 import AddKlient from './addklient/addklient';
+import { useAuth } from '../../../AuthContext';
 
 function Klientoversigt() {
   const navigate = useNavigate();
+  const { signOutUser } = useAuth();
   const [clients, setClients] = useState(initialClients);
   const [activeNav, setActiveNav] = useState('klienter');
   const [searchQuery, setSearchQuery] = useState('');
@@ -64,7 +66,10 @@ function Klientoversigt() {
       {/* Top Navigation Bar */}
       <div className="booking-topbar">
         <div className="topbar-left">
-          <button className="topbar-logo-btn" onClick={() => navigate('/')}>
+          <button className="topbar-logo-btn" onClick={async () => {
+            await signOutUser();
+            navigate('/');
+          }}>
             Forside
           </button>
         </div>

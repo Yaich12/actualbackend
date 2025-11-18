@@ -4,9 +4,11 @@ import '../bookingpage.css';
 import './ydelser.css';
 import { services } from './servicesData';
 import AddNewServiceModal from './addnew/addnew';
+import { useAuth } from '../../../AuthContext';
 
 function Ydelser() {
   const navigate = useNavigate();
+  const { signOutUser } = useAuth();
   const [activeNav, setActiveNav] = useState('ydelser');
   const [searchQuery, setSearchQuery] = useState('');
   const [serviceList, setServiceList] = useState(services);
@@ -71,7 +73,10 @@ function Ydelser() {
       {/* Top Navigation Bar */}
       <div className="booking-topbar">
         <div className="topbar-left">
-          <button className="topbar-logo-btn" onClick={() => navigate('/')}>
+          <button className="topbar-logo-btn" onClick={async () => {
+            await signOutUser();
+            navigate('/');
+          }}>
             Forside
           </button>
         </div>
