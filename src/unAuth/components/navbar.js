@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../AuthContext';
 import './navbar.css';
 
 const menuItems = [
@@ -9,6 +10,10 @@ const menuItems = [
 ];
 
 function Navbar() {
+  const { user } = useAuth();
+  const ctaPath = user ? '/dashboard' : '/signup';
+  const ctaLabel = user ? 'Go to dashboard' : 'Try For Free';
+
   return (
     <nav className="navbar">
       <div className="navbar-container">
@@ -30,8 +35,8 @@ function Navbar() {
             ))}
           </ul>
 
-          <Link to="/booking" className="navbar-cta">
-            Try For Free
+          <Link to={ctaPath} className="navbar-cta">
+            {ctaLabel}
           </Link>
         </div>
       </div>

@@ -1,12 +1,16 @@
-// Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
-// TODO: Add other SDKs you need:
-// e.g. import { getAuth } from "firebase/auth";
-// import { getFirestore } from "firebase/firestore";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithRedirect,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
+  onAuthStateChanged,
+  connectAuthEmulator,
+  getRedirectResult,
+} from "firebase/auth";
 
-// Your web app's Firebase configuration (measurementId is optional for v7.20.0+)
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_API_KEY,
   authDomain: process.env.REACT_APP_AUTH_DOMAIN,
@@ -17,24 +21,33 @@ const firebaseConfig = {
   measurementId: process.env.REACT_APP_MEASUREMENT_ID,
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
 
-// Initialize Functions
-const functions = getFunctions(app);
+const shouldUseEmulators = (() => {
+  if (process.env.REACT_APP_USE_FIREBASE_EMULATORS === "true") {
+    return true;
+  }
 
-// Optional: connect to emulator when running locally
-if (
-  (typeof window !== "undefined" && window.location.hostname === "localhost") ||
-  process.env.REACT_APP_ENV === "local"
-) {
-  connectFunctionsEmulator(functions, "localhost", 5001);
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return ["localhost", "127.0.0.1"].includes(window.location.hostname);
+})();
+
+if (shouldUseEmulators) {
+  connectAuthEmulator(auth, "http://localhost:9099");
 }
 
 export {
-  app,
-  analytics,
-  functions,
-  // ...export any other services you initialize here
+  auth,
+  googleProvider,
+  signInWithRedirect,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
+  onAuthStateChanged,
+  getRedirectResult,
 };
