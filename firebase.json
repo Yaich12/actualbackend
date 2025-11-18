@@ -27,5 +27,40 @@
       ],
       "runtime": "python312"
     }
-  ]
+  ],
+  "emulators": {
+    "auth": {
+      "host": "127.0.0.1",
+      "port": 9150
+    },
+    "functions": {
+      "host": "127.0.0.1",
+      "port": 5501
+    },
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 8200
+    },
+    "hosting": {
+      "host": "127.0.0.1",
+      "port": 5500
+    },
+    "pubsub": {
+      "host": "127.0.0.1",
+      "port": 8205
+    },
+    "hub": {
+      "host": "127.0.0.1",
+      "port": 4410
+    },
+    "ui": {
+      "enabled": true,
+      "host": "127.0.0.1",
+      "port": 4415
+    },
+    "logging": {
+      "host": "127.0.0.1",
+      "port": 4510
+    }
+  }
 }

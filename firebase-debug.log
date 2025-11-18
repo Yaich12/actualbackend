@@ -1,0 +1,231 @@
+[debug] [2025-11-18T11:05:16.985Z] ----------------------------------------------------------------------
+[debug] [2025-11-18T11:05:16.992Z] Command:       /Users/jonasyaich/.nvm/versions/node/v24.11.0/bin/node /Users/jonasyaich/.nvm/versions/node/v24.11.0/bin/firebase emulators:start
+[debug] [2025-11-18T11:05:16.992Z] CLI Version:   14.25.0
+[debug] [2025-11-18T11:05:16.992Z] Platform:      darwin
+[debug] [2025-11-18T11:05:16.992Z] Node Version:  v24.11.0
+[debug] [2025-11-18T11:05:16.992Z] Time:          Tue Nov 18 2025 12:05:16 GMT+0100 (Central European Standard Time)
+[debug] [2025-11-18T11:05:16.992Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-11-18T11:05:17.096Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-11-18T11:05:17.096Z] > authorizing via signed-in user (jona223j@gmail.com)
+[debug] [2025-11-18T11:05:17.250Z] openjdk version "25.0.1" 2025-10-21 LTS
+
+[debug] [2025-11-18T11:05:17.250Z] OpenJDK Runtime Environment Temurin-25.0.1+8 (build 25.0.1+8-LTS)
+OpenJDK 64-Bit Server VM Temurin-25.0.1+8 (build 25.0.1+8-LTS, mixed mode, sharing)
+
+[debug] [2025-11-18T11:05:17.261Z] Parsed Java major version: 25
+[info] i  emulators: Starting emulators: auth, functions, firestore, hosting, pubsub, extensions {"metadata":{"emulator":{"name":"hub"},"message":"Starting emulators: auth, functions, firestore, hosting, pubsub, extensions"}}
+[debug] [2025-11-18T11:05:17.262Z] Checked if tokens are valid: true, expires at: 1763467238590
+[debug] [2025-11-18T11:05:17.262Z] Checked if tokens are valid: true, expires at: 1763467238590
+[debug] [2025-11-18T11:05:17.262Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/actualbackend-3b454 [none]
+[debug] [2025-11-18T11:05:17.989Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/actualbackend-3b454 200
+[debug] [2025-11-18T11:05:17.989Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/actualbackend-3b454 {"projectNumber":"491793307002","projectId":"actualbackend-3b454","lifecycleState":"ACTIVE","name":"actualbackend","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2025-11-13T11:19:12.942491Z"}
+[debug] [2025-11-18T11:05:18.314Z] [logging] Logging Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-11-18T11:05:18.315Z] [auth] Authentication Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-11-18T11:05:18.315Z] [firestore] Firestore Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-11-18T11:05:18.315Z] [firestore.websocket] websocket server for firestore only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-11-18T11:05:18.315Z] [hosting] Hosting Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-11-18T11:05:18.315Z] [pubsub] Pub/Sub Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[warn] ⚠  ui: Emulator UI unable to start on port 4000, starting on 4001 instead. {"metadata":{"emulator":{"name":"ui"},"message":"Emulator UI unable to start on port 4000, starting on 4001 instead."}}
+[debug] [2025-11-18T11:05:18.315Z] assigned listening specs for emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4400},{"address":"::1","family":"IPv6","port":4400}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4500}],"auth":[{"address":"127.0.0.1","family":"IPv4","port":9099}],"firestore":[{"address":"127.0.0.1","family":"IPv4","port":8080}],"firestore.websocket":[{"address":"127.0.0.1","family":"IPv4","port":9150}],"hosting":[{"address":"127.0.0.1","family":"IPv4","port":5100}],"pubsub":[{"address":"127.0.0.1","family":"IPv4","port":8085}],"ui":[{"address":"127.0.0.1","family":"IPv4","port":4001},{"address":"::1","family":"IPv6","port":4001}]},"metadata":{"message":"assigned listening specs for emulators"}}
+[debug] [2025-11-18T11:05:18.318Z] Emulator locator file path: /var/folders/wb/bq3x_ckn2bzg2wkbh19vffg40000gn/T/hub-actualbackend-3b454.json
+[debug] [2025-11-18T11:05:18.318Z] [hub] writing locator at /var/folders/wb/bq3x_ckn2bzg2wkbh19vffg40000gn/T/hub-actualbackend-3b454.json
+[debug] [2025-11-18T11:05:18.320Z] [Extensions] Started Extensions emulator, this is a noop.
+[debug] [2025-11-18T11:05:18.439Z] [functions] Functions Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-11-18T11:05:18.439Z] [eventarc] Eventarc Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-11-18T11:05:18.439Z] [tasks] Cloud Tasks Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-11-18T11:05:18.439Z] late-assigned ports for functions and eventarc emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4400},{"address":"::1","family":"IPv6","port":4400}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4500}],"auth":[{"address":"127.0.0.1","family":"IPv4","port":9099}],"firestore":[{"address":"127.0.0.1","family":"IPv4","port":8080}],"firestore.websocket":[{"address":"127.0.0.1","family":"IPv4","port":9150}],"hosting":[{"address":"127.0.0.1","family":"IPv4","port":5100}],"pubsub":[{"address":"127.0.0.1","family":"IPv4","port":8085}],"ui":[{"address":"127.0.0.1","family":"IPv4","port":4001},{"address":"::1","family":"IPv6","port":4001}],"functions":[{"address":"127.0.0.1","family":"IPv4","port":5002}],"eventarc":[{"address":"127.0.0.1","family":"IPv4","port":9299}],"tasks":[{"address":"127.0.0.1","family":"IPv4","port":9499}]},"metadata":{"message":"late-assigned ports for functions and eventarc emulators"}}
+[warn] ⚠  functions: The following emulators are not running, calls to these services from the Functions emulator will affect production: apphosting, database, storage, dataconnect {"metadata":{"emulator":{"name":"functions"},"message":"The following emulators are not running, calls to these services from the Functions emulator will affect production: \u001b[1mapphosting, database, storage, dataconnect\u001b[22m"}}
+[debug] [2025-11-18T11:05:18.446Z] defaultcredentials: writing to file /Users/jonasyaich/.config/firebase/jona223j_gmail_com_application_default_credentials.json
+[debug] [2025-11-18T11:05:18.446Z] Setting GAC to /Users/jonasyaich/.config/firebase/jona223j_gmail_com_application_default_credentials.json {"metadata":{"emulator":{"name":"functions"},"message":"Setting GAC to /Users/jonasyaich/.config/firebase/jona223j_gmail_com_application_default_credentials.json"}}
+[debug] [2025-11-18T11:05:18.447Z] Checked if tokens are valid: true, expires at: 1763467238590
+[debug] [2025-11-18T11:05:18.447Z] Checked if tokens are valid: true, expires at: 1763467238590
+[debug] [2025-11-18T11:05:18.447Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454/adminSdkConfig [none]
+[debug] [2025-11-18T11:05:18.815Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454/adminSdkConfig 200
+[debug] [2025-11-18T11:05:18.815Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454/adminSdkConfig {"projectId":"actualbackend-3b454","storageBucket":"actualbackend-3b454.firebasestorage.app"}
+[warn] ⚠  firestore: Cloud Firestore Emulator does not support multiple databases yet. {"metadata":{"emulator":{"name":"firestore"},"message":"Cloud Firestore Emulator does not support multiple databases yet."}}
+[warn] ⚠  firestore: Did not find a Cloud Firestore rules file specified in a firebase.json config file. {"metadata":{"emulator":{"name":"firestore"},"message":"Did not find a Cloud Firestore rules file specified in a firebase.json config file."}}
+[warn] ⚠  firestore: The emulator will default to allowing all reads and writes. Learn more about this option: https://firebase.google.com/docs/emulator-suite/install_and_configure#security_rules_configuration. {"metadata":{"emulator":{"name":"firestore"},"message":"The emulator will default to allowing all reads and writes. Learn more about this option: https://firebase.google.com/docs/emulator-suite/install_and_configure#security_rules_configuration."}}
+[debug] [2025-11-18T11:05:18.829Z] Ignoring unsupported arg: auto_download {"metadata":{"emulator":{"name":"firestore"},"message":"Ignoring unsupported arg: auto_download"}}
+[debug] [2025-11-18T11:05:18.829Z] Ignoring unsupported arg: single_project_mode_error {"metadata":{"emulator":{"name":"firestore"},"message":"Ignoring unsupported arg: single_project_mode_error"}}
+[debug] [2025-11-18T11:05:18.829Z] Starting Firestore Emulator with command {"binary":"java","args":["-Dgoogle.cloud_firestore.debug_log_level=FINE","-Duser.language=en","-jar","/Users/jonasyaich/.cache/firebase/emulators/cloud-firestore-emulator-v1.19.8.jar","--host","127.0.0.1","--port",8080,"--websocket_port",9150,"--project_id","actualbackend-3b454","--single_project_mode",true,"--functions_emulator","127.0.0.1:5002"],"optionalArgs":["port","webchannel_port","host","rules","websocket_port","functions_emulator","seed_from_export","project_id","single_project_mode"],"joinArgs":false,"shell":false,"port":8080} {"metadata":{"emulator":{"name":"firestore"},"message":"Starting Firestore Emulator with command {\"binary\":\"java\",\"args\":[\"-Dgoogle.cloud_firestore.debug_log_level=FINE\",\"-Duser.language=en\",\"-jar\",\"/Users/jonasyaich/.cache/firebase/emulators/cloud-firestore-emulator-v1.19.8.jar\",\"--host\",\"127.0.0.1\",\"--port\",8080,\"--websocket_port\",9150,\"--project_id\",\"actualbackend-3b454\",\"--single_project_mode\",true,\"--functions_emulator\",\"127.0.0.1:5002\"],\"optionalArgs\":[\"port\",\"webchannel_port\",\"host\",\"rules\",\"websocket_port\",\"functions_emulator\",\"seed_from_export\",\"project_id\",\"single_project_mode\"],\"joinArgs\":false,\"shell\":false,\"port\":8080}"}}
+[info] i  firestore: Firestore Emulator logging to firestore-debug.log {"metadata":{"emulator":{"name":"firestore"},"message":"Firestore Emulator logging to \u001b[1mfirestore-debug.log\u001b[22m"}}
+[debug] [2025-11-18T11:05:19.117Z] WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by io.netty.util.internal.PlatformDependent0$4 (file:/Users/jonasyaich/.cache/firebase/emulators/cloud-firestore-emulator-v1.19.8.jar)
+WARNING: Please consider reporting this to the maintainers of class io.netty.util.internal.PlatformDependent0$4
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ {"metadata":{"emulator":{"name":"firestore"},"message":"WARNING: A terminally deprecated method in sun.misc.Unsafe has been called\nWARNING: sun.misc.Unsafe::objectFieldOffset has been called by io.netty.util.internal.PlatformDependent0$4 (file:/Users/jonasyaich/.cache/firebase/emulators/cloud-firestore-emulator-v1.19.8.jar)\nWARNING: Please consider reporting this to the maintainers of class io.netty.util.internal.PlatformDependent0$4\nWARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release\n"}}
+[debug] [2025-11-18T11:05:19.525Z] Nov 18, 2025 12:05:19 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start
+INFO: Started WebSocket server on ws://127.0.0.1:9150
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Nov 18, 2025 12:05:19 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start\nINFO: Started WebSocket server on ws://127.0.0.1:9150\n"}}
+[debug] [2025-11-18T11:05:19.536Z] API endpoint: http:// {"metadata":{"emulator":{"name":"firestore"},"message":"API endpoint: http://"}}
+[debug] [2025-11-18T11:05:19.536Z] 127.0.0.1:8080
+If you are using a library that supports the FIRESTORE_EMULATOR_HOST environment variable, run:
+
+   export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+
+If you are running a Firestore in Datastore Mode project, run:
+
+   export DATASTORE_EMULATOR_HOST=127.0.0.1:8080
+
+Note: Support for Datastore Mode is in preview. If you encounter any bugs please file at https://github.com/firebase/firebase-tools/issues.
+Dev App Server is now running.
+
+ {"metadata":{"emulator":{"name":"firestore"},"message":"127.0.0.1:8080\nIf you are using a library that supports the FIRESTORE_EMULATOR_HOST environment variable, run:\n\n   export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080\n\nIf you are running a Firestore in Datastore Mode project, run:\n\n   export DATASTORE_EMULATOR_HOST=127.0.0.1:8080\n\nNote: Support for Datastore Mode is in preview. If you encounter any bugs please file at https://github.com/firebase/firebase-tools/issues.\nDev App Server is now running.\n\n"}}
+[info] ✔  firestore: Firestore Emulator UI websocket is running on 9150. {"metadata":{"emulator":{"name":"firestore"},"message":"Firestore Emulator UI websocket is running on 9150."}}
+[debug] [2025-11-18T11:05:21.965Z] Ignoring unsupported arg: projectId {"metadata":{"emulator":{"name":"pubsub"},"message":"Ignoring unsupported arg: projectId"}}
+[debug] [2025-11-18T11:05:21.965Z] Ignoring unsupported arg: auto_download {"metadata":{"emulator":{"name":"pubsub"},"message":"Ignoring unsupported arg: auto_download"}}
+[debug] [2025-11-18T11:05:21.965Z] Starting Pub/Sub Emulator with command {"binary":"/Users/jonasyaich/.cache/firebase/emulators/pubsub-emulator-0.8.17/pubsub-emulator/bin/cloud-pubsub-emulator","args":["--host=127.0.0.1","--port=8085"],"optionalArgs":["port","host"],"joinArgs":true,"shell":true,"port":8085} {"metadata":{"emulator":{"name":"pubsub"},"message":"Starting Pub/Sub Emulator with command {\"binary\":\"/Users/jonasyaich/.cache/firebase/emulators/pubsub-emulator-0.8.17/pubsub-emulator/bin/cloud-pubsub-emulator\",\"args\":[\"--host=127.0.0.1\",\"--port=8085\"],\"optionalArgs\":[\"port\",\"host\"],\"joinArgs\":true,\"shell\":true,\"port\":8085}"}}
+[info] i  pubsub: Pub/Sub Emulator logging to pubsub-debug.log {"metadata":{"emulator":{"name":"pubsub"},"message":"Pub/Sub Emulator logging to \u001b[1mpubsub-debug.log\u001b[22m"}}
+[debug] [2025-11-18T11:05:22.101Z] This is the Google Pub/Sub fake.
+Implementation may be incomplete or differ from the real system.
+ {"metadata":{"emulator":{"name":"pubsub"},"message":"This is the Google Pub/Sub fake.\nImplementation may be incomplete or differ from the real system.\n"}}
+[debug] [2025-11-18T11:05:22.121Z] nov. 18, 2025 12:05:22 PM com.google.cloud.pubsub.testing.v1.Main main
+INFO: IAM integration is disabled. IAM policy methods and ACL checks are not supported
+ {"metadata":{"emulator":{"name":"pubsub"},"message":"nov. 18, 2025 12:05:22 PM com.google.cloud.pubsub.testing.v1.Main main\nINFO: IAM integration is disabled. IAM policy methods and ACL checks are not supported\n"}}
+[debug] [2025-11-18T11:05:22.252Z] SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+ {"metadata":{"emulator":{"name":"pubsub"},"message":"SLF4J: Failed to load class \"org.slf4j.impl.StaticLoggerBinder\".\nSLF4J: Defaulting to no-operation (NOP) logger implementation\n"}}
+[debug] [2025-11-18T11:05:22.252Z] SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+ {"metadata":{"emulator":{"name":"pubsub"},"message":"SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.\n"}}
+[debug] [2025-11-18T11:05:22.257Z] WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::allocateMemory has been called by io.netty.util.internal.PlatformDependent0$2 (file:/Users/jonasyaich/.cache/firebase/emulators/pubsub-emulator-0.8.17/pubsub-emulator/lib/cloud-pubsub-emulator-0.8.17-all.jar)
+WARNING: Please consider reporting this to the maintainers of class io.netty.util.internal.PlatformDependent0$2
+WARNING: sun.misc.Unsafe::allocateMemory will be removed in a future release
+ {"metadata":{"emulator":{"name":"pubsub"},"message":"WARNING: A terminally deprecated method in sun.misc.Unsafe has been called\nWARNING: sun.misc.Unsafe::allocateMemory has been called by io.netty.util.internal.PlatformDependent0$2 (file:/Users/jonasyaich/.cache/firebase/emulators/pubsub-emulator-0.8.17/pubsub-emulator/lib/cloud-pubsub-emulator-0.8.17-all.jar)\nWARNING: Please consider reporting this to the maintainers of class io.netty.util.internal.PlatformDependent0$2\nWARNING: sun.misc.Unsafe::allocateMemory will be removed in a future release\n"}}
+[debug] [2025-11-18T11:05:22.526Z] nov. 18, 2025 12:05:22 PM com.google.cloud.pubsub.testing.v1.Main main
+INFO: Server started, listening on 8085
+ {"metadata":{"emulator":{"name":"pubsub"},"message":"nov. 18, 2025 12:05:22 PM com.google.cloud.pubsub.testing.v1.Main main\nINFO: Server started, listening on 8085\n"}}
+[debug] [2025-11-18T11:05:22.573Z] Checked if tokens are valid: true, expires at: 1763467238590
+[debug] [2025-11-18T11:05:22.573Z] Checked if tokens are valid: true, expires at: 1763467238590
+[debug] [2025-11-18T11:05:22.573Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/actualbackend-3b454/sites 
+[debug] [2025-11-18T11:05:23.474Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/actualbackend-3b454/sites 200
+[debug] [2025-11-18T11:05:23.474Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/actualbackend-3b454/sites {"sites":[{"name":"projects/actualbackend-3b454/sites/actualbackend-3b454","defaultUrl":"https://actualbackend-3b454.web.app","appId":"1:491793307002:web:0e9c4a0fbf419e40b4f2c3","type":"DEFAULT_SITE"}]}
+[debug] [2025-11-18T11:05:23.474Z] Checked if tokens are valid: true, expires at: 1763467238590
+[debug] [2025-11-18T11:05:23.474Z] Checked if tokens are valid: true, expires at: 1763467238590
+[debug] [2025-11-18T11:05:23.475Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454/webApps/1:491793307002:web:0e9c4a0fbf419e40b4f2c3/config [none]
+[debug] [2025-11-18T11:05:24.047Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454/webApps/1:491793307002:web:0e9c4a0fbf419e40b4f2c3/config 200
+[debug] [2025-11-18T11:05:24.047Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454/webApps/1:491793307002:web:0e9c4a0fbf419e40b4f2c3/config {"projectId":"actualbackend-3b454","appId":"1:491793307002:web:0e9c4a0fbf419e40b4f2c3","storageBucket":"actualbackend-3b454.firebasestorage.app","apiKey":"AIzaSyBXORQSis4xZS86kDCICfwwhU_yCJqaaLQ","authDomain":"actualbackend-3b454.firebaseapp.com","messagingSenderId":"491793307002","measurementId":"G-RY5MK2MJPF","projectNumber":"491793307002","version":"2"}
+[debug] [2025-11-18T11:05:24.057Z] Checked if tokens are valid: true, expires at: 1763467238590
+[debug] [2025-11-18T11:05:24.057Z] Checked if tokens are valid: true, expires at: 1763467238590
+[debug] [2025-11-18T11:05:24.058Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454 [none]
+[debug] [2025-11-18T11:05:24.473Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454 200
+[debug] [2025-11-18T11:05:24.473Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/actualbackend-3b454 {"projectId":"actualbackend-3b454","projectNumber":"491793307002","displayName":"actualbackend","name":"projects/actualbackend-3b454","resources":{"hostingSite":"actualbackend-3b454"},"state":"ACTIVE","etag":"1_889a74cc-b811-4ef5-9281-ee66b0f70448"}
+[info] i  hosting[actualbackend-3b454]: Serving hosting files from: build {"metadata":{"emulator":{"name":"hosting"},"message":"Serving hosting files from: \u001b[1mbuild\u001b[22m"}}
+[info] ✔  hosting[actualbackend-3b454]: Local server: http://127.0.0.1:5100 {"metadata":{"emulator":{"name":"hosting"},"message":"Local server: \u001b[4m\u001b[1mhttp://127.0.0.1:5100\u001b[22m\u001b[24m"}}
+[debug] [2025-11-18T11:05:24.546Z] [Extensions] Connecting Extensions emulator, this is a noop.
+[info] i  functions: Watching "/Users/jonasyaich/Desktop/actualbackend/functions" for Cloud Functions... {"metadata":{"emulator":{"name":"functions"},"message":"Watching \"/Users/jonasyaich/Desktop/actualbackend/functions\" for Cloud Functions..."}}
+[debug] [2025-11-18T11:05:24.551Z] Customer code is not Node
+[debug] [2025-11-18T11:05:24.552Z] Validating python source
+[debug] [2025-11-18T11:05:24.552Z] Building python source
+[info] i  functions: Loaded environment variables from .env. 
+[debug] [2025-11-18T11:05:24.557Z] Could not find functions.yaml. Must use http discovery
+[debug] [2025-11-18T11:05:24.561Z] Running command with virtualenv: command=., args=["\"/Users/jonasyaich/Desktop/actualbackend/functions/venv/bin/activate\"","&&","python3.12","-c","\"import firebase_functions; import os; print(os.path.dirname(firebase_functions.__file__))\""]
+[debug] [2025-11-18T11:05:24.722Z] stdout: /Users/jonasyaich/Desktop/actualbackend/functions/venv/lib/python3.12/site-packages/firebase_functions
+
+[debug] [2025-11-18T11:05:24.726Z] Running admin server with args: ["python3.12","\"/Users/jonasyaich/Desktop/actualbackend/functions/venv/lib/python3.12/site-packages/firebase_functions/private/serving.py\""] and env: {"GCLOUD_PROJECT":"actualbackend-3b454","K_REVISION":"1","PORT":"80","GOOGLE_CLOUD_QUOTA_PROJECT":"actualbackend-3b454","FUNCTIONS_EMULATOR":"true","TZ":"UTC","FIREBASE_DEBUG_MODE":"true","FIREBASE_DEBUG_FEATURES":"{\"skipTokenVerification\":true,\"enableCors\":true}","FIREBASE_EMULATOR_HUB":"127.0.0.1:4400","FIREBASE_AUTH_EMULATOR_HOST":"127.0.0.1:9099","FIRESTORE_EMULATOR_HOST":"127.0.0.1:8080","FIREBASE_FIRESTORE_EMULATOR_ADDRESS":"127.0.0.1:8080","PUBSUB_EMULATOR_HOST":"127.0.0.1:8085","CLOUD_EVENTARC_EMULATOR_HOST":"http://127.0.0.1:9299","CLOUD_TASKS_EMULATOR_HOST":"127.0.0.1:9499","FIREBASE_CONFIG":"{\"storageBucket\":\"actualbackend-3b454.firebasestorage.app\",\"projectId\":\"actualbackend-3b454\"}","GOOGLE_APPLICATION_CREDENTIALS":"/Users/jonasyaich/.config/firebase/jona223j_gmail_com_application_default_credentials.json","ADMIN_PORT":"8081"} in /Users/jonasyaich/Desktop/actualbackend/functions
+[debug] [2025-11-18T11:05:24.726Z] Running command with virtualenv: command=., args=["\"/Users/jonasyaich/Desktop/actualbackend/functions/venv/bin/activate\"","&&","python3.12","\"/Users/jonasyaich/Desktop/actualbackend/functions/venv/lib/python3.12/site-packages/firebase_functions/private/serving.py\""]
+[error]  * Tip: There are .env files present. Install python-dotenv to use them.
+
+[info]  * Serving Flask app 'serving'
+ * Debug mode: off
+
+[error] WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:8081
+Press CTRL+C to quit
+
+[error] 127.0.0.1 - - [18/Nov/2025 11:05:25] "GET /__/functions.yaml HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [18/Nov/2025 11:05:25] "GET /__/functions.yaml HTTP/1.1" 200 -
+
+[debug] [2025-11-18T11:05:25.600Z] Got response from /__/functions.yaml endpoints:
+  transcribe_audio:
+    availableMemoryMb: null
+    concurrency: null
+    cpu: gcf_gen1
+    entryPoint: transcribe_audio
+    httpsTrigger: {}
+    ingressSettings: null
+    labels: {}
+    maxInstances: 10
+    minInstances: null
+    platform: gcfv2
+    secretEnvironmentVariables: []
+    serviceAccountEmail: null
+    timeoutSeconds: null
+params: []
+requiredAPIs: []
+specVersion: v1alpha1
+
+[error] 127.0.0.1 - - [18/Nov/2025 11:05:25] "GET /__/quitquitquit HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [18/Nov/2025 11:05:25] "GET /__/quitquitquit HTTP/1.1" 200 -
+
+[error] /bin/sh: line 1: 63546 Terminated: 15          python3.12 "/Users/jonasyaich/Desktop/actualbackend/functions/venv/lib/python3.12/site-packages/firebase_functions/private/serving.py"
+
+[info] ✔  functions: Loaded functions definitions from source: transcribe_audio. {"metadata":{"emulator":{"name":"functions"},"message":"Loaded functions definitions from source: transcribe_audio."}}
+[info] ✔  functions[us-central1-transcribe_audio]: http function initialized (http://127.0.0.1:5002/actualbackend-3b454/us-central1/transcribe_audio). {"metadata":{"emulator":{"name":"functions"},"message":"\u001b[1mhttp\u001b[22m function initialized (http://127.0.0.1:5002/actualbackend-3b454/us-central1/transcribe_audio)."}}
+[debug] [2025-11-18T11:05:25.629Z] Could not find VSCode notification endpoint: FetchError: request to http://localhost:40001/vscode/notify failed, reason: . If you are not running the Firebase Data Connect VSCode extension, this is expected and not an issue.
+[info] 
+┌─────────────────────────────────────────────────────────────┐
+│ ✔  All emulators ready! It is now safe to connect your app. │
+│ i  View Emulator UI at http://127.0.0.1:4001/               │
+└─────────────────────────────────────────────────────────────┘
+
+┌────────────────┬────────────────┬──────────────────────────────────┐
+│ Emulator       │ Host:Port      │ View in Emulator UI              │
+├────────────────┼────────────────┼──────────────────────────────────┤
+│ Authentication │ 127.0.0.1:9099 │ http://127.0.0.1:4001/auth       │
+├────────────────┼────────────────┼──────────────────────────────────┤
+│ Functions      │ 127.0.0.1:5002 │ http://127.0.0.1:4001/functions  │
+├────────────────┼────────────────┼──────────────────────────────────┤
+│ Firestore      │ 127.0.0.1:8080 │ http://127.0.0.1:4001/firestore  │
+├────────────────┼────────────────┼──────────────────────────────────┤
+│ Hosting        │ 127.0.0.1:5100 │ n/a                              │
+├────────────────┼────────────────┼──────────────────────────────────┤
+│ Pub/Sub        │ 127.0.0.1:8085 │ n/a                              │
+├────────────────┼────────────────┼──────────────────────────────────┤
+│ Extensions     │ 127.0.0.1:5002 │ http://127.0.0.1:4001/extensions │
+└────────────────┴────────────────┴──────────────────────────────────┘
+  Emulator Hub host: 127.0.0.1 port: 4400
+  Other reserved ports: 4500, 9150
+┌─────────────────────────┬───────────────┬─────────────────────┐
+│ Extension Instance Name │ Extension Ref │ View in Emulator UI │
+└─────────────────────────┴───────────────┴─────────────────────┘
+Issues? Report them at https://github.com/firebase/firebase-tools/issues and attach the *-debug.log files.
+ 
+[debug] [2025-11-18T11:06:01.525Z] Nov 18, 2025 12:06:01 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler initChannel
+INFO: Connected to new websocket client
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Nov 18, 2025 12:06:01 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler initChannel\nINFO: Connected to new websocket client\n"}}
+[debug] [2025-11-18T11:06:03.216Z] Nov 18, 2025 12:06:03 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+INFO: Detected non-HTTP/2 connection.
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Nov 18, 2025 12:06:03 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\nINFO: Detected non-HTTP/2 connection.\n"}}
+[debug] [2025-11-18T11:06:03.293Z] Nov 18, 2025 12:06:03 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+INFO: Detected HTTP/2 connection.
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Nov 18, 2025 12:06:03 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\nINFO: Detected HTTP/2 connection.\n"}}
+[debug] [2025-11-18T11:08:31.658Z] >>> [apiv2][query] POST http://127.0.0.1:5002/functions/projects/actualbackend-3b454/trigger_multicast [none]
+[debug] [2025-11-18T11:08:31.659Z] >>> [apiv2][body] POST http://127.0.0.1:5002/functions/projects/actualbackend-3b454/trigger_multicast {"eventId":"5cbfa2cd-aeb3-4899-916f-dd5ee8ec4be9","eventType":"providers/firebase.auth/eventTypes/user.create","resource":{"name":"projects/actualbackend-3b454","service":"firebaseauth.googleapis.com"},"params":{},"timestamp":"2025-11-18T11:08:31.654Z","data":{"uid":"QBqNDfr8sMSsaaawqUkcgl8wuOr5","email":"olive.raccoon.595@example.com","emailVerified":true,"displayName":"Olive Raccoon","metadata":{"creationTime":"2025-11-18T11:08:31.645Z","lastSignInTime":"2025-11-18T11:08:31.645Z"},"customClaims":{},"providerData":[{"rawId":"4629931350086144765461206193031654884087","providerId":"google.com","displayName":"Olive Raccoon","email":"olive.raccoon.595@example.com","federatedId":"4629931350086144765461206193031654884087","screenName":"raccoon_olive"}]}}
+[debug] [2025-11-18T11:08:31.713Z] <<< [apiv2][status] POST http://127.0.0.1:5002/functions/projects/actualbackend-3b454/trigger_multicast 200
+[debug] [2025-11-18T11:08:31.713Z] <<< [apiv2][body] POST http://127.0.0.1:5002/functions/projects/actualbackend-3b454/trigger_multicast {"status":"multicast_acknowledged"}
+[debug] [2025-11-18T11:14:35.192Z] Nov 18, 2025 12:14:35 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+INFO: Detected non-HTTP/2 connection.
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Nov 18, 2025 12:14:35 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\nINFO: Detected non-HTTP/2 connection.\n"}}
+[debug] [2025-11-18T11:22:20.839Z] Nov 18, 2025 12:22:20 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+INFO: Detected non-HTTP/2 connection.
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Nov 18, 2025 12:22:20 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\nINFO: Detected non-HTTP/2 connection.\n"}}
+[debug] [2025-11-18T11:25:14.209Z] Nov 18, 2025 12:25:14 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+INFO: Detected non-HTTP/2 connection.
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Nov 18, 2025 12:25:14 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\nINFO: Detected non-HTTP/2 connection.\n"}}
+[debug] [2025-11-18T11:26:27.331Z] Nov 18, 2025 12:26:27 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler channelClosed
+INFO: Websocket client disconnected
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Nov 18, 2025 12:26:27 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler channelClosed\nINFO: Websocket client disconnected\n"}}
+[debug] [2025-11-18T11:27:05.845Z] >>> [apiv2][query] POST http://127.0.0.1:5002/functions/projects/actualbackend-3b454/trigger_multicast [none]
+[debug] [2025-11-18T11:27:05.845Z] >>> [apiv2][body] POST http://127.0.0.1:5002/functions/projects/actualbackend-3b454/trigger_multicast {"eventId":"e11e7b7a-07be-4c13-b86b-29f0cfa9052f","eventType":"providers/firebase.auth/eventTypes/user.create","resource":{"name":"projects/actualbackend-3b454","service":"firebaseauth.googleapis.com"},"params":{},"timestamp":"2025-11-18T11:27:05.839Z","data":{"uid":"Aqanm15GNbq0aYb5UFWR3kLlGhC6","email":"panda.algae.560@example.com","emailVerified":true,"displayName":"Panda Algae","metadata":{"creationTime":"2025-11-18T11:27:05.834Z","lastSignInTime":"2025-11-18T11:27:05.834Z"},"customClaims":{},"providerData":[{"rawId":"3475491079756785083426456987392714664462","providerId":"google.com","displayName":"Panda Algae","email":"panda.algae.560@example.com","federatedId":"3475491079756785083426456987392714664462","screenName":"algae_panda"}]}}
+[debug] [2025-11-18T11:27:05.879Z] <<< [apiv2][status] POST http://127.0.0.1:5002/functions/projects/actualbackend-3b454/trigger_multicast 200
+[debug] [2025-11-18T11:27:05.879Z] <<< [apiv2][body] POST http://127.0.0.1:5002/functions/projects/actualbackend-3b454/trigger_multicast {"status":"multicast_acknowledged"}
+[debug] [2025-11-18T11:31:21.176Z] >>> [apiv2][query] POST http://127.0.0.1:5002/functions/projects/actualbackend-3b454/trigger_multicast [none]
+[debug] [2025-11-18T11:31:21.183Z] >>> [apiv2][body] POST http://127.0.0.1:5002/functions/projects/actualbackend-3b454/trigger_multicast {"eventId":"ff894b60-270f-491a-82a8-703c2ee7ee86","eventType":"providers/firebase.auth/eventTypes/user.create","resource":{"name":"projects/actualbackend-3b454","service":"firebaseauth.googleapis.com"},"params":{},"timestamp":"2025-11-18T11:31:21.168Z","data":{"uid":"LuFK47lNfHKkGNEGsmXYidfeG3wZ","email":"otter.otter.12@example.com","emailVerified":true,"displayName":"Otter Otter","metadata":{"creationTime":"2025-11-18T11:31:21.165Z","lastSignInTime":"2025-11-18T11:31:21.165Z"},"customClaims":{},"providerData":[{"rawId":"8021606762803975788813867919026727747647","providerId":"google.com","displayName":"Otter Otter","email":"otter.otter.12@example.com","federatedId":"8021606762803975788813867919026727747647","screenName":"otter_otter"}]}}
+[debug] [2025-11-18T11:31:21.218Z] <<< [apiv2][status] POST http://127.0.0.1:5002/functions/projects/actualbackend-3b454/trigger_multicast 200
+[debug] [2025-11-18T11:31:21.219Z] <<< [apiv2][body] POST http://127.0.0.1:5002/functions/projects/actualbackend-3b454/trigger_multicast {"status":"multicast_acknowledged"}
+[debug] [2025-11-18T11:33:09.423Z] >>> [apiv2][query] POST http://127.0.0.1:5002/functions/projects/actualbackend-3b454/trigger_multicast [none]
+[debug] [2025-11-18T11:33:09.424Z] >>> [apiv2][body] POST http://127.0.0.1:5002/functions/projects/actualbackend-3b454/trigger_multicast {"eventId":"b20d91c9-4f4a-4895-9402-99034b6fc781","eventType":"providers/firebase.auth/eventTypes/user.create","resource":{"name":"projects/actualbackend-3b454","service":"firebaseauth.googleapis.com"},"params":{},"timestamp":"2025-11-18T11:33:09.422Z","data":{"uid":"uwsXDI9T7Q6mAl6J2MR2g88ODil7","email":"orange.orange.889@example.com","emailVerified":true,"displayName":"Orange Orange","metadata":{"creationTime":"2025-11-18T11:33:09.421Z","lastSignInTime":"2025-11-18T11:33:09.421Z"},"customClaims":{},"providerData":[{"rawId":"0272665530752908023935399477122130760257","providerId":"google.com","displayName":"Orange Orange","email":"orange.orange.889@example.com","federatedId":"0272665530752908023935399477122130760257","screenName":"orange_orange"}]}}
+[debug] [2025-11-18T11:33:09.454Z] <<< [apiv2][status] POST http://127.0.0.1:5002/functions/projects/actualbackend-3b454/trigger_multicast 200
+[debug] [2025-11-18T11:33:09.455Z] <<< [apiv2][body] POST http://127.0.0.1:5002/functions/projects/actualbackend-3b454/trigger_multicast {"status":"multicast_acknowledged"}
