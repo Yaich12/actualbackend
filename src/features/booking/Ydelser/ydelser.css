@@ -1,0 +1,230 @@
+/* Ydelser Main Content - More specific to override bookingpage.css */
+.booking-page .ydelser-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background-color: #ffffff !important;
+  padding: 0 !important;
+  min-width: 0;
+}
+
+/* Page Header */
+.booking-page .ydelser-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.booking-page .ydelser-header .header-left {
+  display: flex;
+  align-items: center;
+}
+
+.booking-page .ydelser-header .page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.booking-page .ydelser-header .header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.booking-page .sort-btn,
+.booking-page .create-service-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.booking-page .sort-btn:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.booking-page .create-service-btn {
+  background-color: #3b82f6;
+  color: #ffffff;
+  border-color: #3b82f6;
+}
+
+.booking-page .create-service-btn:hover {
+  background-color: #2563eb;
+  border-color: #2563eb;
+}
+
+.booking-page .sort-icon {
+  font-size: 16px;
+}
+
+.booking-page .plus-icon {
+  font-size: 18px;
+  font-weight: 300;
+}
+
+/* Selection Bar */
+.booking-page .selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.booking-page .select-all-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.booking-page .select-all-container input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+.booking-page .select-all-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+  user-select: none;
+}
+
+.booking-page .dropdown-arrow {
+  font-size: 10px;
+  color: #6b7280;
+  margin-left: 4px;
+}
+
+.booking-page .search-bar-services {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  max-width: 300px;
+  margin-left: auto;
+}
+
+.booking-page .search-icon-small {
+  font-size: 16px;
+  color: #6b7280;
+}
+
+.booking-page .search-input-services {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+  color: #111827;
+}
+
+.booking-page .search-input-services::placeholder {
+  color: #9ca3af;
+}
+
+/* Services List */
+.booking-page .services-list {
+  flex: 1;
+  overflow-y: auto;
+  background-color: #ffffff;
+  padding: 0;
+}
+
+.booking-page .service-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.booking-page .service-item:hover {
+  background-color: #f9fafb;
+}
+
+.booking-page .service-item:last-child {
+  border-bottom: none;
+}
+
+.booking-page .service-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+}
+
+.booking-page .service-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+.booking-page .service-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+  min-width: 200px;
+}
+
+.booking-page .service-duration {
+  font-size: 14px;
+  color: #6b7280;
+  min-width: 120px;
+  text-align: left;
+}
+
+.booking-page .service-price {
+  font-size: 14px;
+  color: #111827;
+  font-weight: 500;
+  text-align: right;
+  min-width: 200px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .booking-page .service-item {
+    flex-wrap: wrap;
+  }
+  
+  .booking-page .service-name,
+  .booking-page .service-duration,
+  .booking-page .service-price {
+    min-width: auto;
+  }
+  
+  .booking-page .service-price {
+    text-align: left;
+  }
+}
+

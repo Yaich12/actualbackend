@@ -1,0 +1,490 @@
+.indlæg-container {
+  width: 100%;
+  height: 100%;
+  background-color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header */
+.indlæg-header {
+  flex: 0 0 auto;
+  padding: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.indlæg-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.indlæg-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.indlæg-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.indlæg-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.indlæg-action-btn:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.indlæg-action-icon {
+  font-size: 16px;
+}
+
+.indlæg-icon-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.indlæg-icon-btn:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.indlæg-close-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.indlæg-close-btn:hover {
+  background-color: #f3f4f6;
+  color: #111827;
+}
+
+.indlæg-mikrofon-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.indlæg-mikrofon-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: none;
+  background-color: #ef4444;
+  color: #ffffff;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.2s;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+}
+
+.indlæg-mikrofon-btn:hover {
+  background-color: #dc2626;
+  transform: translateY(-1px);
+}
+
+.indlæg-mikrofon-btn.active {
+  background-color: #991b1b;
+  box-shadow: 0 4px 16px rgba(153, 27, 27, 0.4);
+}
+
+.indlæg-mikrofon-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.indlæg-dictation-status {
+  font-size: 13px;
+  color: #374151;
+  margin: 0;
+  text-align: right;
+  white-space: pre-line;
+}
+
+/* Search Bar */
+.indlæg-search-bar {
+  width: 100%;
+}
+
+.indlæg-search-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #111827;
+  background-color: #ffffff;
+}
+
+.indlæg-search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.indlæg-search-input::placeholder {
+  color: #9ca3af;
+}
+
+/* Content */
+.indlæg-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.indlæg-form-section {
+  margin-bottom: 24px;
+}
+
+.indlæg-form-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.indlæg-form-group {
+  flex: 1;
+}
+
+.indlæg-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.indlæg-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #111827;
+  background-color: #ffffff;
+  box-sizing: border-box;
+}
+
+.indlæg-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.indlæg-date-input {
+  max-width: 150px;
+}
+
+/* Toggle Switch */
+.indlæg-toggle-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.indlæg-toggle-label {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 28px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.indlæg-toggle-input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.indlæg-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #d1d5db;
+  transition: 0.3s;
+  border-radius: 28px;
+}
+
+.indlæg-toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 22px;
+  width: 22px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.indlæg-toggle-input:checked + .indlæg-toggle-slider {
+  background-color: #3b82f6;
+}
+
+.indlæg-toggle-input:checked + .indlæg-toggle-slider:before {
+  transform: translateX(20px);
+}
+
+.indlæg-toggle-text-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.indlæg-help-btn {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  border-radius: 50%;
+  font-size: 12px;
+  color: #6b7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.indlæg-help-btn:hover {
+  background-color: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+/* Rich Text Editor Toolbar */
+.indlæg-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  flex-wrap: wrap;
+}
+
+.indlæg-toolbar-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.indlæg-toolbar-btn:hover {
+  background-color: #e5e7eb;
+}
+
+.indlæg-toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background-color: #d1d5db;
+  margin: 0 4px;
+}
+
+.indlæg-toolbar-select {
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+}
+
+.indlæg-toolbar-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+/* Textarea */
+.indlæg-textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  font-size: 14px;
+  color: #111827;
+  background-color: #ffffff;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 300px;
+  box-sizing: border-box;
+}
+
+.indlæg-textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.indlæg-textarea::placeholder {
+  color: #9ca3af;
+}
+
+/* Footer */
+.indlæg-footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px;
+  border-top: 1px solid #e5e7eb;
+  background-color: #ffffff;
+}
+
+.indlæg-cancel-btn {
+  padding: 10px 20px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.indlæg-cancel-btn:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.indlæg-draft-btn {
+  padding: 10px 20px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.indlæg-draft-btn:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.indlæg-save-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: none;
+  background-color: #3b82f6;
+  color: #ffffff;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.indlæg-save-btn:hover {
+  background-color: #2563eb;
+}
+
+.indlæg-save-icon {
+  font-size: 16px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .indlæg-header-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .indlæg-header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .indlæg-form-row {
+    flex-direction: column;
+  }
+
+  .indlæg-date-input {
+    max-width: 100%;
+  }
+
+  .indlæg-footer {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .indlæg-cancel-btn,
+  .indlæg-draft-btn,
+  .indlæg-save-btn {
+    width: 100%;
+  }
+}
