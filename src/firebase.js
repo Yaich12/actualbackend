@@ -10,6 +10,10 @@ import {
   connectAuthEmulator,
   getRedirectResult,
 } from "firebase/auth";
+import {
+  getFirestore,
+  connectFirestoreEmulator,
+} from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_API_KEY,
@@ -23,6 +27,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 
 const shouldUseEmulators = (() => {
@@ -38,11 +43,13 @@ const shouldUseEmulators = (() => {
 })();
 
 if (shouldUseEmulators) {
-  connectAuthEmulator(auth, "http://localhost:9099");
+  connectAuthEmulator(auth, "http://localhost:9150");
+  connectFirestoreEmulator(db, "localhost", 8200);
 }
 
 export {
   auth,
+  db,
   googleProvider,
   signInWithRedirect,
   sendSignInLinkToEmail,
