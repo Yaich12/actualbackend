@@ -1,14 +1,12 @@
-import React from 'react';
-import './kalender.css';
+import React from "react";
+import "../../unAuth/components/kalender.css";
 
-function Axis() {
+function KalenderPreview() {
   return (
-    <section className="axis">
-      <div className="axis-container">
-        <div className="axis-card">
-          <h2 className="axis-title">The interface is intentionally minimal, while a sophisticated, custom-built AI engine operates behind the scenes.</h2>
-          
-          <div className="axis-visual">
+    <div className="axis" style={{ padding: 0, margin: 0, background: "transparent" }}>
+      <div className="axis-container" style={{ maxWidth: "100%", padding: 0 }}>
+        <div className="axis-card" style={{ padding: "1rem", boxShadow: "none", borderRadius: 0 }}>
+          <div className="axis-visual" style={{ margin: 0 }}>
             <div className="axis-app-preview">
               <div className="axis-app-header">
                 <div className="axis-app-logo"></div>
@@ -87,9 +85,10 @@ function Axis() {
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 
-export default Axis;
+export default KalenderPreview;
+
 

@@ -5,7 +5,6 @@ import BookingPage from './features/booking/bookingpage';
 import Klientoversigt from './features/booking/Klienter/Klientoversigt';
 import Ydelser from './features/booking/Ydelser/ydelser';
 import SignUp from './SignUp';
-import Dashboard from './Dashboard';
 import { useAuth } from './AuthContext';
 import './App.css';
 
@@ -33,14 +32,6 @@ function App() {
           <Route path="/booking/klienter" element={<Klientoversigt />} />
           <Route path="/booking/ydelser" element={<Ydelser />} />
           <Route path="/signup" element={<SignUp />} />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
         </Routes>
     </div>
     </Router>

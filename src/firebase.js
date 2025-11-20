@@ -14,6 +14,10 @@ import {
   getFirestore,
   connectFirestoreEmulator,
 } from "firebase/firestore";
+import {
+  getStorage,
+  connectStorageEmulator,
+} from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_API_KEY,
@@ -28,6 +32,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 const googleProvider = new GoogleAuthProvider();
 
 const shouldUseEmulators = (() => {
@@ -43,8 +48,9 @@ const shouldUseEmulators = (() => {
 })();
 
 if (shouldUseEmulators) {
-  connectAuthEmulator(auth, "http://localhost:9150");
-  connectFirestoreEmulator(db, "localhost", 8200);
+  connectAuthEmulator(auth, "http://localhost:9099");
+  connectFirestoreEmulator(db, "localhost", 8080);
+  connectStorageEmulator(storage, "localhost", 9199);
 }
 
 export {
@@ -57,4 +63,5 @@ export {
   signInWithEmailLink,
   onAuthStateChanged,
   getRedirectResult,
+  storage,
 };

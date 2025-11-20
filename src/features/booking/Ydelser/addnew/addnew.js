@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { ref, uploadString } from 'firebase/storage';
 import './addnew.css';
+import { storage } from '../../../../firebase';
+import { useAuth } from '../../../../AuthContext';
 
 const DEFAULT_FORM_VALUES = {
   name: '',
@@ -19,8 +22,41 @@ const durationOptions = [
   '2 timer',
 ];
 
+const sanitizeIdentifier = (value) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+const deriveUserIdentifier = (user) => {
+  if (!user) {
+    return 'unknown-user';
+  }
+
+  const baseIdentifier =
+    (user.displayName && user.displayName.trim()) ||
+    (user.email && user.email.trim()) ||
+    user.uid ||
+    'unknown-user';
+
+  const sanitized = sanitizeIdentifier(baseIdentifier);
+  if (sanitized) {
+    return sanitized;
+  }
+
+  if (user.uid) {
+    return sanitizeIdentifier(user.uid);
+  }
+
+  return 'unknown-user';
+};
+
 function AddNewServiceModal({ isOpen, onClose, onSubmit }) {
   const [formValues, setFormValues] = useState(DEFAULT_FORM_VALUES);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const { user } = useAuth();
 
   useEffect(() => {
     if (isOpen) {
@@ -40,12 +76,76 @@ function AddNewServiceModal({ isOpen, onClose, onSubmit }) {
     }));
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    if (onSubmit) {
-      onSubmit(formValues);
+
+    if (isSaving) {
+      return;
     }
-    onClose();
+
+    if (!user) {
+      setSaveError('Du skal være logget ind for at gemme en ydelse.');
+      return;
+    }
+
+    setSaveError('');
+    setIsSaving(true);
+
+    try {
+      const nowIso = new Date().toISOString();
+      const ownerIdentifier = deriveUserIdentifier(user);
+      const serviceIdentifier =
+        sanitizeIdentifier(formValues.name) || `ydelse-${Date.now()}`;
+      const storageFileName = `${serviceIdentifier}-${Date.now()}.json`;
+      const storagePath = `ydelser/${ownerIdentifier}/${storageFileName}`;
+      const priceParsed = parseFloat(
+        (formValues.price || '').toString().replace(',', '.')
+      );
+      const price = Number.isNaN(priceParsed) ? 0 : priceParsed;
+      const priceInclVat = formValues.includeVat ? price : price * 1.25;
+
+      const payload = {
+        ...formValues,
+        price,
+        priceInclVat,
+        ownerUid: user.uid,
+        ownerEmail: user.email ?? null,
+        ownerIdentifier,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        storagePath,
+      };
+
+      await uploadString(
+        ref(storage, storagePath),
+        JSON.stringify(payload),
+        'raw',
+        {
+          contentType: 'application/json; charset=utf-8',
+        }
+      );
+
+      const newServiceForList = {
+        id: storagePath,
+        navn: payload.name?.trim() || 'Ny ydelse',
+        varighed: payload.duration || '1 time',
+        pris: payload.price,
+        prisInklMoms: payload.priceInclVat,
+        description: payload.description || '',
+        createdAt: nowIso,
+        storagePath,
+      };
+
+      if (onSubmit) {
+        onSubmit(newServiceForList);
+      }
+      onClose();
+    } catch (error) {
+      console.error('Failed to save service:', error);
+      setSaveError('Kunne ikke gemme ydelsen. Prøv igen.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -129,12 +229,32 @@ function AddNewServiceModal({ isOpen, onClose, onSubmit }) {
             </div>
           </div>
 
+          {saveError && (
+            <p className="addnew-error" role="alert">
+              {saveError}
+            </p>
+          )}
+
           <div className="addnew-modal-footer">
-            <button type="button" className="addnew-secondary-btn" onClick={onClose}>
+            <button
+              type="button"
+              className="addnew-secondary-btn"
+              onClick={onClose}
+              disabled={isSaving}
+            >
               Annuller
             </button>
-            <button type="submit" className="addnew-primary-btn">
-              Næste <span className="addnew-btn-arrow">›</span>
+            <button
+              type="submit"
+              className="addnew-primary-btn"
+              disabled={isSaving}
+              aria-busy={isSaving}
+            >
+              {isSaving ? 'Gemmer...' : (
+                <>
+                  Næste <span className="addnew-btn-arrow">›</span>
+                </>
+              )}
             </button>
           </div>
         </form>
