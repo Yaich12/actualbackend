@@ -1,6 +1,10 @@
 import React, { useRef, useState } from 'react';
+import { ref, uploadString } from 'firebase/storage';
 import './indlæg.css';
 import Whisper from './whisper';
+import Prompt from './prompt';
+import { storage } from '../../../../firebase';
+import { useAuth } from '../../../../AuthContext';
 
 const PROJECT_ID = process.env.REACT_APP_PROJECT_ID || '';
 const FUNCTION_REGION = process.env.REACT_APP_FUNCTION_REGION || 'us-central1';
@@ -14,7 +18,7 @@ const buildDefaultTranscribeUrl = () => {
     typeof window !== 'undefined' &&
     window.location.hostname === 'localhost'
   ) {
-    return `http://127.0.0.1:5001/${PROJECT_ID}/${FUNCTION_REGION}/transcribe_audio`;
+    return `http://127.0.0.1:5501/${PROJECT_ID}/${FUNCTION_REGION}/transcribe_audio`;
   }
 
   return `https://${FUNCTION_REGION}-${PROJECT_ID}.cloudfunctions.net/transcribe_audio`;
@@ -22,6 +26,36 @@ const buildDefaultTranscribeUrl = () => {
 
 const TRANSCRIBE_FUNCTION_URL =
   process.env.REACT_APP_TRANSCRIBE_URL || buildDefaultTranscribeUrl();
+
+const sanitizeIdentifier = (value) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+const deriveUserIdentifier = (user) => {
+  if (!user) {
+    return 'unknown-user';
+  }
+
+  const baseIdentifier =
+    (user.displayName && user.displayName.trim()) ||
+    (user.email && user.email.trim()) ||
+    user.uid ||
+    'unknown-user';
+
+  const sanitized = sanitizeIdentifier(baseIdentifier);
+  if (sanitized) {
+    return sanitized;
+  }
+
+  if (user.uid) {
+    return sanitizeIdentifier(user.uid);
+  }
+
+  return 'unknown-user';
+};
 
 function Indlæg({ clientName, onClose, onSave }) {
   const [title, setTitle] = useState('');
@@ -32,26 +66,78 @@ function Indlæg({ clientName, onClose, onSave }) {
   const [isDictating, setIsDictating] = useState(false);
   const [dictationStatus, setDictationStatus] = useState('');
   const [transcriptionResult, setTranscriptionResult] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
+  const { user } = useAuth();
 
-  const handleSave = () => {
-    const newEntry = {
-      id: Date.now(),
-      title,
+  const handleSave = async () => {
+    if (isSaving) {
+      return;
+    }
+
+    setSaveError('');
+
+    if (!user) {
+      setSaveError('Du skal være logget ind for at gemme indlæg.');
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const ownerIdentifier = deriveUserIdentifier(user);
+    const entryPayload = {
+      title: title.trim(),
       date,
       content,
       isPrivate,
       isStarred: false,
       isLocked: false,
+      clientName,
+      searchQuery,
+      dictationStatus,
+      transcriptionResult,
+      ownerUid: user.uid,
+      ownerEmail: user.email ?? null,
+      ownerIdentifier,
+      createdAt: nowIso,
+      updatedAt: nowIso,
     };
-    
-    if (typeof onSave === 'function') {
-      onSave(newEntry);
+
+    setIsSaving(true);
+
+    try {
+      const entryId = `${ownerIdentifier || 'journal'}-journal-${Date.now()}.json`;
+      const storagePath = `userindlæg/${ownerIdentifier}/${entryId}`;
+      const storageRef = ref(storage, storagePath);
+
+      await uploadString(
+        storageRef,
+        JSON.stringify(entryPayload),
+        'raw',
+        {
+          contentType: 'application/json; charset=utf-8',
+        }
+      );
+
+      const savedEntry = {
+        id: storagePath,
+        storagePath,
+        ...entryPayload,
+      };
+
+      if (typeof onSave === 'function') {
+        onSave(savedEntry);
+      }
+
+      onClose();
+    } catch (error) {
+      console.error('Failed to save journal entry:', error);
+      setSaveError('Kunne ikke gemme indlægget. Prøv igen senere.');
+    } finally {
+      setIsSaving(false);
     }
-    
-    onClose();
   };
 
   const handleSaveDraft = () => {
@@ -90,6 +176,17 @@ function Indlæg({ clientName, onClose, onSave }) {
   const handlePrint = () => {
     // Handle print
     console.log('Print');
+  };
+
+  const appendContentFromExternalSource = (incomingText) => {
+    if (typeof incomingText !== 'string' || !incomingText.trim()) {
+      return;
+    }
+
+    setContent((currentContent) => {
+      const suffix = currentContent ? '\n\n' : '';
+      return `${currentContent || ''}${suffix}${incomingText}`;
+    });
   };
 
   const startDictation = async () => {
@@ -188,10 +285,7 @@ function Indlæg({ clientName, onClose, onSave }) {
       if (parsedResult) {
         setTranscriptionResult(parsedResult);
         if (parsedResult.text) {
-          setContent((currentContent) => {
-            const suffix = currentContent ? '\n\n' : '';
-            return `${currentContent || ''}${suffix}${parsedResult.text}`;
-          });
+          appendContentFromExternalSource(parsedResult.text);
         }
         setDictationStatus('Transskription modtaget.');
       } else {
@@ -340,23 +434,32 @@ function Indlæg({ clientName, onClose, onSave }) {
             rows={15}
           />
           <div className="indlæg-mikrofon-container">
-            <button
-              type="button"
-              className={`indlæg-mikrofon-btn${isDictating ? ' active' : ''}`}
-              onClick={handleMikrofonClick}
-              title={isDictating ? 'Stop diktering' : 'Start diktering'}
-              aria-pressed={isDictating}
-            >
-              <span className="indlæg-mikrofon-icon">🎤</span>
-              Mikrofon
-            </button>
-            {dictationStatus && (
-              <p className="indlæg-dictation-status">{dictationStatus}</p>
-            )}
+            <div className="indlæg-mikrofon-wrapper">
+              <button
+                type="button"
+                className={`indlæg-mikrofon-btn${isDictating ? ' active' : ''}`}
+                onClick={handleMikrofonClick}
+                title={isDictating ? 'Stop diktering' : 'Start diktering'}
+                aria-pressed={isDictating}
+              >
+                <span className="indlæg-mikrofon-icon">🎤</span>
+                Mikrofon
+              </button>
+              {dictationStatus && (
+                <p className="indlæg-dictation-status">{dictationStatus}</p>
+              )}
+            </div>
+            <Prompt onResult={appendContentFromExternalSource} />
           </div>
           {transcriptionResult && <Whisper data={transcriptionResult} />}
         </div>
       </div>
+
+      {saveError && (
+        <p className="indlæg-save-error" role="alert">
+          {saveError}
+        </p>
+      )}
 
       {/* Footer Actions */}
       <div className="indlæg-footer">
@@ -366,9 +469,14 @@ function Indlæg({ clientName, onClose, onSave }) {
         <button className="indlæg-draft-btn" onClick={handleSaveDraft}>
           Gem som kladde
         </button>
-        <button className="indlæg-save-btn" onClick={handleSave}>
+        <button
+          className="indlæg-save-btn"
+          onClick={handleSave}
+          disabled={isSaving}
+          aria-busy={isSaving}
+        >
           <span className="indlæg-save-icon">💾</span>
-          Gem og luk
+          {isSaving ? 'Gemmer...' : 'Gem og luk'}
         </button>
       </div>
     </div>

@@ -1,19 +1,82 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../bookingpage.css';
 import './ydelser.css';
 import { services } from './servicesData';
 import AddNewServiceModal from './addnew/addnew';
 import { useAuth } from '../../../AuthContext';
+import { ref, listAll, getDownloadURL } from 'firebase/storage';
+import { storage } from '../../../firebase';
+
+const sanitizeIdentifier = (value) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+const deriveUserIdentifier = (user) => {
+  if (!user) {
+    return 'unknown-user';
+  }
+
+  const baseIdentifier =
+    (user.displayName && user.displayName.trim()) ||
+    (user.email && user.email.trim()) ||
+    user.uid ||
+    'unknown-user';
+
+  const sanitized = sanitizeIdentifier(baseIdentifier);
+  if (sanitized) {
+    return sanitized;
+  }
+
+  if (user.uid) {
+    return sanitizeIdentifier(user.uid);
+  }
+
+  return 'unknown-user';
+};
+
+const mapStoredServiceToRow = (stored) => {
+  const price =
+    typeof stored.pris === 'number'
+      ? stored.pris
+      : typeof stored.price === 'number'
+      ? stored.price
+      : 0;
+  const priceIncl =
+    typeof stored.prisInklMoms === 'number'
+      ? stored.prisInklMoms
+      : typeof stored.priceInclVat === 'number'
+      ? stored.priceInclVat
+      : price;
+
+  return {
+    id:
+      stored.storagePath ||
+      stored.id ||
+      `${stored.navn || stored.name || 'ydelse'}-${stored.createdAt || Date.now()}`,
+    navn: stored.navn || stored.name || 'Ny ydelse',
+    varighed: stored.varighed || stored.duration || '1 time',
+    pris: price,
+    prisInklMoms: priceIncl,
+    description: stored.description || '',
+    createdAt: stored.createdAt || null,
+    storagePath: stored.storagePath,
+  };
+};
 
 function Ydelser() {
   const navigate = useNavigate();
-  const { signOutUser } = useAuth();
+  const { signOutUser, user } = useAuth();
   const [activeNav, setActiveNav] = useState('ydelser');
   const [searchQuery, setSearchQuery] = useState('');
   const [serviceList, setServiceList] = useState(services);
   const [selectedServices, setSelectedServices] = useState([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isLoadingServices, setIsLoadingServices] = useState(false);
+  const [servicesLoadError, setServicesLoadError] = useState('');
 
 
   const handleNavClick = (navItem) => {
@@ -52,21 +115,110 @@ function Ydelser() {
     }).format(price);
   };
 
-  const handleAddNewService = (formData) => {
-    const parsedPrice = parseFloat((formData.price || '').toString().replace(',', '.'));
-    const price = Number.isNaN(parsedPrice) ? 0 : parsedPrice;
-    const priceInclVat = formData.includeVat ? price : price * 1.25;
+  const handleAddNewService = (serviceData) => {
+    const normalized = mapStoredServiceToRow(serviceData || {});
+    setServiceList((prev) => [normalized, ...prev]);
+  };
 
-    const newService = {
-      id: Date.now(),
-      navn: formData.name?.trim() || 'Ny ydelse',
-      varighed: formData.duration || '1 time',
-      pris: price,
-      prisInklMoms: priceInclVat,
+  useEffect(() => {
+    let isCancelled = false;
+
+    const fetchServicesFromStorage = async () => {
+      if (!user) {
+        setServiceList(services);
+        setServicesLoadError('');
+        setIsLoadingServices(false);
+        return;
+      }
+
+      setIsLoadingServices(true);
+      setServicesLoadError('');
+
+      try {
+        const identifier = deriveUserIdentifier(user);
+        const folderCandidates = Array.from(
+          new Set(
+            [identifier, user.uid].filter(
+              (candidate) =>
+                typeof candidate === 'string' && candidate.trim().length > 0
+            )
+          )
+        );
+
+        const fetchedArrays = await Promise.all(
+          folderCandidates.map(async (folderName) => {
+            try {
+              const folderRef = ref(storage, `ydelser/${folderName}`);
+              const listResult = await listAll(folderRef);
+
+              const entries = await Promise.all(
+                listResult.items.map(async (itemRef) => {
+                  try {
+                    const url = await getDownloadURL(itemRef);
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                      throw new Error(`Failed to fetch ${itemRef.fullPath}`);
+                    }
+                    const data = await response.json();
+                    return mapStoredServiceToRow({
+                      ...data,
+                      storagePath: itemRef.fullPath,
+                    });
+                  } catch (entryError) {
+                    console.error('Failed to load service:', entryError);
+                    return null;
+                  }
+                })
+              );
+
+              return entries.filter(Boolean);
+            } catch (error) {
+              if (error?.code === 'storage/object-not-found') {
+                return [];
+              }
+              throw error;
+            }
+          })
+        );
+
+        const fetchedServices = fetchedArrays
+          .flat()
+          .sort((a, b) => {
+            const first = new Date(a.createdAt || 0).getTime();
+            const second = new Date(b.createdAt || 0).getTime();
+            return second - first;
+          });
+
+        if (!isCancelled) {
+          const fetchedIds = new Set(fetchedServices.map((svc) => svc.id));
+          setServiceList((prev) => {
+            const combined = [...fetchedServices];
+            prev.forEach((svc) => {
+              if (!fetchedIds.has(svc.id)) {
+                combined.push(svc);
+              }
+            });
+            return combined;
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load services from storage:', error);
+        if (!isCancelled) {
+          setServicesLoadError('Kunne ikke hente ydelser. Prøv igen senere.');
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingServices(false);
+        }
+      }
     };
 
-    setServiceList((prev) => [...prev, newService]);
-  };
+    fetchServicesFromStorage();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [user]);
 
   return (
     <div className="booking-page">
@@ -209,6 +361,18 @@ function Ydelser() {
               />
             </div>
           </div>
+
+          {(isLoadingServices || servicesLoadError) && (
+            <div
+              className={`services-status-message${
+                servicesLoadError ? ' error' : ''
+              }`}
+            >
+              {servicesLoadError
+                ? servicesLoadError
+                : 'Henter ydelser...'}
+            </div>
+          )}
 
           {/* Services List */}
           <div className="services-list">

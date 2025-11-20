@@ -1,20 +1,74 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../bookingpage.css';
 import './klientoversigt.css';
 import { clients as initialClients } from './clientsData';
 import AddKlient from './addklient/addklient';
 import { useAuth } from '../../../AuthContext';
+import { ref, listAll, getDownloadURL } from 'firebase/storage';
+import { storage } from '../../../firebase';
+
+const sanitizeIdentifier = (value) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+const deriveUserIdentifier = (user) => {
+  if (!user) {
+    return 'unknown-user';
+  }
+
+  const baseIdentifier =
+    (user.displayName && user.displayName.trim()) ||
+    (user.email && user.email.trim()) ||
+    user.uid ||
+    'unknown-user';
+
+  const sanitized = sanitizeIdentifier(baseIdentifier);
+  if (sanitized) {
+    return sanitized;
+  }
+
+  if (user.uid) {
+    return sanitizeIdentifier(user.uid);
+  }
+
+  return 'unknown-user';
+};
+
+const mapStoredClientToRow = (storedClient) => ({
+  id:
+    storedClient.storagePath ||
+    storedClient.id ||
+    `${storedClient.navn || 'klient'}-${storedClient.createdAt || Date.now()}`,
+  navn: storedClient.navn || 'Uden navn',
+  status: storedClient.status || 'Aktiv',
+  email: storedClient.email || '',
+  telefon:
+    storedClient.telefonKomplet ||
+    storedClient.telefon ||
+    '',
+  cpr: storedClient.cpr || '',
+  adresse: storedClient.adresse || '',
+  by: storedClient.by || '',
+  postnummer: storedClient.postnummer || '',
+  land: storedClient.land || 'Danmark',
+  createdAt: storedClient.createdAt || null,
+});
 
 function Klientoversigt() {
   const navigate = useNavigate();
-  const { signOutUser } = useAuth();
+  const { signOutUser, user } = useAuth();
   const [clients, setClients] = useState(initialClients);
   const [activeNav, setActiveNav] = useState('klienter');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortColumn, setSortColumn] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
   const [showAddClient, setShowAddClient] = useState(false);
+  const [isLoadingClients, setIsLoadingClients] = useState(false);
+  const [clientsLoadError, setClientsLoadError] = useState('');
 
 
   const handleNavClick = (navItem) => {
@@ -41,25 +95,111 @@ function Klientoversigt() {
     client.by.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleAddClientSave = (formData) => {
-    const newClient = {
-      id: Date.now(),
-      navn: formData.navn,
+  const handleAddClientSave = (newClient) => {
+    const clientWithDefaults = {
       status: 'Aktiv',
-      email: formData.email,
-      telefon: formData.telefon
-        ? `${formData.telefonLand} ${formData.telefon}`
-        : '',
-      cpr: formData.cpr,
-      adresse: formData.adresse,
-      by: formData.by,
-      postnummer: formData.postnummer,
-      land: formData.land || 'Danmark',
+      ...newClient,
+      id: newClient.id || `client-${Date.now()}`,
     };
 
-    setClients((prev) => [...prev, newClient]);
+    setClients((prev) => [clientWithDefaults, ...prev]);
     setShowAddClient(false);
   };
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const fetchClientsFromStorage = async () => {
+      if (!user) {
+        setClients(initialClients);
+        setClientsLoadError('');
+        setIsLoadingClients(false);
+        return;
+      }
+
+      setIsLoadingClients(true);
+      setClientsLoadError('');
+
+      try {
+        const identifier = deriveUserIdentifier(user);
+        const folderCandidates = Array.from(
+          new Set(
+            [identifier, user.uid].filter(
+              (candidate) =>
+                typeof candidate === 'string' && candidate.trim().length > 0
+            )
+          )
+        );
+
+        const fetchedEntriesArrays = await Promise.all(
+          folderCandidates.map(async (folderName) => {
+            try {
+              const folderRef = ref(storage, `klienter/${folderName}`);
+              const listResult = await listAll(folderRef);
+
+              const entries = await Promise.all(
+                listResult.items.map(async (itemRef) => {
+                  try {
+                    const url = await getDownloadURL(itemRef);
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                      throw new Error(`Failed to fetch ${itemRef.fullPath}`);
+                    }
+                    const data = await response.json();
+                    return mapStoredClientToRow({
+                      ...data,
+                      storagePath: itemRef.fullPath,
+                    });
+                  } catch (entryError) {
+                    console.error('Failed to load client entry:', entryError);
+                    return null;
+                  }
+                })
+              );
+
+              return entries.filter(Boolean);
+            } catch (error) {
+              if (error?.code === 'storage/object-not-found') {
+                return [];
+              }
+              throw error;
+            }
+          })
+        );
+
+        const fetchedClients = fetchedEntriesArrays
+          .flat()
+          .sort((a, b) => {
+            const first = new Date(a.createdAt || 0).getTime();
+            const second = new Date(b.createdAt || 0).getTime();
+            return second - first;
+          });
+
+        if (!isCancelled) {
+          const fetchedMap = new Map(fetchedClients.map((c) => [c.id, c]));
+          setClients((prev) => [
+            ...fetchedClients,
+            ...prev.filter((client) => !fetchedMap.has(client.id)),
+          ]);
+        }
+      } catch (error) {
+        console.error('Failed to load clients from storage:', error);
+        if (!isCancelled) {
+          setClientsLoadError('Kunne ikke hente klienter. Prøv igen senere.');
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingClients(false);
+        }
+      }
+    };
+
+    fetchClientsFromStorage();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [user]);
 
   return (
     <div className="booking-page">
@@ -204,6 +344,19 @@ function Klientoversigt() {
               />
             </div>
           </div>
+
+          {/* Client status */}
+          {(isLoadingClients || clientsLoadError) && (
+            <div
+              className={`client-status-message${
+                clientsLoadError ? ' error' : ''
+              }`}
+            >
+              {clientsLoadError
+                ? clientsLoadError
+                : 'Henter klienter...'}
+            </div>
+          )}
 
           {/* Client Table */}
           <div className="table-container">
