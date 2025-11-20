@@ -100,10 +100,18 @@
 
 .indlæg-mikrofon-container {
   display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.indlæg-mikrofon-wrapper {
+  display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 6px;
-  margin-top: 12px;
+  flex-shrink: 0;
 }
 
 .indlæg-mikrofon-btn {
@@ -143,6 +151,12 @@
   margin: 0;
   text-align: right;
   white-space: pre-line;
+}
+.indlæg-save-error {
+  margin: 0 20px 8px;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 /* Search Bar */
@@ -450,6 +464,11 @@
 
 .indlæg-save-btn:hover {
   background-color: #2563eb;
+}
+.indlæg-save-btn:disabled {
+  background-color: #93c5fd;
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .indlæg-save-icon {

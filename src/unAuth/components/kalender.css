@@ -1,6 +1,6 @@
 .axis {
   width: 100%;
-  padding: 4rem 0 2rem 0;
+  padding: 2.25rem 0 1.25rem 0;
   background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
   margin: 0;
 }
@@ -15,7 +15,7 @@
   background: #ffffff;
   border-radius: 24px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  padding: 3rem;
+  padding: 1.6rem 1.8rem 2.25rem;
   text-align: center;
 }
 
@@ -23,7 +23,7 @@
   color: #212529;
   font-size: 2.5rem;
   font-weight: 700;
-  margin: 0 0 2rem 0;
+  margin: -0.5rem 0 1.75rem 0;
   line-height: 1.2;
   max-width: 800px;
   margin-left: auto;
@@ -33,8 +33,8 @@
 .axis-visual {
   width: 100%;
   max-width: 1000px;
-  margin: 2rem auto;
-  padding: 1rem 0;
+  margin: 0.85rem auto;
+  padding: 0.35rem 0;
 }
 
 .axis-app-preview {
@@ -110,7 +110,7 @@
 
 .axis-app-content {
   display: flex;
-  height: 500px;
+  min-height: 380px;
 }
 
 .axis-sidebar {
@@ -219,8 +219,8 @@
 
 .axis-calendar-day {
   background: #ffffff;
-  min-height: 60px;
-  padding: 0.5rem;
+  min-height: 48px;
+  padding: 0.4rem;
   position: relative;
   display: flex;
   align-items: flex-start;
@@ -235,7 +235,7 @@
 
 @media (max-width: 768px) {
   .axis-card {
-    padding: 2rem 1.5rem;
+    padding: 1.75rem 1.25rem;
   }
 
   .axis-title {
@@ -277,6 +277,6 @@
   }
 
   .axis-calendar-day {
-    min-height: 40px;
+    min-height: 36px;
   }
 }

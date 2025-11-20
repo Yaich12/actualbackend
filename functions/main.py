@@ -8,9 +8,14 @@ import os
 from typing import Any, Dict
 
 import requests
+from openai import OpenAI
 from firebase_admin import initialize_app
 from firebase_functions import https_fn
 from firebase_functions.options import set_global_options
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging for clearer Cloud Functions console output.
 logger = logging.getLogger(__name__)
@@ -161,3 +166,67 @@ def transcribe_audio(req: https_fn.Request) -> https_fn.Response:
         headers=response_headers,
         content_type="application/json",
     )
+
+
+@https_fn.on_request()
+def openai_completion(req: https_fn.Request) -> https_fn.Response:
+    logger.info(
+        "Incoming OpenAI completion request: method=%s",
+        req.method,
+    )
+
+    if req.method == "OPTIONS":
+        return https_fn.Response(
+            "",
+            status=204,
+            headers=_cors_headers(),
+        )
+
+    if req.method != "POST":
+        return _error("Only POST requests are supported.", status=405)
+
+    try:
+        request_data = req.get_json(silent=True)
+        if not request_data:
+            return _error("Request body must be valid JSON.", status=400)
+
+        userprompt = request_data.get("userprompt")
+        if not userprompt:
+            return _error("Missing 'userprompt' in request body.", status=400)
+
+        logger.info("Received userprompt: %s", userprompt)
+
+        # Initialize OpenAI client with API key from environment
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.error("OPENAI_API_KEY is not set in environment variables.")
+            return _error("Server configuration error: Missing API key.", status=500)
+
+        client = OpenAI(api_key=api_key)
+
+        # Create completion using chat completions API
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",  # Using a valid model name
+            messages=[
+                {"role": "user", "content": userprompt}
+            ]
+        )
+
+        # Extract the message content
+        message_output = response.choices[0].message.content
+
+        # Print to console log
+        logger.info("OpenAI completion output: %s", message_output)
+        print(f"OpenAI completion output: {message_output}")
+
+        return _json_response(
+            {
+                "output": message_output,
+                "message": response.choices[0].message.model_dump()
+            },
+            status=200,
+        )
+
+    except Exception as exc:
+        logger.exception("Failed to process OpenAI completion request.")
+        return _error(f"Failed to process request: {exc}", status=500)

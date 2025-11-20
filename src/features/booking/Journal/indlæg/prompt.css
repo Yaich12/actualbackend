@@ -1,0 +1,138 @@
+.prompt-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  flex: 1;
+  min-width: 0;
+  max-width: 600px;
+}
+
+.prompt-form {
+  width: 100%;
+}
+
+.prompt-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.prompt-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #111827;
+  background-color: #ffffff;
+  box-sizing: border-box;
+}
+
+.prompt-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.prompt-input::placeholder {
+  color: #9ca3af;
+}
+
+.prompt-input:disabled {
+  background-color: #f3f4f6;
+  cursor: not-allowed;
+}
+
+.prompt-submit-btn {
+  padding: 10px 20px;
+  border: none;
+  background-color: #3b82f6;
+  color: #ffffff;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  white-space: nowrap;
+}
+
+.prompt-submit-btn:hover:not(:disabled) {
+  background-color: #2563eb;
+}
+
+.prompt-submit-btn:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.prompt-error {
+  margin-top: 8px;
+  padding: 8px;
+  background-color: #fee2e2;
+  color: #dc2626;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.prompt-history {
+  width: 100%;
+}
+
+.prompt-history-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 12px 0;
+}
+
+.prompt-empty {
+  color: #6b7280;
+  font-size: 14px;
+  margin: 0;
+  padding: 12px;
+  background-color: #ffffff;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.prompt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.prompt-item {
+  padding: 12px;
+  background-color: #ffffff;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.prompt-item-prompt {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.prompt-item-prompt strong {
+  color: #111827;
+  font-weight: 600;
+}
+
+.prompt-item-response {
+  font-size: 14px;
+  color: #374151;
+  padding-top: 8px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.prompt-item-response strong {
+  color: #111827;
+  font-weight: 600;
+}
+

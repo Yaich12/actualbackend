@@ -1,5 +1,38 @@
 import React, { useState } from 'react';
+import { ref, uploadString } from 'firebase/storage';
 import './addklient.css';
+import { storage } from '../../../../firebase';
+import { useAuth } from '../../../../AuthContext';
+
+const sanitizeIdentifier = (value) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+const deriveUserIdentifier = (user) => {
+  if (!user) {
+    return 'unknown-user';
+  }
+
+  const baseIdentifier =
+    (user.displayName && user.displayName.trim()) ||
+    (user.email && user.email.trim()) ||
+    user.uid ||
+    'unknown-user';
+
+  const sanitized = sanitizeIdentifier(baseIdentifier);
+  if (sanitized) {
+    return sanitized;
+  }
+
+  if (user.uid) {
+    return sanitizeIdentifier(user.uid);
+  }
+
+  return 'unknown-user';
+};
 
 function AddKlient({ onClose, onSave }) {
   const [formData, setFormData] = useState({
@@ -20,6 +53,9 @@ function AddKlient({ onClose, onSave }) {
   });
 
   const [showAddressLine2, setShowAddressLine2] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const { user } = useAuth();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -39,12 +75,88 @@ function AddKlient({ onClose, onSave }) {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (typeof onSave === 'function') {
-      onSave(formData);
+
+    if (isSaving) {
+      return;
     }
-    onClose();
+
+    if (!user) {
+      setSaveError('Du skal være logget ind for at gemme en klient.');
+      return;
+    }
+
+    setSaveError('');
+    setIsSaving(true);
+
+    try {
+      const nowIso = new Date().toISOString();
+      const ownerIdentifier = deriveUserIdentifier(user);
+      const clientIdentifier =
+        sanitizeIdentifier(formData.navn) || `klient-${Date.now()}`;
+      const storageFileName = `${clientIdentifier}-${Date.now()}.json`;
+      const storagePath = `klienter/${ownerIdentifier}/${storageFileName}`;
+      const storageRef = ref(storage, storagePath);
+
+      const {
+        billede,
+        telefonLand,
+        telefon,
+        ...restFormData
+      } = formData;
+
+      const clientPayload = {
+        ...restFormData,
+        telefonLand,
+        telefon,
+        telefonKomplet: telefon
+          ? `${telefonLand || '+45'} ${telefon}`
+          : '',
+        billedeNavn: billede?.name ?? null,
+        billedeType: billede?.type ?? null,
+        billedeStorrelse: billede?.size ?? null,
+        ownerUid: user.uid,
+        ownerEmail: user.email ?? null,
+        ownerIdentifier,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        storagePath,
+      };
+
+      await uploadString(
+        storageRef,
+        JSON.stringify(clientPayload),
+        'raw',
+        {
+          contentType: 'application/json; charset=utf-8',
+        }
+      );
+
+      const savedClientForList = {
+        id: storagePath,
+        navn: formData.navn,
+        status: 'Aktiv',
+        email: formData.email,
+        telefon: clientPayload.telefonKomplet,
+        cpr: formData.cpr,
+        adresse: formData.adresse,
+        by: formData.by,
+        postnummer: formData.postnummer,
+        land: formData.land || 'Danmark',
+        createdAt: nowIso,
+      };
+
+      if (typeof onSave === 'function') {
+          onSave(savedClientForList);
+      }
+      onClose();
+    } catch (error) {
+      console.error('Failed to save client data:', error);
+      setSaveError('Kunne ikke gemme klienten. Prøv igen.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -299,17 +411,30 @@ function AddKlient({ onClose, onSave }) {
             />
           </div>
 
+          {/* Error Message */}
+          {saveError && (
+            <p className="addklient-error" role="alert">
+              {saveError}
+            </p>
+          )}
+
           {/* Action Buttons */}
           <div className="addklient-form-actions">
             <button
               type="button"
               className="addklient-cancel-btn"
               onClick={handleCancel}
+              disabled={isSaving}
             >
               Annuller
             </button>
-            <button type="submit" className="addklient-save-btn">
-              Gem
+            <button
+              type="submit"
+              className="addklient-save-btn"
+              disabled={isSaving}
+              aria-busy={isSaving}
+            >
+              {isSaving ? 'Gemmer...' : 'Gem'}
             </button>
           </div>
         </form>
