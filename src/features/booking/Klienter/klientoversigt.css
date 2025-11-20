@@ -173,6 +173,20 @@
   background-color: #ffffff;
 }
 
+.client-status-message {
+  padding: 12px 24px;
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  font-size: 14px;
+  border-bottom: 1px solid #dbeafe;
+}
+
+.client-status-message.error {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
 .clients-table {
   width: 100%;
   border-collapse: collapse;

@@ -246,6 +246,13 @@
   min-height: 80px;
 }
 
+.addklient-error {
+  margin: 8px 0;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 500;
+}
+
 /* Form Actions */
 .addklient-form-actions {
   display: flex;
@@ -274,6 +281,11 @@
   border-color: #9ca3af;
 }
 
+.addklient-cancel-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .addklient-save-btn {
   padding: 10px 20px;
   border: none;
@@ -288,6 +300,12 @@
 
 .addklient-save-btn:hover {
   background-color: #2563eb;
+}
+
+.addklient-save-btn:disabled {
+  background-color: #93c5fd;
+  cursor: not-allowed;
+  opacity: 0.85;
 }
 
 /* Responsive adjustments */

@@ -1,2 +1,4 @@
 firebase-functions @ git+https://github.com/firebase/firebase-functions-python.git
 requests>=2.32.0
+openai>=1.0.0
+python-dotenv>=1.0.0
