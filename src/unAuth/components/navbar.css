@@ -1,43 +1,48 @@
 .navbar {
   width: 100%;
-  background-color: #ffffff;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0) 100%);
   padding: 1.5rem 0;
-  border-bottom: 1px solid #e9ecef;
+  border-bottom: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
 }
 
 .navbar-container {
-  max-width: 1120px;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 2rem;
-  padding: 0 2rem;
-  width: 100%;
+  padding: 0 clamp(1.5rem, 4vw, 3rem) 0 clamp(8px, 1vw, 12px);
 }
 
 .navbar-logo {
   display: inline-flex;
   align-items: center;
   gap: 0.75rem;
-  font-size: 1.75rem;
+  font-size: clamp(3rem, 5vw, 4.5rem);
   font-weight: 600;
-  color: #212529;
+  color: #f8f9fa;
   text-decoration: none;
   letter-spacing: -0.01em;
 }
 
-.navbar-logo-img {
-  height: 5.5rem;
-  width: auto;
-  display: block;
+.navbar-logo-wordmark {
+  font-size: inherit;
+  font-weight: inherit;
+  color: #dc3545;
+  line-height: 1;
+  text-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
 }
 
 .navbar-logo-text {
   display: inline-block;
   font-size: 0.875rem;
   font-weight: 400;
-  color: #6c757d;
+  color: rgba(248, 249, 250, 0.8);
   margin-left: 0.5rem;
   white-space: nowrap;
 }
@@ -59,7 +64,7 @@
 }
 
 .navbar-item a {
-  color: #212529;
+  color: #f8f9fa;
   text-decoration: none;
   font-weight: 600;
   font-size: 1rem;
@@ -67,7 +72,7 @@
 }
 
 .navbar-item a:hover {
-  color: rgba(33, 37, 41, 0.7);
+  color: rgba(248, 249, 250, 0.75);
   opacity: 0.9;
 }
 
@@ -77,16 +82,17 @@
   justify-content: center;
   gap: 0.35rem;
   text-decoration: none;
-  background-color: #212529;
+  background-color: rgba(255, 255, 255, 0.15);
   color: #ffffff;
   padding: 0.65rem 1.8rem;
   border-radius: 999px;
   font-weight: 600;
   font-size: 0.95rem;
   line-height: 1.2;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .navbar-cta::after {
@@ -95,15 +101,22 @@
 }
 
 .navbar-cta:hover {
-  background-color: rgba(33, 37, 41, 0.9);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  background-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
   transform: translateY(-1px);
 }
 
 @media (max-width: 768px) {
+  .navbar {
+    position: static;
+    background: rgba(0, 0, 0, 0.85);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
   .navbar-container {
     flex-direction: column;
     align-items: flex-start;
+    padding: 0 clamp(1rem, 4vw, 1.5rem);
   }
 
   .navbar-logo-text {
