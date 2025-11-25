@@ -3,6 +3,7 @@ import './prompt.css';
 
 const PROJECT_ID = process.env.REACT_APP_PROJECT_ID || '';
 const FUNCTION_REGION = process.env.REACT_APP_FUNCTION_REGION || 'us-central1';
+const FUNCTIONS_PORT = process.env.REACT_APP_FUNCTIONS_PORT || '5601';
 
 const buildDefaultCompletionUrl = () => {
   if (!PROJECT_ID) {
@@ -13,7 +14,7 @@ const buildDefaultCompletionUrl = () => {
     typeof window !== 'undefined' &&
     window.location.hostname === 'localhost'
   ) {
-    return `http://127.0.0.1:5501/${PROJECT_ID}/${FUNCTION_REGION}/openai_completion`;
+    return `http://127.0.0.1:${FUNCTIONS_PORT}/${PROJECT_ID}/${FUNCTION_REGION}/openai_completion`;
   }
 
   return `https://${FUNCTION_REGION}-${PROJECT_ID}.cloudfunctions.net/openai_completion`;
@@ -165,4 +166,3 @@ function Prompt({ onResult }) {
 }
 
 export default Prompt;
-

@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
-import { ref, uploadString } from 'firebase/storage';
+import React, { useState, useRef, useMemo } from 'react';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import './addklient.css';
-import { storage } from '../../../../firebase';
+import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
+import { useLoadScript, Autocomplete } from '@react-google-maps/api';
+
+const libraries = ['places'];
 
 const sanitizeIdentifier = (value) =>
   value
@@ -36,10 +39,8 @@ const deriveUserIdentifier = (user) => {
 
 function AddKlient({ onClose, onSave }) {
   const [formData, setFormData] = useState({
-    billede: null,
     navn: '',
     cpr: '',
-    fødselsdato: '',
     email: '',
     telefon: '',
     telefonLand: '+45',
@@ -47,15 +48,45 @@ function AddKlient({ onClose, onSave }) {
     adresse2: '',
     postnummer: '',
     by: '',
-    region: '',
     land: 'Danmark',
-    noter: '',
   });
 
   const [showAddressLine2, setShowAddressLine2] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const { user } = useAuth();
+
+  // Google Maps / Places
+  const googleMapsApiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+  const { isLoaded, loadError } = useLoadScript({
+    id: 'google-places-autocomplete',
+    googleMapsApiKey: googleMapsApiKey || '',
+    libraries,
+  });
+  const autocompleteRef = useRef(null);
+  const isAutocompleteReady = Boolean(googleMapsApiKey) && isLoaded && !loadError;
+  const autocompleteStatus = useMemo(() => {
+    if (!googleMapsApiKey) {
+      return {
+        text: 'Tilføj REACT_APP_GOOGLE_MAPS_API_KEY i din .env og genstart udviklingsserveren.',
+        tone: 'error',
+      };
+    }
+    if (loadError) {
+      return {
+        text: 'Kunne ikke hente Google Maps. Tjek at API-nøglen er korrekt, at Places API er aktiveret, og at der er tilknyttet billing.',
+        tone: 'error',
+      };
+    }
+    if (!isLoaded) {
+      return {
+        text: 'Indlæser Google Maps…',
+        tone: 'info',
+      };
+    }
+    return { text: '', tone: 'info' };
+  }, [googleMapsApiKey, isLoaded, loadError]);
+  const showAutocompleteStatus = Boolean(autocompleteStatus.text) && !isAutocompleteReady;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -65,14 +96,43 @@ function AddKlient({ onClose, onSave }) {
     }));
   };
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setFormData((prev) => ({
-        ...prev,
-        billede: file,
-      }));
-    }
+  // Når bruger vælger adresse fra Google-forslag
+  const handlePlaceChanged = () => {
+    if (!autocompleteRef.current) return;
+    const place = autocompleteRef.current.getPlace();
+    if (!place || !place.address_components) return;
+
+    // Sæt selve adresse-feltet til den formaterede adresse
+    const formattedAddress = place.formatted_address || '';
+    let postnummer = '';
+    let by = '';
+
+    place.address_components.forEach((comp) => {
+      const types = comp.types;
+      if (types.includes('postal_code')) {
+        postnummer = comp.long_name;
+      }
+      if (types.includes('locality') || types.includes('postal_town')) {
+        by = comp.long_name;
+      }
+    });
+
+    setFormData((prev) => ({
+      ...prev,
+      adresse: formattedAddress,
+      postnummer: postnummer || prev.postnummer,
+      by: by || prev.by,
+    }));
+  };
+
+  const addressInputProps = {
+    type: 'text',
+    id: 'adresse',
+    name: 'adresse',
+    value: formData.adresse,
+    onChange: handleChange,
+    className: 'addklient-input',
+    placeholder: 'Begynd at skrive adressen...',
   };
 
   const handleSubmit = async (e) => {
@@ -93,48 +153,28 @@ function AddKlient({ onClose, onSave }) {
     try {
       const nowIso = new Date().toISOString();
       const ownerIdentifier = deriveUserIdentifier(user);
-      const clientIdentifier =
-        sanitizeIdentifier(formData.navn) || `klient-${Date.now()}`;
-      const storageFileName = `${clientIdentifier}-${Date.now()}.json`;
-      const storagePath = `klienter/${ownerIdentifier}/${storageFileName}`;
-      const storageRef = ref(storage, storagePath);
-
-      const {
-        billede,
-        telefonLand,
-        telefon,
-        ...restFormData
-      } = formData;
+      const { telefonLand, telefon, land, ...restFormData } = formData;
 
       const clientPayload = {
         ...restFormData,
+        land: land || 'Danmark',
         telefonLand,
         telefon,
-        telefonKomplet: telefon
-          ? `${telefonLand || '+45'} ${telefon}`
-          : '',
-        billedeNavn: billede?.name ?? null,
-        billedeType: billede?.type ?? null,
-        billedeStorrelse: billede?.size ?? null,
+        telefonKomplet: telefon ? `${telefonLand || '+45'} ${telefon}` : '',
         ownerUid: user.uid,
         ownerEmail: user.email ?? null,
         ownerIdentifier,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-        storagePath,
+        status: 'Aktiv',
+        createdAt: serverTimestamp(),
+        createdAtIso: nowIso,
+        updatedAt: serverTimestamp(),
       };
 
-      await uploadString(
-        storageRef,
-        JSON.stringify(clientPayload),
-        'raw',
-        {
-          contentType: 'application/json; charset=utf-8',
-        }
-      );
+      const clientsCollection = collection(db, 'users', user.uid, 'clients');
+      const docRef = await addDoc(clientsCollection, clientPayload);
 
       const savedClientForList = {
-        id: storagePath,
+        id: docRef.id,
         navn: formData.navn,
         status: 'Aktiv',
         email: formData.email,
@@ -143,12 +183,12 @@ function AddKlient({ onClose, onSave }) {
         adresse: formData.adresse,
         by: formData.by,
         postnummer: formData.postnummer,
-        land: formData.land || 'Danmark',
+        land: land || 'Danmark',
         createdAt: nowIso,
       };
 
       if (typeof onSave === 'function') {
-          onSave(savedClientForList);
+        onSave(savedClientForList);
       }
       onClose();
     } catch (error) {
@@ -174,38 +214,6 @@ function AddKlient({ onClose, onSave }) {
         </div>
 
         <form className="addklient-form" onSubmit={handleSubmit}>
-          {/* Image Upload */}
-          <div className="addklient-form-section">
-            <label className="addklient-form-label">Billede</label>
-            <div className="addklient-image-upload">
-              <input
-                type="file"
-                id="image-upload"
-                accept="image/*"
-                onChange={handleImageChange}
-                className="addklient-image-input"
-              />
-              <label htmlFor="image-upload" className="addklient-image-label">
-                {formData.billede ? (
-                  <div className="addklient-image-preview">
-                    <img
-                      src={URL.createObjectURL(formData.billede)}
-                      alt="Preview"
-                      className="addklient-preview-img"
-                    />
-                  </div>
-                ) : (
-                  <>
-                    <span className="addklient-upload-icon">☁</span>
-                    <span className="addklient-upload-text">
-                      Klik for at tilføje et billede
-                    </span>
-                  </>
-                )}
-              </label>
-            </div>
-          </div>
-
           {/* Name */}
           <div className="addklient-form-section">
             <label className="addklient-form-label" htmlFor="navn">
@@ -233,22 +241,6 @@ function AddKlient({ onClose, onSave }) {
               name="cpr"
               value={formData.cpr}
               onChange={handleChange}
-              className="addklient-input"
-            />
-          </div>
-
-          {/* Date of Birth */}
-          <div className="addklient-form-section">
-            <label className="addklient-form-label" htmlFor="fødselsdato">
-              Fødselsdato
-            </label>
-            <input
-              type="text"
-              id="fødselsdato"
-              name="fødselsdato"
-              value={formData.fødselsdato}
-              onChange={handleChange}
-              placeholder="DD-MM-YYYY"
               className="addklient-input"
             />
           </div>
@@ -297,19 +289,33 @@ function AddKlient({ onClose, onSave }) {
             </div>
           </div>
 
-          {/* Address */}
+          {/* Address + Google Autocomplete */}
           <div className="addklient-form-section">
             <label className="addklient-form-label" htmlFor="adresse">
               Adresse
             </label>
-            <input
-              type="text"
-              id="adresse"
-              name="adresse"
-              value={formData.adresse}
-              onChange={handleChange}
-              className="addklient-input"
-            />
+            {isAutocompleteReady ? (
+              <Autocomplete
+                onLoad={(autocomplete) => (autocompleteRef.current = autocomplete)}
+                onPlaceChanged={handlePlaceChanged}
+              >
+                <input {...addressInputProps} />
+              </Autocomplete>
+            ) : (
+              <>
+                <input {...addressInputProps} />
+                {showAutocompleteStatus && (
+                  <p
+                    className={`addklient-status-hint${
+                      autocompleteStatus.tone === 'error' ? ' error' : ''
+                    }`}
+                  >
+                    {autocompleteStatus.text}
+                  </p>
+                )}
+              </>
+            )}
+
             {!showAddressLine2 && (
               <button
                 type="button"
@@ -359,56 +365,6 @@ function AddKlient({ onClose, onSave }) {
                 className="addklient-input"
               />
             </div>
-          </div>
-
-          {/* Region */}
-          <div className="addklient-form-section">
-            <label className="addklient-form-label" htmlFor="region">
-              Region
-            </label>
-            <input
-              type="text"
-              id="region"
-              name="region"
-              value={formData.region}
-              onChange={handleChange}
-              className="addklient-input"
-            />
-          </div>
-
-          {/* Country */}
-          <div className="addklient-form-section">
-            <label className="addklient-form-label" htmlFor="land">
-              Land
-            </label>
-            <select
-              id="land"
-              name="land"
-              value={formData.land}
-              onChange={handleChange}
-              className="addklient-select"
-            >
-              <option value="Danmark">Danmark</option>
-              <option value="Sverige">Sverige</option>
-              <option value="Norge">Norge</option>
-              <option value="Finland">Finland</option>
-              <option value="Tyskland">Tyskland</option>
-            </select>
-          </div>
-
-          {/* Notes */}
-          <div className="addklient-form-section">
-            <label className="addklient-form-label" htmlFor="noter">
-              Noter
-            </label>
-            <textarea
-              id="noter"
-              name="noter"
-              value={formData.noter}
-              onChange={handleChange}
-              className="addklient-textarea"
-              rows={4}
-            />
           </div>
 
           {/* Error Message */}

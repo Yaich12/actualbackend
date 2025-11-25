@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { ref, uploadString } from 'firebase/storage';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import './addnew.css';
-import { storage } from '../../../../firebase';
+import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
 
 const DEFAULT_FORM_VALUES = {
@@ -94,10 +94,6 @@ function AddNewServiceModal({ isOpen, onClose, onSubmit }) {
     try {
       const nowIso = new Date().toISOString();
       const ownerIdentifier = deriveUserIdentifier(user);
-      const serviceIdentifier =
-        sanitizeIdentifier(formValues.name) || `ydelse-${Date.now()}`;
-      const storageFileName = `${serviceIdentifier}-${Date.now()}.json`;
-      const storagePath = `ydelser/${ownerIdentifier}/${storageFileName}`;
       const priceParsed = parseFloat(
         (formValues.price || '').toString().replace(',', '.')
       );
@@ -111,29 +107,24 @@ function AddNewServiceModal({ isOpen, onClose, onSubmit }) {
         ownerUid: user.uid,
         ownerEmail: user.email ?? null,
         ownerIdentifier,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-        storagePath,
+        createdAtIso: nowIso,
       };
 
-      await uploadString(
-        ref(storage, storagePath),
-        JSON.stringify(payload),
-        'raw',
-        {
-          contentType: 'application/json; charset=utf-8',
-        }
-      );
+      const servicesCollection = collection(db, 'users', user.uid, 'services');
+      const docRef = await addDoc(servicesCollection, {
+        ...payload,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
 
       const newServiceForList = {
-        id: storagePath,
+        id: docRef.id,
         navn: payload.name?.trim() || 'Ny ydelse',
         varighed: payload.duration || '1 time',
         pris: payload.price,
         prisInklMoms: payload.priceInclVat,
         description: payload.description || '',
         createdAt: nowIso,
-        storagePath,
       };
 
       if (onSubmit) {

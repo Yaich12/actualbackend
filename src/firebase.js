@@ -12,44 +12,84 @@ import {
 } from "firebase/auth";
 import {
   getFirestore,
-  connectFirestoreEmulator,
 } from "firebase/firestore";
 import {
   getStorage,
   connectStorageEmulator,
 } from "firebase/storage";
 
-const firebaseConfig = {
-  apiKey: process.env.REACT_APP_API_KEY,
-  authDomain: process.env.REACT_APP_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_APP_ID,
-  measurementId: process.env.REACT_APP_MEASUREMENT_ID,
-};
+const shouldUseEmulators =
+  process.env.REACT_APP_USE_FIREBASE_EMULATORS === "true";
+const useAuthEmulator =
+  process.env.REACT_APP_USE_AUTH_EMULATOR === "true";
+
+const firebaseConfig = shouldUseEmulators
+  ? {
+      // Emulator mode: Firebase accepts any API key; keep projectId stable for local data.
+      apiKey: "fake-api-key",
+      authDomain: "localhost",
+      projectId: process.env.REACT_APP_PROJECT_ID || "demo-project",
+      storageBucket:
+        process.env.REACT_APP_STORAGE_BUCKET ||
+        "demo-project.appspot.com",
+      messagingSenderId:
+        process.env.REACT_APP_MESSAGING_SENDER_ID || "demo-sender",
+      appId: process.env.REACT_APP_APP_ID || "demo-app",
+      measurementId: process.env.REACT_APP_MEASUREMENT_ID || "demo-measure",
+    }
+  : {
+      apiKey: process.env.REACT_APP_API_KEY,
+      authDomain: process.env.REACT_APP_AUTH_DOMAIN,
+      projectId: process.env.REACT_APP_PROJECT_ID,
+      storageBucket: process.env.REACT_APP_STORAGE_BUCKET,
+      messagingSenderId: process.env.REACT_APP_MESSAGING_SENDER_ID,
+      appId: process.env.REACT_APP_APP_ID,
+      measurementId: process.env.REACT_APP_MEASUREMENT_ID,
+    };
+
+if (!shouldUseEmulators) {
+  const missingKeys = Object.entries({
+    REACT_APP_API_KEY: firebaseConfig.apiKey,
+    REACT_APP_AUTH_DOMAIN: firebaseConfig.authDomain,
+    REACT_APP_PROJECT_ID: firebaseConfig.projectId,
+    REACT_APP_STORAGE_BUCKET: firebaseConfig.storageBucket,
+    REACT_APP_MESSAGING_SENDER_ID: firebaseConfig.messagingSenderId,
+    REACT_APP_APP_ID: firebaseConfig.appId,
+  })
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
+
+  if (missingKeys.length) {
+    throw new Error(
+      `Missing Firebase env vars: ${missingKeys.join(
+        ", "
+      )}. Set them in your .env file.`
+    );
+  }
+}
+
+const FIRESTORE_DATABASE_ID =
+  process.env.REACT_APP_FIRESTORE_DB_ID || "actuelbackend12";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+const db = getFirestore(app, FIRESTORE_DATABASE_ID);
+console.log(
+  "[Firebase] Firestore initialized for cloud use (no emulator).",
+  "Project ID:",
+  firebaseConfig.projectId,
+  "Database ID:",
+  FIRESTORE_DATABASE_ID || "(default)"
+);
 const storage = getStorage(app);
 const googleProvider = new GoogleAuthProvider();
 
-const shouldUseEmulators = (() => {
-  if (process.env.REACT_APP_USE_FIREBASE_EMULATORS === "true") {
-    return true;
-  }
-
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  return ["localhost", "127.0.0.1"].includes(window.location.hostname);
-})();
-
 if (shouldUseEmulators) {
-  connectAuthEmulator(auth, "http://localhost:9099");
-  connectFirestoreEmulator(db, "localhost", 8080);
+  if (useAuthEmulator) {
+    connectAuthEmulator(auth, "http://localhost:9099", {
+      disableWarnings: true,
+    });
+  }
   connectStorageEmulator(storage, "localhost", 9199);
 }
 

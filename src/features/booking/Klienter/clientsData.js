@@ -1,3 +1,4 @@
+// DEMO ONLY – do not use in production code; real clients are stored in Firestore under users/{uid}/clients.
 export const clients = [
   {
     id: 1,

@@ -1,15 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './appointments.css';
-import { clients } from '../Klienter/clientsData';
-import { services } from '../Ydelser/servicesData';
+import { useUserClients } from '../Klienter/hooks/useUserClients';
+import ServiceSelector from '../Ydelser/ServiceSelector';
 
 function AppointmentForm({ onClose, onCreate }) {
+  const {
+    clients,
+    loading: clientsLoading,
+    error: clientsError,
+  } = useUserClients();
   const [startDate, setStartDate] = useState('14-11-2025');
   const [startTime, setStartTime] = useState('10:00');
   const [endDate, setEndDate] = useState('14-11-2025');
   const [endTime, setEndTime] = useState('11:00');
-  const [selectedClient, setSelectedClient] = useState('');
-  const [selectedService, setSelectedService] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [selectedServiceId, setSelectedServiceId] = useState('');
+  const [availableServices, setAvailableServices] = useState([]);
   const [notes, setNotes] = useState('');
   const [showStartDropdown, setShowStartDropdown] = useState(false);
   const [showEndDropdown, setShowEndDropdown] = useState(false);
@@ -58,14 +64,30 @@ function AppointmentForm({ onClose, onCreate }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    const selectedClientData =
+      clients.find((client) => client.id === selectedClientId) || null;
+    const selectedServiceData =
+      availableServices.find((service) => service.id === selectedServiceId) || null;
+
     const newAppointment = {
       id: Date.now(),
       startDate,
       startTime,
       endDate,
       endTime,
-      client: selectedClient,
-      service: selectedService,
+      clientId: selectedClientId || null,
+      client: selectedClientData?.navn || '',
+      clientEmail: selectedClientData?.email || '',
+      clientPhone: selectedClientData?.telefon || '',
+      serviceId: selectedServiceId || null,
+      service: selectedServiceData?.navn || '',
+      serviceDuration: selectedServiceData?.varighed || '',
+      servicePrice:
+        typeof selectedServiceData?.pris === 'number' ? selectedServiceData.pris : null,
+      servicePriceInclVat:
+        typeof selectedServiceData?.prisInklMoms === 'number'
+          ? selectedServiceData.prisInklMoms
+          : null,
       notes,
     };
 
@@ -79,12 +101,6 @@ function AppointmentForm({ onClose, onCreate }) {
   const handleCancel = () => {
     onClose();
   };
-
-  const formatServicePrice = (price) =>
-    new Intl.NumberFormat('da-DK', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(price);
 
   return (
     <div className="appointment-form-container">
@@ -202,15 +218,22 @@ function AppointmentForm({ onClose, onCreate }) {
             <div className="select-wrapper">
               <select
                 className="select-input"
-                value={selectedClient}
-                onChange={(e) => setSelectedClient(e.target.value)}
+                value={selectedClientId}
+                onChange={(e) => setSelectedClientId(e.target.value)}
+                disabled={clientsLoading}
               >
                 <option value="">Vælg klient</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.navn}>
-                    {client.navn} – {client.email}
+                {clientsLoading && (
+                  <option value="loading" disabled>
+                    Henter klienter…
                   </option>
-                ))}
+                )}
+                {!clientsLoading &&
+                  clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.navn} – {client.email}
+                    </option>
+                  ))}
               </select>
               <span className="dropdown-arrow">▼</span>
             </div>
@@ -218,26 +241,25 @@ function AppointmentForm({ onClose, onCreate }) {
               Tilføj klient
             </button>
           </div>
+          {clientsError && (
+            <p className="client-select-error" role="alert">
+              {clientsError}
+            </p>
+          )}
+          {!clientsError && !clientsLoading && clients.length === 0 && (
+            <p className="client-select-empty">
+              Du har ingen klienter endnu. Tilføj en ny for at fortsætte.
+            </p>
+          )}
         </div>
 
         {/* Select Service */}
         <div className="form-section">
-          <label className="form-label">Ydelse</label>
-          <div className="select-wrapper">
-            <select
-              className="select-input"
-              value={selectedService}
-              onChange={(e) => setSelectedService(e.target.value)}
-            >
-              <option value="">Ingen ydelse valgt</option>
-              {services.map((service) => (
-                <option key={service.id} value={service.navn}>
-                  {service.navn} – {service.varighed} – DKK {formatServicePrice(service.pris)}
-                </option>
-              ))}
-            </select>
-            <span className="dropdown-arrow">▼</span>
-          </div>
+          <ServiceSelector
+            value={selectedServiceId}
+            onChange={setSelectedServiceId}
+            onServicesChange={setAvailableServices}
+          />
         </div>
 
         {/* Notes */}

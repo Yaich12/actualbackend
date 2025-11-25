@@ -4,6 +4,11 @@ import './bookingpage.css';
 import AppointmentForm from './appointment/appointment';
 import Journal from './Journal/journal';
 import { useAuth } from '../../AuthContext';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../firebase';
+import useAppointments from '../../hooks/useAppointments';
+import { combineDateAndTimeToIso } from '../../utils/appointmentFormat';
+import { useUserClients } from './Klienter/hooks/useUserClients';
 
 function BookingPage() {
   const navigate = useNavigate();
@@ -12,30 +17,21 @@ function BookingPage() {
   const [viewMode, setViewMode] = useState('month');
   const [activeNav, setActiveNav] = useState('kalender');
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
-  const [appointments, setAppointments] = useState([
-    {
-      id: 1,
-      startDate: '13-11-2025',
-      startTime: '09:00',
-      endDate: '13-11-2025',
-      endTime: '10:00',
-      client: 'Jonas Yaich',
-      service: 'fodmassage',
-      notes: '',
-    },
-    {
-      id: 2,
-      startDate: '14-11-2025',
-      startTime: '13:45',
-      endDate: '14-11-2025',
-      endTime: '14:45',
-      client: 'Jonas Yaich',
-      service: 'fodmassage',
-      notes: '',
-    },
-  ]);
-  const [selectedClient, setSelectedClient] = useState(null);
+  const [selectedClientId, setSelectedClientId] = useState(null);
+  const [selectedClientFallback, setSelectedClientFallback] = useState(null);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const { appointments = [] } = useAppointments(user?.uid || null);
+  const { clients } = useUserClients();
+  const derivedSelectedClient = useMemo(() => {
+    if (selectedClientId) {
+      const match = clients.find((client) => client.id === selectedClientId);
+      if (match) {
+        return match;
+      }
+    }
+    return selectedClientFallback;
+  }, [clients, selectedClientId, selectedClientFallback]);
+
 
   const monthNames = [
     'januar', 'februar', 'marts', 'april', 'maj', 'juni',
@@ -121,25 +117,91 @@ function BookingPage() {
 
   const calendarWeeks = getCalendarWeeks();
 
-  const handleCreateAppointment = (appointment) => {
-    setAppointments((prev) => [...prev, appointment]);
-    setShowAppointmentForm(false);
+  const handleCreateAppointment = async (appointment) => {
+    if (!user?.uid) {
+      console.error('[BookingPage] Cannot create appointment: user not logged in');
+      return;
+    }
+
+    try {
+      const startIso = combineDateAndTimeToIso(appointment.startDate, appointment.startTime);
+      const endIso = combineDateAndTimeToIso(appointment.endDate, appointment.endTime);
+
+      if (!startIso || !endIso) {
+        throw new Error('Invalid start or end time');
+      }
+
+      const title = appointment.client || appointment.service || 'Aftale';
+
+      const payload = {
+        therapistId: user.uid,
+        title,
+        client: appointment.client || title,
+        clientId: appointment.clientId || null,
+        clientEmail: appointment.clientEmail || '',
+        clientPhone: appointment.clientPhone || '',
+        service: appointment.service || '',
+        serviceId: appointment.serviceId || null,
+        serviceDuration: appointment.serviceDuration || '',
+        servicePrice:
+          typeof appointment.servicePrice === 'number' ? appointment.servicePrice : null,
+        servicePriceInclVat:
+          typeof appointment.servicePriceInclVat === 'number'
+            ? appointment.servicePriceInclVat
+            : null,
+        notes: appointment.notes || '',
+        start: startIso,
+        end: endIso,
+        startDate: appointment.startDate,
+        startTime: appointment.startTime,
+        endDate: appointment.endDate,
+        endTime: appointment.endTime,
+        status: 'booked',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      const appointmentsCollection = collection(db, 'users', user.uid, 'appointments');
+      console.log('[BookingPage] Creating appointment document', payload);
+      await addDoc(appointmentsCollection, payload);
+    } catch (error) {
+      console.error('[BookingPage] Failed to create appointment', error);
+    } finally {
+      setShowAppointmentForm(false);
+    }
   };
 
   const handleAppointmentClick = (appointment) => {
-    setSelectedClient(appointment.client);
+    setSelectedClientId(appointment.clientId || null);
+    setSelectedClientFallback(
+      appointment.client || appointment.clientEmail || appointment.clientPhone
+        ? {
+            id: appointment.clientId || 'legacy-client',
+            navn: appointment.client || 'Ukendt klient',
+            email: appointment.clientEmail || '',
+            telefon: appointment.clientPhone || '',
+            status: 'Aktiv',
+            adresse: '',
+            by: '',
+            postnummer: '',
+            land: 'Danmark',
+          }
+        : null
+    );
     setSelectedAppointment(appointment);
     setShowAppointmentForm(false);
   };
 
   const handleCloseJournal = () => {
-    setSelectedClient(null);
+    setSelectedClientId(null);
+    setSelectedClientFallback(null);
     setSelectedAppointment(null);
   };
 
   const handleCreateNextAppointment = () => {
     setShowAppointmentForm(true);
-    setSelectedClient(null);
+    setSelectedClientId(null);
+    setSelectedClientFallback(null);
     setSelectedAppointment(null);
   };
 
@@ -210,7 +272,7 @@ function BookingPage() {
         </div>
       </div>
 
-      <div className={`booking-content ${showAppointmentForm || selectedClient ? 'with-appointment-form' : ''}`}>
+        <div className={`booking-content ${showAppointmentForm || derivedSelectedClient ? 'with-appointment-form' : ''}`}>
         {/* Left Sidebar */}
         <div className="booking-sidebar">
           <div className="sidebar-search">
@@ -387,10 +449,10 @@ function BookingPage() {
         </div>
 
         {/* Journal or Appointment Form */}
-        {selectedClient ? (
+        {derivedSelectedClient ? (
           <div className="appointment-form-wrapper">
             <Journal
-              selectedClient={selectedClient}
+              selectedClient={derivedSelectedClient}
               selectedAppointment={selectedAppointment}
               onClose={handleCloseJournal}
               onCreateAppointment={handleCreateNextAppointment}

@@ -5,7 +5,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { getRedirectResult, onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
@@ -20,12 +20,35 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const resolveRedirectLogin = async () => {
+      try {
+        const redirectResult = await getRedirectResult(auth);
+        if (!isMounted || !redirectResult?.user) {
+          return;
+        }
+        console.log("[AuthContext] redirect result user:", redirectResult.user);
+        setUser(redirectResult.user);
+      } catch (error) {
+        if (!isMounted) return;
+        console.error("[AuthContext] getRedirectResult failed:", error);
+      }
+    };
+
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (!isMounted) return;
+      console.log("[AuthContext] onAuthStateChanged:", firebaseUser);
       setUser(firebaseUser);
       setLoading(false);
     });
 
-    return unsubscribe;
+    void resolveRedirectLogin();
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
