@@ -1,5 +1,5 @@
-import React, { useState, useRef, useMemo } from 'react';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import './addklient.css';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
@@ -37,8 +37,8 @@ const deriveUserIdentifier = (user) => {
   return 'unknown-user';
 };
 
-function AddKlient({ onClose, onSave }) {
-  const [formData, setFormData] = useState({
+const getInitialFormData = (mode, initialClient) => {
+  const base = {
     navn: '',
     cpr: '',
     email: '',
@@ -49,9 +49,47 @@ function AddKlient({ onClose, onSave }) {
     postnummer: '',
     by: '',
     land: 'Danmark',
-  });
+    status: 'Aktiv',
+  };
 
-  const [showAddressLine2, setShowAddressLine2] = useState(false);
+  if (mode === 'edit' && initialClient) {
+    const telefonLand = initialClient.telefonLand || '+45';
+    const telefonValue = initialClient.telefon || '';
+    const telefonUdenLand = telefonValue.startsWith(telefonLand)
+      ? telefonValue.slice(telefonLand.length).trim().replace(/^\s+/, '')
+      : telefonValue;
+
+    return {
+      ...base,
+      navn: initialClient.navn || '',
+      cpr: initialClient.cpr || '',
+      email: initialClient.email || '',
+      telefon: telefonUdenLand || '',
+      telefonLand,
+      adresse: initialClient.adresse || '',
+      adresse2: initialClient.adresse2 || '',
+      postnummer: initialClient.postnummer || '',
+      by: initialClient.by || '',
+      land: initialClient.land || 'Danmark',
+      status: initialClient.status || 'Aktiv',
+    };
+  }
+
+  return base;
+};
+
+function AddKlient({
+  isOpen = true,
+  onClose,
+  onSave,
+  mode = 'create',
+  initialClient = null,
+  clientId = null,
+  onDelete,
+}) {
+  const [formData, setFormData] = useState(() => getInitialFormData(mode, initialClient));
+
+  const [showAddressLine2, setShowAddressLine2] = useState(Boolean(initialClient?.adresse2));
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const { user } = useAuth();
@@ -95,6 +133,12 @@ function AddKlient({ onClose, onSave }) {
       [name]: value,
     }));
   };
+
+  useEffect(() => {
+    setFormData(getInitialFormData(mode, initialClient));
+    setShowAddressLine2(Boolean(initialClient?.adresse2));
+    setSaveError('');
+  }, [mode, initialClient]);
 
   // Når bruger vælger adresse fra Google-forslag
   const handlePlaceChanged = () => {
@@ -154,42 +198,58 @@ function AddKlient({ onClose, onSave }) {
       const nowIso = new Date().toISOString();
       const ownerIdentifier = deriveUserIdentifier(user);
       const { telefonLand, telefon, land, ...restFormData } = formData;
+      const telefonLandValue = (telefonLand || '+45').trim();
+      const telefonValue = (telefon || '').trim();
 
       const clientPayload = {
         ...restFormData,
         land: land || 'Danmark',
-        telefonLand,
-        telefon,
-        telefonKomplet: telefon ? `${telefonLand || '+45'} ${telefon}` : '',
+        telefonLand: telefonLandValue,
+        telefon: telefonValue,
+        telefonKomplet: telefonValue ? `${telefonLandValue} ${telefonValue}` : '',
         ownerUid: user.uid,
         ownerEmail: user.email ?? null,
         ownerIdentifier,
-        status: 'Aktiv',
-        createdAt: serverTimestamp(),
-        createdAtIso: nowIso,
+        status: formData.status || 'Aktiv',
         updatedAt: serverTimestamp(),
+        ...(mode === 'create'
+          ? {
+              createdAt: serverTimestamp(),
+              createdAtIso: nowIso,
+            }
+          : {}),
       };
 
-      const clientsCollection = collection(db, 'users', user.uid, 'clients');
-      const docRef = await addDoc(clientsCollection, clientPayload);
+      if (mode === 'edit' && clientId) {
+        const clientRef = doc(db, 'users', user.uid, 'clients', clientId);
+        await updateDoc(clientRef, clientPayload);
+      } else {
+        const clientsCollection = collection(db, 'users', user.uid, 'clients');
+        const docRef = await addDoc(clientsCollection, clientPayload);
 
-      const savedClientForList = {
-        id: docRef.id,
-        navn: formData.navn,
-        status: 'Aktiv',
-        email: formData.email,
-        telefon: clientPayload.telefonKomplet,
-        cpr: formData.cpr,
-        adresse: formData.adresse,
-        by: formData.by,
-        postnummer: formData.postnummer,
-        land: land || 'Danmark',
-        createdAt: nowIso,
-      };
+        const savedClientForList = {
+          id: docRef.id,
+          navn: formData.navn,
+          status: formData.status || 'Aktiv',
+          email: formData.email,
+          telefon: clientPayload.telefonKomplet,
+          cpr: formData.cpr,
+          adresse: formData.adresse,
+          by: formData.by,
+          postnummer: formData.postnummer,
+          land: land || 'Danmark',
+          createdAt: nowIso,
+        };
 
-      if (typeof onSave === 'function') {
-        onSave(savedClientForList);
+        if (typeof onSave === 'function') {
+          onSave(savedClientForList);
+        }
       }
+
+      if (typeof onSave === 'function' && mode === 'edit') {
+        onSave();
+      }
+
       onClose();
     } catch (error) {
       console.error('Failed to save client data:', error);
@@ -203,11 +263,33 @@ function AddKlient({ onClose, onSave }) {
     onClose();
   };
 
+  const handleDelete = async () => {
+    if (!user?.uid || !clientId) return;
+    const confirmed = window.confirm(
+      'Er du sikker på, at du vil slette denne klient? Dette kan ikke fortrydes.'
+    );
+    if (!confirmed) return;
+
+    try {
+      const clientRef = doc(db, 'users', user.uid, 'clients', clientId);
+      await deleteDoc(clientRef);
+      if (typeof onDelete === 'function') {
+        onDelete(clientId);
+      }
+      onClose?.();
+    } catch (error) {
+      console.error('[AddKlient] Failed to delete client', error);
+      alert('Kunne ikke slette klienten. Prøv igen.');
+    }
+  };
+
   return (
     <div className="addklient-modal-overlay" onClick={handleCancel}>
       <div className="addklient-modal" onClick={(e) => e.stopPropagation()}>
         <div className="addklient-modal-header">
-          <h2 className="addklient-modal-title">Tilføj klient</h2>
+          <h2 className="addklient-modal-title">
+            {mode === 'edit' ? 'Rediger klient' : 'Tilføj klient'}
+          </h2>
           <button className="addklient-close-btn" onClick={handleCancel}>
             ×
           </button>
@@ -376,6 +458,16 @@ function AddKlient({ onClose, onSave }) {
 
           {/* Action Buttons */}
           <div className="addklient-form-actions">
+            {mode === 'edit' && (
+              <button
+                type="button"
+                className="addklient-delete-btn"
+                onClick={handleDelete}
+                disabled={isSaving}
+              >
+                Slet klient
+              </button>
+            )}
             <button
               type="button"
               className="addklient-cancel-btn"
@@ -400,4 +492,3 @@ function AddKlient({ onClose, onSave }) {
 }
 
 export default AddKlient;
-

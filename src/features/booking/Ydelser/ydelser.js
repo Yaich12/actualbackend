@@ -42,7 +42,8 @@ function Ydelser() {
   const [searchQuery, setSearchQuery] = useState('');
   const [serviceList, setServiceList] = useState([]);
   const [selectedServices, setSelectedServices] = useState([]);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [showServiceModal, setShowServiceModal] = useState(false);
+  const [editingService, setEditingService] = useState(null);
 
   const handleNavClick = (navItem) => {
     setActiveNav(navItem);
@@ -88,6 +89,41 @@ function Ydelser() {
     });
   };
 
+  const openCreateService = () => {
+    setEditingService(null);
+    setShowServiceModal(true);
+  };
+
+  const openEditService = (service) => {
+    setEditingService(service);
+    setShowServiceModal(true);
+  };
+
+  const handleServiceModalClose = () => {
+    setShowServiceModal(false);
+    setEditingService(null);
+  };
+
+  const handleServiceModalSubmit = (maybeService) => {
+    if (!maybeService) {
+      handleServiceModalClose();
+      return;
+    }
+
+    if (maybeService.deleted) {
+      setServiceList((prev) => prev.filter((service) => service.id !== maybeService.id));
+      handleServiceModalClose();
+      return;
+    }
+
+    const normalized = normalizeService(maybeService || {});
+    setServiceList((prev) => {
+      const withoutDuplicate = prev.filter((service) => service.id !== normalized.id);
+      return [normalized, ...withoutDuplicate];
+    });
+    handleServiceModalClose();
+  };
+
   useEffect(() => {
     setServiceList(remoteServices);
     setSelectedServices((prevSelected) =>
@@ -109,12 +145,7 @@ function Ydelser() {
             Forside
           </button>
         </div>
-        <div className="topbar-right">
-          <button className="create-appointment-btn">
-            <span className="plus-icon">+</span>
-            Opret aftale
-          </button>
-        </div>
+        <div className="topbar-right" />
       </div>
 
       <div className="booking-content">
@@ -198,14 +229,10 @@ function Ydelser() {
               <h2 className="page-title">Ydelser</h2>
             </div>
             <div className="header-right">
-              <button className="sort-btn">
-                <span className="sort-icon">☰</span>
-                Sorter ydelser
-              </button>
               <button
                 className="create-service-btn"
                 type="button"
-                onClick={() => setIsAddModalOpen(true)}
+                onClick={openCreateService}
               >
                 <span className="plus-icon">+</span>
                 Opret ny
@@ -262,8 +289,9 @@ function Ydelser() {
                 <div className="service-checkbox">
                   <input 
                     type="checkbox" 
-                    checked={selectedServices.includes(service.id)}
-                    onChange={() => handleSelectService(service.id)}
+                    checked={false}
+                    readOnly
+                    onChange={() => openEditService(service)}
                     onClick={(e) => e.stopPropagation()}
                   />
                 </div>
@@ -290,9 +318,12 @@ function Ydelser() {
         </div>
       </div>
       <AddNewServiceModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onSubmit={handleAddNewService}
+        isOpen={showServiceModal}
+        onClose={handleServiceModalClose}
+        onSubmit={handleServiceModalSubmit}
+        mode={editingService ? 'edit' : 'create'}
+        serviceId={editingService?.id || null}
+        initialService={editingService || null}
       />
     </div>
   );

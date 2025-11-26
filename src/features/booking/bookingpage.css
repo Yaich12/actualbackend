@@ -5,6 +5,7 @@
   width: 100%;
   background-color: #ffffff;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  box-sizing: border-box;
 }
 
 /* Top Navigation Bar */
@@ -40,26 +41,6 @@
   display: flex;
   align-items: center;
   gap: 16px;
-}
-
-.topbar-tab {
-  padding: 8px 16px;
-  border: none;
-  background: transparent;
-  color: #6b7280;
-  font-size: 14px;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.2s;
-}
-
-.topbar-tab:hover {
-  background-color: #f3f4f6;
-}
-
-.topbar-tab.active {
-  background-color: #3b82f6;
-  color: #ffffff;
 }
 
 .topbar-navigation {
@@ -144,9 +125,12 @@
 .booking-content {
   display: flex;
   flex: 1;
-  overflow: hidden;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   transition: all 0.3s ease;
+  overflow: hidden;
+  align-items: stretch;
 }
 
 .booking-content .booking-sidebar {
@@ -156,24 +140,48 @@
 }
 
 .booking-content .booking-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.booking-content.with-appointment-form .booking-main {
-  flex: 0 0 40%;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
 .appointment-form-wrapper {
-  flex: 0 0 60%;
-  min-width: 350px;
-  max-width: 600px;
+  flex: 0 0 480px;
+  min-width: 400px;
+  max-width: 520px;
   display: flex;
   flex-direction: column;
   background-color: #ffffff;
   border-left: 1px solid #e5e7eb;
   overflow: hidden;
+  box-sizing: border-box;
+  padding: 0 24px 24px 24px;
+}
+
+@media (max-width: 1100px) {
+  .booking-content {
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .booking-sidebar {
+    width: 100%;
+    min-width: 0;
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .booking-main {
+    padding: 24px 24px 32px 24px;
+  }
+
+  .appointment-form-wrapper {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    border-left: none;
+    border-top: 1px solid #e5e7eb;
+    padding: 24px;
+  }
 }
 
 /* Left Sidebar */
@@ -185,6 +193,7 @@
   flex-direction: column;
   padding: 20px;
   overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .sidebar-logo {
@@ -553,10 +562,6 @@
 
 /* Responsive adjustments */
 @media (max-width: 1024px) {
-  .booking-sidebar {
-    width: 240px;
-  }
-
   .calendar-container {
     padding: 16px;
   }

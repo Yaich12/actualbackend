@@ -4,7 +4,7 @@ import './bookingpage.css';
 import AppointmentForm from './appointment/appointment';
 import Journal from './Journal/journal';
 import { useAuth } from '../../AuthContext';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import useAppointments from '../../hooks/useAppointments';
 import { combineDateAndTimeToIso } from '../../utils/appointmentFormat';
@@ -13,10 +13,11 @@ import { useUserClients } from './Klienter/hooks/useUserClients';
 function BookingPage() {
   const navigate = useNavigate();
   const { user, signOutUser } = useAuth();
-  const [currentDate, setCurrentDate] = useState(new Date(2025, 10, 1)); // November 2025
-  const [viewMode, setViewMode] = useState('month');
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [activeNav, setActiveNav] = useState('kalender');
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
+  const [editingAppointment, setEditingAppointment] = useState(null);
+  const [nextAppointmentTemplate, setNextAppointmentTemplate] = useState(null);
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [selectedClientFallback, setSelectedClientFallback] = useState(null);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
@@ -168,10 +169,82 @@ function BookingPage() {
       console.error('[BookingPage] Failed to create appointment', error);
     } finally {
       setShowAppointmentForm(false);
+      setEditingAppointment(null);
+      setNextAppointmentTemplate(null);
+    }
+  };
+
+  const handleUpdateAppointment = async (appointment) => {
+    if (!user?.uid || !appointment?.id) {
+      console.error('[BookingPage] Cannot update appointment: missing user or appointment id');
+      return;
+    }
+
+    try {
+      const startIso = combineDateAndTimeToIso(appointment.startDate, appointment.startTime);
+      const endIso = combineDateAndTimeToIso(appointment.endDate, appointment.endTime);
+
+      if (!startIso || !endIso) {
+        throw new Error('Invalid start or end time');
+      }
+
+      const title = appointment.client || appointment.service || 'Aftale';
+      const docRef = doc(db, 'users', user.uid, 'appointments', appointment.id);
+
+      await updateDoc(docRef, {
+        title,
+        client: appointment.client || title,
+        clientId: appointment.clientId || null,
+        clientEmail: appointment.clientEmail || '',
+        clientPhone: appointment.clientPhone || '',
+        service: appointment.service || '',
+        serviceId: appointment.serviceId || null,
+        serviceDuration: appointment.serviceDuration || '',
+        servicePrice:
+          typeof appointment.servicePrice === 'number' ? appointment.servicePrice : null,
+        servicePriceInclVat:
+          typeof appointment.servicePriceInclVat === 'number'
+            ? appointment.servicePriceInclVat
+            : null,
+        notes: appointment.notes || '',
+        start: startIso,
+        end: endIso,
+        status: appointment.status || 'booked',
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error('[BookingPage] Failed to update appointment', error);
+    } finally {
+      setShowAppointmentForm(false);
+      setEditingAppointment(null);
+      setNextAppointmentTemplate(null);
+    }
+  };
+
+  const handleDeleteAppointment = async (appointment) => {
+    if (!user?.uid || !appointment?.id) {
+      console.error('[BookingPage] Cannot delete appointment – missing user or appointment id');
+      return;
+    }
+
+    try {
+      const ref = doc(db, 'users', user.uid, 'appointments', appointment.id);
+      await deleteDoc(ref);
+      console.log('[BookingPage] Deleted appointment', appointment.id);
+      setSelectedAppointment(null);
+      setSelectedClientId(null);
+      setSelectedClientFallback(null);
+      setEditingAppointment(null);
+      setShowAppointmentForm(false);
+      setNextAppointmentTemplate(null);
+    } catch (error) {
+      console.error('[BookingPage] Failed to delete appointment', error);
     }
   };
 
   const handleAppointmentClick = (appointment) => {
+    setEditingAppointment(null);
+    setNextAppointmentTemplate(null);
     setSelectedClientId(appointment.clientId || null);
     setSelectedClientFallback(
       appointment.client || appointment.clientEmail || appointment.clientPhone
@@ -196,13 +269,18 @@ function BookingPage() {
     setSelectedClientId(null);
     setSelectedClientFallback(null);
     setSelectedAppointment(null);
+    setEditingAppointment(null);
+    setNextAppointmentTemplate(null);
   };
 
-  const handleCreateNextAppointment = () => {
+  const handleCreateNextAppointment = (payload) => {
+    const fromJournal = payload?.appointment || null;
+    setNextAppointmentTemplate(fromJournal);
     setShowAppointmentForm(true);
     setSelectedClientId(null);
     setSelectedClientFallback(null);
     setSelectedAppointment(null);
+    setEditingAppointment(null);
   };
 
   const userIdentity = useMemo(() => {
@@ -246,12 +324,6 @@ function BookingPage() {
           </button>
         </div>
         <div className="topbar-center">
-          <button className={`topbar-tab ${viewMode === 'calendars' ? 'active' : ''}`}>
-            Kalendere
-          </button>
-          <button className={`topbar-tab ${viewMode === 'month' ? 'active' : ''}`}>
-            måned
-          </button>
           <div className="topbar-navigation">
             <button className="nav-arrow" onClick={() => navigateMonth(-1)}>←</button>
             <button className="nav-today" onClick={goToToday}>i dag</button>
@@ -264,7 +336,14 @@ function BookingPage() {
         <div className="topbar-right">
           <button 
             className="create-appointment-btn"
-            onClick={() => setShowAppointmentForm(!showAppointmentForm)}
+            onClick={() => {
+              setEditingAppointment(null);
+              setNextAppointmentTemplate(null);
+              setSelectedAppointment(null);
+              setSelectedClientId(null);
+              setSelectedClientFallback(null);
+              setShowAppointmentForm(true);
+            }}
           >
             <span className="plus-icon">+</span>
             Opret aftale
@@ -456,13 +535,28 @@ function BookingPage() {
               selectedAppointment={selectedAppointment}
               onClose={handleCloseJournal}
               onCreateAppointment={handleCreateNextAppointment}
+              onEditAppointment={(appointment) => {
+                setEditingAppointment(appointment);
+                setShowAppointmentForm(true);
+                setSelectedAppointment(null);
+                setSelectedClientId(null);
+                setSelectedClientFallback(null);
+              }}
+              onDeleteAppointment={handleDeleteAppointment}
             />
           </div>
         ) : showAppointmentForm && (
           <div className="appointment-form-wrapper">
             <AppointmentForm
-              onClose={() => setShowAppointmentForm(false)}
+              initialAppointment={editingAppointment || nextAppointmentTemplate || null}
+              mode={editingAppointment ? 'edit' : 'create'}
+              onClose={() => {
+                setShowAppointmentForm(false);
+                setEditingAppointment(null);
+                setNextAppointmentTemplate(null);
+              }}
               onCreate={handleCreateAppointment}
+              onUpdate={handleUpdateAppointment}
             />
           </div>
         )}

@@ -19,6 +19,7 @@ function Klientoversigt() {
   const [sortColumn, setSortColumn] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
   const [showAddClient, setShowAddClient] = useState(false);
+  const [editingClient, setEditingClient] = useState(null);
 
 
   const handleNavClick = (navItem) => {
@@ -56,8 +57,24 @@ function Klientoversigt() {
     });
   }, [clients, searchQuery]);
 
+  const openCreateClient = () => {
+    setEditingClient(null);
+    setShowAddClient(true);
+  };
+
+  const openEditClient = (client) => {
+    setEditingClient(client);
+    setShowAddClient(true);
+  };
+
   const handleAddClientSave = () => {
     setShowAddClient(false);
+    setEditingClient(null);
+  };
+
+  const handleDeleteClient = () => {
+    setShowAddClient(false);
+    setEditingClient(null);
   };
 
   return (
@@ -72,12 +89,7 @@ function Klientoversigt() {
             Forside
           </button>
         </div>
-        <div className="topbar-right">
-          <button className="create-appointment-btn">
-            <span className="plus-icon">+</span>
-            Opret aftale
-          </button>
-        </div>
+        <div className="topbar-right" />
       </div>
 
       <div className="booking-content">
@@ -159,20 +171,13 @@ function Klientoversigt() {
           <div className="klientoversigt-header">
             <div className="header-left">
               <div className="header-title">
-                <span className="title-arrows">««</span>
-                <span className="title-arrow">‹</span>
                 <h2 className="page-title">Klientoversigt</h2>
               </div>
             </div>
             <div className="header-right">
-              <button className="export-btn">
-                <span className="export-icon">⬇</span>
-                Eksporter CSV
-                <span className="dropdown-arrow">▼</span>
-              </button>
               <button 
                 className="add-client-btn"
-                onClick={() => setShowAddClient(true)}
+                onClick={openCreateClient}
               >
                 <span className="add-icon">👤+</span>
                 Tilføj klient
@@ -312,7 +317,12 @@ function Klientoversigt() {
                 {filteredClients.map((client) => (
                   <tr key={client.id}>
                     <td className="checkbox-col">
-                      <input type="checkbox" />
+                      <input
+                        type="checkbox"
+                        checked={false}
+                        readOnly
+                        onChange={() => openEditClient(client)}
+                      />
                     </td>
                     <td>{client.navn}</td>
                     <td>
@@ -338,8 +348,16 @@ function Klientoversigt() {
       {/* Add Klient Modal */}
       {showAddClient && (
         <AddKlient
-          onClose={() => setShowAddClient(false)}
+          isOpen={showAddClient}
+          mode={editingClient ? 'edit' : 'create'}
+          clientId={editingClient?.id || null}
+          initialClient={editingClient || null}
+          onClose={() => {
+            setShowAddClient(false);
+            setEditingClient(null);
+          }}
           onSave={handleAddClientSave}
+          onDelete={handleDeleteClient}
         />
       )}
     </div>

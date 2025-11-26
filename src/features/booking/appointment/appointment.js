@@ -3,20 +3,41 @@ import './appointments.css';
 import { useUserClients } from '../Klienter/hooks/useUserClients';
 import ServiceSelector from '../Ydelser/ServiceSelector';
 
-function AppointmentForm({ onClose, onCreate }) {
+function AppointmentForm({
+  onClose,
+  onCreate,
+  onUpdate,
+  initialAppointment,
+  mode = 'create',
+}) {
   const {
     clients,
     loading: clientsLoading,
     error: clientsError,
   } = useUserClients();
-  const [startDate, setStartDate] = useState('14-11-2025');
-  const [startTime, setStartTime] = useState('10:00');
-  const [endDate, setEndDate] = useState('14-11-2025');
-  const [endTime, setEndTime] = useState('11:00');
-  const [selectedClientId, setSelectedClientId] = useState('');
-  const [selectedServiceId, setSelectedServiceId] = useState('');
+  const defaultDate = useMemo(() => {
+    const today = new Date();
+    const day = today.getDate().toString().padStart(2, '0');
+    const month = (today.getMonth() + 1).toString().padStart(2, '0');
+    const year = today.getFullYear();
+    return `${day}-${month}-${year}`;
+  }, []);
+  const [startDate, setStartDate] = useState(
+    initialAppointment?.startDate || defaultDate
+  );
+  const [startTime, setStartTime] = useState(
+    initialAppointment?.startTime || '10:00'
+  );
+  const [endDate, setEndDate] = useState(initialAppointment?.endDate || defaultDate);
+  const [endTime, setEndTime] = useState(initialAppointment?.endTime || '11:00');
+  const [selectedClientId, setSelectedClientId] = useState(
+    initialAppointment?.clientId || ''
+  );
+  const [selectedServiceId, setSelectedServiceId] = useState(
+    initialAppointment?.serviceId || ''
+  );
   const [availableServices, setAvailableServices] = useState([]);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(initialAppointment?.notes || '');
   const [showStartDropdown, setShowStartDropdown] = useState(false);
   const [showEndDropdown, setShowEndDropdown] = useState(false);
 
@@ -62,37 +83,59 @@ function AppointmentForm({ onClose, onCreate }) {
     };
   }, []);
 
+  useEffect(() => {
+    setStartDate(initialAppointment?.startDate || defaultDate);
+    setStartTime(initialAppointment?.startTime || '10:00');
+    setEndDate(initialAppointment?.endDate || defaultDate);
+    setEndTime(initialAppointment?.endTime || '11:00');
+    setSelectedClientId(initialAppointment?.clientId || '');
+    setSelectedServiceId(initialAppointment?.serviceId || '');
+    setNotes(initialAppointment?.notes || '');
+    setShowStartDropdown(false);
+    setShowEndDropdown(false);
+  }, [initialAppointment, defaultDate]);
+
   const handleSubmit = (e) => {
     e.preventDefault();
+    const base = initialAppointment || {};
     const selectedClientData =
       clients.find((client) => client.id === selectedClientId) || null;
     const selectedServiceData =
       availableServices.find((service) => service.id === selectedServiceId) || null;
 
-    const newAppointment = {
-      id: Date.now(),
+    const appointmentPayload = {
+      ...base,
+      id: base.id || Date.now(),
       startDate,
       startTime,
       endDate,
       endTime,
-      clientId: selectedClientId || null,
-      client: selectedClientData?.navn || '',
-      clientEmail: selectedClientData?.email || '',
-      clientPhone: selectedClientData?.telefon || '',
-      serviceId: selectedServiceId || null,
-      service: selectedServiceData?.navn || '',
-      serviceDuration: selectedServiceData?.varighed || '',
+      clientId: selectedClientId || base.clientId || null,
+      client: selectedClientData?.navn || base.client || '',
+      clientEmail: selectedClientData?.email || base.clientEmail || '',
+      clientPhone: selectedClientData?.telefon || base.clientPhone || '',
+      serviceId: selectedServiceId || base.serviceId || null,
+      service: selectedServiceData?.navn || base.service || '',
+      serviceDuration: selectedServiceData?.varighed || base.serviceDuration || '',
       servicePrice:
-        typeof selectedServiceData?.pris === 'number' ? selectedServiceData.pris : null,
+        typeof selectedServiceData?.pris === 'number'
+          ? selectedServiceData.pris
+          : typeof base.servicePrice === 'number'
+            ? base.servicePrice
+            : null,
       servicePriceInclVat:
         typeof selectedServiceData?.prisInklMoms === 'number'
           ? selectedServiceData.prisInklMoms
-          : null,
+          : typeof base.servicePriceInclVat === 'number'
+            ? base.servicePriceInclVat
+            : null,
       notes,
     };
 
-    if (typeof onCreate === 'function') {
-      onCreate(newAppointment);
+    if (mode === 'edit' && typeof onUpdate === 'function') {
+      onUpdate(appointmentPayload);
+    } else if (typeof onCreate === 'function') {
+      onCreate(appointmentPayload);
     }
 
     onClose();
@@ -105,7 +148,9 @@ function AppointmentForm({ onClose, onCreate }) {
   return (
     <div className="appointment-form-container">
       <div className="appointment-form-header">
-        <h2 className="appointment-form-title">Opret aftale</h2>
+        <h2 className="appointment-form-title">
+          {mode === 'edit' ? 'Rediger aftale' : 'Opret aftale'}
+        </h2>
       </div>
 
       <form className="appointment-form" onSubmit={handleSubmit}>
@@ -113,7 +158,7 @@ function AppointmentForm({ onClose, onCreate }) {
         <div className="form-section">
           <div className="datetime-row">
             <div className="datetime-group">
-              <label className="form-label">Start</label>
+              <label className="form-label">Start tidspunkt</label>
               <div className="datetime-inputs">
                 <input
                   type="text"
@@ -158,8 +203,6 @@ function AppointmentForm({ onClose, onCreate }) {
                 </div>
               </div>
             </div>
-
-            <div className="arrow-icon">→</div>
 
             <div className="datetime-group">
               <label className="form-label">Slut tidspunkt</label>
@@ -283,7 +326,7 @@ function AppointmentForm({ onClose, onCreate }) {
             Annuller
           </button>
           <button type="submit" className="submit-btn">
-            Opret aftale
+            {mode === 'edit' ? 'Opdater aftale' : 'Opret aftale'}
           </button>
         </div>
       </form>

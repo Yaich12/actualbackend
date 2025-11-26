@@ -176,6 +176,17 @@
   border-color: #9ca3af;
 }
 
+.journal-delete-btn {
+  background-color: #ffe5e5;
+  color: #b00020;
+  border-color: #f8bcbc;
+}
+
+.journal-delete-btn:hover {
+  background-color: #ffcccc;
+  border-color: #f59aa0;
+}
+
 .journal-icon-btn {
   width: 32px;
   height: 32px;
@@ -238,4 +249,3 @@
     justify-content: space-between;
   }
 }
-

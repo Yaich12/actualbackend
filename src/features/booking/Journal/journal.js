@@ -3,7 +3,14 @@ import './journal.css';
 import { useUserServices } from '../Ydelser/hooks/useUserServices';
 import SeHistorik from './Historik/sehistorik';
 
-function Journal({ selectedClient, selectedAppointment, onClose, onCreateAppointment }) {
+function Journal({
+  selectedClient,
+  selectedAppointment,
+  onClose,
+  onCreateAppointment,
+  onEditAppointment,
+  onDeleteAppointment,
+}) {
   const [showHistory, setShowHistory] = useState(false);
   const { services: savedServices } = useUserServices();
 
@@ -129,7 +136,16 @@ function Journal({ selectedClient, selectedAppointment, onClose, onCreateAppoint
 
         {/* Create Next Appointment Button */}
         <div className="journal-section">
-          <button className="journal-create-appointment-btn" onClick={onCreateAppointment}>
+          <button
+            className="journal-create-appointment-btn"
+            onClick={() => {
+              if (!onCreateAppointment) return;
+              onCreateAppointment({
+                appointment: selectedAppointment || null,
+                client,
+              });
+            }}
+          >
             Opret næste aftale
           </button>
         </div>
@@ -157,10 +173,32 @@ function Journal({ selectedClient, selectedAppointment, onClose, onCreateAppoint
                   Se journal
                 </button>
                 <button className="journal-action-btn">Opret ny faktura</button>
-                <button className="journal-icon-btn">✏️</button>
-                <button className="journal-icon-btn">⋯</button>
-              </div>
+              <button
+                className="journal-icon-btn"
+                onClick={() => {
+                  if (onEditAppointment && selectedAppointment) {
+                    onEditAppointment(selectedAppointment);
+                  }
+                }}
+              >
+                ✏️
+              </button>
+              <button
+                className="journal-action-btn journal-delete-btn"
+                onClick={() => {
+                  if (!selectedAppointment || !onDeleteAppointment) return;
+                  const confirmed = window.confirm(
+                    'Er du sikker på, at du vil slette denne aftale? Dette kan ikke fortrydes.'
+                  );
+                  if (confirmed) {
+                    onDeleteAppointment(selectedAppointment);
+                  }
+                }}
+              >
+                Slet aftale
+              </button>
             </div>
+          </div>
 
             {/* Booking Source */}
             <div className="journal-section">
@@ -189,4 +227,3 @@ function Journal({ selectedClient, selectedAppointment, onClose, onCreateAppoint
 }
 
 export default Journal;
-
