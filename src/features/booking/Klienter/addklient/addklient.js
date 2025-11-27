@@ -456,6 +456,13 @@ function AddKlient({
             </p>
           )}
 
+          {/* Error Message */}
+          {saveError && (
+            <p className="addklient-error" role="alert">
+              {saveError}
+            </p>
+          )}
+
           {/* Action Buttons */}
           <div className="addklient-form-actions">
             {mode === 'edit' && (

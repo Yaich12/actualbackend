@@ -6,6 +6,12 @@ import MacbookScrollDemo from '../components/ui/macbook-scroll-demo';
 import Both from './components/Both';
 import Footer from './components/footer';
 
+const LandingDivider = () => (
+  <div className="landing-divider" aria-label="Divider: from physios to physios">
+    <span className="landing-divider-text">from physios to physios</span>
+  </div>
+);
+
 function LandingPage() {
   return (
     <div className="landing-page">
