@@ -1,12 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import './sehistorik.css';
-import Indlæg from '../indlæg/indlæg';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
 
-function SeHistorik({ clientName, onClose }) {
-  const [showCreateEntry, setShowCreateEntry] = useState(false);
+function SeHistorik({ clientId, clientName, onClose, onCreateEntry }) {
   const [entries, setEntries] = useState([]);
   const [isLoadingEntries, setIsLoadingEntries] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -52,10 +50,24 @@ function SeHistorik({ clientName, onClose }) {
       return;
     }
 
+    if (!clientId) {
+      setEntries([]);
+      setIsLoadingEntries(false);
+      setLoadError('Manglende klient-id for at hente journaler.');
+      return;
+    }
+
     setIsLoadingEntries(true);
     setLoadError('');
 
-    const entriesRef = collection(db, 'users', user.uid, 'journalEntries');
+    const entriesRef = collection(
+      db,
+      'users',
+      user.uid,
+      'clients',
+      clientId,
+      'journalEntries'
+    );
     const entriesQuery = query(entriesRef, orderBy('createdAt', 'desc'));
 
     const unsubscribe = onSnapshot(
@@ -87,7 +99,7 @@ function SeHistorik({ clientName, onClose }) {
     return () => {
       unsubscribe();
     };
-  }, [user]);
+  }, [user, clientId]);
 
   const filteredEntries = useMemo(() => {
     if (!clientName) {
@@ -97,33 +109,6 @@ function SeHistorik({ clientName, onClose }) {
       (entry) => (entry.clientName || '').toLowerCase() === clientName.toLowerCase()
     );
   }, [entries, clientName]);
-
-  const handleCreateEntry = () => {
-    setShowCreateEntry(true);
-  };
-
-  const handleSaveEntry = (newEntry) => {
-    setEntries((prev) => {
-      const updated = [newEntry, ...prev];
-      return updated.sort((a, b) => {
-        const first = new Date(a.createdAt || a.date || 0).getTime();
-        const second = new Date(b.createdAt || b.date || 0).getTime();
-        return second - first;
-      });
-    });
-    setShowCreateEntry(false);
-  };
-
-  // If showing create entry form, render Indlæg component
-  if (showCreateEntry) {
-    return (
-      <Indlæg
-        clientName={clientName}
-        onClose={() => setShowCreateEntry(false)}
-        onSave={handleSaveEntry}
-      />
-    );
-  }
 
   return (
     <div className="sehistorik-container">
@@ -135,7 +120,10 @@ function SeHistorik({ clientName, onClose }) {
             <span className="sehistorik-client-name">{clientName}</span>
           </div>
           <div className="sehistorik-header-actions">
-            <button className="sehistorik-create-entry-btn" onClick={handleCreateEntry}>
+            <button
+              className="sehistorik-create-entry-btn"
+              onClick={() => onCreateEntry && onCreateEntry()}
+            >
               <span className="sehistorik-plus-icon">+</span>
               Opret indlæg
             </button>

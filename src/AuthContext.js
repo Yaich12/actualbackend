@@ -5,7 +5,12 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { getRedirectResult, onAuthStateChanged, signOut } from "firebase/auth";
+import {
+  getRedirectResult,
+  onAuthStateChanged,
+  signOut,
+  updateProfile,
+} from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
@@ -13,6 +18,7 @@ const AuthContext = createContext({
   user: null,
   loading: true,
   signOutUser: () => Promise.resolve(),
+  updateUserProfile: () => Promise.resolve(),
 });
 
 export function AuthProvider({ children }) {
@@ -81,11 +87,42 @@ export function AuthProvider({ children }) {
 
   const signOutUser = () => signOut(auth);
 
+  const updateUserProfile = async ({ fullName, jobTitle }) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      return;
+    }
+
+    try {
+      if (fullName) {
+        await updateProfile(currentUser, { displayName: fullName });
+      }
+
+      const userRef = doc(db, "users", currentUser.uid);
+      await setDoc(
+        userRef,
+        {
+          displayName: fullName || currentUser.displayName || null,
+          email: currentUser.email ?? null,
+          jobTitle: jobTitle ?? "",
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      setUser({ ...currentUser, displayName: fullName || currentUser.displayName });
+    } catch (error) {
+      console.error("[AuthContext] Failed to update user profile", error);
+      throw error;
+    }
+  };
+
   const value = useMemo(
     () => ({
       user,
       loading,
       signOutUser,
+      updateUserProfile,
     }),
     [user, loading]
   );

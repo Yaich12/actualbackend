@@ -8,7 +8,7 @@ import { useUserClients } from './hooks/useUserClients';
 
 function Klientoversigt() {
   const navigate = useNavigate();
-  const { signOutUser } = useAuth();
+  const { user, signOutUser } = useAuth();
   const {
     clients,
     loading: isLoadingClients,
@@ -76,6 +76,34 @@ function Klientoversigt() {
     setShowAddClient(false);
     setEditingClient(null);
   };
+
+  const userIdentity = useMemo(() => {
+    if (!user) {
+      return {
+        name: 'Ikke logget ind',
+        email: 'Log ind for at fortsætte',
+        initials: '?',
+        photoURL: null,
+      };
+    }
+
+    const name = user.displayName || user.email || 'Selma bruger';
+    const email = user.email || '—';
+    const initialsSource = (user.displayName || user.email || '?').trim();
+    const initials = initialsSource
+      .split(/\s+/)
+      .map((part) => part[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
+
+    return {
+      name,
+      email,
+      initials,
+      photoURL: user.photoURL || null,
+    };
+  }, [user]);
 
   return (
     <div className="booking-page">
@@ -163,6 +191,28 @@ function Klientoversigt() {
               </button>
             </nav>
           </div>
+
+          <button
+            type="button"
+            className="sidebar-clinic"
+            onClick={() => navigate('/booking/settings')}
+          >
+            {userIdentity.photoURL ? (
+              <img
+                src={userIdentity.photoURL}
+                alt={userIdentity.name}
+                className="clinic-avatar"
+              />
+            ) : (
+              <div className="clinic-avatar clinic-avatar-placeholder">
+                {userIdentity.initials}
+              </div>
+            )}
+            <div className="clinic-user-details">
+              <div className="clinic-user-name">{userIdentity.name}</div>
+              <div className="clinic-user-email">{userIdentity.email}</div>
+            </div>
+          </button>
         </div>
 
         {/* Main Content Area - Client Overview */}

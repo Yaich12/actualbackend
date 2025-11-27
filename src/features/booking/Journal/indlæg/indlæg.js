@@ -58,7 +58,7 @@ const deriveUserIdentifier = (user) => {
   return 'unknown-user';
 };
 
-function Indlæg({ clientName, onClose, onSave }) {
+function Indlæg({ clientId, clientName, onClose, onSave }) {
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('14-11-2025');
   const [isPrivate, setIsPrivate] = useState(false);
@@ -86,6 +86,11 @@ function Indlæg({ clientName, onClose, onSave }) {
       return;
     }
 
+    if (!clientId) {
+      setSaveError('Manglende klient-id – kunne ikke knytte indlægget til en klient.');
+      return;
+    }
+
     const nowIso = new Date().toISOString();
     const ownerIdentifier = deriveUserIdentifier(user);
     const entryPayload = {
@@ -96,6 +101,7 @@ function Indlæg({ clientName, onClose, onSave }) {
       isStarred: false,
       isLocked: false,
       clientName,
+      clientId,
       searchQuery,
       dictationStatus,
       transcriptionResult,
@@ -108,7 +114,14 @@ function Indlæg({ clientName, onClose, onSave }) {
     setIsSaving(true);
 
     try {
-      const entriesCollection = collection(db, 'users', user.uid, 'journalEntries');
+      const entriesCollection = collection(
+        db,
+        'users',
+        user.uid,
+        'clients',
+        clientId,
+        'journalEntries'
+      );
       const docRef = await addDoc(entriesCollection, {
         ...entryPayload,
         createdAt: serverTimestamp(),

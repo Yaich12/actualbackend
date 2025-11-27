@@ -92,6 +92,27 @@
   margin-left: 8px;
 }
 
+.topbar-view-toggle {
+  display: inline-flex;
+  gap: 8px;
+  margin: 0 16px;
+}
+
+.view-toggle-btn {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.view-toggle-btn.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+
 .topbar-right {
   display: flex;
   align-items: center;
@@ -131,6 +152,36 @@
   transition: all 0.3s ease;
   overflow: hidden;
   align-items: stretch;
+}
+
+.booking-content.with-journal-entry {
+  display: flex;
+}
+
+.booking-main-full {
+  flex: 1;
+}
+
+.booking-content.with-journal-entry .appointment-form-wrapper {
+  display: none;
+}
+
+.journal-create-entry-btn {
+  padding: 10px 16px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 8px;
+}
+
+.journal-create-entry-btn:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
 }
 
 .booking-content .booking-sidebar {
@@ -375,6 +426,10 @@
 
 /* Clinic Section */
 .sidebar-clinic {
+  width: 100%;
+  border: none;
+  text-align: left;
+  appearance: none;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -383,6 +438,7 @@
   border-radius: 8px;
   cursor: pointer;
   transition: background-color 0.2s;
+  margin-top: auto;
 }
 
 .sidebar-clinic:hover {

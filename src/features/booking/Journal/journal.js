@@ -8,6 +8,7 @@ function Journal({
   selectedAppointment,
   onClose,
   onCreateAppointment,
+  onCreateJournalEntry,
   onEditAppointment,
   onDeleteAppointment,
 }) {
@@ -26,8 +27,10 @@ function Journal({
   if (showHistory) {
     return (
       <SeHistorik 
+        clientId={selectedClient?.id || null}
         clientName={selectedClient?.navn || 'Ukendt klient'}
         onClose={() => setShowHistory(false)}
+        onCreateEntry={onCreateJournalEntry}
       />
     );
   }
@@ -136,18 +139,20 @@ function Journal({
 
         {/* Create Next Appointment Button */}
         <div className="journal-section">
-          <button
-            className="journal-create-appointment-btn"
-            onClick={() => {
-              if (!onCreateAppointment) return;
-              onCreateAppointment({
-                appointment: selectedAppointment || null,
-                client,
-              });
-            }}
-          >
-            Opret næste aftale
-          </button>
+          <div className="journal-create-actions">
+            <button
+              className="journal-create-appointment-btn"
+              onClick={() => {
+                if (!onCreateAppointment) return;
+                onCreateAppointment({
+                  appointment: selectedAppointment || null,
+                  client,
+                });
+              }}
+            >
+              Opret næste aftale
+            </button>
+          </div>
         </div>
 
         {/* Selected Appointment Details */}
@@ -173,7 +178,7 @@ function Journal({
                   Se journal
                 </button>
                 <button className="journal-action-btn">Opret ny faktura</button>
-              <button
+                <button
                 className="journal-icon-btn"
                 onClick={() => {
                   if (onEditAppointment && selectedAppointment) {
@@ -183,22 +188,31 @@ function Journal({
               >
                 ✏️
               </button>
-              <button
-                className="journal-action-btn journal-delete-btn"
-                onClick={() => {
-                  if (!selectedAppointment || !onDeleteAppointment) return;
-                  const confirmed = window.confirm(
-                    'Er du sikker på, at du vil slette denne aftale? Dette kan ikke fortrydes.'
-                  );
-                  if (confirmed) {
-                    onDeleteAppointment(selectedAppointment);
-                  }
-                }}
-              >
-                Slet aftale
-              </button>
+                <button
+                  className="journal-action-btn journal-delete-btn"
+                  onClick={() => {
+                    if (!selectedAppointment || !onDeleteAppointment) return;
+                    const confirmed = window.confirm(
+                      'Er du sikker på, at du vil slette denne aftale? Dette kan ikke fortrydes.'
+                    );
+                    if (confirmed) {
+                      onDeleteAppointment(selectedAppointment);
+                    }
+                  }}
+                >
+                  Slet aftale
+                </button>
+                {onCreateJournalEntry && (
+                  <button
+                    className="journal-create-entry-btn inline"
+                    onClick={onCreateJournalEntry}
+                  >
+                    <span className="journal-create-entry-icon">+</span>
+                    Opret indlæg
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
 
             {/* Booking Source */}
             <div className="journal-section">
