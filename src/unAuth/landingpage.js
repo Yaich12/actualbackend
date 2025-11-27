@@ -18,13 +18,19 @@ function LandingPage() {
       <Navbar />
       <main className="landing-page-main">
         <section className="landing-section landing-section-hero" id="hero">
-          <Frontpage />
+          <div className="landing-section-inner landing-section-inner-hero">
+            <Frontpage />
+          </div>
         </section>
         <section className="landing-section landing-section-panel" id="kalender">
-          <MacbookScrollDemo />
+          <div className="landing-section-inner">
+            <MacbookScrollDemo />
+          </div>
         </section>
         <section className="landing-section landing-section-full" id="suite">
-          <Both />
+          <div className="landing-section-inner">
+            <Both />
+          </div>
         </section>
       </main>
       <Footer />

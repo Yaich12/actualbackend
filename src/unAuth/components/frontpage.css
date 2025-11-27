@@ -1,7 +1,7 @@
 .frontpage {
   width: 100%;
   padding: 0 0 4rem 0;
-  background: #000000;
+  background: #f5f7fb;
   margin: 0;
   position: relative;
   min-height: 100vh;
@@ -36,26 +36,28 @@
 .frontpage-video-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.25);
 }
 
 .frontpage-grid {
-  max-width: 1120px;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  margin: 0 auto 0 0;
-  min-height: 100vh;
-  padding: clamp(3rem, 6vw, 5rem) clamp(8px, 1vw, 12px) clamp(2rem, 5vw, 3rem);
+  max-width: none;
+  margin: 0;
+  padding: clamp(2.5rem, 6vw, 4rem);
   display: flex;
   flex-direction: column;
-  gap: 2.5rem;
+  gap: 2rem;
   justify-content: flex-end;
   align-items: flex-start;
-  position: relative;
   z-index: 1;
+  box-sizing: border-box;
 }
 
 .frontpage-container {
   width: 100%;
+  max-width: 560px;
   text-align: left;
 }
 
@@ -170,4 +172,3 @@
     width: 100%;
   }
 }
-
