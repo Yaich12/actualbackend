@@ -24,3 +24,4 @@ functions/.env
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+public/hero/*.mp4
