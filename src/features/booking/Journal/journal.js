@@ -1,33 +1,74 @@
 import React, { useState } from 'react';
 import './journal.css';
-import { clients } from '../Klienter/clientsData';
-import { services } from '../Ydelser/servicesData';
+import { useUserServices } from '../Ydelser/hooks/useUserServices';
 import SeHistorik from './Historik/sehistorik';
 
-function Journal({ selectedClient, selectedAppointment, onClose, onCreateAppointment }) {
+function Journal({
+  selectedClient,
+  selectedAppointment,
+  onClose,
+  onCreateAppointment,
+  onCreateJournalEntry,
+  onEditAppointment,
+  onDeleteAppointment,
+}) {
   const [showHistory, setShowHistory] = useState(false);
+  const { services: savedServices } = useUserServices();
 
   if (!selectedClient) {
-    return null;
+    return (
+      <div className="journal-empty">
+        Ingen klient valgt – vælg en klient for at se journalen.
+      </div>
+    );
   }
 
   // If showing history, render SeHistorik component
   if (showHistory) {
     return (
       <SeHistorik 
-        clientName={selectedClient}
+        clientId={selectedClient?.id || null}
+        clientName={selectedClient?.navn || 'Ukendt klient'}
         onClose={() => setShowHistory(false)}
+        onCreateEntry={onCreateJournalEntry}
       />
     );
   }
 
-  // Find client data
-  const client = clients.find(c => c.navn === selectedClient) || clients[0];
-  
-  // Find service for the appointment
-  const service = selectedAppointment?.service 
-    ? services.find(s => s.navn === selectedAppointment.service)
-    : null;
+  const client = selectedClient;
+
+  // Resolve service for the appointment
+  const appointmentService = (() => {
+    if (!selectedAppointment) {
+      return null;
+    }
+
+    if (selectedAppointment.serviceId) {
+      const saved = savedServices.find(
+        (svc) => svc.id === selectedAppointment.serviceId
+      );
+      if (saved) {
+        return saved;
+      }
+    }
+
+    if (selectedAppointment.service) {
+      const matchByName = savedServices.find(
+        (svc) => svc.navn === selectedAppointment.service
+      );
+      if (matchByName) {
+        return matchByName;
+      }
+      return {
+        id: 'fallback',
+        navn: selectedAppointment.service,
+        varighed: selectedAppointment.serviceDuration || '1 time',
+        pris: selectedAppointment.servicePrice ?? 0,
+      };
+    }
+
+    return null;
+  })();
 
   // Format date
   const formatDate = (dateStr) => {
@@ -79,7 +120,7 @@ function Journal({ selectedClient, selectedAppointment, onClose, onCreateAppoint
         <div className="journal-header-top">
           <div className="journal-client-info">
             <span className="journal-client-icon">👤</span>
-            <h2 className="journal-client-name">{client.navn}</h2>
+            <h2 className="journal-client-name">{client?.navn || 'Ukendt klient'}</h2>
           </div>
           <div className="journal-header-actions">
             <button className="journal-edit-client-btn">Rediger klient</button>
@@ -93,14 +134,25 @@ function Journal({ selectedClient, selectedAppointment, onClose, onCreateAppoint
         {/* Client Contact */}
         <div className="journal-section">
           <div className="journal-label">E-mail</div>
-          <div className="journal-value">{client.email}</div>
+          <div className="journal-value">{client?.email || selectedAppointment?.clientEmail || '—'}</div>
         </div>
 
         {/* Create Next Appointment Button */}
         <div className="journal-section">
-          <button className="journal-create-appointment-btn" onClick={onCreateAppointment}>
-            Opret næste aftale
-          </button>
+          <div className="journal-create-actions">
+            <button
+              className="journal-create-appointment-btn"
+              onClick={() => {
+                if (!onCreateAppointment) return;
+                onCreateAppointment({
+                  appointment: selectedAppointment || null,
+                  client,
+                });
+              }}
+            >
+              Opret næste aftale
+            </button>
+          </div>
         </div>
 
         {/* Selected Appointment Details */}
@@ -110,10 +162,12 @@ function Journal({ selectedClient, selectedAppointment, onClose, onCreateAppoint
               <div className="journal-appointment-date">
                 {formatDate(selectedAppointment.startDate)}, {formatTime(selectedAppointment.startTime)} til {getEndTime(selectedAppointment.startTime)}
               </div>
-              {service && (
+              {appointmentService && (
                 <>
-                  <div className="journal-appointment-service">{service.navn}</div>
-                  <div className="journal-appointment-price">DKK {formatPrice(service.pris)}</div>
+                  <div className="journal-appointment-service">{appointmentService.navn}</div>
+                  <div className="journal-appointment-price">
+                    DKK {formatPrice(appointmentService.pris)}
+                  </div>
                 </>
               )}
               <div className="journal-appointment-actions">
@@ -124,8 +178,39 @@ function Journal({ selectedClient, selectedAppointment, onClose, onCreateAppoint
                   Se journal
                 </button>
                 <button className="journal-action-btn">Opret ny faktura</button>
-                <button className="journal-icon-btn">✏️</button>
-                <button className="journal-icon-btn">⋯</button>
+                <button
+                className="journal-icon-btn"
+                onClick={() => {
+                  if (onEditAppointment && selectedAppointment) {
+                    onEditAppointment(selectedAppointment);
+                  }
+                }}
+              >
+                ✏️
+              </button>
+                <button
+                  className="journal-action-btn journal-delete-btn"
+                  onClick={() => {
+                    if (!selectedAppointment || !onDeleteAppointment) return;
+                    const confirmed = window.confirm(
+                      'Er du sikker på, at du vil slette denne aftale? Dette kan ikke fortrydes.'
+                    );
+                    if (confirmed) {
+                      onDeleteAppointment(selectedAppointment);
+                    }
+                  }}
+                >
+                  Slet aftale
+                </button>
+                {onCreateJournalEntry && (
+                  <button
+                    className="journal-create-entry-btn inline"
+                    onClick={onCreateJournalEntry}
+                  >
+                    <span className="journal-create-entry-icon">+</span>
+                    Opret indlæg
+                  </button>
+                )}
               </div>
             </div>
 
@@ -156,4 +241,3 @@ function Journal({ selectedClient, selectedAppointment, onClose, onCreateAppoint
 }
 
 export default Journal;
-

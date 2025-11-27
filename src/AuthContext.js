@@ -5,7 +5,12 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import {
+  getRedirectResult,
+  onAuthStateChanged,
+  signOut,
+  updateProfile,
+} from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
@@ -13,6 +18,7 @@ const AuthContext = createContext({
   user: null,
   loading: true,
   signOutUser: () => Promise.resolve(),
+  updateUserProfile: () => Promise.resolve(),
 });
 
 export function AuthProvider({ children }) {
@@ -20,12 +26,35 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const resolveRedirectLogin = async () => {
+      try {
+        const redirectResult = await getRedirectResult(auth);
+        if (!isMounted || !redirectResult?.user) {
+          return;
+        }
+        console.log("[AuthContext] redirect result user:", redirectResult.user);
+        setUser(redirectResult.user);
+      } catch (error) {
+        if (!isMounted) return;
+        console.error("[AuthContext] getRedirectResult failed:", error);
+      }
+    };
+
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (!isMounted) return;
+      console.log("[AuthContext] onAuthStateChanged:", firebaseUser);
       setUser(firebaseUser);
       setLoading(false);
     });
 
-    return unsubscribe;
+    void resolveRedirectLogin();
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -58,11 +87,42 @@ export function AuthProvider({ children }) {
 
   const signOutUser = () => signOut(auth);
 
+  const updateUserProfile = async ({ fullName, jobTitle }) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      return;
+    }
+
+    try {
+      if (fullName) {
+        await updateProfile(currentUser, { displayName: fullName });
+      }
+
+      const userRef = doc(db, "users", currentUser.uid);
+      await setDoc(
+        userRef,
+        {
+          displayName: fullName || currentUser.displayName || null,
+          email: currentUser.email ?? null,
+          jobTitle: jobTitle ?? "",
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      setUser({ ...currentUser, displayName: fullName || currentUser.displayName });
+    } catch (error) {
+      console.error("[AuthContext] Failed to update user profile", error);
+      throw error;
+    }
+  };
+
   const value = useMemo(
     () => ({
       user,
       loading,
       signOutUser,
+      updateUserProfile,
     }),
     [user, loading]
   );

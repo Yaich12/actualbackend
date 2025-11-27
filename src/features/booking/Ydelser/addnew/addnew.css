@@ -221,6 +221,17 @@
   gap: 6px;
 }
 
+.addnew-delete-btn {
+  border-color: #fca5a5;
+  color: #b91c1c;
+  background-color: #fee2e2;
+}
+
+.addnew-delete-btn:hover:not(:disabled) {
+  background-color: #fecaca;
+  border-color: #f87171;
+}
+
 .addnew-primary-btn:hover {
   background: #1d4ed8;
   border-color: #1d4ed8;
@@ -257,4 +268,3 @@
     justify-content: center;
   }
 }
-

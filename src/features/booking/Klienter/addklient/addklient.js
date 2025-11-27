@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
-import { ref, uploadString } from 'firebase/storage';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import './addklient.css';
-import { storage } from '../../../../firebase';
+import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
+import { useLoadScript, Autocomplete } from '@react-google-maps/api';
+
+const libraries = ['places'];
 
 const sanitizeIdentifier = (value) =>
   value
@@ -34,12 +37,10 @@ const deriveUserIdentifier = (user) => {
   return 'unknown-user';
 };
 
-function AddKlient({ onClose, onSave }) {
-  const [formData, setFormData] = useState({
-    billede: null,
+const getInitialFormData = (mode, initialClient) => {
+  const base = {
     navn: '',
     cpr: '',
-    fødselsdato: '',
     email: '',
     telefon: '',
     telefonLand: '+45',
@@ -47,15 +48,83 @@ function AddKlient({ onClose, onSave }) {
     adresse2: '',
     postnummer: '',
     by: '',
-    region: '',
     land: 'Danmark',
-    noter: '',
-  });
+    status: 'Aktiv',
+  };
 
-  const [showAddressLine2, setShowAddressLine2] = useState(false);
+  if (mode === 'edit' && initialClient) {
+    const telefonLand = initialClient.telefonLand || '+45';
+    const telefonValue = initialClient.telefon || '';
+    const telefonUdenLand = telefonValue.startsWith(telefonLand)
+      ? telefonValue.slice(telefonLand.length).trim().replace(/^\s+/, '')
+      : telefonValue;
+
+    return {
+      ...base,
+      navn: initialClient.navn || '',
+      cpr: initialClient.cpr || '',
+      email: initialClient.email || '',
+      telefon: telefonUdenLand || '',
+      telefonLand,
+      adresse: initialClient.adresse || '',
+      adresse2: initialClient.adresse2 || '',
+      postnummer: initialClient.postnummer || '',
+      by: initialClient.by || '',
+      land: initialClient.land || 'Danmark',
+      status: initialClient.status || 'Aktiv',
+    };
+  }
+
+  return base;
+};
+
+function AddKlient({
+  isOpen = true,
+  onClose,
+  onSave,
+  mode = 'create',
+  initialClient = null,
+  clientId = null,
+  onDelete,
+}) {
+  const [formData, setFormData] = useState(() => getInitialFormData(mode, initialClient));
+
+  const [showAddressLine2, setShowAddressLine2] = useState(Boolean(initialClient?.adresse2));
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const { user } = useAuth();
+
+  // Google Maps / Places
+  const googleMapsApiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+  const { isLoaded, loadError } = useLoadScript({
+    id: 'google-places-autocomplete',
+    googleMapsApiKey: googleMapsApiKey || '',
+    libraries,
+  });
+  const autocompleteRef = useRef(null);
+  const isAutocompleteReady = Boolean(googleMapsApiKey) && isLoaded && !loadError;
+  const autocompleteStatus = useMemo(() => {
+    if (!googleMapsApiKey) {
+      return {
+        text: 'Tilføj REACT_APP_GOOGLE_MAPS_API_KEY i din .env og genstart udviklingsserveren.',
+        tone: 'error',
+      };
+    }
+    if (loadError) {
+      return {
+        text: 'Kunne ikke hente Google Maps. Tjek at API-nøglen er korrekt, at Places API er aktiveret, og at der er tilknyttet billing.',
+        tone: 'error',
+      };
+    }
+    if (!isLoaded) {
+      return {
+        text: 'Indlæser Google Maps…',
+        tone: 'info',
+      };
+    }
+    return { text: '', tone: 'info' };
+  }, [googleMapsApiKey, isLoaded, loadError]);
+  const showAutocompleteStatus = Boolean(autocompleteStatus.text) && !isAutocompleteReady;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -65,14 +134,49 @@ function AddKlient({ onClose, onSave }) {
     }));
   };
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setFormData((prev) => ({
-        ...prev,
-        billede: file,
-      }));
-    }
+  useEffect(() => {
+    setFormData(getInitialFormData(mode, initialClient));
+    setShowAddressLine2(Boolean(initialClient?.adresse2));
+    setSaveError('');
+  }, [mode, initialClient]);
+
+  // Når bruger vælger adresse fra Google-forslag
+  const handlePlaceChanged = () => {
+    if (!autocompleteRef.current) return;
+    const place = autocompleteRef.current.getPlace();
+    if (!place || !place.address_components) return;
+
+    // Sæt selve adresse-feltet til den formaterede adresse
+    const formattedAddress = place.formatted_address || '';
+    let postnummer = '';
+    let by = '';
+
+    place.address_components.forEach((comp) => {
+      const types = comp.types;
+      if (types.includes('postal_code')) {
+        postnummer = comp.long_name;
+      }
+      if (types.includes('locality') || types.includes('postal_town')) {
+        by = comp.long_name;
+      }
+    });
+
+    setFormData((prev) => ({
+      ...prev,
+      adresse: formattedAddress,
+      postnummer: postnummer || prev.postnummer,
+      by: by || prev.by,
+    }));
+  };
+
+  const addressInputProps = {
+    type: 'text',
+    id: 'adresse',
+    name: 'adresse',
+    value: formData.adresse,
+    onChange: handleChange,
+    className: 'addklient-input',
+    placeholder: 'Begynd at skrive adressen...',
   };
 
   const handleSubmit = async (e) => {
@@ -93,63 +197,59 @@ function AddKlient({ onClose, onSave }) {
     try {
       const nowIso = new Date().toISOString();
       const ownerIdentifier = deriveUserIdentifier(user);
-      const clientIdentifier =
-        sanitizeIdentifier(formData.navn) || `klient-${Date.now()}`;
-      const storageFileName = `${clientIdentifier}-${Date.now()}.json`;
-      const storagePath = `klienter/${ownerIdentifier}/${storageFileName}`;
-      const storageRef = ref(storage, storagePath);
-
-      const {
-        billede,
-        telefonLand,
-        telefon,
-        ...restFormData
-      } = formData;
+      const { telefonLand, telefon, land, ...restFormData } = formData;
+      const telefonLandValue = (telefonLand || '+45').trim();
+      const telefonValue = (telefon || '').trim();
 
       const clientPayload = {
         ...restFormData,
-        telefonLand,
-        telefon,
-        telefonKomplet: telefon
-          ? `${telefonLand || '+45'} ${telefon}`
-          : '',
-        billedeNavn: billede?.name ?? null,
-        billedeType: billede?.type ?? null,
-        billedeStorrelse: billede?.size ?? null,
+        land: land || 'Danmark',
+        telefonLand: telefonLandValue,
+        telefon: telefonValue,
+        telefonKomplet: telefonValue ? `${telefonLandValue} ${telefonValue}` : '',
         ownerUid: user.uid,
         ownerEmail: user.email ?? null,
         ownerIdentifier,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-        storagePath,
+        status: formData.status || 'Aktiv',
+        updatedAt: serverTimestamp(),
+        ...(mode === 'create'
+          ? {
+              createdAt: serverTimestamp(),
+              createdAtIso: nowIso,
+            }
+          : {}),
       };
 
-      await uploadString(
-        storageRef,
-        JSON.stringify(clientPayload),
-        'raw',
-        {
-          contentType: 'application/json; charset=utf-8',
-        }
-      );
+      if (mode === 'edit' && clientId) {
+        const clientRef = doc(db, 'users', user.uid, 'clients', clientId);
+        await updateDoc(clientRef, clientPayload);
+      } else {
+        const clientsCollection = collection(db, 'users', user.uid, 'clients');
+        const docRef = await addDoc(clientsCollection, clientPayload);
 
-      const savedClientForList = {
-        id: storagePath,
-        navn: formData.navn,
-        status: 'Aktiv',
-        email: formData.email,
-        telefon: clientPayload.telefonKomplet,
-        cpr: formData.cpr,
-        adresse: formData.adresse,
-        by: formData.by,
-        postnummer: formData.postnummer,
-        land: formData.land || 'Danmark',
-        createdAt: nowIso,
-      };
+        const savedClientForList = {
+          id: docRef.id,
+          navn: formData.navn,
+          status: formData.status || 'Aktiv',
+          email: formData.email,
+          telefon: clientPayload.telefonKomplet,
+          cpr: formData.cpr,
+          adresse: formData.adresse,
+          by: formData.by,
+          postnummer: formData.postnummer,
+          land: land || 'Danmark',
+          createdAt: nowIso,
+        };
 
-      if (typeof onSave === 'function') {
+        if (typeof onSave === 'function') {
           onSave(savedClientForList);
+        }
       }
+
+      if (typeof onSave === 'function' && mode === 'edit') {
+        onSave();
+      }
+
       onClose();
     } catch (error) {
       console.error('Failed to save client data:', error);
@@ -163,49 +263,39 @@ function AddKlient({ onClose, onSave }) {
     onClose();
   };
 
+  const handleDelete = async () => {
+    if (!user?.uid || !clientId) return;
+    const confirmed = window.confirm(
+      'Er du sikker på, at du vil slette denne klient? Dette kan ikke fortrydes.'
+    );
+    if (!confirmed) return;
+
+    try {
+      const clientRef = doc(db, 'users', user.uid, 'clients', clientId);
+      await deleteDoc(clientRef);
+      if (typeof onDelete === 'function') {
+        onDelete(clientId);
+      }
+      onClose?.();
+    } catch (error) {
+      console.error('[AddKlient] Failed to delete client', error);
+      alert('Kunne ikke slette klienten. Prøv igen.');
+    }
+  };
+
   return (
     <div className="addklient-modal-overlay" onClick={handleCancel}>
       <div className="addklient-modal" onClick={(e) => e.stopPropagation()}>
         <div className="addklient-modal-header">
-          <h2 className="addklient-modal-title">Tilføj klient</h2>
+          <h2 className="addklient-modal-title">
+            {mode === 'edit' ? 'Rediger klient' : 'Tilføj klient'}
+          </h2>
           <button className="addklient-close-btn" onClick={handleCancel}>
             ×
           </button>
         </div>
 
         <form className="addklient-form" onSubmit={handleSubmit}>
-          {/* Image Upload */}
-          <div className="addklient-form-section">
-            <label className="addklient-form-label">Billede</label>
-            <div className="addklient-image-upload">
-              <input
-                type="file"
-                id="image-upload"
-                accept="image/*"
-                onChange={handleImageChange}
-                className="addklient-image-input"
-              />
-              <label htmlFor="image-upload" className="addklient-image-label">
-                {formData.billede ? (
-                  <div className="addklient-image-preview">
-                    <img
-                      src={URL.createObjectURL(formData.billede)}
-                      alt="Preview"
-                      className="addklient-preview-img"
-                    />
-                  </div>
-                ) : (
-                  <>
-                    <span className="addklient-upload-icon">☁</span>
-                    <span className="addklient-upload-text">
-                      Klik for at tilføje et billede
-                    </span>
-                  </>
-                )}
-              </label>
-            </div>
-          </div>
-
           {/* Name */}
           <div className="addklient-form-section">
             <label className="addklient-form-label" htmlFor="navn">
@@ -233,22 +323,6 @@ function AddKlient({ onClose, onSave }) {
               name="cpr"
               value={formData.cpr}
               onChange={handleChange}
-              className="addklient-input"
-            />
-          </div>
-
-          {/* Date of Birth */}
-          <div className="addklient-form-section">
-            <label className="addklient-form-label" htmlFor="fødselsdato">
-              Fødselsdato
-            </label>
-            <input
-              type="text"
-              id="fødselsdato"
-              name="fødselsdato"
-              value={formData.fødselsdato}
-              onChange={handleChange}
-              placeholder="DD-MM-YYYY"
               className="addklient-input"
             />
           </div>
@@ -297,19 +371,33 @@ function AddKlient({ onClose, onSave }) {
             </div>
           </div>
 
-          {/* Address */}
+          {/* Address + Google Autocomplete */}
           <div className="addklient-form-section">
             <label className="addklient-form-label" htmlFor="adresse">
               Adresse
             </label>
-            <input
-              type="text"
-              id="adresse"
-              name="adresse"
-              value={formData.adresse}
-              onChange={handleChange}
-              className="addklient-input"
-            />
+            {isAutocompleteReady ? (
+              <Autocomplete
+                onLoad={(autocomplete) => (autocompleteRef.current = autocomplete)}
+                onPlaceChanged={handlePlaceChanged}
+              >
+                <input {...addressInputProps} />
+              </Autocomplete>
+            ) : (
+              <>
+                <input {...addressInputProps} />
+                {showAutocompleteStatus && (
+                  <p
+                    className={`addklient-status-hint${
+                      autocompleteStatus.tone === 'error' ? ' error' : ''
+                    }`}
+                  >
+                    {autocompleteStatus.text}
+                  </p>
+                )}
+              </>
+            )}
+
             {!showAddressLine2 && (
               <button
                 type="button"
@@ -361,55 +449,12 @@ function AddKlient({ onClose, onSave }) {
             </div>
           </div>
 
-          {/* Region */}
-          <div className="addklient-form-section">
-            <label className="addklient-form-label" htmlFor="region">
-              Region
-            </label>
-            <input
-              type="text"
-              id="region"
-              name="region"
-              value={formData.region}
-              onChange={handleChange}
-              className="addklient-input"
-            />
-          </div>
-
-          {/* Country */}
-          <div className="addklient-form-section">
-            <label className="addklient-form-label" htmlFor="land">
-              Land
-            </label>
-            <select
-              id="land"
-              name="land"
-              value={formData.land}
-              onChange={handleChange}
-              className="addklient-select"
-            >
-              <option value="Danmark">Danmark</option>
-              <option value="Sverige">Sverige</option>
-              <option value="Norge">Norge</option>
-              <option value="Finland">Finland</option>
-              <option value="Tyskland">Tyskland</option>
-            </select>
-          </div>
-
-          {/* Notes */}
-          <div className="addklient-form-section">
-            <label className="addklient-form-label" htmlFor="noter">
-              Noter
-            </label>
-            <textarea
-              id="noter"
-              name="noter"
-              value={formData.noter}
-              onChange={handleChange}
-              className="addklient-textarea"
-              rows={4}
-            />
-          </div>
+          {/* Error Message */}
+          {saveError && (
+            <p className="addklient-error" role="alert">
+              {saveError}
+            </p>
+          )}
 
           {/* Error Message */}
           {saveError && (
@@ -420,6 +465,16 @@ function AddKlient({ onClose, onSave }) {
 
           {/* Action Buttons */}
           <div className="addklient-form-actions">
+            {mode === 'edit' && (
+              <button
+                type="button"
+                className="addklient-delete-btn"
+                onClick={handleDelete}
+                disabled={isSaving}
+              >
+                Slet klient
+              </button>
+            )}
             <button
               type="button"
               className="addklient-cancel-btn"
@@ -444,4 +499,3 @@ function AddKlient({ onClose, onSave }) {
 }
 
 export default AddKlient;
-

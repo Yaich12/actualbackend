@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { ref, uploadString } from 'firebase/storage';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import './addnew.css';
-import { storage } from '../../../../firebase';
+import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
 
 const DEFAULT_FORM_VALUES = {
@@ -52,17 +52,62 @@ const deriveUserIdentifier = (user) => {
   return 'unknown-user';
 };
 
-function AddNewServiceModal({ isOpen, onClose, onSubmit }) {
+function AddNewServiceModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  mode = 'create',
+  initialService = null,
+  serviceId = null,
+}) {
   const [formValues, setFormValues] = useState(DEFAULT_FORM_VALUES);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const { user } = useAuth();
 
   useEffect(() => {
-    if (isOpen) {
-      setFormValues(DEFAULT_FORM_VALUES);
+    if (!isOpen) return;
+
+    if (mode === 'edit' && initialService) {
+      setFormValues({
+        name: initialService.name || initialService.navn || '',
+        description: initialService.description || '',
+        duration: initialService.duration || initialService.varighed || '1 time',
+        price:
+          typeof initialService.price === 'number'
+            ? initialService.price
+            : typeof initialService.pris === 'number'
+              ? initialService.pris
+              : '',
+        includeVat: (() => {
+          const price =
+            typeof initialService.price === 'number'
+              ? initialService.price
+              : typeof initialService.pris === 'number'
+                ? initialService.pris
+                : null;
+          const incl =
+            typeof initialService.priceInclVat === 'number'
+              ? initialService.priceInclVat
+              : typeof initialService.prisInklMoms === 'number'
+                ? initialService.prisInklMoms
+                : null;
+          if (price == null || incl == null) {
+            return Boolean(initialService.includeVat);
+          }
+          return incl !== price ? true : Boolean(initialService.includeVat);
+        })(),
+        currency: initialService.currency || 'DKK',
+      });
+      setSaveError('');
+      setIsSaving(false);
+      return;
     }
-  }, [isOpen]);
+
+    setFormValues(DEFAULT_FORM_VALUES);
+    setSaveError('');
+    setIsSaving(false);
+  }, [isOpen, mode, initialService]);
 
   if (!isOpen) {
     return null;
@@ -94,10 +139,6 @@ function AddNewServiceModal({ isOpen, onClose, onSubmit }) {
     try {
       const nowIso = new Date().toISOString();
       const ownerIdentifier = deriveUserIdentifier(user);
-      const serviceIdentifier =
-        sanitizeIdentifier(formValues.name) || `ydelse-${Date.now()}`;
-      const storageFileName = `${serviceIdentifier}-${Date.now()}.json`;
-      const storagePath = `ydelser/${ownerIdentifier}/${storageFileName}`;
       const priceParsed = parseFloat(
         (formValues.price || '').toString().replace(',', '.')
       );
@@ -111,33 +152,48 @@ function AddNewServiceModal({ isOpen, onClose, onSubmit }) {
         ownerUid: user.uid,
         ownerEmail: user.email ?? null,
         ownerIdentifier,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-        storagePath,
+        createdAtIso: nowIso,
       };
 
-      await uploadString(
-        ref(storage, storagePath),
-        JSON.stringify(payload),
-        'raw',
-        {
-          contentType: 'application/json; charset=utf-8',
+      if (mode === 'edit' && serviceId) {
+        const serviceRef = doc(db, 'users', user.uid, 'services', serviceId);
+        await updateDoc(serviceRef, {
+          ...payload,
+          updatedAt: serverTimestamp(),
+        });
+
+        if (onSubmit) {
+          onSubmit({
+            id: serviceId,
+            navn: payload.name?.trim() || 'Ny ydelse',
+            varighed: payload.duration || '1 time',
+            pris: payload.price,
+            prisInklMoms: payload.priceInclVat,
+            description: payload.description || '',
+            updatedAt: nowIso,
+          });
         }
-      );
+      } else {
+        const servicesCollection = collection(db, 'users', user.uid, 'services');
+        const docRef = await addDoc(servicesCollection, {
+          ...payload,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
 
-      const newServiceForList = {
-        id: storagePath,
-        navn: payload.name?.trim() || 'Ny ydelse',
-        varighed: payload.duration || '1 time',
-        pris: payload.price,
-        prisInklMoms: payload.priceInclVat,
-        description: payload.description || '',
-        createdAt: nowIso,
-        storagePath,
-      };
+        const newServiceForList = {
+          id: docRef.id,
+          navn: payload.name?.trim() || 'Ny ydelse',
+          varighed: payload.duration || '1 time',
+          pris: payload.price,
+          prisInklMoms: payload.priceInclVat,
+          description: payload.description || '',
+          createdAt: nowIso,
+        };
 
-      if (onSubmit) {
-        onSubmit(newServiceForList);
+        if (onSubmit) {
+          onSubmit(newServiceForList);
+        }
       }
       onClose();
     } catch (error) {
@@ -148,11 +204,31 @@ function AddNewServiceModal({ isOpen, onClose, onSubmit }) {
     }
   };
 
+  const handleDelete = async () => {
+    if (!user?.uid || !serviceId) return;
+    const confirmed = window.confirm(
+      'Er du sikker på, at du vil slette denne ydelse? Dette kan ikke fortrydes.'
+    );
+    if (!confirmed) return;
+
+    try {
+      const serviceRef = doc(db, 'users', user.uid, 'services', serviceId);
+      await deleteDoc(serviceRef);
+      if (onSubmit) {
+        onSubmit({ id: serviceId, deleted: true });
+      }
+      onClose?.();
+    } catch (error) {
+      console.error('Failed to delete service:', error);
+      setSaveError('Kunne ikke slette ydelsen. Prøv igen.');
+    }
+  };
+
   return (
     <div className="addnew-modal-overlay" onClick={onClose}>
       <div className="addnew-modal" onClick={(event) => event.stopPropagation()}>
         <div className="addnew-modal-header">
-          <h2>Opret ny ydelse</h2>
+          <h2>{mode === 'edit' ? 'Rediger ydelse' : 'Opret ny ydelse'}</h2>
           <button type="button" className="addnew-close-btn" onClick={onClose} aria-label="Luk">
             ×
           </button>
@@ -236,6 +312,16 @@ function AddNewServiceModal({ isOpen, onClose, onSubmit }) {
           )}
 
           <div className="addnew-modal-footer">
+            {mode === 'edit' && (
+              <button
+                type="button"
+                className="addnew-secondary-btn addnew-delete-btn"
+                onClick={handleDelete}
+                disabled={isSaving}
+              >
+                Slet ydelse
+              </button>
+            )}
             <button
               type="button"
               className="addnew-secondary-btn"

@@ -1,50 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../bookingpage.css';
 import './ydelser.css';
-import { services } from './servicesData';
 import AddNewServiceModal from './addnew/addnew';
 import { useAuth } from '../../../AuthContext';
-import { ref, listAll, getDownloadURL } from 'firebase/storage';
-import { storage } from '../../../firebase';
+import { useUserServices } from './hooks/useUserServices';
 
-const sanitizeIdentifier = (value) =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-
-const deriveUserIdentifier = (user) => {
-  if (!user) {
-    return 'unknown-user';
-  }
-
-  const baseIdentifier =
-    (user.displayName && user.displayName.trim()) ||
-    (user.email && user.email.trim()) ||
-    user.uid ||
-    'unknown-user';
-
-  const sanitized = sanitizeIdentifier(baseIdentifier);
-  if (sanitized) {
-    return sanitized;
-  }
-
-  if (user.uid) {
-    return sanitizeIdentifier(user.uid);
-  }
-
-  return 'unknown-user';
-};
-
-const mapStoredServiceToRow = (stored) => {
+const normalizeService = (stored = {}) => {
   const price =
     typeof stored.pris === 'number'
       ? stored.pris
       : typeof stored.price === 'number'
       ? stored.price
       : 0;
+
   const priceIncl =
     typeof stored.prisInklMoms === 'number'
       ? stored.prisInklMoms
@@ -54,7 +23,6 @@ const mapStoredServiceToRow = (stored) => {
 
   return {
     id:
-      stored.storagePath ||
       stored.id ||
       `${stored.navn || stored.name || 'ydelse'}-${stored.createdAt || Date.now()}`,
     navn: stored.navn || stored.name || 'Ny ydelse',
@@ -62,22 +30,20 @@ const mapStoredServiceToRow = (stored) => {
     pris: price,
     prisInklMoms: priceIncl,
     description: stored.description || '',
-    createdAt: stored.createdAt || null,
-    storagePath: stored.storagePath,
+    createdAt: stored.createdAt || stored.createdAtIso || null,
   };
 };
 
 function Ydelser() {
   const navigate = useNavigate();
-  const { signOutUser, user } = useAuth();
+  const { user, signOutUser } = useAuth();
+  const { services: remoteServices, loading: isLoadingServices, error: servicesLoadError } = useUserServices();
   const [activeNav, setActiveNav] = useState('ydelser');
   const [searchQuery, setSearchQuery] = useState('');
-  const [serviceList, setServiceList] = useState(services);
+  const [serviceList, setServiceList] = useState([]);
   const [selectedServices, setSelectedServices] = useState([]);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isLoadingServices, setIsLoadingServices] = useState(false);
-  const [servicesLoadError, setServicesLoadError] = useState('');
-
+  const [showServiceModal, setShowServiceModal] = useState(false);
+  const [editingService, setEditingService] = useState(null);
 
   const handleNavClick = (navItem) => {
     setActiveNav(navItem);
@@ -116,107 +82,82 @@ function Ydelser() {
   };
 
   const handleAddNewService = (serviceData) => {
-    const normalized = mapStoredServiceToRow(serviceData || {});
-    setServiceList((prev) => [normalized, ...prev]);
+    const normalized = normalizeService(serviceData || {});
+    setServiceList((prev) => {
+      const withoutDuplicate = prev.filter((service) => service.id !== normalized.id);
+      return [normalized, ...withoutDuplicate];
+    });
+  };
+
+  const openCreateService = () => {
+    setEditingService(null);
+    setShowServiceModal(true);
+  };
+
+  const openEditService = (service) => {
+    setEditingService(service);
+    setShowServiceModal(true);
+  };
+
+  const handleServiceModalClose = () => {
+    setShowServiceModal(false);
+    setEditingService(null);
+  };
+
+  const handleServiceModalSubmit = (maybeService) => {
+    if (!maybeService) {
+      handleServiceModalClose();
+      return;
+    }
+
+    if (maybeService.deleted) {
+      setServiceList((prev) => prev.filter((service) => service.id !== maybeService.id));
+      handleServiceModalClose();
+      return;
+    }
+
+    const normalized = normalizeService(maybeService || {});
+    setServiceList((prev) => {
+      const withoutDuplicate = prev.filter((service) => service.id !== normalized.id);
+      return [normalized, ...withoutDuplicate];
+    });
+    handleServiceModalClose();
   };
 
   useEffect(() => {
-    let isCancelled = false;
+    setServiceList(remoteServices);
+    setSelectedServices((prevSelected) =>
+      prevSelected.filter((serviceId) =>
+        remoteServices.some((service) => service.id === serviceId)
+      )
+    );
+  }, [remoteServices]);
 
-    const fetchServicesFromStorage = async () => {
-      if (!user) {
-        setServiceList(services);
-        setServicesLoadError('');
-        setIsLoadingServices(false);
-        return;
-      }
+  const userIdentity = useMemo(() => {
+    if (!user) {
+      return {
+        name: 'Ikke logget ind',
+        email: 'Log ind for at fortsætte',
+        initials: '?',
+        photoURL: null,
+      };
+    }
 
-      setIsLoadingServices(true);
-      setServicesLoadError('');
+    const name = user.displayName || user.email || 'Selma bruger';
+    const email = user.email || '—';
+    const initialsSource = (user.displayName || user.email || '?').trim();
+    const initials = initialsSource
+      .split(/\s+/)
+      .map((part) => part[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
 
-      try {
-        const identifier = deriveUserIdentifier(user);
-        const folderCandidates = Array.from(
-          new Set(
-            [identifier, user.uid].filter(
-              (candidate) =>
-                typeof candidate === 'string' && candidate.trim().length > 0
-            )
-          )
-        );
-
-        const fetchedArrays = await Promise.all(
-          folderCandidates.map(async (folderName) => {
-            try {
-              const folderRef = ref(storage, `ydelser/${folderName}`);
-              const listResult = await listAll(folderRef);
-
-              const entries = await Promise.all(
-                listResult.items.map(async (itemRef) => {
-                  try {
-                    const url = await getDownloadURL(itemRef);
-                    const response = await fetch(url);
-                    if (!response.ok) {
-                      throw new Error(`Failed to fetch ${itemRef.fullPath}`);
-                    }
-                    const data = await response.json();
-                    return mapStoredServiceToRow({
-                      ...data,
-                      storagePath: itemRef.fullPath,
-                    });
-                  } catch (entryError) {
-                    console.error('Failed to load service:', entryError);
-                    return null;
-                  }
-                })
-              );
-
-              return entries.filter(Boolean);
-            } catch (error) {
-              if (error?.code === 'storage/object-not-found') {
-                return [];
-              }
-              throw error;
-            }
-          })
-        );
-
-        const fetchedServices = fetchedArrays
-          .flat()
-          .sort((a, b) => {
-            const first = new Date(a.createdAt || 0).getTime();
-            const second = new Date(b.createdAt || 0).getTime();
-            return second - first;
-          });
-
-        if (!isCancelled) {
-          const fetchedIds = new Set(fetchedServices.map((svc) => svc.id));
-          setServiceList((prev) => {
-            const combined = [...fetchedServices];
-            prev.forEach((svc) => {
-              if (!fetchedIds.has(svc.id)) {
-                combined.push(svc);
-              }
-            });
-            return combined;
-          });
-        }
-      } catch (error) {
-        console.error('Failed to load services from storage:', error);
-        if (!isCancelled) {
-          setServicesLoadError('Kunne ikke hente ydelser. Prøv igen senere.');
-        }
-      } finally {
-        if (!isCancelled) {
-          setIsLoadingServices(false);
-        }
-      }
-    };
-
-    fetchServicesFromStorage();
-
-    return () => {
-      isCancelled = true;
+    return {
+      name,
+      email,
+      initials,
+      photoURL: user.photoURL || null,
     };
   }, [user]);
 
@@ -232,12 +173,7 @@ function Ydelser() {
             Forside
           </button>
         </div>
-        <div className="topbar-right">
-          <button className="create-appointment-btn">
-            <span className="plus-icon">+</span>
-            Opret aftale
-          </button>
-        </div>
+        <div className="topbar-right" />
       </div>
 
       <div className="booking-content">
@@ -310,7 +246,29 @@ function Ydelser() {
                 <span className="nav-badge-launching">(launching soon)</span>
               </button>
             </nav>
-          </div>
+        </div>
+
+          <button
+            type="button"
+            className="sidebar-clinic"
+            onClick={() => navigate('/booking/settings')}
+          >
+            {userIdentity.photoURL ? (
+              <img
+                src={userIdentity.photoURL}
+                alt={userIdentity.name}
+                className="clinic-avatar"
+              />
+            ) : (
+              <div className="clinic-avatar clinic-avatar-placeholder">
+                {userIdentity.initials}
+              </div>
+            )}
+            <div className="clinic-user-details">
+              <div className="clinic-user-name">{userIdentity.name}</div>
+              <div className="clinic-user-email">{userIdentity.email}</div>
+            </div>
+          </button>
         </div>
 
         {/* Main Content Area - Services */}
@@ -321,14 +279,10 @@ function Ydelser() {
               <h2 className="page-title">Ydelser</h2>
             </div>
             <div className="header-right">
-              <button className="sort-btn">
-                <span className="sort-icon">☰</span>
-                Sorter ydelser
-              </button>
               <button
                 className="create-service-btn"
                 type="button"
-                onClick={() => setIsAddModalOpen(true)}
+                onClick={openCreateService}
               >
                 <span className="plus-icon">+</span>
                 Opret ny
@@ -385,8 +339,9 @@ function Ydelser() {
                 <div className="service-checkbox">
                   <input 
                     type="checkbox" 
-                    checked={selectedServices.includes(service.id)}
-                    onChange={() => handleSelectService(service.id)}
+                    checked={false}
+                    readOnly
+                    onChange={() => openEditService(service)}
                     onClick={(e) => e.stopPropagation()}
                   />
                 </div>
@@ -413,9 +368,12 @@ function Ydelser() {
         </div>
       </div>
       <AddNewServiceModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onSubmit={handleAddNewService}
+        isOpen={showServiceModal}
+        onClose={handleServiceModalClose}
+        onSubmit={handleServiceModalSubmit}
+        mode={editingService ? 'edit' : 'create'}
+        serviceId={editingService?.id || null}
+        initialService={editingService || null}
       />
     </div>
   );

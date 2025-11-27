@@ -18,11 +18,7 @@ function Navbar() {
     <nav className="navbar">
       <div className="navbar-container">
         <a className="navbar-logo" href="/" aria-label="Selma home">
-          <img
-            src="/assets/selmalogo.png"
-            alt="Selma logo"
-            className="navbar-logo-img"
-          />
+          <span className="navbar-logo-wordmark">Selma+</span>
           <span className="navbar-logo-text">meget mere end bare et booking system</span>
         </a>
 

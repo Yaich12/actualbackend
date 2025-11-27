@@ -126,6 +126,37 @@
   border-color: #2563eb;
 }
 
+.journal-create-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.journal-create-entry-btn.inline {
+  padding: 12px 16px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.journal-create-entry-btn.inline:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.journal-create-entry-icon {
+  font-size: 16px;
+  font-weight: 600;
+}
+
 .journal-appointment-section {
   padding: 16px;
   background-color: #f9fafb;
@@ -174,6 +205,17 @@
 .journal-action-btn:hover {
   background-color: #f9fafb;
   border-color: #9ca3af;
+}
+
+.journal-delete-btn {
+  background-color: #ffe5e5;
+  color: #b00020;
+  border-color: #f8bcbc;
+}
+
+.journal-delete-btn:hover {
+  background-color: #ffcccc;
+  border-color: #f59aa0;
 }
 
 .journal-icon-btn {
@@ -238,4 +280,3 @@
     justify-content: space-between;
   }
 }
-

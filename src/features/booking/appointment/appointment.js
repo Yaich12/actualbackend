@@ -1,16 +1,43 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './appointments.css';
-import { clients } from '../Klienter/clientsData';
-import { services } from '../Ydelser/servicesData';
+import { useUserClients } from '../Klienter/hooks/useUserClients';
+import ServiceSelector from '../Ydelser/ServiceSelector';
 
-function AppointmentForm({ onClose, onCreate }) {
-  const [startDate, setStartDate] = useState('14-11-2025');
-  const [startTime, setStartTime] = useState('10:00');
-  const [endDate, setEndDate] = useState('14-11-2025');
-  const [endTime, setEndTime] = useState('11:00');
-  const [selectedClient, setSelectedClient] = useState('');
-  const [selectedService, setSelectedService] = useState('');
-  const [notes, setNotes] = useState('');
+function AppointmentForm({
+  onClose,
+  onCreate,
+  onUpdate,
+  initialAppointment,
+  mode = 'create',
+}) {
+  const {
+    clients,
+    loading: clientsLoading,
+    error: clientsError,
+  } = useUserClients();
+  const defaultDate = useMemo(() => {
+    const today = new Date();
+    const day = today.getDate().toString().padStart(2, '0');
+    const month = (today.getMonth() + 1).toString().padStart(2, '0');
+    const year = today.getFullYear();
+    return `${day}-${month}-${year}`;
+  }, []);
+  const [startDate, setStartDate] = useState(
+    initialAppointment?.startDate || defaultDate
+  );
+  const [startTime, setStartTime] = useState(
+    initialAppointment?.startTime || '10:00'
+  );
+  const [endDate, setEndDate] = useState(initialAppointment?.endDate || defaultDate);
+  const [endTime, setEndTime] = useState(initialAppointment?.endTime || '11:00');
+  const [selectedClientId, setSelectedClientId] = useState(
+    initialAppointment?.clientId || ''
+  );
+  const [selectedServiceId, setSelectedServiceId] = useState(
+    initialAppointment?.serviceId || ''
+  );
+  const [availableServices, setAvailableServices] = useState([]);
+  const [notes, setNotes] = useState(initialAppointment?.notes || '');
   const [showStartDropdown, setShowStartDropdown] = useState(false);
   const [showEndDropdown, setShowEndDropdown] = useState(false);
 
@@ -56,21 +83,59 @@ function AppointmentForm({ onClose, onCreate }) {
     };
   }, []);
 
+  useEffect(() => {
+    setStartDate(initialAppointment?.startDate || defaultDate);
+    setStartTime(initialAppointment?.startTime || '10:00');
+    setEndDate(initialAppointment?.endDate || defaultDate);
+    setEndTime(initialAppointment?.endTime || '11:00');
+    setSelectedClientId(initialAppointment?.clientId || '');
+    setSelectedServiceId(initialAppointment?.serviceId || '');
+    setNotes(initialAppointment?.notes || '');
+    setShowStartDropdown(false);
+    setShowEndDropdown(false);
+  }, [initialAppointment, defaultDate]);
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    const newAppointment = {
-      id: Date.now(),
+    const base = initialAppointment || {};
+    const selectedClientData =
+      clients.find((client) => client.id === selectedClientId) || null;
+    const selectedServiceData =
+      availableServices.find((service) => service.id === selectedServiceId) || null;
+
+    const appointmentPayload = {
+      ...base,
+      id: base.id || Date.now(),
       startDate,
       startTime,
       endDate,
       endTime,
-      client: selectedClient,
-      service: selectedService,
+      clientId: selectedClientId || base.clientId || null,
+      client: selectedClientData?.navn || base.client || '',
+      clientEmail: selectedClientData?.email || base.clientEmail || '',
+      clientPhone: selectedClientData?.telefon || base.clientPhone || '',
+      serviceId: selectedServiceId || base.serviceId || null,
+      service: selectedServiceData?.navn || base.service || '',
+      serviceDuration: selectedServiceData?.varighed || base.serviceDuration || '',
+      servicePrice:
+        typeof selectedServiceData?.pris === 'number'
+          ? selectedServiceData.pris
+          : typeof base.servicePrice === 'number'
+            ? base.servicePrice
+            : null,
+      servicePriceInclVat:
+        typeof selectedServiceData?.prisInklMoms === 'number'
+          ? selectedServiceData.prisInklMoms
+          : typeof base.servicePriceInclVat === 'number'
+            ? base.servicePriceInclVat
+            : null,
       notes,
     };
 
-    if (typeof onCreate === 'function') {
-      onCreate(newAppointment);
+    if (mode === 'edit' && typeof onUpdate === 'function') {
+      onUpdate(appointmentPayload);
+    } else if (typeof onCreate === 'function') {
+      onCreate(appointmentPayload);
     }
 
     onClose();
@@ -80,16 +145,12 @@ function AppointmentForm({ onClose, onCreate }) {
     onClose();
   };
 
-  const formatServicePrice = (price) =>
-    new Intl.NumberFormat('da-DK', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(price);
-
   return (
     <div className="appointment-form-container">
       <div className="appointment-form-header">
-        <h2 className="appointment-form-title">Opret aftale</h2>
+        <h2 className="appointment-form-title">
+          {mode === 'edit' ? 'Rediger aftale' : 'Opret aftale'}
+        </h2>
       </div>
 
       <form className="appointment-form" onSubmit={handleSubmit}>
@@ -97,7 +158,7 @@ function AppointmentForm({ onClose, onCreate }) {
         <div className="form-section">
           <div className="datetime-row">
             <div className="datetime-group">
-              <label className="form-label">Start</label>
+              <label className="form-label">Start tidspunkt</label>
               <div className="datetime-inputs">
                 <input
                   type="text"
@@ -142,8 +203,6 @@ function AppointmentForm({ onClose, onCreate }) {
                 </div>
               </div>
             </div>
-
-            <div className="arrow-icon">→</div>
 
             <div className="datetime-group">
               <label className="form-label">Slut tidspunkt</label>
@@ -202,15 +261,22 @@ function AppointmentForm({ onClose, onCreate }) {
             <div className="select-wrapper">
               <select
                 className="select-input"
-                value={selectedClient}
-                onChange={(e) => setSelectedClient(e.target.value)}
+                value={selectedClientId}
+                onChange={(e) => setSelectedClientId(e.target.value)}
+                disabled={clientsLoading}
               >
                 <option value="">Vælg klient</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.navn}>
-                    {client.navn} – {client.email}
+                {clientsLoading && (
+                  <option value="loading" disabled>
+                    Henter klienter…
                   </option>
-                ))}
+                )}
+                {!clientsLoading &&
+                  clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.navn} – {client.email}
+                    </option>
+                  ))}
               </select>
               <span className="dropdown-arrow">▼</span>
             </div>
@@ -218,26 +284,25 @@ function AppointmentForm({ onClose, onCreate }) {
               Tilføj klient
             </button>
           </div>
+          {clientsError && (
+            <p className="client-select-error" role="alert">
+              {clientsError}
+            </p>
+          )}
+          {!clientsError && !clientsLoading && clients.length === 0 && (
+            <p className="client-select-empty">
+              Du har ingen klienter endnu. Tilføj en ny for at fortsætte.
+            </p>
+          )}
         </div>
 
         {/* Select Service */}
         <div className="form-section">
-          <label className="form-label">Ydelse</label>
-          <div className="select-wrapper">
-            <select
-              className="select-input"
-              value={selectedService}
-              onChange={(e) => setSelectedService(e.target.value)}
-            >
-              <option value="">Ingen ydelse valgt</option>
-              {services.map((service) => (
-                <option key={service.id} value={service.navn}>
-                  {service.navn} – {service.varighed} – DKK {formatServicePrice(service.pris)}
-                </option>
-              ))}
-            </select>
-            <span className="dropdown-arrow">▼</span>
-          </div>
+          <ServiceSelector
+            value={selectedServiceId}
+            onChange={setSelectedServiceId}
+            onServicesChange={setAvailableServices}
+          />
         </div>
 
         {/* Notes */}
@@ -261,7 +326,7 @@ function AppointmentForm({ onClose, onCreate }) {
             Annuller
           </button>
           <button type="submit" className="submit-btn">
-            Opret aftale
+            {mode === 'edit' ? 'Opdater aftale' : 'Opret aftale'}
           </button>
         </div>
       </form>

@@ -3,46 +3,54 @@ import { useNavigate } from 'react-router-dom';
 import './bookingpage.css';
 import AppointmentForm from './appointment/appointment';
 import Journal from './Journal/journal';
+import Indlæg from './Journal/indlæg/indlæg';
 import { useAuth } from '../../AuthContext';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '../../firebase';
+import useAppointments from '../../hooks/useAppointments';
+import { combineDateAndTimeToIso } from '../../utils/appointmentFormat';
+import { useUserClients } from './Klienter/hooks/useUserClients';
 
 function BookingPage() {
   const navigate = useNavigate();
   const { user, signOutUser } = useAuth();
-  const [currentDate, setCurrentDate] = useState(new Date(2025, 10, 1)); // November 2025
-  const [viewMode, setViewMode] = useState('month');
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState('month'); // 'month' | 'week' | 'day'
   const [activeNav, setActiveNav] = useState('kalender');
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
-  const [appointments, setAppointments] = useState([
-    {
-      id: 1,
-      startDate: '13-11-2025',
-      startTime: '09:00',
-      endDate: '13-11-2025',
-      endTime: '10:00',
-      client: 'Jonas Yaich',
-      service: 'fodmassage',
-      notes: '',
-    },
-    {
-      id: 2,
-      startDate: '14-11-2025',
-      startTime: '13:45',
-      endDate: '14-11-2025',
-      endTime: '14:45',
-      client: 'Jonas Yaich',
-      service: 'fodmassage',
-      notes: '',
-    },
-  ]);
-  const [selectedClient, setSelectedClient] = useState(null);
+  const [editingAppointment, setEditingAppointment] = useState(null);
+  const [nextAppointmentTemplate, setNextAppointmentTemplate] = useState(null);
+  const [selectedClientId, setSelectedClientId] = useState(null);
+  const [selectedClientFallback, setSelectedClientFallback] = useState(null);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [showJournalEntryForm, setShowJournalEntryForm] = useState(false);
+  const [journalEntryClient, setJournalEntryClient] = useState(null);
+  const { appointments = [] } = useAppointments(user?.uid || null);
+  const { clients } = useUserClients();
+  const derivedSelectedClient = useMemo(() => {
+    if (selectedClientId) {
+      const match = clients.find((client) => client.id === selectedClientId);
+      if (match) {
+        return match;
+      }
+    }
+    return selectedClientFallback;
+  }, [clients, selectedClientId, selectedClientFallback]);
+
 
   const monthNames = [
     'januar', 'februar', 'marts', 'april', 'maj', 'juni',
     'juli', 'august', 'september', 'oktober', 'november', 'december'
   ];
 
-  const dayNames = ['SØN', 'MAN', 'TIR', 'ONS', 'TOR', 'FRE', 'LØR'];
+  const dayNames = ['MAN', 'TIR', 'ONS', 'TOR', 'FRE', 'LØR', 'SØN'];
+
+  const isSameDate = (a, b) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  const toDate = (dayObj) => new Date(dayObj.year, dayObj.month, dayObj.day);
 
   const navigateMonth = (direction) => {
     setCurrentDate(prev => {
@@ -120,27 +128,201 @@ function BookingPage() {
   };
 
   const calendarWeeks = getCalendarWeeks();
+  let displayedWeeks = calendarWeeks;
 
-  const handleCreateAppointment = (appointment) => {
-    setAppointments((prev) => [...prev, appointment]);
-    setShowAppointmentForm(false);
+  if (viewMode === 'week') {
+    const weekForCurrent = calendarWeeks.find((week) =>
+      week.some((day) => isSameDate(toDate(day), currentDate))
+    );
+    displayedWeeks = weekForCurrent ? [weekForCurrent] : [];
+  }
+
+  if (viewMode === 'day') {
+    const allDays = calendarWeeks.flat();
+    const dayForCurrent = allDays.find((day) =>
+      isSameDate(toDate(day), currentDate)
+    );
+    displayedWeeks = dayForCurrent ? [[dayForCurrent]] : [];
+  }
+
+  const handleCreateAppointment = async (appointment) => {
+    if (!user?.uid) {
+      console.error('[BookingPage] Cannot create appointment: user not logged in');
+      return;
+    }
+
+    try {
+      const startIso = combineDateAndTimeToIso(appointment.startDate, appointment.startTime);
+      const endIso = combineDateAndTimeToIso(appointment.endDate, appointment.endTime);
+
+      if (!startIso || !endIso) {
+        throw new Error('Invalid start or end time');
+      }
+
+      const title = appointment.client || appointment.service || 'Aftale';
+
+      const payload = {
+        therapistId: user.uid,
+        title,
+        client: appointment.client || title,
+        clientId: appointment.clientId || null,
+        clientEmail: appointment.clientEmail || '',
+        clientPhone: appointment.clientPhone || '',
+        service: appointment.service || '',
+        serviceId: appointment.serviceId || null,
+        serviceDuration: appointment.serviceDuration || '',
+        servicePrice:
+          typeof appointment.servicePrice === 'number' ? appointment.servicePrice : null,
+        servicePriceInclVat:
+          typeof appointment.servicePriceInclVat === 'number'
+            ? appointment.servicePriceInclVat
+            : null,
+        notes: appointment.notes || '',
+        start: startIso,
+        end: endIso,
+        startDate: appointment.startDate,
+        startTime: appointment.startTime,
+        endDate: appointment.endDate,
+        endTime: appointment.endTime,
+        status: 'booked',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      const appointmentsCollection = collection(db, 'users', user.uid, 'appointments');
+      console.log('[BookingPage] Creating appointment document', payload);
+      await addDoc(appointmentsCollection, payload);
+    } catch (error) {
+      console.error('[BookingPage] Failed to create appointment', error);
+    } finally {
+      setShowAppointmentForm(false);
+      setEditingAppointment(null);
+      setNextAppointmentTemplate(null);
+    }
+  };
+
+  const handleUpdateAppointment = async (appointment) => {
+    if (!user?.uid || !appointment?.id) {
+      console.error('[BookingPage] Cannot update appointment: missing user or appointment id');
+      return;
+    }
+
+    try {
+      const startIso = combineDateAndTimeToIso(appointment.startDate, appointment.startTime);
+      const endIso = combineDateAndTimeToIso(appointment.endDate, appointment.endTime);
+
+      if (!startIso || !endIso) {
+        throw new Error('Invalid start or end time');
+      }
+
+      const title = appointment.client || appointment.service || 'Aftale';
+      const docRef = doc(db, 'users', user.uid, 'appointments', appointment.id);
+
+      await updateDoc(docRef, {
+        title,
+        client: appointment.client || title,
+        clientId: appointment.clientId || null,
+        clientEmail: appointment.clientEmail || '',
+        clientPhone: appointment.clientPhone || '',
+        service: appointment.service || '',
+        serviceId: appointment.serviceId || null,
+        serviceDuration: appointment.serviceDuration || '',
+        servicePrice:
+          typeof appointment.servicePrice === 'number' ? appointment.servicePrice : null,
+        servicePriceInclVat:
+          typeof appointment.servicePriceInclVat === 'number'
+            ? appointment.servicePriceInclVat
+            : null,
+        notes: appointment.notes || '',
+        start: startIso,
+        end: endIso,
+        status: appointment.status || 'booked',
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error('[BookingPage] Failed to update appointment', error);
+    } finally {
+      setShowAppointmentForm(false);
+      setEditingAppointment(null);
+      setNextAppointmentTemplate(null);
+    }
+  };
+
+  const handleDeleteAppointment = async (appointment) => {
+    if (!user?.uid || !appointment?.id) {
+      console.error('[BookingPage] Cannot delete appointment – missing user or appointment id');
+      return;
+    }
+
+    try {
+      const ref = doc(db, 'users', user.uid, 'appointments', appointment.id);
+      await deleteDoc(ref);
+      console.log('[BookingPage] Deleted appointment', appointment.id);
+      setSelectedAppointment(null);
+      setSelectedClientId(null);
+      setSelectedClientFallback(null);
+      setEditingAppointment(null);
+      setShowAppointmentForm(false);
+      setNextAppointmentTemplate(null);
+    } catch (error) {
+      console.error('[BookingPage] Failed to delete appointment', error);
+    }
   };
 
   const handleAppointmentClick = (appointment) => {
-    setSelectedClient(appointment.client);
+    setEditingAppointment(null);
+    setNextAppointmentTemplate(null);
+    setSelectedClientId(appointment.clientId || null);
+    setSelectedClientFallback(
+      appointment.client || appointment.clientEmail || appointment.clientPhone
+        ? {
+            id: appointment.clientId || 'legacy-client',
+            navn: appointment.client || 'Ukendt klient',
+            email: appointment.clientEmail || '',
+            telefon: appointment.clientPhone || '',
+            status: 'Aktiv',
+            adresse: '',
+            by: '',
+            postnummer: '',
+            land: 'Danmark',
+          }
+        : null
+    );
     setSelectedAppointment(appointment);
     setShowAppointmentForm(false);
   };
 
   const handleCloseJournal = () => {
-    setSelectedClient(null);
+    setSelectedClientId(null);
+    setSelectedClientFallback(null);
     setSelectedAppointment(null);
+    setEditingAppointment(null);
+    setNextAppointmentTemplate(null);
   };
 
-  const handleCreateNextAppointment = () => {
+  const handleCreateNextAppointment = (payload) => {
+    const fromJournal = payload?.appointment || null;
+    setNextAppointmentTemplate(fromJournal);
     setShowAppointmentForm(true);
-    setSelectedClient(null);
+    setSelectedClientId(null);
+    setSelectedClientFallback(null);
     setSelectedAppointment(null);
+    setEditingAppointment(null);
+  };
+
+  const handleOpenJournalEntry = () => {
+    if (!derivedSelectedClient) return;
+    setJournalEntryClient(derivedSelectedClient);
+    setShowJournalEntryForm(true);
+  };
+
+  const handleJournalEntrySaved = (entry) => {
+    console.log('[BookingPage] journal entry saved', entry);
+    setShowJournalEntryForm(false);
+  };
+
+  const handleCloseJournalEntry = () => {
+    setShowJournalEntryForm(false);
   };
 
   const userIdentity = useMemo(() => {
@@ -184,16 +366,30 @@ function BookingPage() {
           </button>
         </div>
         <div className="topbar-center">
-          <button className={`topbar-tab ${viewMode === 'calendars' ? 'active' : ''}`}>
-            Kalendere
-          </button>
-          <button className={`topbar-tab ${viewMode === 'month' ? 'active' : ''}`}>
-            måned
-          </button>
           <div className="topbar-navigation">
             <button className="nav-arrow" onClick={() => navigateMonth(-1)}>←</button>
             <button className="nav-today" onClick={goToToday}>i dag</button>
             <button className="nav-arrow" onClick={() => navigateMonth(1)}>→</button>
+          </div>
+          <div className="topbar-view-toggle">
+            <button
+              className={`view-toggle-btn ${viewMode === 'month' ? 'active' : ''}`}
+              onClick={() => setViewMode('month')}
+            >
+              Måned
+            </button>
+            <button
+              className={`view-toggle-btn ${viewMode === 'week' ? 'active' : ''}`}
+              onClick={() => setViewMode('week')}
+            >
+              Uge
+            </button>
+            <button
+              className={`view-toggle-btn ${viewMode === 'day' ? 'active' : ''}`}
+              onClick={() => setViewMode('day')}
+            >
+              Dag
+            </button>
           </div>
           <span className="current-month">
             {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
@@ -202,7 +398,14 @@ function BookingPage() {
         <div className="topbar-right">
           <button 
             className="create-appointment-btn"
-            onClick={() => setShowAppointmentForm(!showAppointmentForm)}
+            onClick={() => {
+              setEditingAppointment(null);
+              setNextAppointmentTemplate(null);
+              setSelectedAppointment(null);
+              setSelectedClientId(null);
+              setSelectedClientFallback(null);
+              setShowAppointmentForm(true);
+            }}
           >
             <span className="plus-icon">+</span>
             Opret aftale
@@ -210,7 +413,11 @@ function BookingPage() {
         </div>
       </div>
 
-      <div className={`booking-content ${showAppointmentForm || selectedClient ? 'with-appointment-form' : ''}`}>
+        <div className={`booking-content ${
+          showJournalEntryForm
+            ? 'with-journal-entry'
+            : (showAppointmentForm || derivedSelectedClient ? 'with-appointment-form' : '')
+        }`}>
         {/* Left Sidebar */}
         <div className="booking-sidebar">
           <div className="sidebar-search">
@@ -282,17 +489,12 @@ function BookingPage() {
             </nav>
           </div>
 
-          {/* Buy Full Access Banner */}
-          <div className="sidebar-banner">
-            <div className="banner-icon">🛒</div>
-            <div className="banner-content">
-              <div className="banner-title">Køb fuld adgang</div>
-              <div className="banner-subtitle">Du får 1 måned gratis</div>
-            </div>
-          </div>
-
           {/* Clinic Section */}
-          <div className="sidebar-clinic">
+          <button
+            type="button"
+            className="sidebar-clinic"
+            onClick={() => navigate('/booking/settings')}
+          >
             {userIdentity.photoURL ? (
               <img
                 src={userIdentity.photoURL}
@@ -308,101 +510,130 @@ function BookingPage() {
               <div className="clinic-user-name">{userIdentity.name}</div>
               <div className="clinic-user-email">{userIdentity.email}</div>
             </div>
-          </div>
+          </button>
         </div>
 
-        {/* Main Calendar Area */}
-        <div className="booking-main">
-          <div className="calendar-container">
-            <div className="calendar-header">
-              <div className="week-number-header"></div>
-              {dayNames.map((dayName, index) => {
-                // Get the first day of the first week to show correct dates
-                const firstWeek = calendarWeeks[0];
-                const firstDay = firstWeek[index];
-                const dayNumber = firstDay.day;
-                const month = firstDay.month + 1;
-                return (
-                  <div key={index} className="calendar-day-header">
-                    {dayName} {dayNumber}/{month}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="calendar-grid">
-              {calendarWeeks.map((week, weekIndex) => {
-                const weekStartDate = new Date(week[0].year, week[0].month, week[0].day);
-                const weekNumber = getWeekNumber(weekStartDate);
-                return (
-                  <React.Fragment key={weekIndex}>
-                    <div className="week-number-cell">{weekNumber}</div>
-                    {week.map((day, dayIndex) => {
-                      const dayAppointments = appointments.filter((appointment) => {
-                        if (!appointment.startDate) return false;
-                        const [dayStr, monthStr, yearStr] = appointment.startDate.split('-');
-                        const appDay = parseInt(dayStr, 10);
-                        const appMonth = parseInt(monthStr, 10) - 1;
-                        const appYear = parseInt(yearStr, 10);
-                        return appDay === day.day && appMonth === day.month && appYear === day.year;
-                      });
+        {showJournalEntryForm ? (
+          <div className="booking-main booking-main-full">
+            <Indlæg
+              clientId={journalEntryClient?.id}
+              clientName={journalEntryClient?.navn}
+              onClose={handleCloseJournalEntry}
+              onSave={handleJournalEntrySaved}
+            />
+          </div>
+        ) : (
+          <>
+            {/* Main Calendar Area */}
+            <div className="booking-main">
+            <div className="calendar-container">
+              <div className="calendar-header">
+                <div className="week-number-header"></div>
+                {(displayedWeeks[0] || []).map((day, index) => {
+                  const dateObj = toDate(day);
+                  const dayNameIndex = dateObj.getDay(); // 0 (Sun) - 6 (Sat)
+                  const labelDayName = dayNames[(dayNameIndex + 6) % 7];
+                  const dayNumber = day.day;
+                  const month = day.month + 1;
+                  return (
+                    <div key={index} className="calendar-day-header">
+                      {labelDayName} {dayNumber}/{month}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="calendar-grid">
+                {displayedWeeks.map((week, weekIndex) => {
+                  const weekStartDate = new Date(week[0].year, week[0].month, week[0].day);
+                  const weekNumber = getWeekNumber(weekStartDate);
+                  return (
+                    <React.Fragment key={weekIndex}>
+                      <div className="week-number-cell">{weekNumber}</div>
+                      {week.map((day, dayIndex) => {
+                          const dayAppointments = appointments.filter((appointment) => {
+                            if (!appointment.startDate) return false;
+                            const [dayStr, monthStr, yearStr] = appointment.startDate.split('-');
+                            const appDay = parseInt(dayStr, 10);
+                            const appMonth = parseInt(monthStr, 10) - 1;
+                            const appYear = parseInt(yearStr, 10);
+                            return appDay === day.day && appMonth === day.month && appYear === day.year;
+                          });
 
-                      const isSelected = selectedAppointment && 
-                        selectedAppointment.startDate && 
-                        (() => {
-                          const [dayStr, monthStr, yearStr] = selectedAppointment.startDate.split('-');
-                          const appDay = parseInt(dayStr, 10);
-                          const appMonth = parseInt(monthStr, 10) - 1;
-                          const appYear = parseInt(yearStr, 10);
-                          return appDay === day.day && appMonth === day.month && appYear === day.year;
-                        })();
+                          const isSelected = selectedAppointment && 
+                            selectedAppointment.startDate && 
+                            (() => {
+                              const [dayStr, monthStr, yearStr] = selectedAppointment.startDate.split('-');
+                              const appDay = parseInt(dayStr, 10);
+                              const appMonth = parseInt(monthStr, 10) - 1;
+                              const appYear = parseInt(yearStr, 10);
+                              return appDay === day.day && appMonth === day.month && appYear === day.year;
+                            })();
 
-                      return (
-                        <div 
-                          key={dayIndex} 
-                          className={`calendar-day-cell ${!day.isCurrentMonth ? 'other-month' : ''} ${isSelected ? 'selected-day' : ''}`}
-                        >
-                          <span className="day-number">{day.day}</span>
-                          {dayAppointments.length > 0 && (
-                            <div className="day-appointments">
-                              {dayAppointments.map((appointment) => (
-                                <span 
-                                  key={appointment.id} 
-                                  className="day-appointment-chip"
-                                  onClick={() => handleAppointmentClick(appointment)}
-                                  style={{ cursor: 'pointer' }}
-                                >
-                                  {appointment.startTime} {appointment.client ? `– ${appointment.client.split(' ')[0]}` : '– Aftale'}
-                                </span>
-                              ))}
+                          return (
+                            <div 
+                              key={dayIndex} 
+                              className={`calendar-day-cell ${!day.isCurrentMonth ? 'other-month' : ''} ${isSelected ? 'selected-day' : ''}`}
+                            >
+                              <span className="day-number">{day.day}</span>
+                              {dayAppointments.length > 0 && (
+                                <div className="day-appointments">
+                                  {dayAppointments.map((appointment) => (
+                                    <span 
+                                      key={appointment.id} 
+                                      className="day-appointment-chip"
+                                      onClick={() => handleAppointmentClick(appointment)}
+                                      style={{ cursor: 'pointer' }}
+                                    >
+                                      {appointment.startTime} {appointment.client ? `– ${appointment.client.split(' ')[0]}` : '– Aftale'}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </React.Fragment>
-                );
-              })}
+                          );
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Journal or Appointment Form */}
-        {selectedClient ? (
-          <div className="appointment-form-wrapper">
-            <Journal
-              selectedClient={selectedClient}
-              selectedAppointment={selectedAppointment}
-              onClose={handleCloseJournal}
-              onCreateAppointment={handleCreateNextAppointment}
-            />
-          </div>
-        ) : showAppointmentForm && (
-          <div className="appointment-form-wrapper">
-            <AppointmentForm
-              onClose={() => setShowAppointmentForm(false)}
-              onCreate={handleCreateAppointment}
-            />
-          </div>
+            {/* Journal or Appointment Form */}
+            {derivedSelectedClient ? (
+              <div className="appointment-form-wrapper">
+                <Journal
+                  selectedClient={derivedSelectedClient}
+                  selectedAppointment={selectedAppointment}
+                  onClose={handleCloseJournal}
+                  onCreateAppointment={handleCreateNextAppointment}
+                  onCreateJournalEntry={handleOpenJournalEntry}
+                  onEditAppointment={(appointment) => {
+                    setEditingAppointment(appointment);
+                    setShowAppointmentForm(true);
+                    setSelectedAppointment(null);
+                    setSelectedClientId(null);
+                    setSelectedClientFallback(null);
+                  }}
+                  onDeleteAppointment={handleDeleteAppointment}
+                />
+              </div>
+            ) : showAppointmentForm && (
+              <div className="appointment-form-wrapper">
+                <AppointmentForm
+                  initialAppointment={editingAppointment || nextAppointmentTemplate || null}
+                  mode={editingAppointment ? 'edit' : 'create'}
+                  onClose={() => {
+                    setShowAppointmentForm(false);
+                    setEditingAppointment(null);
+                    setNextAppointmentTemplate(null);
+                  }}
+                  onCreate={handleCreateAppointment}
+                  onUpdate={handleUpdateAppointment}
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

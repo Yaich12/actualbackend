@@ -253,6 +253,16 @@
   font-weight: 500;
 }
 
+.addklient-status-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.addklient-status-hint.error {
+  color: #b91c1c;
+}
+
 /* Form Actions */
 .addklient-form-actions {
   display: flex;
@@ -279,6 +289,23 @@
 .addklient-cancel-btn:hover {
   background-color: #f9fafb;
   border-color: #9ca3af;
+}
+
+.addklient-delete-btn {
+  padding: 10px 16px;
+  border: 1px solid #fca5a5;
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.addklient-delete-btn:hover:enabled {
+  background-color: #fecaca;
+  border-color: #f87171;
 }
 
 .addklient-cancel-btn:disabled {
@@ -349,4 +376,3 @@
 .addklient-form::-webkit-scrollbar-thumb:hover {
   background-color: rgba(0, 0, 0, 0.3);
 }
-

@@ -1,13 +1,14 @@
 import React, { useRef, useState } from 'react';
-import { ref, uploadString } from 'firebase/storage';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import './indlæg.css';
 import Whisper from './whisper';
 import Prompt from './prompt';
-import { storage } from '../../../../firebase';
+import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
 
 const PROJECT_ID = process.env.REACT_APP_PROJECT_ID || '';
 const FUNCTION_REGION = process.env.REACT_APP_FUNCTION_REGION || 'us-central1';
+const FUNCTIONS_PORT = process.env.REACT_APP_FUNCTIONS_PORT || '5601';
 
 const buildDefaultTranscribeUrl = () => {
   if (!PROJECT_ID) {
@@ -18,7 +19,7 @@ const buildDefaultTranscribeUrl = () => {
     typeof window !== 'undefined' &&
     window.location.hostname === 'localhost'
   ) {
-    return `http://127.0.0.1:5501/${PROJECT_ID}/${FUNCTION_REGION}/transcribe_audio`;
+    return `http://127.0.0.1:${FUNCTIONS_PORT}/${PROJECT_ID}/${FUNCTION_REGION}/transcribe_audio`;
   }
 
   return `https://${FUNCTION_REGION}-${PROJECT_ID}.cloudfunctions.net/transcribe_audio`;
@@ -57,7 +58,7 @@ const deriveUserIdentifier = (user) => {
   return 'unknown-user';
 };
 
-function Indlæg({ clientName, onClose, onSave }) {
+function Indlæg({ clientId, clientName, onClose, onSave }) {
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('14-11-2025');
   const [isPrivate, setIsPrivate] = useState(false);
@@ -85,6 +86,11 @@ function Indlæg({ clientName, onClose, onSave }) {
       return;
     }
 
+    if (!clientId) {
+      setSaveError('Manglende klient-id – kunne ikke knytte indlægget til en klient.');
+      return;
+    }
+
     const nowIso = new Date().toISOString();
     const ownerIdentifier = deriveUserIdentifier(user);
     const entryPayload = {
@@ -95,36 +101,37 @@ function Indlæg({ clientName, onClose, onSave }) {
       isStarred: false,
       isLocked: false,
       clientName,
+      clientId,
       searchQuery,
       dictationStatus,
       transcriptionResult,
       ownerUid: user.uid,
       ownerEmail: user.email ?? null,
       ownerIdentifier,
-      createdAt: nowIso,
-      updatedAt: nowIso,
+      createdAtIso: nowIso,
     };
 
     setIsSaving(true);
 
     try {
-      const entryId = `${ownerIdentifier || 'journal'}-journal-${Date.now()}.json`;
-      const storagePath = `userindlæg/${ownerIdentifier}/${entryId}`;
-      const storageRef = ref(storage, storagePath);
-
-      await uploadString(
-        storageRef,
-        JSON.stringify(entryPayload),
-        'raw',
-        {
-          contentType: 'application/json; charset=utf-8',
-        }
+      const entriesCollection = collection(
+        db,
+        'users',
+        user.uid,
+        'clients',
+        clientId,
+        'journalEntries'
       );
+      const docRef = await addDoc(entriesCollection, {
+        ...entryPayload,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
 
       const savedEntry = {
-        id: storagePath,
-        storagePath,
+        id: docRef.id,
         ...entryPayload,
+        createdAt: nowIso,
       };
 
       if (typeof onSave === 'function') {

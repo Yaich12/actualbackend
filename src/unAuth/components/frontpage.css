@@ -1,18 +1,57 @@
 .frontpage {
   width: 100%;
-  padding: 6rem 0 4rem 0;
-  background: #ffffff;
+  padding: 0 0 4rem 0;
+  background: #000000;
   margin: 0;
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.frontpage-video-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.frontpage-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 1200ms ease-in-out;
+  will-change: opacity;
+  opacity: 0;
+}
+
+.frontpage-video.fade-in {
+  opacity: 1;
+}
+
+.frontpage-video.fade-out {
+  opacity: 0;
+}
+
+.frontpage-video-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
 }
 
 .frontpage-grid {
   max-width: 1120px;
-  margin: 0 auto;
-  padding: 0 2rem;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  width: 100%;
+  margin: 0 auto 0 0;
+  min-height: 100vh;
+  padding: clamp(3rem, 6vw, 5rem) clamp(8px, 1vw, 12px) clamp(2rem, 5vw, 3rem);
+  display: flex;
+  flex-direction: column;
   gap: 2.5rem;
-  align-items: center;
+  justify-content: flex-end;
+  align-items: flex-start;
+  position: relative;
+  z-index: 1;
 }
 
 .frontpage-container {
@@ -20,37 +59,18 @@
   text-align: left;
 }
 
-.frontpage-showcase {
-  width: 100%;
-  max-width: 620px;
-  margin: 0 auto;
-  position: relative;
-  scroll-margin-top: 120px;
-}
-
-.frontpage-showcase .card {
-  border: none;
-  border-radius: 24px;
-  box-shadow: 0 20px 60px rgba(15, 19, 36, 0.35);
-}
-
-.loader {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 3px solid rgba(255, 255, 255, 0.2);
-  border-top-color: #dc3545;
-  animation: frontpage-spin 0.8s linear infinite;
-}
-
-@keyframes frontpage-spin {
-  to {
-    transform: rotate(360deg);
-  }
+.frontpage-anchor {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+  opacity: 0;
 }
 
 .frontpage-title {
-  color: #212529;
+  color: #f7f7f5;
   font-size: 4rem;
   font-weight: 700;
   margin: 0 0 1.5rem 0;
@@ -58,6 +78,7 @@
   letter-spacing: -0.02em;
   display: flex;
   flex-direction: column;
+  text-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
 }
 
 .frontpage-title-line {
@@ -65,24 +86,17 @@
 }
 
 .frontpage-dot {
-  color: #dc3545;
+  color: #ff6b6b;
   display: inline-block;
 }
 
 .frontpage-subtitle {
-  color: #212529;
+  color: #f7f7f5;
   font-size: 1.5rem;
   font-weight: 500;
   margin: 0 0 1.5rem 0;
   line-height: 1.4;
-}
-
-.frontpage-description {
-  color: #495057;
-  font-size: 1.125rem;
-  line-height: 1.7;
-  margin: 0 0 2.5rem 0;
-  max-width: 800px;
+  text-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
 }
 
 .frontpage-buttons {
@@ -138,21 +152,12 @@
     text-align: center;
   }
   
-  .frontpage-description {
-    margin-left: auto;
-    margin-right: auto;
-  }
-
   .frontpage-title {
     font-size: 2.5rem;
   }
 
   .frontpage-subtitle {
     font-size: 1.25rem;
-  }
-
-  .frontpage-description {
-    font-size: 1rem;
   }
 
   .frontpage-buttons {

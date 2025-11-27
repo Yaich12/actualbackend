@@ -1,74 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../bookingpage.css';
 import './klientoversigt.css';
-import { clients as initialClients } from './clientsData';
 import AddKlient from './addklient/addklient';
 import { useAuth } from '../../../AuthContext';
-import { ref, listAll, getDownloadURL } from 'firebase/storage';
-import { storage } from '../../../firebase';
-
-const sanitizeIdentifier = (value) =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-
-const deriveUserIdentifier = (user) => {
-  if (!user) {
-    return 'unknown-user';
-  }
-
-  const baseIdentifier =
-    (user.displayName && user.displayName.trim()) ||
-    (user.email && user.email.trim()) ||
-    user.uid ||
-    'unknown-user';
-
-  const sanitized = sanitizeIdentifier(baseIdentifier);
-  if (sanitized) {
-    return sanitized;
-  }
-
-  if (user.uid) {
-    return sanitizeIdentifier(user.uid);
-  }
-
-  return 'unknown-user';
-};
-
-const mapStoredClientToRow = (storedClient) => ({
-  id:
-    storedClient.storagePath ||
-    storedClient.id ||
-    `${storedClient.navn || 'klient'}-${storedClient.createdAt || Date.now()}`,
-  navn: storedClient.navn || 'Uden navn',
-  status: storedClient.status || 'Aktiv',
-  email: storedClient.email || '',
-  telefon:
-    storedClient.telefonKomplet ||
-    storedClient.telefon ||
-    '',
-  cpr: storedClient.cpr || '',
-  adresse: storedClient.adresse || '',
-  by: storedClient.by || '',
-  postnummer: storedClient.postnummer || '',
-  land: storedClient.land || 'Danmark',
-  createdAt: storedClient.createdAt || null,
-});
+import { useUserClients } from './hooks/useUserClients';
 
 function Klientoversigt() {
   const navigate = useNavigate();
-  const { signOutUser, user } = useAuth();
-  const [clients, setClients] = useState(initialClients);
+  const { user, signOutUser } = useAuth();
+  const {
+    clients,
+    loading: isLoadingClients,
+    error: clientsLoadError,
+  } = useUserClients();
   const [activeNav, setActiveNav] = useState('klienter');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortColumn, setSortColumn] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
   const [showAddClient, setShowAddClient] = useState(false);
-  const [isLoadingClients, setIsLoadingClients] = useState(false);
-  const [clientsLoadError, setClientsLoadError] = useState('');
+  const [editingClient, setEditingClient] = useState(null);
 
 
   const handleNavClick = (navItem) => {
@@ -89,115 +40,68 @@ function Klientoversigt() {
     }
   };
 
-  const filteredClients = clients.filter(client =>
-    client.navn.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    client.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    client.by.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredClients = useMemo(() => {
+    const queryValue = searchQuery.trim().toLowerCase();
+    if (!queryValue) {
+      return clients;
+    }
+    return clients.filter((client) => {
+      const name = client.navn?.toLowerCase?.() || '';
+      const email = client.email?.toLowerCase?.() || '';
+      const city = client.by?.toLowerCase?.() || '';
+      return (
+        name.includes(queryValue) ||
+        email.includes(queryValue) ||
+        city.includes(queryValue)
+      );
+    });
+  }, [clients, searchQuery]);
 
-  const handleAddClientSave = (newClient) => {
-    const clientWithDefaults = {
-      status: 'Aktiv',
-      ...newClient,
-      id: newClient.id || `client-${Date.now()}`,
-    };
-
-    setClients((prev) => [clientWithDefaults, ...prev]);
-    setShowAddClient(false);
+  const openCreateClient = () => {
+    setEditingClient(null);
+    setShowAddClient(true);
   };
 
-  useEffect(() => {
-    let isCancelled = false;
+  const openEditClient = (client) => {
+    setEditingClient(client);
+    setShowAddClient(true);
+  };
 
-    const fetchClientsFromStorage = async () => {
-      if (!user) {
-        setClients(initialClients);
-        setClientsLoadError('');
-        setIsLoadingClients(false);
-        return;
-      }
+  const handleAddClientSave = () => {
+    setShowAddClient(false);
+    setEditingClient(null);
+  };
 
-      setIsLoadingClients(true);
-      setClientsLoadError('');
+  const handleDeleteClient = () => {
+    setShowAddClient(false);
+    setEditingClient(null);
+  };
 
-      try {
-        const identifier = deriveUserIdentifier(user);
-        const folderCandidates = Array.from(
-          new Set(
-            [identifier, user.uid].filter(
-              (candidate) =>
-                typeof candidate === 'string' && candidate.trim().length > 0
-            )
-          )
-        );
+  const userIdentity = useMemo(() => {
+    if (!user) {
+      return {
+        name: 'Ikke logget ind',
+        email: 'Log ind for at fortsætte',
+        initials: '?',
+        photoURL: null,
+      };
+    }
 
-        const fetchedEntriesArrays = await Promise.all(
-          folderCandidates.map(async (folderName) => {
-            try {
-              const folderRef = ref(storage, `klienter/${folderName}`);
-              const listResult = await listAll(folderRef);
+    const name = user.displayName || user.email || 'Selma bruger';
+    const email = user.email || '—';
+    const initialsSource = (user.displayName || user.email || '?').trim();
+    const initials = initialsSource
+      .split(/\s+/)
+      .map((part) => part[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
 
-              const entries = await Promise.all(
-                listResult.items.map(async (itemRef) => {
-                  try {
-                    const url = await getDownloadURL(itemRef);
-                    const response = await fetch(url);
-                    if (!response.ok) {
-                      throw new Error(`Failed to fetch ${itemRef.fullPath}`);
-                    }
-                    const data = await response.json();
-                    return mapStoredClientToRow({
-                      ...data,
-                      storagePath: itemRef.fullPath,
-                    });
-                  } catch (entryError) {
-                    console.error('Failed to load client entry:', entryError);
-                    return null;
-                  }
-                })
-              );
-
-              return entries.filter(Boolean);
-            } catch (error) {
-              if (error?.code === 'storage/object-not-found') {
-                return [];
-              }
-              throw error;
-            }
-          })
-        );
-
-        const fetchedClients = fetchedEntriesArrays
-          .flat()
-          .sort((a, b) => {
-            const first = new Date(a.createdAt || 0).getTime();
-            const second = new Date(b.createdAt || 0).getTime();
-            return second - first;
-          });
-
-        if (!isCancelled) {
-          const fetchedMap = new Map(fetchedClients.map((c) => [c.id, c]));
-          setClients((prev) => [
-            ...fetchedClients,
-            ...prev.filter((client) => !fetchedMap.has(client.id)),
-          ]);
-        }
-      } catch (error) {
-        console.error('Failed to load clients from storage:', error);
-        if (!isCancelled) {
-          setClientsLoadError('Kunne ikke hente klienter. Prøv igen senere.');
-        }
-      } finally {
-        if (!isCancelled) {
-          setIsLoadingClients(false);
-        }
-      }
-    };
-
-    fetchClientsFromStorage();
-
-    return () => {
-      isCancelled = true;
+    return {
+      name,
+      email,
+      initials,
+      photoURL: user.photoURL || null,
     };
   }, [user]);
 
@@ -213,12 +117,7 @@ function Klientoversigt() {
             Forside
           </button>
         </div>
-        <div className="topbar-right">
-          <button className="create-appointment-btn">
-            <span className="plus-icon">+</span>
-            Opret aftale
-          </button>
-        </div>
+        <div className="topbar-right" />
       </div>
 
       <div className="booking-content">
@@ -292,6 +191,28 @@ function Klientoversigt() {
               </button>
             </nav>
           </div>
+
+          <button
+            type="button"
+            className="sidebar-clinic"
+            onClick={() => navigate('/booking/settings')}
+          >
+            {userIdentity.photoURL ? (
+              <img
+                src={userIdentity.photoURL}
+                alt={userIdentity.name}
+                className="clinic-avatar"
+              />
+            ) : (
+              <div className="clinic-avatar clinic-avatar-placeholder">
+                {userIdentity.initials}
+              </div>
+            )}
+            <div className="clinic-user-details">
+              <div className="clinic-user-name">{userIdentity.name}</div>
+              <div className="clinic-user-email">{userIdentity.email}</div>
+            </div>
+          </button>
         </div>
 
         {/* Main Content Area - Client Overview */}
@@ -300,20 +221,13 @@ function Klientoversigt() {
           <div className="klientoversigt-header">
             <div className="header-left">
               <div className="header-title">
-                <span className="title-arrows">««</span>
-                <span className="title-arrow">‹</span>
                 <h2 className="page-title">Klientoversigt</h2>
               </div>
             </div>
             <div className="header-right">
-              <button className="export-btn">
-                <span className="export-icon">⬇</span>
-                Eksporter CSV
-                <span className="dropdown-arrow">▼</span>
-              </button>
               <button 
                 className="add-client-btn"
-                onClick={() => setShowAddClient(true)}
+                onClick={openCreateClient}
               >
                 <span className="add-icon">👤+</span>
                 Tilføj klient
@@ -453,7 +367,12 @@ function Klientoversigt() {
                 {filteredClients.map((client) => (
                   <tr key={client.id}>
                     <td className="checkbox-col">
-                      <input type="checkbox" />
+                      <input
+                        type="checkbox"
+                        checked={false}
+                        readOnly
+                        onChange={() => openEditClient(client)}
+                      />
                     </td>
                     <td>{client.navn}</td>
                     <td>
@@ -479,8 +398,16 @@ function Klientoversigt() {
       {/* Add Klient Modal */}
       {showAddClient && (
         <AddKlient
-          onClose={() => setShowAddClient(false)}
+          isOpen={showAddClient}
+          mode={editingClient ? 'edit' : 'create'}
+          clientId={editingClient?.id || null}
+          initialClient={editingClient || null}
+          onClose={() => {
+            setShowAddClient(false);
+            setEditingClient(null);
+          }}
           onSave={handleAddClientSave}
+          onDelete={handleDeleteClient}
         />
       )}
     </div>

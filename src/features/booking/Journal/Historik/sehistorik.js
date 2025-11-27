@@ -1,42 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import './sehistorik.css';
-import Indlæg from '../indlæg/indlæg';
-import { ref, listAll, getDownloadURL } from 'firebase/storage';
-import { storage } from '../../../../firebase';
+import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
 
-const sanitizeIdentifier = (value) =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-
-const deriveUserIdentifier = (user) => {
-  if (!user) {
-    return 'unknown-user';
-  }
-
-  const baseIdentifier =
-    (user.displayName && user.displayName.trim()) ||
-    (user.email && user.email.trim()) ||
-    user.uid ||
-    'unknown-user';
-
-  const sanitized = sanitizeIdentifier(baseIdentifier);
-  if (sanitized) {
-    return sanitized;
-  }
-
-  if (user.uid) {
-    return sanitizeIdentifier(user.uid);
-  }
-
-  return 'unknown-user';
-};
-
-function SeHistorik({ clientName, onClose }) {
-  const [showCreateEntry, setShowCreateEntry] = useState(false);
+function SeHistorik({ clientId, clientName, onClose, onCreateEntry }) {
   const [entries, setEntries] = useState([]);
   const [isLoadingEntries, setIsLoadingEntries] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -75,100 +43,63 @@ function SeHistorik({ clientName, onClose }) {
   };
 
   useEffect(() => {
-    let isCancelled = false;
+    if (!user) {
+      setEntries([]);
+      setIsLoadingEntries(false);
+      setLoadError('Du skal være logget ind for at se journaler.');
+      return;
+    }
 
-    const fetchEntries = async () => {
-      if (!user) {
-        setEntries([]);
+    if (!clientId) {
+      setEntries([]);
+      setIsLoadingEntries(false);
+      setLoadError('Manglende klient-id for at hente journaler.');
+      return;
+    }
+
+    setIsLoadingEntries(true);
+    setLoadError('');
+
+    const entriesRef = collection(
+      db,
+      'users',
+      user.uid,
+      'clients',
+      clientId,
+      'journalEntries'
+    );
+    const entriesQuery = query(entriesRef, orderBy('createdAt', 'desc'));
+
+    const unsubscribe = onSnapshot(
+      entriesQuery,
+      (snapshot) => {
+        const mapped = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          const createdAt =
+            typeof data.createdAt?.toDate === 'function'
+              ? data.createdAt.toDate().toISOString()
+              : data.createdAtIso || null;
+          return {
+            id: doc.id,
+            ...data,
+            createdAt,
+          };
+        });
+        setEntries(mapped);
         setIsLoadingEntries(false);
-        setLoadError('Du skal være logget ind for at se journaler.');
-        return;
+      },
+      (error) => {
+        console.error('Failed to list journal entries:', error);
+        setEntries([]);
+        setLoadError('Kunne ikke hente journalindlæg. Prøv igen senere.');
+        setIsLoadingEntries(false);
       }
-
-      setIsLoadingEntries(true);
-      setLoadError('');
-
-      try {
-        const userIdentifier = deriveUserIdentifier(user);
-        const folderCandidates = Array.from(
-          new Set(
-            [userIdentifier, user.uid].filter(
-              (candidate) => typeof candidate === 'string' && candidate.trim().length > 0
-            )
-          )
-        );
-
-        const fetchEntriesFromFolder = async (folderName) => {
-          if (!folderName) {
-            return [];
-          }
-
-          const folderRef = ref(storage, `userindlæg/${folderName}`);
-          const listResult = await listAll(folderRef);
-
-          const entries = await Promise.all(
-            listResult.items.map(async (itemRef) => {
-              try {
-                const url = await getDownloadURL(itemRef);
-                const response = await fetch(url);
-                if (!response.ok) {
-                  throw new Error(`Failed to fetch ${itemRef.fullPath}`);
-                }
-                const data = await response.json();
-                return {
-                  id: itemRef.fullPath,
-                  storagePath: itemRef.fullPath,
-                  ...data,
-                };
-              } catch (entryError) {
-                console.error('Failed to load journal entry:', entryError);
-                return null;
-              }
-            })
-          );
-
-          return entries.filter(Boolean);
-        };
-
-        const fetchedEntriesArrays = await Promise.all(
-          folderCandidates.map((folderName) => fetchEntriesFromFolder(folderName))
-        );
-
-        const fetchedEntries = fetchedEntriesArrays
-          .flat()
-          .filter(Boolean)
-          .sort((a, b) => {
-            const first = new Date(a.createdAt || a.date || 0).getTime();
-            const second = new Date(b.createdAt || b.date || 0).getTime();
-            return second - first;
-          });
-
-        if (!isCancelled) {
-          setEntries(fetchedEntries);
-        }
-      } catch (error) {
-        if (!isCancelled) {
-          if (error?.code === 'storage/object-not-found') {
-            setEntries([]);
-            setLoadError('');
-          } else {
-            console.error('Failed to list journal entries:', error);
-            setLoadError('Kunne ikke hente journalindlæg. Prøv igen senere.');
-          }
-        }
-      } finally {
-        if (!isCancelled) {
-          setIsLoadingEntries(false);
-        }
-      }
-    };
-
-    fetchEntries();
+    );
 
     return () => {
-      isCancelled = true;
+      unsubscribe();
     };
-  }, [user]);
+  }, [user, clientId]);
 
   const filteredEntries = useMemo(() => {
     if (!clientName) {
@@ -178,33 +109,6 @@ function SeHistorik({ clientName, onClose }) {
       (entry) => (entry.clientName || '').toLowerCase() === clientName.toLowerCase()
     );
   }, [entries, clientName]);
-
-  const handleCreateEntry = () => {
-    setShowCreateEntry(true);
-  };
-
-  const handleSaveEntry = (newEntry) => {
-    setEntries((prev) => {
-      const updated = [newEntry, ...prev];
-      return updated.sort((a, b) => {
-        const first = new Date(a.createdAt || a.date || 0).getTime();
-        const second = new Date(b.createdAt || b.date || 0).getTime();
-        return second - first;
-      });
-    });
-    setShowCreateEntry(false);
-  };
-
-  // If showing create entry form, render Indlæg component
-  if (showCreateEntry) {
-    return (
-      <Indlæg
-        clientName={clientName}
-        onClose={() => setShowCreateEntry(false)}
-        onSave={handleSaveEntry}
-      />
-    );
-  }
 
   return (
     <div className="sehistorik-container">
@@ -216,7 +120,10 @@ function SeHistorik({ clientName, onClose }) {
             <span className="sehistorik-client-name">{clientName}</span>
           </div>
           <div className="sehistorik-header-actions">
-            <button className="sehistorik-create-entry-btn" onClick={handleCreateEntry}>
+            <button
+              className="sehistorik-create-entry-btn"
+              onClick={() => onCreateEntry && onCreateEntry()}
+            >
               <span className="sehistorik-plus-icon">+</span>
               Opret indlæg
             </button>
