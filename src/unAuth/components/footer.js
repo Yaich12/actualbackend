@@ -1,21 +1,11 @@
 import React from 'react';
 import './footer.css';
+import Featured_05 from '../../components/ui/globe-feature-section';
 
 function Footer() {
   return (
     <footer className="footer">
-      <div className="footer-cta">
-        <div className="footer-cta-container">
-          <div className="footer-cta-content">
-            <h2 className="footer-cta-title">Ready to take it to the next level?</h2>
-            <p className="footer-cta-subtitle">Explore how Selma could work for you.</p>
-          </div>
-          <a href="#demo" className="footer-cta-button">
-            Request Demo
-            <span className="footer-cta-arrow">↗</span>
-          </a>
-        </div>
-      </div>
+      <Featured_05 />
 
       <div className="footer-links">
         <div className="footer-links-container">

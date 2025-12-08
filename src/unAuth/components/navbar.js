@@ -1,40 +1,42 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useMemo } from 'react';
 import { useAuth } from '../../AuthContext';
 import './navbar.css';
-
-const menuItems = [
-  { label: 'Features', href: '#benefits' },
-  { label: 'Pricing', href: '#specifications' },
-  { label: 'Contact Us', href: '#contact' },
-];
+import { Navbar1 } from '../../components/blocks/shadcnblocks-com-navbar1';
 
 function Navbar() {
   const { user } = useAuth();
   const ctaPath = user ? '/booking' : '/signup';
   const ctaLabel = user ? 'Go to booking' : 'Try For Free';
 
+  const menu = useMemo(
+    () => [
+      { title: 'Features', url: '#benefits' },
+      { title: 'Pricing', url: '#specifications' },
+      { title: 'Contact Us', url: '#contact' },
+    ],
+    []
+  );
+
   return (
     <nav className="navbar">
-      <div className="navbar-container">
-        <a className="navbar-logo" href="/" aria-label="Selma home">
-          <span className="navbar-logo-wordmark">Selma+</span>
-          <span className="navbar-logo-text">meget mere end bare et booking system</span>
-        </a>
-
-        <div className="navbar-right">
-          <ul className="navbar-menu">
-            {menuItems.map((item) => (
-              <li key={item.label} className="navbar-item">
-                <a href={item.href}>{item.label}</a>
-              </li>
-            ))}
-          </ul>
-
-          <Link to={ctaPath} className="navbar-cta">
-            {ctaLabel}
-          </Link>
-        </div>
+      <div className="navbar-container" style={{ width: '100%' }}>
+        <Navbar1
+          className="w-full"
+          containerClassName="w-full"
+          logo={{
+            url: '/',
+            src: '',
+            alt: 'Selma+',
+            title: 'Selma+',
+            tagline: 'Much more than just a booking system.',
+          }}
+          menu={menu}
+          mobileExtraLinks={[]}
+          auth={{
+            login: { text: 'Contact', url: '#contact' },
+            signup: { text: ctaLabel, url: ctaPath },
+          }}
+        />
       </div>
     </nav>
   );

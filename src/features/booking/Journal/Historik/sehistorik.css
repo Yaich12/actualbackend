@@ -1,7 +1,8 @@
 .sehistorik-container {
   width: 100%;
   height: 100%;
-  background-color: #ffffff;
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -10,7 +11,7 @@
 .sehistorik-header {
   flex: 0 0 auto;
   padding: 20px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .sehistorik-header-top {
@@ -28,13 +29,13 @@
 .sehistorik-title {
   font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
   margin: 0;
 }
 
 .sehistorik-client-name {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--text-muted);
   font-weight: 400;
 }
 
@@ -73,7 +74,7 @@
   height: 32px;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 18px;
   cursor: pointer;
   display: flex;
@@ -84,8 +85,8 @@
 }
 
 .sehistorik-close-btn:hover {
-  background-color: #f3f4f6;
-  color: #111827;
+  background-color: var(--bg-subtle);
+  color: var(--text-primary);
 }
 
 .sehistorik-content {
@@ -96,6 +97,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
+  color: var(--text-primary);
 }
 
 .sehistorik-empty {
@@ -103,7 +105,7 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
@@ -114,8 +116,8 @@
 }
 
 .sehistorik-entry-card {
-  background-color: #ffffff;
-  border: 1px solid #e5e7eb;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   padding: 16px;
   transition: all 0.2s;
@@ -241,4 +243,3 @@
     align-self: flex-end;
   }
 }
-

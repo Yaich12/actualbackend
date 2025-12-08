@@ -103,7 +103,7 @@ const clips = [
           </h1>
 
           <p className="frontpage-subtitle">
-            Det eneste redskab, du behøver for at klare det hele.
+            The only tool you need to get everything done.
           </p>
 
           <div className="frontpage-buttons">

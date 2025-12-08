@@ -1,0 +1,15 @@
+.scroll-section {
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  background: #ffffff;
+}
+
+.scroll-section > div {
+  width: 100%;
+}
+
+.scroll-featured {
+  width: 100%;
+}
+

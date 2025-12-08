@@ -1,6 +1,6 @@
 const POST_AUTH_REDIRECT_KEY = "selmaPostAuthRedirect";
 
-export const setPostAuthRedirectTarget = (path = "/booking") => {
+export const setPostAuthRedirectTarget = (path = "/welcome") => {
   if (typeof window === "undefined") {
     return;
   }
@@ -24,4 +24,3 @@ export const clearPostAuthRedirectTarget = () => {
   }
   window.localStorage.removeItem(POST_AUTH_REDIRECT_KEY);
 };
-

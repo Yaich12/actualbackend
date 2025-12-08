@@ -1,0 +1,289 @@
+.demo-root {
+  width: 100vw;
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  background: 
+    radial-gradient(circle at 20% 80%, rgba(255, 182, 153, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(255, 244, 214, 0.5) 0%, transparent 50%),
+    radial-gradient(circle at 40% 40%, rgba(255, 182, 153, 0.1) 0%, transparent 50%),
+    #fff8f0;
+}
+
+.demo-text-overlay {
+  position: absolute;
+  top: 60px;
+  left: 16px;
+  z-index: 10;
+  pointer-events: none;
+  max-width: 600px;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+}
+
+.demo-text-overlay > div {
+  margin: 0;
+}
+
+/* Typography for the text content */
+.demo-text-overlay > div > div > div {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+}
+
+/* Heading style - first part of text (up to line break) */
+.demo-text-overlay > div > div > div > div > span {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #1a1a1a;
+}
+
+/* Body text style - second paragraph (after line break) */
+.demo-text-overlay > div > div > div > div > br ~ span {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #4a4a4a;
+  font-weight: 400;
+}
+
+@media (max-width: 768px) {
+  .demo-text-overlay {
+    top: 50px;
+    left: 12px;
+    right: 12px;
+    max-width: none;
+  }
+}
+
+.demo-back-btn {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(12px);
+  color: #ffffff;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+}
+
+.demo-back-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.demo-chip {
+  padding: 6px 10px;
+  background: #e0f2fe;
+  border-radius: 999px;
+  color: #075985;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.demo-button {
+  border: none;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.demo-button.primary {
+  background: #3b82f6;
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(59, 130, 246, 0.35);
+}
+
+.demo-button.primary:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.demo-button.ghost {
+  background: #f8fafc;
+  color: #0f172a;
+  border: 1px solid #e5e7eb;
+}
+
+.demo-button.ghost:hover {
+  background: #eef2f7;
+  transform: translateY(-1px);
+}
+
+.demo-circle-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  margin: 10px 0 8px 0;
+}
+
+.demo-circle {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: rgba(248, 250, 252, 0.9);
+  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.12);
+  transition: all 0.2s ease;
+}
+
+.demo-circle:hover {
+  transform: translateY(-2px);
+}
+
+.demo-circle.active {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #ffffff;
+  border-color: transparent;
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.3);
+}
+
+.demo-active-card {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr);
+  gap: 0;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.14);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: #ffffff;
+}
+
+.demo-active-card .demo-step-body {
+  border-radius: 24px 24px 0 0;
+}
+
+.demo-active-card .demo-step-media-large {
+  height: 220px;
+  border-radius: 0 0 24px 24px;
+}
+
+/* JOURNEY LAYOUT – 4 large cards with arrows between them */
+
+.demo-step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.demo-step-pill {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #e5edff;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.demo-step-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #facc15;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.demo-step-title {
+  margin: 4px 0 2px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.demo-step-text {
+  margin: 0;
+  font-size: 14px;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+.demo-step-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.demo-step-body {
+  padding: 18px 16px 14px 16px;
+  background: linear-gradient(180deg, #f6f8fc 0%, #eef2f7 100%);
+  border-radius: 18px 18px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1 1 auto;
+}
+
+.demo-step-media {
+  height: 160px;
+  width: 100%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 0 0 18px 18px;
+  overflow: hidden;
+}
+
+.demo-cta-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+@media (max-width: 768px) {
+  .demo-header-overlay {
+    top: 50px;
+    left: 12px;
+    right: 12px;
+    max-width: none;
+  }
+
+  .demo-header {
+    padding: 12px 16px;
+  }
+
+  .demo-title {
+    font-size: 18px;
+  }
+
+  .demo-subtitle {
+    font-size: 12px;
+  }
+
+  .demo-back-btn {
+    top: 12px;
+    left: 12px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}
+

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './bookingpage.css';
 import AppointmentForm from './appointment/appointment';
@@ -15,7 +15,8 @@ function BookingPage() {
   const navigate = useNavigate();
   const { user, signOutUser } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState('month'); // 'month' | 'week' | 'day'
+  const [currentView, setCurrentView] = useState('week'); // 'month' | 'week' | 'day'
+  const [now, setNow] = useState(new Date());
   const [activeNav, setActiveNav] = useState('kalender');
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState(null);
@@ -27,6 +28,11 @@ function BookingPage() {
   const [journalEntryClient, setJournalEntryClient] = useState(null);
   const { appointments = [] } = useAppointments(user?.uid || null);
   const { clients } = useUserClients();
+  const START_HOUR = 6;
+  const END_HOUR = 19;
+  const VISIBLE_HOURS = END_HOUR - START_HOUR;
+  const HOUR_HEIGHT = 64;
+  const TOTAL_MINUTES = VISIBLE_HOURS * 60;
   const derivedSelectedClient = useMemo(() => {
     if (selectedClientId) {
       const match = clients.find((client) => client.id === selectedClientId);
@@ -37,6 +43,18 @@ function BookingPage() {
     return selectedClientFallback;
   }, [clients, selectedClientId, selectedClientFallback]);
 
+  useEffect(() => {
+    const current = new Date();
+    setCurrentDate(current);
+    setNow(current);
+
+    const intervalId = setInterval(() => {
+      setNow(new Date());
+    }, 60_000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
 
   const monthNames = [
     'januar', 'februar', 'marts', 'april', 'maj', 'juni',
@@ -45,6 +63,112 @@ function BookingPage() {
 
   const dayNames = ['MAN', 'TIR', 'ONS', 'TOR', 'FRE', 'LØR', 'SØN'];
 
+  const startOfWeek = (date) => {
+    const copy = new Date(date);
+    const day = copy.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    copy.setDate(copy.getDate() + diff);
+    copy.setHours(0, 0, 0, 0);
+    return copy;
+  };
+
+  const getWeekDays = (date) => {
+    const start = startOfWeek(date);
+    return Array.from({ length: 7 }, (_, index) => {
+      const day = new Date(start);
+      day.setDate(start.getDate() + index);
+      return day;
+    });
+  };
+
+  const formatDateKey = (date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+  const parseDateTime = (isoString, dateStr, timeStr) => {
+    if (isoString) {
+      const parsed = new Date(isoString);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+
+    if (dateStr && timeStr) {
+      const [day, month, year] = dateStr.split('-').map((part) => parseInt(part, 10));
+      const [hours, minutes] = timeStr.split(':').map((part) => parseInt(part, 10));
+      if ([day, month, year, hours, minutes].every((value) => !Number.isNaN(value))) {
+        return new Date(year, month - 1, day, hours, minutes);
+      }
+    }
+
+    return null;
+  };
+
+  const parseAppointmentDateTimes = (appointment) => {
+    const startDate = parseDateTime(
+      appointment.start || appointment.startIso,
+      appointment.startDate,
+      appointment.startTime
+    );
+    const endDate = parseDateTime(
+      appointment.end || appointment.endIso,
+      appointment.endDate || appointment.startDate,
+      appointment.endTime || appointment.startTime
+    );
+
+    return { startDate, endDate: endDate || startDate };
+  };
+
+  const formatTime = (date) => {
+    if (!date) return '';
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
+  const appointmentsByDay = useMemo(() => {
+    const map = {};
+
+    appointments.forEach((appointmentItem) => {
+      const { startDate, endDate } = parseAppointmentDateTimes(appointmentItem);
+      if (!startDate) return;
+
+      const key = formatDateKey(startDate);
+      if (!map[key]) {
+        map[key] = [];
+      }
+      map[key].push({
+        ...appointmentItem,
+        startDateObj: startDate,
+        endDateObj: endDate || startDate,
+      });
+    });
+
+    return map;
+  }, [appointments]);
+
+  const getMinutesFromMidnight = (date) => date.getHours() * 60 + date.getMinutes();
+
+  const getEventPosition = (startDate, endDate) => {
+    const startMinutes = getMinutesFromMidnight(startDate);
+    const endMinutes = Math.max(getMinutesFromMidnight(endDate || startDate), startMinutes + 15);
+    const boundedStart = Math.min(Math.max(startMinutes, START_HOUR * 60), END_HOUR * 60);
+    const boundedEnd = Math.min(Math.max(endMinutes, boundedStart + 15), END_HOUR * 60);
+    const heightMinutes = Math.max(boundedEnd - boundedStart, 5);
+    const topPercent = ((boundedStart - START_HOUR * 60) / TOTAL_MINUTES) * 100;
+    const heightPercent = (heightMinutes / TOTAL_MINUTES) * 100;
+
+    return {
+      top: `${topPercent}%`,
+      height: `${heightPercent}%`,
+    };
+  };
+
+  const hourLabels = useMemo(
+    () => Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, index) => START_HOUR + index),
+    [START_HOUR, END_HOUR]
+  );
+  const weekDays = useMemo(() => getWeekDays(currentDate), [currentDate]);
+
   const isSameDate = (a, b) =>
     a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
@@ -52,16 +176,24 @@ function BookingPage() {
 
   const toDate = (dayObj) => new Date(dayObj.year, dayObj.month, dayObj.day);
 
-  const navigateMonth = (direction) => {
-    setCurrentDate(prev => {
-      const newDate = new Date(prev);
-      newDate.setMonth(prev.getMonth() + direction);
-      return newDate;
+  const navigateByView = (direction) => {
+    setCurrentDate((prev) => {
+      const nextDate = new Date(prev);
+      if (currentView === 'month') {
+        nextDate.setMonth(prev.getMonth() + direction);
+      } else if (currentView === 'week') {
+        nextDate.setDate(prev.getDate() + direction * 7);
+      } else {
+        nextDate.setDate(prev.getDate() + direction);
+      }
+      return nextDate;
     });
   };
 
   const goToToday = () => {
-    setCurrentDate(new Date());
+    const today = new Date();
+    setCurrentDate(today);
+    setNow(today);
   };
 
   const getWeekNumber = (date) => {
@@ -127,23 +259,7 @@ function BookingPage() {
     return weeks;
   };
 
-  const calendarWeeks = getCalendarWeeks();
-  let displayedWeeks = calendarWeeks;
-
-  if (viewMode === 'week') {
-    const weekForCurrent = calendarWeeks.find((week) =>
-      week.some((day) => isSameDate(toDate(day), currentDate))
-    );
-    displayedWeeks = weekForCurrent ? [weekForCurrent] : [];
-  }
-
-  if (viewMode === 'day') {
-    const allDays = calendarWeeks.flat();
-    const dayForCurrent = allDays.find((day) =>
-      isSameDate(toDate(day), currentDate)
-    );
-    displayedWeeks = dayForCurrent ? [[dayForCurrent]] : [];
-  }
+  const calendarWeeks = useMemo(() => getCalendarWeeks(), [currentDate]);
 
   const handleCreateAppointment = async (appointment) => {
     if (!user?.uid) {
@@ -272,6 +388,10 @@ function BookingPage() {
   const handleAppointmentClick = (appointment) => {
     setEditingAppointment(null);
     setNextAppointmentTemplate(null);
+    const { startDate } = parseAppointmentDateTimes(appointment);
+    if (startDate) {
+      setCurrentDate(startDate);
+    }
     setSelectedClientId(appointment.clientId || null);
     setSelectedClientFallback(
       appointment.client || appointment.clientEmail || appointment.clientPhone
@@ -353,6 +473,193 @@ function BookingPage() {
     };
   }, [user]);
 
+  const renderMonthView = () => (
+    <>
+      <div className="calendar-header">
+        <div className="week-number-header"></div>
+        {(calendarWeeks[0] || []).map((day, index) => {
+          const dateObj = toDate(day);
+          const dayNameIndex = dateObj.getDay(); // 0 (Sun) - 6 (Sat)
+          const labelDayName = dayNames[(dayNameIndex + 6) % 7];
+          const dayNumber = day.day;
+          const month = day.month + 1;
+          return (
+            <div key={index} className="calendar-day-header">
+              {labelDayName} {dayNumber}/{month}
+            </div>
+          );
+        })}
+      </div>
+      <div className="calendar-grid">
+        {calendarWeeks.map((week, weekIndex) => {
+          const weekStartDate = new Date(week[0].year, week[0].month, week[0].day);
+          const weekNumber = getWeekNumber(weekStartDate);
+          return (
+            <React.Fragment key={weekIndex}>
+              <div className="week-number-cell">{weekNumber}</div>
+              {week.map((day, dayIndex) => {
+                const dayAppointments = appointments.filter((appointment) => {
+                  if (!appointment.startDate) return false;
+                  const [dayStr, monthStr, yearStr] = appointment.startDate.split('-');
+                  const appDay = parseInt(dayStr, 10);
+                  const appMonth = parseInt(monthStr, 10) - 1;
+                  const appYear = parseInt(yearStr, 10);
+                  return appDay === day.day && appMonth === day.month && appYear === day.year;
+                });
+
+                const isSelected = selectedAppointment &&
+                  selectedAppointment.startDate &&
+                  (() => {
+                    const [dayStr, monthStr, yearStr] = selectedAppointment.startDate.split('-');
+                    const appDay = parseInt(dayStr, 10);
+                    const appMonth = parseInt(monthStr, 10) - 1;
+                    const appYear = parseInt(yearStr, 10);
+                    return appDay === day.day && appMonth === day.month && appYear === day.year;
+                  })();
+
+                return (
+                  <div
+                    key={dayIndex}
+                    className={`calendar-day-cell ${!day.isCurrentMonth ? 'other-month' : ''} ${isSelected ? 'selected-day' : ''}`}
+                  >
+                    <span className="day-number">{day.day}</span>
+                    {dayAppointments.length > 0 && (
+                      <div className="day-appointments">
+                        {dayAppointments.map((appointment) => (
+                          <span
+                            key={appointment.id}
+                            className="day-appointment-chip"
+                            onClick={() => handleAppointmentClick(appointment)}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            {appointment.startTime} {appointment.client ? `– ${appointment.client.split(' ')[0]}` : '– Aftale'}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </>
+  );
+
+  const renderTimeGrid = () => {
+    const daysToRender = currentView === 'week' ? weekDays : [currentDate];
+    const gridStyle = {
+      '--days-count': daysToRender.length,
+      '--hour-height': `${HOUR_HEIGHT}px`,
+      '--visible-hours': VISIBLE_HOURS,
+      '--time-grid-height': `${VISIBLE_HOURS * HOUR_HEIGHT}px`,
+      minWidth: `${80 + daysToRender.length * 120}px`,
+    };
+    const nowMinutes = getMinutesFromMidnight(now);
+    const nowTopPercent =
+      nowMinutes >= START_HOUR * 60 && nowMinutes <= END_HOUR * 60
+        ? ((nowMinutes - START_HOUR * 60) / TOTAL_MINUTES) * 100
+        : null;
+
+    return (
+      <div className="time-grid" style={gridStyle}>
+        <div className="time-grid-header">
+          <div className="time-grid-hours-spacer"></div>
+          {daysToRender.map((day) => {
+            const isHighlighted = currentView === 'day' || isSameDate(day, currentDate);
+            const isToday = isSameDate(day, now);
+            const dayNameIndex = day.getDay(); // 0 (Sun) - 6 (Sat)
+            const labelDayName = dayNames[(dayNameIndex + 6) % 7];
+            return (
+              <button
+                key={formatDateKey(day)}
+                type="button"
+                className={`time-grid-day-header ${isHighlighted ? 'is-selected' : ''} ${isToday ? 'is-today' : ''}`}
+                onClick={() => setCurrentDate(new Date(day))}
+              >
+                <span className="day-name">{labelDayName}</span>
+                <span className="day-date">
+                  {day.getDate()}/{day.getMonth() + 1}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="time-grid-body">
+          <div className="time-grid-hours" style={{ height: `${VISIBLE_HOURS * HOUR_HEIGHT}px` }}>
+            {hourLabels.map((hour, index) => (
+              <div
+                key={hour}
+                className="time-grid-hour-label"
+                style={{ top: `${(index / VISIBLE_HOURS) * 100}%` }}
+              >
+                {String(hour).padStart(2, '0')}:00
+              </div>
+            ))}
+          </div>
+          <div className="time-grid-days">
+            {daysToRender.map((day) => {
+              const dayKey = formatDateKey(day);
+              const dayEvents = (appointmentsByDay[dayKey] || [])
+                .slice()
+                .sort(
+                  (a, b) =>
+                    (a.startDateObj?.getTime?.() || 0) - (b.startDateObj?.getTime?.() || 0)
+                );
+              const isHighlighted = currentView === 'day' || isSameDate(day, currentDate);
+              const isToday = isSameDate(day, now);
+              const showNowLine =
+                (currentView === 'day' || currentView === 'week') &&
+                isToday &&
+                nowTopPercent !== null;
+
+              return (
+                <div
+                  key={dayKey}
+                  className={`time-grid-day ${isHighlighted ? 'is-highlighted' : ''} ${isToday ? 'is-today' : ''}`}
+                >
+                  <div
+                    className="time-grid-day-body"
+                    style={{ height: `${VISIBLE_HOURS * HOUR_HEIGHT}px` }}
+                  >
+                    {showNowLine && (
+                      <div className="time-indicator-line" style={{ top: `${nowTopPercent}%` }} />
+                    )}
+                    {dayEvents.map((appointmentItem) => {
+                      const { startDateObj, endDateObj, id } = appointmentItem;
+                      const style = startDateObj
+                        ? getEventPosition(startDateObj, endDateObj || startDateObj)
+                        : {};
+                      return (
+                        <div
+                          key={id}
+                          className="time-grid-event"
+                          style={style}
+                          onClick={() => handleAppointmentClick(appointmentItem)}
+                        >
+                          <span className="time-grid-event-time">
+                            {appointmentItem.startTime || formatTime(startDateObj)}
+                            {appointmentItem.endTime || endDateObj
+                              ? ` – ${appointmentItem.endTime || formatTime(endDateObj)}`
+                              : ''}
+                          </span>
+                          <span className="time-grid-event-title">
+                            {appointmentItem.client || appointmentItem.title || 'Aftale'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="booking-page">
       {/* Top Navigation Bar */}
@@ -367,26 +674,26 @@ function BookingPage() {
         </div>
         <div className="topbar-center">
           <div className="topbar-navigation">
-            <button className="nav-arrow" onClick={() => navigateMonth(-1)}>←</button>
+            <button className="nav-arrow" onClick={() => navigateByView(-1)}>←</button>
             <button className="nav-today" onClick={goToToday}>i dag</button>
-            <button className="nav-arrow" onClick={() => navigateMonth(1)}>→</button>
+            <button className="nav-arrow" onClick={() => navigateByView(1)}>→</button>
           </div>
           <div className="topbar-view-toggle">
             <button
-              className={`view-toggle-btn ${viewMode === 'month' ? 'active' : ''}`}
-              onClick={() => setViewMode('month')}
+              className={`view-toggle-btn ${currentView === 'month' ? 'active' : ''}`}
+              onClick={() => setCurrentView('month')}
             >
               Måned
             </button>
             <button
-              className={`view-toggle-btn ${viewMode === 'week' ? 'active' : ''}`}
-              onClick={() => setViewMode('week')}
+              className={`view-toggle-btn ${currentView === 'week' ? 'active' : ''}`}
+              onClick={() => setCurrentView('week')}
             >
               Uge
             </button>
             <button
-              className={`view-toggle-btn ${viewMode === 'day' ? 'active' : ''}`}
-              onClick={() => setViewMode('day')}
+              className={`view-toggle-btn ${currentView === 'day' ? 'active' : ''}`}
+              onClick={() => setCurrentView('day')}
             >
               Dag
             </button>
@@ -526,76 +833,8 @@ function BookingPage() {
           <>
             {/* Main Calendar Area */}
             <div className="booking-main">
-            <div className="calendar-container">
-              <div className="calendar-header">
-                <div className="week-number-header"></div>
-                {(displayedWeeks[0] || []).map((day, index) => {
-                  const dateObj = toDate(day);
-                  const dayNameIndex = dateObj.getDay(); // 0 (Sun) - 6 (Sat)
-                  const labelDayName = dayNames[(dayNameIndex + 6) % 7];
-                  const dayNumber = day.day;
-                  const month = day.month + 1;
-                  return (
-                    <div key={index} className="calendar-day-header">
-                      {labelDayName} {dayNumber}/{month}
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="calendar-grid">
-                {displayedWeeks.map((week, weekIndex) => {
-                  const weekStartDate = new Date(week[0].year, week[0].month, week[0].day);
-                  const weekNumber = getWeekNumber(weekStartDate);
-                  return (
-                    <React.Fragment key={weekIndex}>
-                      <div className="week-number-cell">{weekNumber}</div>
-                      {week.map((day, dayIndex) => {
-                          const dayAppointments = appointments.filter((appointment) => {
-                            if (!appointment.startDate) return false;
-                            const [dayStr, monthStr, yearStr] = appointment.startDate.split('-');
-                            const appDay = parseInt(dayStr, 10);
-                            const appMonth = parseInt(monthStr, 10) - 1;
-                            const appYear = parseInt(yearStr, 10);
-                            return appDay === day.day && appMonth === day.month && appYear === day.year;
-                          });
-
-                          const isSelected = selectedAppointment && 
-                            selectedAppointment.startDate && 
-                            (() => {
-                              const [dayStr, monthStr, yearStr] = selectedAppointment.startDate.split('-');
-                              const appDay = parseInt(dayStr, 10);
-                              const appMonth = parseInt(monthStr, 10) - 1;
-                              const appYear = parseInt(yearStr, 10);
-                              return appDay === day.day && appMonth === day.month && appYear === day.year;
-                            })();
-
-                          return (
-                            <div 
-                              key={dayIndex} 
-                              className={`calendar-day-cell ${!day.isCurrentMonth ? 'other-month' : ''} ${isSelected ? 'selected-day' : ''}`}
-                            >
-                              <span className="day-number">{day.day}</span>
-                              {dayAppointments.length > 0 && (
-                                <div className="day-appointments">
-                                  {dayAppointments.map((appointment) => (
-                                    <span 
-                                      key={appointment.id} 
-                                      className="day-appointment-chip"
-                                      onClick={() => handleAppointmentClick(appointment)}
-                                      style={{ cursor: 'pointer' }}
-                                    >
-                                      {appointment.startTime} {appointment.client ? `– ${appointment.client.split(' ')[0]}` : '– Aftale'}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
+              <div className="calendar-container">
+                {currentView === 'month' ? renderMonthView() : renderTimeGrid()}
               </div>
             </div>
 
