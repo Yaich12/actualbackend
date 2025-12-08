@@ -1,0 +1,302 @@
+.ne-root {
+  width: 100vw;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.ne-header-overlay {
+  position: absolute;
+  top: 60px;
+  left: 16px;
+  z-index: 10;
+  pointer-events: none;
+  max-width: 420px;
+}
+
+.ne-header-overlay .ne-header {
+  pointer-events: auto;
+}
+
+.ne-header {
+  margin-bottom: 6px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(16px);
+  padding: 16px 20px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.ne-eyebrow {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #60a5fa;
+  margin: 0 0 6px 0;
+  font-weight: 700;
+}
+
+.ne-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 6px 0;
+  line-height: 1.3;
+}
+
+.ne-subtitle {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.ne-stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.ne-stat {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.12);
+  padding: 4px 10px;
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+}
+
+.ne-back-btn {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(12px);
+  color: #ffffff;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+}
+
+.ne-back-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.ne-chip {
+  padding: 6px 10px;
+  background: #e0f2fe;
+  border-radius: 999px;
+  color: #075985;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.ne-button {
+  border: none;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.ne-button.primary {
+  background: #3b82f6;
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(59, 130, 246, 0.35);
+}
+
+.ne-button.primary:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.ne-button.ghost {
+  background: #f8fafc;
+  color: #0f172a;
+  border: 1px solid #e5e7eb;
+}
+
+.ne-button.ghost:hover {
+  background: #eef2f7;
+  transform: translateY(-1px);
+}
+
+.ne-circle-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  margin: 10px 0 8px 0;
+}
+
+.ne-circle {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: rgba(248, 250, 252, 0.9);
+  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.12);
+  transition: all 0.2s ease;
+}
+
+.ne-circle:hover {
+  transform: translateY(-2px);
+}
+
+.ne-circle.active {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #ffffff;
+  border-color: transparent;
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.3);
+}
+
+.ne-active-card {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr);
+  gap: 0;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.14);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: #ffffff;
+}
+
+.ne-active-card .ne-step-body {
+  border-radius: 24px 24px 0 0;
+}
+
+.ne-active-card .ne-step-media-large {
+  height: 220px;
+  border-radius: 0 0 24px 24px;
+}
+
+/* JOURNEY LAYOUT – 4 large cards with arrows between them */
+
+.ne-step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ne-step-pill {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #e5edff;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ne-step-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #facc15;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.ne-step-title {
+  margin: 4px 0 2px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.ne-step-text {
+  margin: 0;
+  font-size: 14px;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+.ne-step-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.ne-step-body {
+  padding: 18px 16px 14px 16px;
+  background: linear-gradient(180deg, #f6f8fc 0%, #eef2f7 100%);
+  border-radius: 18px 18px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1 1 auto;
+}
+
+.ne-step-media {
+  height: 160px;
+  width: 100%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 0 0 18px 18px;
+  overflow: hidden;
+}
+
+.ne-cta-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+@media (max-width: 768px) {
+  .ne-header-overlay {
+    top: 50px;
+    left: 12px;
+    right: 12px;
+    max-width: none;
+  }
+
+  .ne-header {
+    padding: 12px 16px;
+  }
+
+  .ne-title {
+    font-size: 18px;
+  }
+
+  .ne-subtitle {
+    font-size: 12px;
+  }
+
+  .ne-back-btn {
+    top: 12px;
+    left: 12px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}

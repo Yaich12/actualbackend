@@ -1,0 +1,251 @@
+.living-apple-shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 24px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px;
+  border-radius: 32px;
+  background: radial-gradient(circle at 20% 20%, #f4f7ff 0, #ffffff 45%);
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.12);
+  color: #0f172a;
+}
+
+.living-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  background: #f6f7fb;
+  border-radius: 24px;
+  padding: 20px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 12px 32px rgba(15, 23, 42, 0.08);
+}
+
+.living-sidebar h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.living-search {
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-size: 14px;
+  background: #ffffff;
+  outline: none;
+}
+
+.living-search::placeholder {
+  color: #94a3b8;
+}
+
+.living-sidebar nav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  color: #475569;
+}
+
+.living-sidebar nav p {
+  margin: 0;
+  cursor: default;
+}
+
+.living-sidebar nav p.active {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.living-sidebar-footer {
+  margin-top: auto;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.living-main {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.living-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 22px;
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+.living-pill {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.living-topbar h2 {
+  margin: 8px 0 4px 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.living-subtitle {
+  margin: 0;
+  color: #475569;
+  font-size: 14px;
+}
+
+.living-journey {
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.journey-track {
+  position: relative;
+  width: 100%;
+  height: 10px;
+  border-radius: 9999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.journey-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 75%;
+  background: linear-gradient(90deg, #22d3ee 0%, #3b82f6 60%, #6366f1 100%);
+  border-radius: inherit;
+}
+
+.living-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.living-card {
+  position: relative;
+  padding: 18px 18px 16px 18px;
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.living-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: var(--accent, #e2e8f0);
+}
+
+.living-card h3 {
+  margin: 10px 0 6px 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.living-card-label {
+  margin: 0;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.living-card-sub {
+  margin: 0;
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.living-card-detail {
+  margin: 2px 0 0 0;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.accent-orange {
+  --accent: linear-gradient(90deg, #fb923c, #f97316);
+}
+
+.accent-blue {
+  --accent: linear-gradient(90deg, #38bdf8, #3b82f6);
+}
+
+.accent-sage {
+  --accent: linear-gradient(90deg, #6ee7b7, #10b981);
+}
+
+.accent-rose {
+  --accent: linear-gradient(90deg, #fb7185, #ec4899);
+}
+
+.accent-lilac {
+  --accent: linear-gradient(90deg, #c084fc, #a855f7);
+}
+
+.accent-gold {
+  --accent: linear-gradient(90deg, #facc15, #f59e0b);
+}
+
+@media (max-width: 900px) {
+  .living-apple-shell {
+    grid-template-columns: 1fr;
+    padding: 22px;
+  }
+
+  .living-sidebar {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .living-sidebar nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .living-sidebar-footer {
+    margin-top: 0;
+  }
+
+  .living-topbar {
+    flex-direction: column;
+  }
+
+  .living-journey {
+    width: 100%;
+  }
+}
+
+@media (max-width: 540px) {
+  .living-grid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+}
+

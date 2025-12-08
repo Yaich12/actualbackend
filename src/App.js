@@ -7,9 +7,13 @@ import Ydelser from './features/booking/Ydelser/ydelser';
 import JournalPage from './features/booking/Journal/JournalPage';
 import UserSettings from './features/booking/usersettings';
 import SignUp from './SignUp/SignUp';
+import SignInPageDemo from './components/ui/sign-in-demo';
 import { useAuth } from './AuthContext';
 import './App.css';
 import PostAuthRedirect from './PostAuthRedirect';
+import CustomDashboardChoice from './costum';
+import GettingStartedPlaceholder from './GettingStartedPlaceholder';
+import NotEstablishedPage from './notestablished/notestablished';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -32,12 +36,15 @@ function App() {
     <div className="app-container">
         <Routes>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/welcome" element={<CustomDashboardChoice />} />
+          <Route path="/getting-started" element={<NotEstablishedPage />} />
           <Route path="/booking" element={<BookingPage />} />
           <Route path="/journal" element={<JournalPage />} />
           <Route path="/booking/klienter" element={<Klientoversigt />} />
           <Route path="/booking/ydelser" element={<Ydelser />} />
           <Route path="/booking/settings" element={<UserSettings />} />
           <Route path="/signup" element={<SignUp />} />
+          <Route path="/sign-in-demo" element={<SignInPageDemo />} />
         </Routes>
     </div>
     </Router>

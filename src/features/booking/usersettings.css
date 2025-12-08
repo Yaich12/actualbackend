@@ -1,6 +1,18 @@
+:root {
+  --bg-color: #f4f6fb;
+  --card-bg-color: #ffffff;
+  --text-color: #0f172a;
+}
+
+[data-theme="dark"] {
+  --bg-color: #111827;
+  --card-bg-color: #1f2937;
+  --text-color: #f9fafb;
+}
+
 .usersettings-main {
   flex: 1;
-  background-color: #f5f7fb;
+  background-color: var(--bg-color);
   padding: 24px 32px;
   box-sizing: border-box;
   display: flex;
@@ -15,7 +27,7 @@
 .usersettings-card {
   width: 100%;
   max-width: 900px;
-  background: #ffffff;
+  background: var(--card-bg-color);
   border-radius: 16px;
   box-shadow: 0 15px 40px rgba(15, 23, 42, 0.08);
   padding: 28px 32px 32px;
@@ -34,12 +46,12 @@
 .usersettings-title {
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text-color);
 }
 
 .usersettings-subtitle {
   font-size: 13px;
-  color: #6b7280;
+  color: rgba(107, 114, 128, 0.9);
 }
 
 .usersettings-section {
@@ -51,7 +63,7 @@
 .usersettings-label {
   font-size: 14px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-color);
 }
 
 .usersettings-input {
@@ -60,7 +72,7 @@
   border-radius: 10px;
   padding: 12px 14px;
   font-size: 14px;
-  color: #111827;
+  color: var(--text-color);
   background: #ffffff;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }

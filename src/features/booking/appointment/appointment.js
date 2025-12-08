@@ -3,6 +3,23 @@ import './appointments.css';
 import { useUserClients } from '../Klienter/hooks/useUserClients';
 import ServiceSelector from '../Ydelser/ServiceSelector';
 
+const getAutoEndTime = (startTime, timeSlots) => {
+  if (!startTime || !Array.isArray(timeSlots) || timeSlots.length === 0) {
+    return startTime;
+  }
+
+  const [h, m] = startTime.split(':').map(Number);
+  const baseDate = new Date(2000, 0, 1, h, m + 60);
+  const hh = String(baseDate.getHours()).padStart(2, '0');
+  const mm = String(baseDate.getMinutes()).padStart(2, '0');
+  const candidate = `${hh}:${mm}`;
+
+  if (timeSlots.includes(candidate)) {
+    return candidate;
+  }
+  return timeSlots[timeSlots.length - 1];
+};
+
 function AppointmentForm({
   onClose,
   onCreate,
@@ -94,6 +111,16 @@ function AppointmentForm({
     setShowStartDropdown(false);
     setShowEndDropdown(false);
   }, [initialAppointment, defaultDate]);
+
+  useEffect(() => {
+    if (mode !== 'create') return;
+    if (!selectedServiceId) return;
+    if (!startTime) return;
+
+    const autoEnd = getAutoEndTime(startTime, timeSlots);
+    setEndTime(autoEnd);
+    setEndDate(startDate);
+  }, [selectedServiceId, startTime, mode, timeSlots, startDate]);
 
   const handleSubmit = (e) => {
     e.preventDefault();

@@ -7,6 +7,8 @@ import { db } from '../../firebase';
 import { useAuth } from '../../AuthContext';
 
 const THEME_STORAGE_KEY = 'selma_theme_mode';
+const NIGHT_START_HOUR = 18; // 18:00
+const NIGHT_END_HOUR = 5;    // 05:00
 
 function UserSettings() {
   const { user, updateUserProfile } = useAuth();
@@ -47,12 +49,14 @@ function UserSettings() {
   }, [user]);
 
   const applyTheme = (mode) => {
-    const resolvedMode =
-      mode === 'system'
-        ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-            ? 'dark'
-            : 'light')
-        : mode;
+    let resolvedMode = mode;
+
+    if (mode === 'system') {
+      const hour = new Date().getHours();
+      const isNight = hour >= NIGHT_START_HOUR || hour < NIGHT_END_HOUR;
+      resolvedMode = isNight ? 'dark' : 'light';
+    }
+
     document.documentElement.setAttribute('data-theme', resolvedMode);
   };
 
@@ -99,6 +103,16 @@ function UserSettings() {
   useEffect(() => {
     applyTheme(colorMode);
     localStorage.setItem(THEME_STORAGE_KEY, colorMode);
+  }, [colorMode]);
+
+  useEffect(() => {
+    if (colorMode !== 'system') return;
+
+    const update = () => applyTheme('system');
+    update();
+    const intervalId = setInterval(update, 5 * 60 * 1000);
+
+    return () => clearInterval(intervalId);
   }, [colorMode]);
 
   const handleSaveProfile = async () => {

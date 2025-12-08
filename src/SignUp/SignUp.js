@@ -1,16 +1,18 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import {
   getRedirectResult,
   isSignInWithEmailLink,
-  sendSignInLinkToEmail,
   signInWithEmailLink,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  createUserWithEmailAndPassword,
 } from "firebase/auth";
 import { auth } from "../firebase";
 import { signInWithGoogle } from "../googleauth";
 import { useAuth } from "../AuthContext";
 import { Gem } from "lucide-react";
-import { AuthComponent } from "../components/ui/sign-up";
+import { SignInPage } from "../components/ui/sign-in";
 import { ensureUserDocument } from "../services/userService";
 import {
   clearPostAuthRedirectTarget,
@@ -26,32 +28,16 @@ const SelmaAuthLogo = () => (
   </Link>
 );
 
-const getActionCodeSettings = () => {
-  const defaultUrl =
-    typeof window !== "undefined" && window.location.origin
-      ? `${window.location.origin}/signup`
-      : "http://localhost:3004/signup";
-
-  return {
-    url: process.env.REACT_APP_PASSWORDLESS_REDIRECT_URL ?? defaultUrl,
-    handleCodeInApp: true,
-    ...(process.env.REACT_APP_DYNAMIC_LINK_DOMAIN
-      ? { dynamicLinkDomain: process.env.REACT_APP_DYNAMIC_LINK_DOMAIN }
-      : {}),
-  };
-};
-
 function SignUp() {
-  const [email, setEmail] = useState("");
   const [status, setStatus] = useState(null);
   const [sending, setSending] = useState(false);
   const [processingLink, setProcessingLink] = useState(false);
-  const [showLegacyForm, setShowLegacyForm] = useState(false);
-  const [shouldRedirectToBooking, setShouldRedirectToBooking] = useState(false);
+  const [shouldRedirectToWelcome, setShouldRedirectToWelcome] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(null);
   const navigate = useNavigate();
   const { user, loading } = useAuth();
+  const [lastEmail, setLastEmail] = useState("");
 
-  const actionCodeSettings = useMemo(getActionCodeSettings, []);
   const persistUserProfile = async (authUser) => {
     if (!authUser) {
       return;
@@ -63,9 +49,9 @@ function SignUp() {
     }
   };
 
-  const redirectToBooking = () => {
-    setShouldRedirectToBooking(true);
-    navigate("/booking", { replace: true });
+  const redirectToWelcome = () => {
+    setShouldRedirectToWelcome(true);
+    navigate("/welcome", { replace: true });
     clearPostAuthRedirectTarget();
   };
 
@@ -74,8 +60,8 @@ function SignUp() {
     if (!loading && user) {
       const persistAndRedirect = async () => {
         await persistUserProfile(user);
-        console.log("[SignUp] navigating to /booking");
-        redirectToBooking();
+        console.log("[SignUp] navigating to /welcome");
+        redirectToWelcome();
       };
 
       void persistAndRedirect();
@@ -99,10 +85,10 @@ function SignUp() {
         await persistUserProfile(redirectResult.user);
         setStatus({
           type: "success",
-          message: "Du er nu logget ind. Sender dig til booking…",
+          message: "Du er nu logget ind. Sender dig til velkomstskærmen…",
         });
-        console.log("[SignUp] navigating to /booking after Google sign-in");
-        redirectToBooking();
+        console.log("[SignUp] navigating to /welcome after Google sign-in");
+        redirectToWelcome();
       } catch (error) {
         console.error("[SignUp] Google redirect completion failed:", error);
         if (!isMounted) {
@@ -166,10 +152,10 @@ function SignUp() {
         window.localStorage.removeItem(EMAIL_STORAGE_KEY);
         setStatus({
           type: "success",
-          message: "Du er nu logget ind. Sender dig til booking…",
+          message: "Du er nu logget ind. Sender dig til velkomstskærmen…",
         });
-        console.log("[SignUp] navigating to /booking after email link sign-in");
-        redirectToBooking();
+        console.log("[SignUp] navigating to /welcome after email link sign-in");
+        redirectToWelcome();
       } catch (error) {
         console.error("[SignUp] email link sign-in failed:", error);
         setStatus({
@@ -184,56 +170,21 @@ function SignUp() {
     finishSignInFromLink();
   }, [navigate]);
 
-  const sendMagicLink = async (targetEmail) => {
-    if (!targetEmail) {
-      const errorMessage = "Enter an email address first.";
-      setStatus({ type: "error", message: errorMessage });
-      throw new Error(errorMessage);
-    }
-
-    try {
-      setSending(true);
-      setStatus(null);
-      setPostAuthRedirectTarget("/booking");
-      await sendSignInLinkToEmail(auth, targetEmail, actionCodeSettings);
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(EMAIL_STORAGE_KEY, targetEmail);
-      }
-      setStatus({
-        type: "success",
-        message: "Check your inbox for a secure sign-in link.",
-      });
-      if (!showLegacyForm) {
-        setEmail(targetEmail);
-      }
-    } catch (error) {
-      const message = error.message ?? "Unable to send sign-in link.";
-      setStatus({ type: "error", message });
-      throw new Error(message);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  if (shouldRedirectToBooking && !loading) {
-    return <Navigate to="/booking" replace />;
+  if (shouldRedirectToWelcome && !loading) {
+    return <Navigate to="/welcome" replace />;
   }
-
-  const handleEmailSubmit = async (event) => {
-    event.preventDefault();
-    await sendMagicLink(email);
-  };
 
   const handleGoogleSignIn = async () => {
     setStatus(null);
+    setStatusMessage(null);
     console.log("[SignUp] handleGoogleSignIn triggered");
-    setPostAuthRedirectTarget("/booking");
+    setPostAuthRedirectTarget("/welcome");
     try {
       const result = await signInWithGoogle();
       if (result?.user) {
         console.log("[SignUp] Google popup sign-in success:", result.user);
         await persistUserProfile(result.user);
-        redirectToBooking();
+        redirectToWelcome();
       } else {
         console.log(
           "[SignUp] Switched to redirect flow for Google sign-in (popup unavailable)"
@@ -248,79 +199,91 @@ function SignUp() {
     }
   };
 
+  const handleEmailPasswordSignIn = async (event) => {
+    event.preventDefault();
+    if (!auth) return;
+    setStatusMessage(null);
+    const formData = new FormData(event.currentTarget);
+    const emailInput = (formData.get("email") || "").toString().trim();
+    const passwordInput = (formData.get("password") || "").toString();
+    setLastEmail(emailInput);
+    try {
+      const credential = await signInWithEmailAndPassword(auth, emailInput, passwordInput);
+      await persistUserProfile(credential.user);
+      redirectToWelcome();
+    } catch (error) {
+      console.error("[SignUp] email/password sign-in failed:", error);
+      setStatusMessage(error.message || "Could not sign in with email/password.");
+    }
+  };
+
+  const handleCreateAccount = async () => {
+    if (!auth) return;
+    setStatusMessage(null);
+    // Use last entered email/password if available
+    const emailInput = lastEmail;
+    if (!emailInput) {
+      setStatusMessage("Enter email and password, then tap Create Account.");
+      return;
+    }
+    const formPassword = document.querySelector('input[name="password"]')?.value || "";
+    if (!formPassword) {
+      setStatusMessage("Enter a password to create your account.");
+      return;
+    }
+    try {
+      const credential = await createUserWithEmailAndPassword(auth, emailInput, formPassword);
+      await persistUserProfile(credential.user);
+      redirectToWelcome();
+    } catch (error) {
+      console.error("[SignUp] create account failed:", error);
+      setStatusMessage(error.message || "Could not create account.");
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!auth) return;
+    const emailInput = lastEmail || document.querySelector('input[name="email"]')?.value || "";
+    if (!emailInput) {
+      setStatusMessage("Enter your email first, then choose Reset password.");
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, emailInput);
+      setStatusMessage("Password reset email sent. Check your inbox.");
+    } catch (error) {
+      console.error("[SignUp] reset password failed:", error);
+      setStatusMessage(error.message || "Could not send reset email.");
+    }
+  };
+
   return (
     <div className="signup-page">
-      <section className="signup-auth-wrapper">
-        <AuthComponent
-          logo={<SelmaAuthLogo />}
-          brandName="Selma+"
+      <section className="signup-auth-wrapper" aria-busy={sending || processingLink}>
+        <div className="signup-logo-chip">
+          <Link to="/" aria-label="Tilbage til forsiden">
+            <Gem className="h-4 w-4 text-white" />
+          </Link>
+        </div>
+        <SignInPage
+          heroImageSrc="/hero/pexels-yankrukov-5794028.jpg"
+          testimonials={[]}
+          onSignIn={handleEmailPasswordSignIn}
           onGoogleSignIn={handleGoogleSignIn}
-          onEmailSubmit={({ email: inputEmail }) => sendMagicLink(inputEmail)}
-          isProcessing={sending || processingLink}
+          onResetPassword={handleResetPassword}
+          onCreateAccount={handleCreateAccount}
+          title={<span className="font-light">Velkommen tilbage</span>}
+          description="Log ind med email og kode eller fortsæt med Google. Du kan stadig bruge din magiske link-login hvis du har en aktiv email link."
         />
-      </section>
-
-      <section className="signup-legacy">
-        <button
-          type="button"
-          className="signup-legacy-toggle"
-          onClick={() => setShowLegacyForm((prev) => !prev)}
-        >
-          {showLegacyForm ? "Skjul legacy-login" : "Brug den oprindelige login-flow"}
-        </button>
-
-        {showLegacyForm && (
-          <main className="signup-content" aria-busy={processingLink}>
-            <section className="signup-card signup-legacy-card">
-              <header className="signup-header">
-                <h1>Sign up to Selma</h1>
-                <p>Choose email or Google to finish creating your account.</p>
-              </header>
-
-              <form className="signup-form" onSubmit={handleEmailSubmit}>
-                <label htmlFor="signup-email">Email address</label>
-                <input
-                  id="signup-email"
-                  type="email"
-                  placeholder="you@clinic.com"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  autoComplete="email"
-                  required
-                />
-                <button
-                  type="submit"
-                  className="signup-button primary"
-                  disabled={sending || processingLink}
-                >
-                  {sending ? "Sending link…" : "Next"}
-                </button>
-              </form>
-
-              <div className="signup-divider">
-                <span />
-                <p>or</p>
-                <span />
-              </div>
-
-              <button
-                type="button"
-                className="signup-button google"
-                onClick={handleGoogleSignIn}
-                disabled={processingLink}
-              >
-                Continue with Google
-              </button>
-
-              {status && (
-                <p className={`signup-status ${status.type}`}>{status.message}</p>
-              )}
-
-              <p className="signup-switch">
-                Already have access? <Link to="/booking">Go to the app</Link>
-              </p>
-            </section>
-          </main>
+        {status && (
+          <p className={`signup-status ${status.type}`} style={{ maxWidth: '480px', margin: '1rem auto' }}>
+            {status.message}
+          </p>
+        )}
+        {statusMessage && (
+          <p className="signup-status" style={{ maxWidth: '480px', margin: '1rem auto', background: '#e0e7ff', color: '#1e3a8a' }}>
+            {statusMessage}
+          </p>
         )}
       </section>
     </div>

@@ -1,7 +1,8 @@
 .indlæg-container {
   width: 100%;
   height: 100%;
-  background-color: #ffffff;
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -17,7 +18,7 @@
 .indlæg-header {
   flex: 0 0 auto;
   padding: 20px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .indlæg-header-top {
@@ -30,7 +31,7 @@
 .indlæg-title {
   font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -45,19 +46,19 @@
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  background-color: #ffffff;
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-surface);
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
-  color: #374151;
+  color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .indlæg-action-btn:hover {
-  background-color: #f9fafb;
-  border-color: #9ca3af;
+  background-color: var(--bg-subtle);
+  border-color: var(--border-subtle);
 }
 
 .indlæg-action-icon {
@@ -68,8 +69,8 @@
   width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid #d1d5db;
-  background-color: #ffffff;
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-surface);
   border-radius: 6px;
   font-size: 16px;
   cursor: pointer;
@@ -77,11 +78,12 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  color: var(--text-primary);
 }
 
 .indlæg-icon-btn:hover {
-  background-color: #f9fafb;
-  border-color: #9ca3af;
+  background-color: var(--bg-subtle);
+  border-color: var(--border-subtle);
 }
 
 .indlæg-close-btn {
@@ -89,7 +91,7 @@
   height: 32px;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 18px;
   cursor: pointer;
   display: flex;
@@ -100,8 +102,8 @@
 }
 
 .indlæg-close-btn:hover {
-  background-color: #f3f4f6;
-  color: #111827;
+  background-color: var(--bg-subtle);
+  color: var(--text-primary);
 }
 
 .indlæg-mikrofon-container {
@@ -153,7 +155,7 @@
 
 .indlæg-dictation-status {
   font-size: 13px;
-  color: #374151;
+  color: var(--text-muted);
   margin: 0;
   text-align: right;
   white-space: pre-line;
