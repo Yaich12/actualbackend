@@ -108,6 +108,48 @@
   flex-wrap: wrap;
 }
 
+.addnew-color-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.addnew-color-swatch {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.12s ease, box-shadow 0.15s ease, border-color 0.12s ease;
+}
+
+.addnew-color-swatch:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+}
+
+.addnew-color-swatch.selected {
+  border-color: #111827;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.14);
+}
+
+.addnew-color-check {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  color: #ffffff;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.addnew-color-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
 .addnew-price-row {
   align-items: flex-end;
 }

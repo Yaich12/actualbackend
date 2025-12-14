@@ -11,6 +11,7 @@ const DEFAULT_FORM_VALUES = {
   price: '',
   includeVat: false,
   currency: 'DKK',
+  color: '#3B82F6',
 };
 
 const durationOptions = [
@@ -20,6 +21,15 @@ const durationOptions = [
   '1 time',
   '1 time 30 minutter',
   '2 timer',
+];
+
+const colorOptions = [
+  { value: '#F59E0B', label: 'Rav / Amber' },
+  { value: '#06B6D4', label: 'Turkis / Teal' },
+  { value: '#3B82F6', label: 'Blød blå' },
+  { value: '#8B5CF6', label: 'Violet' },
+  { value: '#EF4444', label: 'Rød' },
+  { value: '#EC4899', label: 'Lyserød' },
 ];
 
 const sanitizeIdentifier = (value) =>
@@ -98,6 +108,7 @@ function AddNewServiceModal({
           return incl !== price ? true : Boolean(initialService.includeVat);
         })(),
         currency: initialService.currency || 'DKK',
+        color: initialService.color || '#3B82F6',
       });
       setSaveError('');
       setIsSaving(false);
@@ -170,6 +181,7 @@ function AddNewServiceModal({
             pris: payload.price,
             prisInklMoms: payload.priceInclVat,
             description: payload.description || '',
+            color: payload.color || '#3B82F6',
             updatedAt: nowIso,
           });
         }
@@ -188,6 +200,7 @@ function AddNewServiceModal({
           pris: payload.price,
           prisInklMoms: payload.priceInclVat,
           description: payload.description || '',
+          color: payload.color || '#3B82F6',
           createdAt: nowIso,
         };
 
@@ -272,6 +285,25 @@ function AddNewServiceModal({
                 ))}
               </select>
             </div>
+          <div className="addnew-field-group">
+            <label>Farve</label>
+            <div className="addnew-color-grid">
+              {colorOptions.map((c) => (
+                <button
+                  type="button"
+                  key={c.value}
+                  className={`addnew-color-swatch ${formValues.color === c.value ? 'selected' : ''}`}
+                  onClick={() => setFormValues((prev) => ({ ...prev, color: c.value }))}
+                  aria-label={c.label}
+                  title={c.label}
+                  style={{ background: c.value }}
+                >
+                  {formValues.color === c.value && <span className="addnew-color-check">✓</span>}
+                </button>
+              ))}
+            </div>
+            <p className="addnew-color-hint">Vælg farve til visning i kalenderen.</p>
+          </div>
           </div>
 
           <div className="addnew-inline-fields addnew-price-row">

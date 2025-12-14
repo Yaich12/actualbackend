@@ -11,10 +11,10 @@ function NotEstablishedPage() {
   const timelineData = [
     {
       id: 1,
-      title: 'Find din lokation',
+      title: 'Go-independent Launch Planner',
       date: 'Trin 1',
       content:
-        'Bliv guidet til at finde et fysisk sted, hvor du kan udøve din praksis – klinik, lejet lokale eller samarbejde med andre behandlere.',
+        'The Go-independent Launch Planner helps health professionals turn a vague idea into a concrete, launch-ready practice. In a few focused steps you define who you serve, what you offer, how you structure your business, and what you need in place to work safely and professionally.',
       category: 'Setup',
       icon: Rocket,
       relatedIds: [2],
@@ -64,7 +64,7 @@ function NotEstablishedPage() {
       <button
         type="button"
         className="ne-back-btn"
-        onClick={() => navigate(-1)}
+        onClick={() => navigate('/welcome')}
       >
         ← Tilbage
       </button>

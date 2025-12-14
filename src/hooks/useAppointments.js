@@ -75,6 +75,8 @@ const mapAppointmentDoc = (doc) => {
     endTime: derivedEndTime || data.endTime || '',
     createdAt: data.createdAt || null,
     updatedAt: data.updatedAt || null,
+    participants: Array.isArray(data.participants) ? data.participants : [],
+    color: data.color || null,
   };
 };
 

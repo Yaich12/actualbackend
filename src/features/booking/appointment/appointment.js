@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './appointments.css';
 import { useUserClients } from '../Klienter/hooks/useUserClients';
 import ServiceSelector from '../Ydelser/ServiceSelector';
+import AddKlient from '../Klienter/addklient/addklient';
 
 const getAutoEndTime = (startTime, timeSlots) => {
   if (!startTime || !Array.isArray(timeSlots) || timeSlots.length === 0) {
@@ -57,6 +58,17 @@ function AppointmentForm({
   const [notes, setNotes] = useState(initialAppointment?.notes || '');
   const [showStartDropdown, setShowStartDropdown] = useState(false);
   const [showEndDropdown, setShowEndDropdown] = useState(false);
+  const [recurrenceEnabled, setRecurrenceEnabled] = useState(
+    initialAppointment?.serviceType === 'forloeb'
+  );
+  const [recurrenceWeeks, setRecurrenceWeeks] = useState(8);
+  const [recurrenceDays, setRecurrenceDays] = useState(['1', '3']); // default Mon/Wed (Mon=1)
+  const [selectedColor, setSelectedColor] = useState(initialAppointment?.color || null);
+  const selectedServiceData = useMemo(
+    () => availableServices.find((service) => service.id === selectedServiceId) || null,
+    [availableServices, selectedServiceId]
+  );
+  const [showAddClient, setShowAddClient] = useState(false);
 
   const startDropdownRef = useRef(null);
   const endDropdownRef = useRef(null);
@@ -110,7 +122,14 @@ function AppointmentForm({
     setNotes(initialAppointment?.notes || '');
     setShowStartDropdown(false);
     setShowEndDropdown(false);
+    setSelectedColor(initialAppointment?.color || null);
   }, [initialAppointment, defaultDate]);
+
+  useEffect(() => {
+    if (selectedServiceData?.color) {
+      setSelectedColor(selectedServiceData.color);
+    }
+  }, [selectedServiceData]);
 
   useEffect(() => {
     if (mode !== 'create') return;
@@ -121,6 +140,41 @@ function AppointmentForm({
     setEndTime(autoEnd);
     setEndDate(startDate);
   }, [selectedServiceId, startTime, mode, timeSlots, startDate]);
+
+  const parseDateStr = (dateStr) => {
+    if (!dateStr) return null;
+    const [dd, mm, yyyy] = dateStr.split('-').map((n) => parseInt(n, 10));
+    if ([dd, mm, yyyy].some((n) => Number.isNaN(n))) return null;
+    return new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
+  };
+
+  const formatDateStr = (dateObj) => {
+    const dd = String(dateObj.getDate()).padStart(2, '0');
+    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const yyyy = dateObj.getFullYear();
+    return `${dd}-${mm}-${yyyy}`;
+  };
+
+  const generateSeries = (basePayload, selectedDays, weeksCount) => {
+    const anchor = parseDateStr(startDate);
+    if (!anchor) return [basePayload];
+    const anchorWeekday = anchor.getDay(); // 0 = Sun
+    const daysInt = selectedDays.map((d) => parseInt(d, 10));
+    const results = [];
+    for (let w = 0; w < weeksCount; w += 1) {
+      daysInt.forEach((weekday) => {
+        const offset = ((weekday - anchorWeekday + 7) % 7) + w * 7;
+        const dateObj = new Date(anchor);
+        dateObj.setDate(anchor.getDate() + offset);
+        results.push({
+          ...basePayload,
+          startDate: formatDateStr(dateObj),
+          endDate: formatDateStr(dateObj),
+        });
+      });
+    }
+    return results;
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -143,6 +197,8 @@ function AppointmentForm({
       clientPhone: selectedClientData?.telefon || base.clientPhone || '',
       serviceId: selectedServiceId || base.serviceId || null,
       service: selectedServiceData?.navn || base.service || '',
+      serviceType: selectedServiceData?.type || 'service',
+      forloebId: selectedServiceData?.forloebId || null,
       serviceDuration: selectedServiceData?.varighed || base.serviceDuration || '',
       servicePrice:
         typeof selectedServiceData?.pris === 'number'
@@ -156,13 +212,38 @@ function AppointmentForm({
           : typeof base.servicePriceInclVat === 'number'
             ? base.servicePriceInclVat
             : null,
+      color:
+        selectedServiceData?.color ||
+        selectedColor ||
+        base.color ||
+        '#3B82F6',
       notes,
+      participants: [
+        {
+          id: selectedClientId || base.clientId || 'client-1',
+          name: selectedClientData?.navn || base.client || 'Klient',
+          email: selectedClientData?.email || base.clientEmail || '',
+          phone: selectedClientData?.telefon || base.clientPhone || '',
+        },
+      ],
     };
 
-    if (mode === 'edit' && typeof onUpdate === 'function') {
-      onUpdate(appointmentPayload);
-    } else if (typeof onCreate === 'function') {
-      onCreate(appointmentPayload);
+    if (appointmentPayload.serviceType === 'forloeb' && recurrenceEnabled) {
+      const days = recurrenceDays.length ? recurrenceDays : ['1']; // fallback Monday
+      const weeksCount = Math.max(1, Number(recurrenceWeeks) || 1);
+      const series = generateSeries(appointmentPayload, days, weeksCount);
+      if (mode === 'edit' && typeof onUpdate === 'function') {
+        // For edit, just update single (to avoid accidental bulk overwrite)
+        onUpdate(appointmentPayload);
+      } else if (typeof onCreate === 'function') {
+        onCreate(series);
+      }
+    } else {
+      if (mode === 'edit' && typeof onUpdate === 'function') {
+        onUpdate(appointmentPayload);
+      } else if (typeof onCreate === 'function') {
+        onCreate(appointmentPayload);
+      }
     }
 
     onClose();
@@ -307,7 +388,11 @@ function AppointmentForm({
               </select>
               <span className="dropdown-arrow">▼</span>
             </div>
-            <button type="button" className="add-client-btn-small">
+            <button
+              type="button"
+              className="add-client-btn-small"
+              onClick={() => setShowAddClient(true)}
+            >
               Tilføj klient
             </button>
           </div>
@@ -331,6 +416,71 @@ function AppointmentForm({
             onServicesChange={setAvailableServices}
           />
         </div>
+
+
+        {selectedServiceData?.type === 'forloeb' && (
+          <div className="form-section forloeb-planner">
+            <div className="forloeb-planner__header">
+              <label className="form-label">Planlæg forløb (gentagende tider)</label>
+              <label className="toggle-row">
+                <input
+                  type="checkbox"
+                  checked={recurrenceEnabled}
+                  onChange={(e) => setRecurrenceEnabled(e.target.checked)}
+                />
+                Aktivér gentagelse
+              </label>
+            </div>
+            {recurrenceEnabled && (
+              <div className="forloeb-planner__body">
+                <div className="planner-row">
+                  <div className="planner-group">
+                    <label className="form-label">Uger (antal)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={recurrenceWeeks}
+                      onChange={(e) => setRecurrenceWeeks(e.target.value)}
+                      className="date-input"
+                    />
+                  </div>
+                  <div className="planner-group">
+                    <label className="form-label">Dage pr. uge</label>
+                    <div className="weekday-grid">
+                      {[
+                        { val: '1', label: 'Man' },
+                        { val: '2', label: 'Tir' },
+                        { val: '3', label: 'Ons' },
+                        { val: '4', label: 'Tor' },
+                        { val: '5', label: 'Fre' },
+                        { val: '6', label: 'Lør' },
+                        { val: '0', label: 'Søn' },
+                      ].map((d) => (
+                        <label key={d.val} className={`weekday-chip ${recurrenceDays.includes(d.val) ? 'selected' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={recurrenceDays.includes(d.val)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setRecurrenceDays((prev) => [...prev, d.val]);
+                              } else {
+                                setRecurrenceDays((prev) => prev.filter((x) => x !== d.val));
+                              }
+                            }}
+                          />
+                          {d.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <p className="planner-hint">
+                  Alle valgte dage oprettes fra startdatoen i {recurrenceWeeks || 1} uger med tiderne herover.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Notes */}
         <div className="form-section">
@@ -357,6 +507,20 @@ function AppointmentForm({
           </button>
         </div>
       </form>
+
+      {showAddClient && (
+        <AddKlient
+          isOpen={showAddClient}
+          onClose={() => setShowAddClient(false)}
+          onSave={(newClient) => {
+            if (newClient?.id) {
+              setSelectedClientId(newClient.id);
+            }
+            setShowAddClient(false);
+          }}
+          mode="create"
+        />
+      )}
     </div>
   );
 }

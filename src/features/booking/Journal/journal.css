@@ -270,6 +270,36 @@
   text-decoration: underline;
 }
 
+.journal-participants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.journal-participant-chip {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.journal-participant-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 14px rgba(15, 23, 42, 0.12);
+}
+
+.journal-participant-link {
+  font-size: 0.8rem;
+  color: #2563eb;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .journal-header-top {

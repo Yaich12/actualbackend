@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './bookingpage.css';
+import { BookingSidebarLayout } from '../../components/ui/BookingSidebarLayout';
 import AppointmentForm from './appointment/appointment';
 import Journal from './Journal/journal';
 import Indlæg from './Journal/indlæg/indlæg';
 import { useAuth } from '../../AuthContext';
-import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, where, getDocs, writeBatch, query } from 'firebase/firestore';
 import { db } from '../../firebase';
 import useAppointments from '../../hooks/useAppointments';
 import { combineDateAndTimeToIso } from '../../utils/appointmentFormat';
@@ -17,7 +18,6 @@ function BookingPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentView, setCurrentView] = useState('week'); // 'month' | 'week' | 'day'
   const [now, setNow] = useState(new Date());
-  const [activeNav, setActiveNav] = useState('kalender');
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState(null);
   const [nextAppointmentTemplate, setNextAppointmentTemplate] = useState(null);
@@ -26,6 +26,8 @@ function BookingPage() {
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showJournalEntryForm, setShowJournalEntryForm] = useState(false);
   const [journalEntryClient, setJournalEntryClient] = useState(null);
+  const [dragState, setDragState] = useState(null); // { mode, appointmentId, dayIndex, startClientX, startClientY, daysRect, columnRect, originalStart, originalEnd, currentStart, currentEnd }
+  const daysContainerRef = React.useRef(null);
   const { appointments = [] } = useAppointments(user?.uid || null);
   const { clients } = useUserClients();
   const START_HOUR = 6;
@@ -146,6 +148,97 @@ function BookingPage() {
     return map;
   }, [appointments]);
 
+  const deriveServiceType = (appointment) => {
+    if (!appointment) return 'service';
+    if (appointment.serviceType) return appointment.serviceType;
+    if (typeof appointment.serviceId === 'string' && appointment.serviceId.startsWith('forloeb:')) {
+      return 'forloeb';
+    }
+    return 'service';
+  };
+
+  const participantNames = (appointment) => {
+    const extractName = (p) => {
+      if (!p) return null;
+      if (typeof p === 'string') return p.trim() || null;
+      const firstLast =
+        p.firstName || p.lastName ? `${p.firstName || ''} ${p.lastName || ''}`.trim() : null;
+      return (
+        p.name ||
+        p.navn ||
+        p.fullName ||
+        p.client ||
+        p.title ||
+        p.label ||
+        p.participantName ||
+        p.displayName ||
+        firstLast
+      );
+    };
+
+    const names = [];
+    if (Array.isArray(appointment?.participants)) {
+      appointment.participants.forEach((p) => {
+        const name = extractName(p);
+        if (name) names.push(name);
+      });
+    }
+    if (appointment?.client) names.push(appointment.client);
+
+    const uniq = Array.from(new Set(names.filter(Boolean)));
+    return uniq.sort((a, b) => a.localeCompare(b, 'da', { sensitivity: 'base' }));
+  };
+
+  const toRgb = (hex) => {
+    if (!hex || typeof hex !== 'string') return null;
+    let h = hex.replace('#', '').trim();
+    if (h.length === 3) {
+      h = h
+        .split('')
+        .map((c) => c + c)
+        .join('');
+    }
+    if (h.length !== 6) return null;
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    if ([r, g, b].some((v) => Number.isNaN(v))) return null;
+    return { r, g, b };
+  };
+
+  const getSoftColorStyle = (color) => {
+    const rgb = toRgb(color);
+    if (!rgb) return {};
+    const { r, g, b } = rgb;
+    return {
+      backgroundColor: `rgba(${r}, ${g}, ${b}, 0.16)`,
+      borderColor: `rgba(${r}, ${g}, ${b}, 0.55)`,
+      color: '#0f172a',
+    };
+  };
+
+  const getServiceLabel = (appointment) => {
+    if (!appointment) return 'Aftale';
+    if (appointment.service) return appointment.service;
+    if (appointment.serviceType === 'forloeb') return 'Forløb';
+    return appointment.title || appointment.client || 'Aftale';
+  };
+
+  const groupDayEvents = (dayEvents) => {
+    const groups = {};
+    dayEvents.forEach((ev) => {
+      const startLabel = ev.startTime || formatTime(ev.startDateObj);
+      const endLabel = ev.endTime || formatTime(ev.endDateObj);
+      const type = deriveServiceType(ev);
+      const key = `${startLabel}|${endLabel}|${type}`;
+      if (!groups[key]) {
+        groups[key] = { events: [], start: ev.startDateObj, end: ev.endDateObj, type };
+      }
+      groups[key].events.push(ev);
+    });
+    return Object.values(groups);
+  };
+
   const getMinutesFromMidnight = (date) => date.getHours() * 60 + date.getMinutes();
 
   const getEventPosition = (startDate, endDate) => {
@@ -161,6 +254,113 @@ function BookingPage() {
       top: `${topPercent}%`,
       height: `${heightPercent}%`,
     };
+  };
+
+  const roundToStep = (value, step) => Math.round(value / step) * step;
+  const SNAP_STEP_MINUTES = 15;
+  const snapToStepMinutes = (totalMinutes, step = SNAP_STEP_MINUTES) =>
+    Math.round(totalMinutes / step) * step;
+
+  const updateDragPreview = (event) => {
+    setDragState((prev) => {
+      if (!prev) return null;
+
+      const { mode, originalStart, originalEnd, daysRect, columnRect, dayIndex } = prev;
+
+      const deltaY = event.clientY - prev.startClientY;
+      const deltaMinutesRaw = (deltaY / columnRect.height) * TOTAL_MINUTES;
+
+      let currentStart = new Date(originalStart);
+      let currentEnd = new Date(originalEnd);
+
+      const toTotalMinutes = (d) => d.getHours() * 60 + d.getMinutes();
+
+      if (mode === 'move') {
+        if (!daysRect) return prev;
+
+        const daysToRender = currentView === 'week' ? weekDays : [currentDate];
+        let targetDayIndex = dayIndex;
+
+        if (event.clientX >= daysRect.left && event.clientX <= daysRect.right) {
+          const relX = event.clientX - daysRect.left;
+          const columnWidth = daysRect.width / daysToRender.length;
+          targetDayIndex = Math.floor(relX / columnWidth);
+          targetDayIndex = Math.max(0, Math.min(targetDayIndex, daysToRender.length - 1));
+        }
+
+        const baseDay = (currentView === 'week' ? weekDays : [currentDate])[targetDayIndex];
+
+        currentStart = new Date(baseDay);
+        currentStart.setHours(originalStart.getHours(), originalStart.getMinutes(), 0, 0);
+
+        currentEnd = new Date(baseDay);
+        currentEnd.setHours(originalEnd.getHours(), originalEnd.getMinutes(), 0, 0);
+
+        const origStartMinutes = toTotalMinutes(currentStart);
+        const origEndMinutes = toTotalMinutes(currentEnd);
+        const duration = origEndMinutes - origStartMinutes;
+
+        const targetStartRaw = origStartMinutes + deltaMinutesRaw;
+        let targetStart = snapToStepMinutes(targetStartRaw, SNAP_STEP_MINUTES);
+
+        const minStart = START_HOUR * 60;
+        const maxEnd = END_HOUR * 60;
+        const maxStart = maxEnd - duration;
+
+        targetStart = Math.max(minStart, Math.min(targetStart, maxStart));
+        const targetEnd = targetStart + duration;
+
+        const sH = Math.floor(targetStart / 60);
+        const sM = targetStart % 60;
+        const eH = Math.floor(targetEnd / 60);
+        const eM = targetEnd % 60;
+
+        currentStart.setHours(sH, sM, 0, 0);
+        currentEnd.setHours(eH, eM, 0, 0);
+      } else if (mode === 'resize-start') {
+        const origStartMinutes = toTotalMinutes(originalStart);
+        const origEndMinutes = toTotalMinutes(originalEnd);
+
+        const targetStartRaw = origStartMinutes + deltaMinutesRaw;
+        let targetStart = snapToStepMinutes(targetStartRaw, SNAP_STEP_MINUTES);
+
+        const minStart = START_HOUR * 60;
+        const maxStart = origEndMinutes - SNAP_STEP_MINUTES;
+
+        targetStart = Math.max(minStart, Math.min(targetStart, maxStart));
+
+        const sH = Math.floor(targetStart / 60);
+        const sM = targetStart % 60;
+
+        currentStart = new Date(originalStart);
+        currentStart.setHours(sH, sM, 0, 0);
+        currentEnd = new Date(originalEnd);
+      } else if (mode === 'resize-end') {
+        const origStartMinutes = toTotalMinutes(originalStart);
+        const origEndMinutes = toTotalMinutes(originalEnd);
+
+        const targetEndRaw = origEndMinutes + deltaMinutesRaw;
+        let targetEnd = snapToStepMinutes(targetEndRaw, SNAP_STEP_MINUTES);
+
+        const minEnd = origStartMinutes + SNAP_STEP_MINUTES;
+        const maxEnd = END_HOUR * 60;
+
+        targetEnd = Math.max(minEnd, Math.min(targetEnd, maxEnd));
+
+        const eH = Math.floor(targetEnd / 60);
+        const eM = targetEnd % 60;
+
+        currentStart = new Date(originalStart);
+        currentEnd = new Date(originalEnd);
+        currentEnd.setHours(eH, eM, 0, 0);
+      }
+
+      return {
+        ...prev,
+        currentStart,
+        currentEnd,
+      };
+    });
   };
 
   const hourLabels = useMemo(
@@ -267,47 +467,66 @@ function BookingPage() {
       return;
     }
 
+    const items = Array.isArray(appointment) ? appointment : [appointment];
+
     try {
-      const startIso = combineDateAndTimeToIso(appointment.startDate, appointment.startTime);
-      const endIso = combineDateAndTimeToIso(appointment.endDate, appointment.endTime);
-
-      if (!startIso || !endIso) {
-        throw new Error('Invalid start or end time');
-      }
-
-      const title = appointment.client || appointment.service || 'Aftale';
-
-      const payload = {
-        therapistId: user.uid,
-        title,
-        client: appointment.client || title,
-        clientId: appointment.clientId || null,
-        clientEmail: appointment.clientEmail || '',
-        clientPhone: appointment.clientPhone || '',
-        service: appointment.service || '',
-        serviceId: appointment.serviceId || null,
-        serviceDuration: appointment.serviceDuration || '',
-        servicePrice:
-          typeof appointment.servicePrice === 'number' ? appointment.servicePrice : null,
-        servicePriceInclVat:
-          typeof appointment.servicePriceInclVat === 'number'
-            ? appointment.servicePriceInclVat
-            : null,
-        notes: appointment.notes || '',
-        start: startIso,
-        end: endIso,
-        startDate: appointment.startDate,
-        startTime: appointment.startTime,
-        endDate: appointment.endDate,
-        endTime: appointment.endTime,
-        status: 'booked',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-
       const appointmentsCollection = collection(db, 'users', user.uid, 'appointments');
-      console.log('[BookingPage] Creating appointment document', payload);
-      await addDoc(appointmentsCollection, payload);
+
+      for (const appt of items) {
+        const startIso = combineDateAndTimeToIso(appt.startDate, appt.startTime);
+        const endIso = combineDateAndTimeToIso(appt.endDate, appt.endTime);
+
+        if (!startIso || !endIso) {
+          throw new Error('Invalid start or end time');
+        }
+
+        const title = appt.client || appt.service || 'Aftale';
+
+        const payload = {
+          therapistId: user.uid,
+          title,
+          client: appt.client || title,
+          clientId: appt.clientId || null,
+          clientEmail: appt.clientEmail || '',
+          clientPhone: appt.clientPhone || '',
+          service: appt.service || '',
+          serviceId: appt.serviceId || null,
+          serviceType: deriveServiceType(appt),
+          serviceDuration: appt.serviceDuration || '',
+          servicePrice:
+            typeof appt.servicePrice === 'number' ? appt.servicePrice : null,
+          servicePriceInclVat:
+            typeof appt.servicePriceInclVat === 'number'
+              ? appt.servicePriceInclVat
+              : null,
+          participants: Array.isArray(appt.participants)
+            ? appt.participants
+            : appt.client
+            ? [
+                {
+                  id: appt.clientId || 'client-1',
+                  name: appt.client,
+                  email: appt.clientEmail || '',
+                  phone: appt.clientPhone || '',
+                },
+              ]
+            : [],
+          notes: appt.notes || '',
+          color: appt.color || null,
+          start: startIso,
+          end: endIso,
+          startDate: appt.startDate,
+          startTime: appt.startTime,
+          endDate: appt.endDate,
+          endTime: appt.endTime,
+          status: 'booked',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+
+        console.log('[BookingPage] Creating appointment document', payload);
+        await addDoc(appointmentsCollection, payload);
+      }
     } catch (error) {
       console.error('[BookingPage] Failed to create appointment', error);
     } finally {
@@ -342,6 +561,7 @@ function BookingPage() {
         clientPhone: appointment.clientPhone || '',
         service: appointment.service || '',
         serviceId: appointment.serviceId || null,
+        serviceType: deriveServiceType(appointment),
         serviceDuration: appointment.serviceDuration || '',
         servicePrice:
           typeof appointment.servicePrice === 'number' ? appointment.servicePrice : null,
@@ -349,7 +569,20 @@ function BookingPage() {
           typeof appointment.servicePriceInclVat === 'number'
             ? appointment.servicePriceInclVat
             : null,
+        participants: Array.isArray(appointment.participants)
+          ? appointment.participants
+          : appointment.client
+          ? [
+              {
+                id: appointment.clientId || 'client-1',
+                name: appointment.client,
+                email: appointment.clientEmail || '',
+                phone: appointment.clientPhone || '',
+              },
+            ]
+          : [],
         notes: appointment.notes || '',
+        color: appointment.color || null,
         start: startIso,
         end: endIso,
         status: appointment.status || 'booked',
@@ -371,9 +604,34 @@ function BookingPage() {
     }
 
     try {
-      const ref = doc(db, 'users', user.uid, 'appointments', appointment.id);
-      await deleteDoc(ref);
-      console.log('[BookingPage] Deleted appointment', appointment.id);
+      const appointmentsCollection = collection(db, 'users', user.uid, 'appointments');
+      const isForloeb =
+        deriveServiceType(appointment) === 'forloeb' ||
+        (typeof appointment.serviceId === 'string' && appointment.serviceId.startsWith('forloeb:'));
+
+      const deleteAll = isForloeb
+        ? window.confirm(
+            'Dette er en del af et forløb.\n\nOK: Slet hele klientens forløb.\nAnnuller: Slet kun denne dato.'
+          )
+        : false;
+
+      if (isForloeb && deleteAll) {
+        const filters = [where('serviceId', '==', appointment.serviceId || '')];
+        if (appointment.clientId) {
+          filters.push(where('clientId', '==', appointment.clientId));
+        }
+        const q = query(appointmentsCollection, ...filters);
+        const snap = await getDocs(q);
+        const batch = writeBatch(db);
+        snap.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+        console.log('[BookingPage] Deleted forløb series', appointment.serviceId, 'count:', snap.size);
+      } else {
+        const ref = doc(db, 'users', user.uid, 'appointments', appointment.id);
+        await deleteDoc(ref);
+        console.log('[BookingPage] Deleted appointment', appointment.id);
+      }
+
       setSelectedAppointment(null);
       setSelectedClientId(null);
       setSelectedClientFallback(null);
@@ -411,6 +669,118 @@ function BookingPage() {
     setSelectedAppointment(appointment);
     setShowAppointmentForm(false);
   };
+
+  const startMoveEvent = (event, appointment, dayIndex, startDateObj, endDateObj) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!daysContainerRef.current) return;
+
+    const daysRect = daysContainerRef.current.getBoundingClientRect();
+    const columnEl = event.currentTarget.closest('.time-grid-day-body');
+    if (!columnEl) return;
+    const columnRect = columnEl.getBoundingClientRect();
+
+    setDragState({
+      mode: 'move',
+      appointmentId: appointment.id,
+      dayIndex,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      daysRect,
+      columnRect,
+      originalStart: startDateObj,
+      originalEnd: endDateObj || startDateObj,
+      currentStart: startDateObj,
+      currentEnd: endDateObj || startDateObj,
+    });
+  };
+
+  const startResizeEvent = (event, appointment, dayIndex, startDateObj, endDateObj, mode) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const columnEl = event.currentTarget.closest('.time-grid-day-body');
+    if (!columnEl) return;
+    const columnRect = columnEl.getBoundingClientRect();
+
+    setDragState({
+      mode,
+      appointmentId: appointment.id,
+      dayIndex,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      columnRect,
+      originalStart: startDateObj,
+      originalEnd: endDateObj || startDateObj,
+      currentStart: startDateObj,
+      currentEnd: endDateObj || startDateObj,
+    });
+  };
+
+  const finishDrag = async (event) => {
+    if (!dragState) return;
+
+    const { appointmentId, currentStart, currentEnd } = dragState;
+
+    const appt = appointments.find((a) => a.id === appointmentId);
+    if (!appt || !currentStart || !currentEnd) {
+      setDragState(null);
+      return;
+    }
+
+    const pad = (n) => String(n).padStart(2, '0');
+    const toDateStr = (d) => `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
+    const toTimeStr = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const toTotalMinutes = (d) => d.getHours() * 60 + d.getMinutes();
+
+    let snappedStart = new Date(currentStart);
+    let snappedEnd = new Date(currentEnd);
+
+    const startTotal = snapToStepMinutes(toTotalMinutes(currentStart), SNAP_STEP_MINUTES);
+    const endTotal = snapToStepMinutes(toTotalMinutes(currentEnd), SNAP_STEP_MINUTES);
+
+    const sH = Math.floor(startTotal / 60);
+    const sM = startTotal % 60;
+    const eH = Math.floor(endTotal / 60);
+    const eM = endTotal % 60;
+
+    snappedStart.setHours(sH, sM, 0, 0);
+    snappedEnd.setHours(eH, eM, 0, 0);
+
+    const updated = {
+      ...appt,
+      startDate: toDateStr(snappedStart),
+      startTime: toTimeStr(snappedStart),
+      endDate: toDateStr(snappedEnd),
+      endTime: toTimeStr(snappedEnd),
+    };
+
+    setDragState(null);
+    await handleUpdateAppointment(updated);
+  };
+
+  useEffect(() => {
+    if (!dragState) return;
+
+    const handleMouseMove = (event) => {
+      event.preventDefault();
+      updateDragPreview(event);
+    };
+
+    const handleMouseUp = (event) => {
+      event.preventDefault();
+      finishDrag(event);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [dragState]);
 
   const handleCloseJournal = () => {
     setSelectedClientId(null);
@@ -528,11 +898,29 @@ function BookingPage() {
                         {dayAppointments.map((appointment) => (
                           <span
                             key={appointment.id}
-                            className="day-appointment-chip"
+                            className={`day-appointment-chip service-type-${deriveServiceType(appointment)}`}
                             onClick={() => handleAppointmentClick(appointment)}
-                            style={{ cursor: 'pointer' }}
+                            style={{
+                              cursor: 'pointer',
+                              ...(appointment.color ? getSoftColorStyle(appointment.color) : {}),
+                            }}
                           >
-                            {appointment.startTime} {appointment.client ? `– ${appointment.client.split(' ')[0]}` : '– Aftale'}
+                            {getServiceLabel(appointment)}{' '}
+                            {(() => {
+                              const names = participantNames(appointment);
+                              if (names.length > 1) {
+                                return (
+                                  <span className="chip-names-stack">
+                                    {names.map((n) => (
+                                      <span key={n} className="chip-name-line">
+                                        {n}
+                                      </span>
+                                    ))}
+                                  </span>
+                                );
+                              }
+                              return appointment.client ? `– ${appointment.client.split(' ')[0]}` : '– Aftale';
+                            })()}
                           </span>
                         ))}
                       </div>
@@ -562,8 +950,10 @@ function BookingPage() {
         ? ((nowMinutes - START_HOUR * 60) / TOTAL_MINUTES) * 100
         : null;
 
+    const gridClassName = `time-grid${currentView === 'day' ? ' is-day-view' : ''}`;
+
     return (
-      <div className="time-grid" style={gridStyle}>
+      <div className={gridClassName} style={gridStyle}>
         <div className="time-grid-header">
           <div className="time-grid-hours-spacer"></div>
           {daysToRender.map((day) => {
@@ -598,8 +988,8 @@ function BookingPage() {
               </div>
             ))}
           </div>
-          <div className="time-grid-days">
-            {daysToRender.map((day) => {
+          <div className="time-grid-days" ref={daysContainerRef}>
+            {daysToRender.map((day, dayIndex) => {
               const dayKey = formatDateKey(day);
               const dayEvents = (appointmentsByDay[dayKey] || [])
                 .slice()
@@ -614,6 +1004,8 @@ function BookingPage() {
                 isToday &&
                 nowTopPercent !== null;
 
+              const groupedEvents = groupDayEvents(dayEvents);
+
               return (
                 <div
                   key={dayKey}
@@ -626,28 +1018,131 @@ function BookingPage() {
                     {showNowLine && (
                       <div className="time-indicator-line" style={{ top: `${nowTopPercent}%` }} />
                     )}
-                    {dayEvents.map((appointmentItem) => {
-                      const { startDateObj, endDateObj, id } = appointmentItem;
-                      const style = startDateObj
-                        ? getEventPosition(startDateObj, endDateObj || startDateObj)
+                    {groupedEvents.map((group, idx) => {
+                      const first = group.events[0];
+                      const allNames = group.events.flatMap(participantNames).filter(Boolean);
+                      const uniqNames = Array.from(new Set(allNames));
+                      let visualStart = group.start;
+                      let visualEnd = group.end || group.start;
+
+                      const isDragged = dragState && dragState.appointmentId === first.id;
+
+                      if (isDragged) {
+                        if (dragState.currentStart) visualStart = dragState.currentStart;
+                        if (dragState.currentEnd) visualEnd = dragState.currentEnd;
+                      }
+
+                      const style = visualStart
+                        ? getEventPosition(visualStart, visualEnd || visualStart)
                         : {};
+
+                      let ghostStyle = null;
+                      if (isDragged && dragState.originalStart) {
+                        const ghostStart = dragState.originalStart;
+                        const ghostEnd = dragState.originalEnd || dragState.originalStart;
+                        ghostStyle = getEventPosition(ghostStart, ghostEnd || ghostStart);
+                      }
+
                       return (
-                        <div
-                          key={id}
-                          className="time-grid-event"
-                          style={style}
-                          onClick={() => handleAppointmentClick(appointmentItem)}
-                        >
-                          <span className="time-grid-event-time">
-                            {appointmentItem.startTime || formatTime(startDateObj)}
-                            {appointmentItem.endTime || endDateObj
-                              ? ` – ${appointmentItem.endTime || formatTime(endDateObj)}`
-                              : ''}
-                          </span>
-                          <span className="time-grid-event-title">
-                            {appointmentItem.client || appointmentItem.title || 'Aftale'}
-                          </span>
-                        </div>
+                        <React.Fragment key={`${dayKey}-${idx}`}>
+                          {isDragged && ghostStyle && (
+                            <div
+                              className={`time-grid-event time-grid-event-ghost service-type-${group.type}`}
+                              style={{
+                                ...ghostStyle,
+                              ...(first.color ? getSoftColorStyle(first.color) : {}),
+                              }}
+                            >
+                              <div className="time-grid-event-inner">
+                                <span className="time-grid-event-time">
+                                  {getServiceLabel(first)}
+                                </span>
+                                {uniqNames.length > 1 ? (
+                                  <div className="time-grid-event-names">
+                                    {uniqNames.map((n) => (
+                                      <div key={n} className="time-grid-event-name">
+                                        {n}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="time-grid-event-title">
+                                    {first.client || first.title || 'Aftale'}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          <div
+                            className={`time-grid-event service-type-${group.type} ${
+                              isDragged ? 'is-dragging' : ''
+                            }`}
+                            style={{
+                              ...style,
+                              ...(first.color ? getSoftColorStyle(first.color) : {}),
+                            }}
+                          >
+                            <div
+                              className="time-grid-event-resize-handle resize-handle-top"
+                              onMouseDown={(e) =>
+                                startResizeEvent(
+                                  e,
+                                  first,
+                                  daysToRender.indexOf(day),
+                                  group.start,
+                                  group.end || group.start,
+                                  'resize-start'
+                                )
+                              }
+                            />
+
+                            <div
+                              className="time-grid-event-inner"
+                              onMouseDown={(e) =>
+                                startMoveEvent(
+                                  e,
+                                  first,
+                                  daysToRender.indexOf(day),
+                                  group.start,
+                                  group.end || group.start
+                                )
+                              }
+                              onClick={() => handleAppointmentClick(first)}
+                            >
+                              <span className="time-grid-event-time">
+                                {getServiceLabel(first)}
+                              </span>
+                              {uniqNames.length > 1 ? (
+                                <div className="time-grid-event-names">
+                                  {uniqNames.map((n) => (
+                                    <div key={n} className="time-grid-event-name">
+                                      {n}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="time-grid-event-title">
+                                  {first.client || first.title || 'Aftale'}
+                                </span>
+                              )}
+                            </div>
+
+                            <div
+                              className="time-grid-event-resize-handle resize-handle-bottom"
+                              onMouseDown={(e) =>
+                                startResizeEvent(
+                                  e,
+                                  first,
+                                  daysToRender.indexOf(day),
+                                  group.start,
+                                  group.end || group.start,
+                                  'resize-end'
+                                )
+                              }
+                            />
+                          </div>
+                        </React.Fragment>
                       );
                     })}
                   </div>
@@ -661,221 +1156,128 @@ function BookingPage() {
   };
 
   return (
-    <div className="booking-page">
-      {/* Top Navigation Bar */}
-      <div className="booking-topbar">
-        <div className="topbar-left">
-          <button className="topbar-logo-btn" onClick={async () => {
-            await signOutUser();
-            navigate('/');
-          }}>
-            Forside
-          </button>
-        </div>
-        <div className="topbar-center">
-          <div className="topbar-navigation">
-            <button className="nav-arrow" onClick={() => navigateByView(-1)}>←</button>
-            <button className="nav-today" onClick={goToToday}>i dag</button>
-            <button className="nav-arrow" onClick={() => navigateByView(1)}>→</button>
-          </div>
-          <div className="topbar-view-toggle">
-            <button
-              className={`view-toggle-btn ${currentView === 'month' ? 'active' : ''}`}
-              onClick={() => setCurrentView('month')}
-            >
-              Måned
-            </button>
-            <button
-              className={`view-toggle-btn ${currentView === 'week' ? 'active' : ''}`}
-              onClick={() => setCurrentView('week')}
-            >
-              Uge
-            </button>
-            <button
-              className={`view-toggle-btn ${currentView === 'day' ? 'active' : ''}`}
-              onClick={() => setCurrentView('day')}
-            >
-              Dag
+    <BookingSidebarLayout>
+      <div className="booking-page">
+        {/* Top Navigation Bar */}
+        <div className="booking-topbar">
+          <div className="topbar-left">
+            <button className="topbar-logo-btn" onClick={async () => {
+              await signOutUser();
+              navigate('/');
+            }}>
+              Forside
             </button>
           </div>
-          <span className="current-month">
-            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-          </span>
+          <div className="topbar-center">
+            <div className="topbar-navigation">
+              <button className="nav-arrow" onClick={() => navigateByView(-1)}>←</button>
+              <button className="nav-today" onClick={goToToday}>i dag</button>
+              <button className="nav-arrow" onClick={() => navigateByView(1)}>→</button>
+            </div>
+            <div className="topbar-view-toggle">
+              <button
+                className={`view-toggle-btn ${currentView === 'month' ? 'active' : ''}`}
+                onClick={() => setCurrentView('month')}
+              >
+                Måned
+              </button>
+              <button
+                className={`view-toggle-btn ${currentView === 'week' ? 'active' : ''}`}
+                onClick={() => setCurrentView('week')}
+              >
+                Uge
+              </button>
+              <button
+                className={`view-toggle-btn ${currentView === 'day' ? 'active' : ''}`}
+                onClick={() => setCurrentView('day')}
+              >
+                Dag
+              </button>
+            </div>
+            <span className="current-month">
+              {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+            </span>
+          </div>
+          <div className="topbar-right">
+            <button 
+              className="create-appointment-btn"
+              onClick={() => {
+                setEditingAppointment(null);
+                setNextAppointmentTemplate(null);
+                setSelectedAppointment(null);
+                setSelectedClientId(null);
+                setSelectedClientFallback(null);
+                setShowAppointmentForm(true);
+              }}
+            >
+              <span className="plus-icon">+</span>
+              Opret aftale
+            </button>
+          </div>
         </div>
-        <div className="topbar-right">
-          <button 
-            className="create-appointment-btn"
-            onClick={() => {
-              setEditingAppointment(null);
-              setNextAppointmentTemplate(null);
-              setSelectedAppointment(null);
-              setSelectedClientId(null);
-              setSelectedClientFallback(null);
-              setShowAppointmentForm(true);
-            }}
-          >
-            <span className="plus-icon">+</span>
-            Opret aftale
-          </button>
-        </div>
-      </div>
 
-        <div className={`booking-content ${
-          showJournalEntryForm
-            ? 'with-journal-entry'
-            : (showAppointmentForm || derivedSelectedClient ? 'with-appointment-form' : '')
-        }`}>
-        {/* Left Sidebar */}
-        <div className="booking-sidebar">
-          <div className="sidebar-search">
-            <span className="search-icon">🔍</span>
-            <input type="text" placeholder="Søg" className="search-input" />
-          </div>
-
-          <div className="sidebar-notifications">
-            <span className="bell-icon">🔔</span>
-            <span>Notifikationer</span>
-          </div>
-
-          <div className="sidebar-section">
-            <div className="section-label">KLINIK</div>
-            <nav className="sidebar-nav">
-              <button 
-                className={`nav-item ${activeNav === 'kalender' ? 'active' : ''}`}
-                onClick={() => setActiveNav('kalender')}
-              >
-                <span className="nav-icon calendar-icon">📅</span>
-                <span className="nav-text">Kalender</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'klienter' ? 'active' : ''}`}
-                onClick={() => navigate('/booking/klienter')}
-              >
-                <span className="nav-icon">👤</span>
-                <span className="nav-text">Klienter</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'ydelser' ? 'active' : ''}`}
-                onClick={() => navigate('/booking/ydelser')}
-              >
-                <span className="nav-icon">🏷️</span>
-                <span className="nav-text">Ydelser</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'fakturaer' ? 'active' : ''}`}
-                onClick={() => setActiveNav('fakturaer')}
-              >
-                <span className="nav-icon">📄</span>
-                <span className="nav-text">Fakturaer</span>
-                <span className="nav-badge-launching">(launching soon)</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'statistik' ? 'active' : ''}`}
-                onClick={() => setActiveNav('statistik')}
-              >
-                <span className="nav-icon">📊</span>
-                <span className="nav-text">Statistik</span>
-                <span className="nav-badge-launching">(launching soon)</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'indstillinger' ? 'active' : ''}`}
-                onClick={() => setActiveNav('indstillinger')}
-              >
-                <span className="nav-icon">⚙️</span>
-                <span className="nav-text">Indstillinger</span>
-                <span className="nav-badge-launching">(launching soon)</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'apps' ? 'active' : ''}`}
-                onClick={() => setActiveNav('apps')}
-              >
-                <span className="nav-icon">📱</span>
-                <span className="nav-text">Apps</span>
-                <span className="nav-badge-launching">(launching soon)</span>
-              </button>
-            </nav>
-          </div>
-
-          {/* Clinic Section */}
-          <button
-            type="button"
-            className="sidebar-clinic"
-            onClick={() => navigate('/booking/settings')}
-          >
-            {userIdentity.photoURL ? (
-              <img
-                src={userIdentity.photoURL}
-                alt={userIdentity.name}
-                className="clinic-avatar"
+          <div className={`booking-content ${
+            showJournalEntryForm
+              ? 'with-journal-entry'
+              : (showAppointmentForm || derivedSelectedClient ? 'with-appointment-form' : '')
+          }`}>
+          {showJournalEntryForm ? (
+            <div className="booking-main booking-main-full">
+              <Indlæg
+                clientId={journalEntryClient?.id}
+                clientName={journalEntryClient?.navn}
+                onClose={handleCloseJournalEntry}
+                onSave={handleJournalEntrySaved}
               />
-            ) : (
-              <div className="clinic-avatar clinic-avatar-placeholder">
-                {userIdentity.initials}
-              </div>
-            )}
-            <div className="clinic-user-details">
-              <div className="clinic-user-name">{userIdentity.name}</div>
-              <div className="clinic-user-email">{userIdentity.email}</div>
             </div>
-          </button>
+          ) : (
+            <>
+              {/* Main Calendar Area */}
+              <div className="booking-main">
+                <div className="calendar-container">
+                  {currentView === 'month' ? renderMonthView() : renderTimeGrid()}
+                </div>
+              </div>
+
+              {/* Journal or Appointment Form */}
+              {derivedSelectedClient ? (
+                <div className="appointment-form-wrapper">
+                  <Journal
+                    selectedClient={derivedSelectedClient}
+                    selectedAppointment={selectedAppointment}
+                    onClose={handleCloseJournal}
+                    onCreateAppointment={handleCreateNextAppointment}
+                    onCreateJournalEntry={handleOpenJournalEntry}
+                    onEditAppointment={(appointment) => {
+                      setEditingAppointment(appointment);
+                      setShowAppointmentForm(true);
+                      setSelectedAppointment(null);
+                      setSelectedClientId(null);
+                      setSelectedClientFallback(null);
+                    }}
+                    onDeleteAppointment={handleDeleteAppointment}
+                  />
+                </div>
+              ) : showAppointmentForm && (
+                <div className="appointment-form-wrapper">
+                  <AppointmentForm
+                    initialAppointment={editingAppointment || nextAppointmentTemplate || null}
+                    mode={editingAppointment ? 'edit' : 'create'}
+                    onClose={() => {
+                      setShowAppointmentForm(false);
+                      setEditingAppointment(null);
+                      setNextAppointmentTemplate(null);
+                    }}
+                    onCreate={handleCreateAppointment}
+                    onUpdate={handleUpdateAppointment}
+                  />
+                </div>
+              )}
+            </>
+          )}
         </div>
-
-        {showJournalEntryForm ? (
-          <div className="booking-main booking-main-full">
-            <Indlæg
-              clientId={journalEntryClient?.id}
-              clientName={journalEntryClient?.navn}
-              onClose={handleCloseJournalEntry}
-              onSave={handleJournalEntrySaved}
-            />
-          </div>
-        ) : (
-          <>
-            {/* Main Calendar Area */}
-            <div className="booking-main">
-              <div className="calendar-container">
-                {currentView === 'month' ? renderMonthView() : renderTimeGrid()}
-              </div>
-            </div>
-
-            {/* Journal or Appointment Form */}
-            {derivedSelectedClient ? (
-              <div className="appointment-form-wrapper">
-                <Journal
-                  selectedClient={derivedSelectedClient}
-                  selectedAppointment={selectedAppointment}
-                  onClose={handleCloseJournal}
-                  onCreateAppointment={handleCreateNextAppointment}
-                  onCreateJournalEntry={handleOpenJournalEntry}
-                  onEditAppointment={(appointment) => {
-                    setEditingAppointment(appointment);
-                    setShowAppointmentForm(true);
-                    setSelectedAppointment(null);
-                    setSelectedClientId(null);
-                    setSelectedClientFallback(null);
-                  }}
-                  onDeleteAppointment={handleDeleteAppointment}
-                />
-              </div>
-            ) : showAppointmentForm && (
-              <div className="appointment-form-wrapper">
-                <AppointmentForm
-                  initialAppointment={editingAppointment || nextAppointmentTemplate || null}
-                  mode={editingAppointment ? 'edit' : 'create'}
-                  onClose={() => {
-                    setShowAppointmentForm(false);
-                    setEditingAppointment(null);
-                    setNextAppointmentTemplate(null);
-                  }}
-                  onCreate={handleCreateAppointment}
-                  onUpdate={handleUpdateAppointment}
-                />
-              </div>
-            )}
-          </>
-        )}
       </div>
-    </div>
+    </BookingSidebarLayout>
   );
 }
 

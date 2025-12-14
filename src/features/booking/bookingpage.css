@@ -1,9 +1,10 @@
 .booking-page {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-height: 100vh;
   width: 100%;
-  background-color: var(--bg-color, #ffffff);
+  background: #f8fafc;
   color: var(--text-color, #111827);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
   box-sizing: border-box;
@@ -147,11 +148,11 @@
 .booking-content {
   display: flex;
   flex: 1;
+  overflow: hidden;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
   transition: all 0.3s ease;
-  overflow: hidden;
   align-items: stretch;
 }
 
@@ -384,6 +385,26 @@
   background-color: #1e40af;
 }
 
+.nav-subitem {
+  padding-left: 28px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.nav-subitem .nav-icon {
+  font-size: 16px;
+  color: #64748b;
+}
+
+.nav-subitem.active {
+  background-color: #e2e8f0;
+  color: #1e293b;
+}
+
+.nav-subitem.active .nav-icon {
+  color: #1e293b;
+}
+
 .nav-text {
   flex: 1;
 }
@@ -611,6 +632,30 @@
   transition: all 0.2s;
 }
 
+.chip-names-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-left: 4px;
+  gap: 2px;
+}
+
+.chip-name-line {
+  line-height: 1.2;
+}
+
+.day-appointment-chip.service-type-service {
+  background-color: #e0e7ff;
+  color: #1e3a8a;
+  border: 1px solid #c7d2fe;
+}
+
+.day-appointment-chip.service-type-forloeb {
+  background-color: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
 .day-appointment-chip:hover {
   background-color: #d0e2ff;
   transform: translateY(-1px);
@@ -710,6 +755,14 @@
   background-color: #fff8dc;
 }
 
+.time-grid.is-day-view .time-grid-day-header.is-selected {
+  background-color: #ffffff;
+}
+
+.time-grid.is-day-view .time-grid-day.is-highlighted {
+  background-color: #ffffff;
+}
+
 .time-grid-day-body {
   position: relative;
   height: var(--time-grid-height);
@@ -740,7 +793,54 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  transition: box-shadow 0.2s, transform 0.2s, background-color 0.2s;
+  transition: box-shadow 0.2s, transform 0.2s, background-color 0.2s, top 0.08s linear,
+    height 0.08s linear;
+}
+
+.time-grid-event.is-dragging {
+  opacity: 0.95;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.35);
+  transition: none;
+  z-index: 2;
+}
+
+.time-grid-event-inner {
+  cursor: grab;
+}
+
+.time-grid-event-ghost {
+  opacity: 0.3;
+  border-style: dashed;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.time-grid-event-resize-handle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+.time-grid-event-resize-handle.resize-handle-top {
+  top: -4px;
+}
+
+.time-grid-event-resize-handle.resize-handle-bottom {
+  bottom: -4px;
+}
+
+.time-grid-event.service-type-service {
+  background-color: #e0e7ff;
+  border-color: #c7d2fe;
+  color: #1e3a8a;
+}
+
+.time-grid-event.service-type-forloeb {
+  background-color: #d1fae5;
+  border-color: #a7f3d0;
+  color: #065f46;
 }
 
 .time-grid-event:hover {
@@ -752,10 +852,25 @@
 .time-grid-event-time {
   font-weight: 700;
   font-size: 11px;
+  display: block;
 }
 
 .time-grid-event-title {
   font-size: 12px;
+  display: block;
+  margin-top: 2px;
+}
+
+.time-grid-event-names {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.time-grid-event-name {
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .time-indicator-line {

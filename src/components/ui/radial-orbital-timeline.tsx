@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { ArrowRight, Link, Zap } from "lucide-react";
 
@@ -49,6 +50,8 @@ export default function RadialOrbitalTimeline({
   timelineData,
 
 }: RadialOrbitalTimelineProps) {
+
+  const navigate = useNavigate();
 
   const [expandedItems, setExpandedItems] = useState<Record<number, boolean>>(
 
@@ -514,27 +517,29 @@ export default function RadialOrbitalTimeline({
 
                       <div className="flex justify-between items-center">
 
-                        <Badge
-
-                          className={`px-2 text-xs ${getStatusStyles(
-
-                            item.status
-
-                          )}`}
-
-                        >
-
-                          {item.status === "completed"
-
-                            ? "COMPLETE"
-
-                            : item.status === "in-progress"
-
-                            ? "IN PROGRESS"
-
-                            : "PENDING"}
-
-                        </Badge>
+                        {item.status === "completed" ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-6 px-2 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate("/getting-started/start");
+                            }}
+                          >
+                            Start your journey
+                          </Button>
+                        ) : (
+                          <Badge
+                            className={`px-2 text-xs ${getStatusStyles(
+                              item.status
+                            )}`}
+                          >
+                            {item.status === "in-progress"
+                              ? "IN PROGRESS"
+                              : "PENDING"}
+                          </Badge>
+                        )}
 
                         <span className="text-xs font-mono text-gray-600/70">
 

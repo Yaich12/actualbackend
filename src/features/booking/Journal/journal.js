@@ -113,6 +113,50 @@ function Journal({
     return `${formattedEndHours}:${minutes.toString().padStart(2, '0')}`;
   };
 
+  const isForloeb =
+    selectedAppointment &&
+    (selectedAppointment.serviceType === 'forloeb' ||
+      (typeof selectedAppointment.serviceId === 'string' && selectedAppointment.serviceId.startsWith('forloeb:')));
+
+  const participantList = (() => {
+    const extractName = (p) => {
+      if (!p) return null;
+      if (typeof p === 'string') return p.trim() || null;
+      const firstLast =
+        p.firstName || p.lastName ? `${p.firstName || ''} ${p.lastName || ''}`.trim() : null;
+      return (
+        p.name ||
+        p.navn ||
+        p.fullName ||
+        p.client ||
+        p.title ||
+        p.label ||
+        p.participantName ||
+        p.displayName ||
+        firstLast
+      );
+    };
+
+    const names = [];
+
+    if (Array.isArray(selectedAppointment?.participants)) {
+      selectedAppointment.participants.forEach((p) => {
+        const name = extractName(p);
+        if (name) names.push(name);
+      });
+    }
+
+    if (selectedAppointment?.client) {
+      names.push(selectedAppointment.client);
+    }
+    if (client?.navn) {
+      names.push(client.navn);
+    }
+
+    // Deduplicate while preserving order
+    return names.filter((n, idx) => n && names.indexOf(n) === idx);
+  })();
+
   return (
     <div className="journal-container">
       {/* Header */}
@@ -120,7 +164,11 @@ function Journal({
         <div className="journal-header-top">
           <div className="journal-client-info">
             <span className="journal-client-icon">👤</span>
-            <h2 className="journal-client-name">{client?.navn || 'Ukendt klient'}</h2>
+            <h2 className="journal-client-name">
+              {isForloeb && appointmentService?.navn
+                ? `Forløb: ${appointmentService.navn}`
+                : client?.navn || 'Ukendt klient'}
+            </h2>
           </div>
           <div className="journal-header-actions">
             <button className="journal-edit-client-btn">Rediger klient</button>
@@ -132,10 +180,35 @@ function Journal({
       {/* Content */}
       <div className="journal-content">
         {/* Client Contact */}
-        <div className="journal-section">
-          <div className="journal-label">E-mail</div>
-          <div className="journal-value">{client?.email || selectedAppointment?.clientEmail || '—'}</div>
-        </div>
+        {!isForloeb && (
+          <div className="journal-section">
+            <div className="journal-label">E-mail</div>
+            <div className="journal-value">{client?.email || selectedAppointment?.clientEmail || '—'}</div>
+          </div>
+        )}
+
+        {isForloeb && participantList.length > 0 && (
+          <div className="journal-section">
+            <div className="journal-label">Deltagere</div>
+            <div className="journal-participants">
+              {participantList.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  className="journal-participant-chip"
+                  onClick={() => {
+                    if (onCreateJournalEntry) {
+                      onCreateJournalEntry();
+                    }
+                  }}
+                >
+                  {name}
+                  <span className="journal-participant-link">Se journal</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Create Next Appointment Button */}
         <div className="journal-section">
@@ -164,11 +237,23 @@ function Journal({
               </div>
               {appointmentService && (
                 <>
-                  <div className="journal-appointment-service">{appointmentService.navn}</div>
-                  <div className="journal-appointment-price">
-                    DKK {formatPrice(appointmentService.pris)}
+                  <div className="journal-appointment-service">
+                    {isForloeb ? `Forløb: ${appointmentService.navn}` : appointmentService.navn}
                   </div>
+                  {!isForloeb && (
+                    <div className="journal-appointment-price">
+                      DKK {formatPrice(appointmentService.pris)}
+                    </div>
+                  )}
                 </>
+              )}
+              {isForloeb && participantList.length > 0 && (
+                <div className="journal-section">
+                  <div className="journal-label">Deltagere</div>
+                  <div className="journal-value">
+                    {participantList.join(', ')}
+                  </div>
+                </div>
               )}
               <div className="journal-appointment-actions">
                 <button 
@@ -214,25 +299,29 @@ function Journal({
               </div>
             </div>
 
-            {/* Booking Source */}
-            <div className="journal-section">
-              <div className="journal-booking-source">
-                <span className="journal-booking-icon">🔗</span>
-                <div>
-                  <div className="journal-label">Bookingkilde</div>
-                  <div className="journal-value">Denne aftale blev booket manuelt</div>
+            {!isForloeb && (
+              <>
+                {/* Booking Source */}
+                <div className="journal-section">
+                  <div className="journal-booking-source">
+                    <span className="journal-booking-icon">🔗</span>
+                    <div>
+                      <div className="journal-label">Bookingkilde</div>
+                      <div className="journal-value">Denne aftale blev booket manuelt</div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Last Appointment */}
-            <div className="journal-section">
-              <div className="journal-label">Sidste aftale</div>
-              <div className="journal-value">
-                {getDayName(selectedAppointment.startDate)} d. {formatDate(selectedAppointment.startDate)}, {formatTime(selectedAppointment.startTime)} til {getEndTime(selectedAppointment.startTime)}
-              </div>
-              <button className="journal-view-all-btn">Se alle tidligere aftaler (2)</button>
-            </div>
+                {/* Last Appointment */}
+                <div className="journal-section">
+                  <div className="journal-label">Sidste aftale</div>
+                  <div className="journal-value">
+                    {getDayName(selectedAppointment.startDate)} d. {formatDate(selectedAppointment.startDate)}, {formatTime(selectedAppointment.startTime)} til {getEndTime(selectedAppointment.startTime)}
+                  </div>
+                  <button className="journal-view-all-btn">Se alle tidligere aftaler (2)</button>
+                </div>
+              </>
+            )}
           </>
         )}
       </div>

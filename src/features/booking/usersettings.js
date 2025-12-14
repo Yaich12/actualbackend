@@ -3,6 +3,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import './usersettings.css';
 import './bookingpage.css';
+import { BookingSidebarLayout } from '../../components/ui/BookingSidebarLayout';
 import { db } from '../../firebase';
 import { useAuth } from '../../AuthContext';
 
@@ -16,9 +17,9 @@ function UserSettings() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [jobTitle, setJobTitle] = useState('');
+  const [clinicName, setClinicName] = useState('');
   const [colorMode, setColorMode] = useState('system');
   const [isSaving, setIsSaving] = useState(false);
-  const [activeNav, setActiveNav] = useState('indstillinger');
 
   const userIdentity = useMemo(() => {
     if (!user) {
@@ -82,6 +83,7 @@ function UserSettings() {
           setFullName(data.displayName || user.displayName || '');
           setEmail(data.email || user.email || '');
           setJobTitle(data.jobTitle || '');
+          setClinicName(data.clinicName || '');
           if (data.themeMode === 'light' || data.themeMode === 'dark' || data.themeMode === 'system') {
             setColorMode(data.themeMode);
             applyTheme(data.themeMode);
@@ -91,6 +93,7 @@ function UserSettings() {
           setFullName(user.displayName || '');
           setEmail(user.email || '');
           setJobTitle('');
+          setClinicName('');
         }
       } catch (error) {
         console.error('[UserSettings] Failed to load profile', error);
@@ -119,12 +122,15 @@ function UserSettings() {
     if (!user) return;
     setIsSaving(true);
     try {
-      await updateUserProfile({ fullName, jobTitle });
+      await updateUserProfile({ fullName, jobTitle, clinicName });
       const ref = doc(db, 'users', user.uid);
       await setDoc(
         ref,
         {
           themeMode: colorMode,
+          displayName: fullName,
+          jobTitle,
+          clinicName,
           updatedAt: serverTimestamp(),
         },
         { merge: true }
@@ -148,104 +154,24 @@ function UserSettings() {
   );
 
   return (
-    <div className="booking-page">
-      {/* Top Navigation Bar */}
-      <div className="booking-topbar">
-        <div className="topbar-left">
-          <button
-            className="topbar-logo-btn"
-            onClick={() => navigate('/booking')}
-          >
-            Forside
-          </button>
-        </div>
-        <div className="topbar-right" />
-      </div>
-
-      <div className="booking-content">
-        {/* Left Sidebar */}
-        <div className="booking-sidebar">
-          <div className="sidebar-search">
-            <span className="search-icon">🔍</span>
-            <input type="text" placeholder="Søg" className="search-input" />
+    <BookingSidebarLayout>
+      <div className="booking-page">
+        {/* Top Navigation Bar */}
+        <div className="booking-topbar">
+          <div className="topbar-left">
+            <button
+              className="topbar-logo-btn"
+              onClick={() => navigate('/booking')}
+            >
+              Forside
+            </button>
           </div>
-
-          <div className="sidebar-notifications">
-            <span className="bell-icon">🔔</span>
-            <span>Notifikationer</span>
-          </div>
-
-          <div className="sidebar-section">
-            <div className="section-label">KLINIK</div>
-            <nav className="sidebar-nav">
-              <button
-                className={`nav-item ${activeNav === 'kalender' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveNav('kalender');
-                  navigate('/booking');
-                }}
-              >
-                <span className="nav-icon calendar-icon">📅</span>
-                <span className="nav-text">Kalender</span>
-              </button>
-              <button
-                className={`nav-item ${activeNav === 'klienter' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveNav('klienter');
-                  navigate('/booking/klienter');
-                }}
-              >
-                <span className="nav-icon">👤</span>
-                <span className="nav-text">Klienter</span>
-              </button>
-              <button
-                className={`nav-item ${activeNav === 'ydelser' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveNav('ydelser');
-                  navigate('/booking/ydelser');
-                }}
-              >
-                <span className="nav-icon">🏷️</span>
-                <span className="nav-text">Ydelser</span>
-              </button>
-              <button
-                className={`nav-item ${activeNav === 'indstillinger' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveNav('indstillinger');
-                  navigate('/booking/settings');
-                }}
-              >
-                <span className="nav-icon">⚙️</span>
-                <span className="nav-text">Indstillinger</span>
-              </button>
-            </nav>
-          </div>
-
-          <button
-            type="button"
-            className="sidebar-clinic"
-            onClick={() => navigate('/booking/settings')}
-          >
-            {userIdentity.photoURL ? (
-              <img
-                src={userIdentity.photoURL}
-                alt={userIdentity.name}
-                className="clinic-avatar"
-              />
-            ) : (
-              <div className="clinic-avatar clinic-avatar-placeholder">
-                {userIdentity.initials}
-              </div>
-            )}
-            <div className="clinic-user-details">
-              <div className="clinic-user-name">{userIdentity.name}</div>
-              <div className="clinic-user-email">{userIdentity.email}</div>
-            </div>
-          </button>
+          <div className="topbar-right" />
         </div>
 
-        {/* Main Content */}
-        <div className="usersettings-main">
+        <div className="booking-content">
+          {/* Main Content */}
+          <div className="usersettings-main">
           <div className="usersettings-page">
             <div className="usersettings-card">
               <div className="usersettings-header">
@@ -283,6 +209,16 @@ function UserSettings() {
                 />
               </div>
 
+              <div className="usersettings-section">
+                <label className="usersettings-label">Kliniknavn</label>
+                <input
+                  className="usersettings-input"
+                  value={clinicName}
+                  onChange={(e) => setClinicName(e.target.value)}
+                  placeholder="Angiv navnet på klinikken"
+                />
+              </div>
+
               <div className="usersettings-divider" />
 
               <div className="usersettings-header">
@@ -312,6 +248,7 @@ function UserSettings() {
         </div>
       </div>
     </div>
+    </BookingSidebarLayout>
   );
 }
 

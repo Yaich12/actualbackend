@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import '../bookingpage.css';
 import './klientoversigt.css';
 import AddKlient from './addklient/addklient';
+import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayout';
 import { useAuth } from '../../../AuthContext';
 import { useUserClients } from './hooks/useUserClients';
 
@@ -14,22 +15,11 @@ function Klientoversigt() {
     loading: isLoadingClients,
     error: clientsLoadError,
   } = useUserClients();
-  const [activeNav, setActiveNav] = useState('klienter');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortColumn, setSortColumn] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
   const [showAddClient, setShowAddClient] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
-
-
-  const handleNavClick = (navItem) => {
-    setActiveNav(navItem);
-    if (navItem === 'kalender') {
-      navigate('/booking');
-    } else if (navItem === 'ydelser') {
-      navigate('/booking/ydelser');
-    }
-  };
 
   const handleSort = (column) => {
     if (sortColumn === column) {
@@ -106,117 +96,24 @@ function Klientoversigt() {
   }, [user]);
 
   return (
-    <div className="booking-page">
-      {/* Top Navigation Bar */}
-      <div className="booking-topbar">
-        <div className="topbar-left">
-          <button className="topbar-logo-btn" onClick={async () => {
-            await signOutUser();
-            navigate('/');
-          }}>
-            Forside
-          </button>
-        </div>
-        <div className="topbar-right" />
-      </div>
-
-      <div className="booking-content">
-        {/* Left Sidebar */}
-        <div className="booking-sidebar">
-          <div className="sidebar-search">
-            <span className="search-icon">🔍</span>
-            <input type="text" placeholder="Søg" className="search-input" />
+    <BookingSidebarLayout>
+      <div className="booking-page">
+        {/* Top Navigation Bar */}
+        <div className="booking-topbar">
+          <div className="topbar-left">
+            <button className="topbar-logo-btn" onClick={async () => {
+              await signOutUser();
+              navigate('/');
+            }}>
+              Forside
+            </button>
           </div>
-
-          <div className="sidebar-notifications">
-            <span className="bell-icon">🔔</span>
-            <span>Notifikationer</span>
-          </div>
-
-          <div className="sidebar-section">
-            <div className="section-label">KLINIK</div>
-            <nav className="sidebar-nav">
-              <button 
-                className={`nav-item ${activeNav === 'kalender' ? 'active' : ''}`}
-                onClick={() => handleNavClick('kalender')}
-              >
-                <span className="nav-icon calendar-icon">📅</span>
-                <span className="nav-text">Kalender</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'klienter' ? 'active' : ''}`}
-                onClick={() => handleNavClick('klienter')}
-              >
-                <span className="nav-icon">👤</span>
-                <span className="nav-text">Klienter</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'ydelser' ? 'active' : ''}`}
-                onClick={() => handleNavClick('ydelser')}
-              >
-                <span className="nav-icon">🏷️</span>
-                <span className="nav-text">Ydelser</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'fakturaer' ? 'active' : ''}`}
-                onClick={() => handleNavClick('fakturaer')}
-              >
-                <span className="nav-icon">📄</span>
-                <span className="nav-text">Fakturaer</span>
-                <span className="nav-badge-launching">(launching soon)</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'statistik' ? 'active' : ''}`}
-                onClick={() => handleNavClick('statistik')}
-              >
-                <span className="nav-icon">📊</span>
-                <span className="nav-text">Statistik</span>
-                <span className="nav-badge-launching">(launching soon)</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'indstillinger' ? 'active' : ''}`}
-                onClick={() => handleNavClick('indstillinger')}
-              >
-                <span className="nav-icon">⚙️</span>
-                <span className="nav-text">Indstillinger</span>
-                <span className="nav-badge-launching">(launching soon)</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'apps' ? 'active' : ''}`}
-                onClick={() => handleNavClick('apps')}
-              >
-                <span className="nav-icon">📱</span>
-                <span className="nav-text">Apps</span>
-                <span className="nav-badge-launching">(launching soon)</span>
-              </button>
-            </nav>
-          </div>
-
-          <button
-            type="button"
-            className="sidebar-clinic"
-            onClick={() => navigate('/booking/settings')}
-          >
-            {userIdentity.photoURL ? (
-              <img
-                src={userIdentity.photoURL}
-                alt={userIdentity.name}
-                className="clinic-avatar"
-              />
-            ) : (
-              <div className="clinic-avatar clinic-avatar-placeholder">
-                {userIdentity.initials}
-              </div>
-            )}
-            <div className="clinic-user-details">
-              <div className="clinic-user-name">{userIdentity.name}</div>
-              <div className="clinic-user-email">{userIdentity.email}</div>
-            </div>
-          </button>
+          <div className="topbar-right" />
         </div>
 
-        {/* Main Content Area - Client Overview */}
-        <div className="klientoversigt-main">
+        <div className="booking-content">
+          {/* Main Content Area - Client Overview */}
+          <div className="klientoversigt-main">
           {/* Page Header */}
           <div className="klientoversigt-header">
             <div className="header-left">
@@ -411,6 +308,7 @@ function Klientoversigt() {
         />
       )}
     </div>
+    </BookingSidebarLayout>
   );
 }
 
