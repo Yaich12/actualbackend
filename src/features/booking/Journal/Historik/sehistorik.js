@@ -153,7 +153,7 @@ function SeHistorik({ clientId, clientName, onClose, onCreateEntry }) {
                 <div className="sehistorik-entry-header">
                   <div className="sehistorik-entry-title-section">
                     <h3 className="sehistorik-entry-title">
-                      {entry.title} {formatDate(entry.date)}
+                      {entry.title} {formatDate(entry.date)} {entry.isDraft ? '(kladde)' : ''}
                     </h3>
                   </div>
                   <div className="sehistorik-entry-actions">

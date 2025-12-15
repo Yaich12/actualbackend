@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import './journal.css';
 import { useUserServices } from '../Ydelser/hooks/useUserServices';
 import SeHistorik from './Historik/sehistorik';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '../../../firebase';
+import { useAuth } from '../../../AuthContext';
 
 function Journal({
   selectedClient,
@@ -13,7 +16,33 @@ function Journal({
   onDeleteAppointment,
 }) {
   const [showHistory, setShowHistory] = useState(false);
+  const [journalEntryCount, setJournalEntryCount] = useState(null);
   const { services: savedServices } = useUserServices();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!user || !selectedClient?.id) {
+      setJournalEntryCount(null);
+      return () => {};
+    }
+
+    const entriesRef = collection(
+      db,
+      'users',
+      user.uid,
+      'clients',
+      selectedClient.id,
+      'journalEntries'
+    );
+
+    const unsubscribe = onSnapshot(
+      entriesRef,
+      (snap) => setJournalEntryCount(snap.size),
+      () => setJournalEntryCount(null)
+    );
+
+    return () => unsubscribe();
+  }, [user, selectedClient?.id]);
 
   if (!selectedClient) {
     return (
@@ -311,14 +340,20 @@ function Journal({
                     </div>
                   </div>
                 </div>
-
                 {/* Last Appointment */}
                 <div className="journal-section">
                   <div className="journal-label">Sidste aftale</div>
                   <div className="journal-value">
                     {getDayName(selectedAppointment.startDate)} d. {formatDate(selectedAppointment.startDate)}, {formatTime(selectedAppointment.startTime)} til {getEndTime(selectedAppointment.startTime)}
                   </div>
-                  <button className="journal-view-all-btn">Se alle tidligere aftaler (2)</button>
+                  <button
+                    type="button"
+                    className="journal-view-all-btn"
+                    onClick={() => setShowHistory(true)}
+                  >
+                    Se tidligere journaler
+                    {typeof journalEntryCount === 'number' ? ` (${journalEntryCount})` : ''}
+                  </button>
                 </div>
               </>
             )}

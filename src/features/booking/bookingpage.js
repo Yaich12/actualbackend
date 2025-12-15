@@ -1216,11 +1216,11 @@ function BookingPage() {
           </div>
         </div>
 
-          <div className={`booking-content ${
-            showJournalEntryForm
-              ? 'with-journal-entry'
-              : (showAppointmentForm || derivedSelectedClient ? 'with-appointment-form' : '')
-          }`}>
+        <div className={`booking-content ${
+          showJournalEntryForm
+            ? 'with-journal-entry'
+            : (showAppointmentForm || derivedSelectedClient ? 'with-appointment-form' : '')
+        }`}>
           {showJournalEntryForm ? (
             <div className="booking-main booking-main-full">
               <Indlæg

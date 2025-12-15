@@ -1,7 +1,11 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: ['class'],
-  content: ['./src/**/*.{js,jsx,ts,tsx}'],
+  // Broaden content globs so Tailwind picks up classes in JS/TS/JSX/TSX, CSS and public HTML.
+  content: [
+    './public/index.html',
+    './src/**/*.{js,jsx,ts,tsx,css}',
+  ],
   theme: {
     extend: {
       colors: {
