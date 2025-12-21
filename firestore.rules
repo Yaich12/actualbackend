@@ -2,18 +2,38 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
 
-    // This rule allows anyone with your Firestore database reference to view, edit,
-    // and delete all data in your Firestore database. It is useful for getting
-    // started, but it is configured to expire after 30 days because it
-    // leaves your app open to attackers. At that time, all client
-    // requests to your Firestore database will be denied.
-    //
-    // Make sure to write security rules for your app before that time, or else
-    // all client requests to your Firestore database will be denied until you Update
-    // your rules
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Main data model in this app:
+     * users/{userId}/...
+     *
+     * Examples used in code:
+     * - users/{userId}                      (profile)
+     * - users/{userId}/clients/{clientId}
+     * - users/{userId}/clients/{clientId}/journalEntries/{entryId}
+     * - users/{userId}/appointments/{appointmentId}
+     * - users/{userId}/services/{serviceId}
+     * - users/{userId}/forloeb/{forloebId}
+     */
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+
+      // All nested subcollections under the user are also owner-only.
+      match /{document=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // Default deny for anything outside /users/{userId}/...
     match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2025, 12, 18);
+      allow read, write: if false;
     }
   }
 }

@@ -1,0 +1,198 @@
+{
+  "language": {
+    "title": "Escolha seu idioma",
+    "subtitle": "Você pode mudar isso mais tarde nas configurações."
+  },
+  "onboarding": {
+    "eyebrow": "Configuração da conta",
+    "topLabel": "Configuração da conta",
+    "loading": "Carregando…",
+    "actions": {
+      "close": "Fechar",
+      "continue": "Continuar",
+      "finish": "Concluir",
+      "saving": "Salvando…"
+    },
+    "aria": {
+      "back": "Voltar",
+      "previous": "Anterior",
+      "next": "Próximo"
+    },
+    "steps": {
+      "business": {
+        "title": "Qual é o nome do seu negócio?",
+        "subtitle": "Esta é a marca que seus clientes verão. O faturamento e o nome legal podem ser adicionados mais tarde.",
+        "nameLabel": "Nome da empresa",
+        "namePlaceholder": "Ex.: Clínica Selma",
+        "websiteLabel": "Site (opcional)",
+        "websitePlaceholder": "www.seusite.com"
+      },
+      "categories": {
+        "title": "Escolha a opção que melhor se encaixa no seu negócio",
+        "subtitle": "Você pode alterar isso depois",
+        "hint": "{count}/{max} selecionado(s)",
+        "options": ["Fisioterapeuta", "Osteopata", "Quiropraxista"]
+      },
+      "accountType": {
+        "title": "Escolha o tipo de conta",
+        "subtitle": "Isso nos ajuda a configurar sua conta corretamente",
+        "solo": "Sou autônomo(a)",
+        "team": "Tenho uma equipe"
+      },
+      "teamSize": {
+        "title": "Quantos funcionários você tem",
+        "options": ["2-5 pessoas", "6-10 pessoas", "11+ pessoas"]
+      },
+      "serviceModel": {
+        "title": "Onde você oferece seus serviços?",
+        "options": [
+          "Os clientes me visitam em um local físico",
+          "Eu me desloco para visitar meus clientes",
+          "Ofereço serviços virtuais online"
+        ]
+      },
+      "address": {
+        "title": "Informe a localização física da sua empresa",
+        "subtitle": "Adicione seu local principal para que os clientes possam encontrá-lo facilmente. Você pode adicionar mais locais depois.",
+        "label": "Qual é o endereço da sua empresa?",
+        "placeholder": "Digite o endereço"
+      },
+      "software": {
+        "title": "Qual software você usa atualmente?",
+        "subtitle": "Se você quiser mudar, podemos ajudar a acelerar a configuração e importar seus dados para sua nova conta Selma.",
+        "options": [
+          "Acuity",
+          "Booksy",
+          "Calendly",
+          "Goldie",
+          "Janeapp",
+          "Mindbody",
+          "Salon Iris",
+          "Setmore",
+          "Shortcuts",
+          "Square",
+          "Styleseat",
+          "Timely",
+          "Treatwell",
+          "Vagaro",
+          "Zenoti",
+          "Não uso nenhum software",
+          "Outro"
+        ]
+      },
+      "heardFrom": {
+        "title": "Como você conheceu a Selma?",
+        "options": [
+          "Indicação de um amigo",
+          "Mecanismo de busca (ex.: Google ou Yahoo)",
+          "Redes sociais",
+          "Anúncio por e-mail",
+          "Anúncio em revista",
+          "Sites de avaliações (ex.: Capterra, Trustpilot)",
+          "Chatbot de IA (ex.: ChatGPT, Gemini, DeepSeek)",
+          "Outro"
+        ]
+      }
+    },
+    "completion": {
+      "title": "Sua empresa está pronta!",
+      "subtitle": "Aproveite 14 dias grátis do Selma para empresas",
+      "button": "Concluir"
+    }
+  },
+  "booking": {
+    "sidebar": {
+      "calendar": "Calendário",
+      "clients": "Clientes",
+      "services": "Serviços",
+      "forloeb": "Programas",
+      "invoices": "Faturas",
+      "stats": "Estatísticas",
+      "team": "Equipe",
+      "settings": "Configurações",
+      "apps": "Aplicativos",
+      "catalog": "Catálogo",
+      "logout": "Sair"
+    },
+    "topbar": {
+      "confirmEmail": "Confirmar seu endereço de e-mail",
+      "protectAccount": "Proteja sua conta",
+      "profile": "Meu perfil",
+      "personalSettings": "Configurações pessoais",
+      "help": "Ajuda e suporte",
+      "logout": "Sair",
+      "defaultUser": "Usuário Selma",
+      "clinicSettings": "Configurações da clínica"
+    },
+    "calendar": {
+      "today": "Hoje",
+      "previous": "Anterior",
+      "next": "Próximo",
+      "filters": "Filtros",
+      "freeze": "Congelar",
+      "settings": "Configurações",
+      "refresh": "Atualizar",
+      "viewLabel": "Visualização do calendário",
+      "view": {
+        "month": "Mês",
+        "week": "Semana",
+        "day": "Dia"
+      },
+      "add": "Adicionar",
+      "entireTeam": "Toda a equipe",
+      "teamOnDuty": "Equipe em serviço",
+      "members": "Funcionários",
+      "clearAll": "Limpar tudo",
+      "appointment": "Consulta",
+      "program": "Programa",
+      "memberFallback": "Funcionário",
+      "you": "Você",
+      "notLoggedIn": "Não conectado",
+      "loginToContinue": "Faça login para continuar"
+    }
+  },
+  "settings": {
+    "title": "Configurações",
+    "close": "Fechar",
+    "save": "Salvar",
+    "saving": "Salvando…",
+    "sections": {
+      "profile": "Perfil",
+      "account": "Configuração da conta",
+      "appearance": "Aparência",
+      "language": "Idioma"
+    },
+    "profile": {
+      "title": "Editar seu perfil online",
+      "avatarTitle": "Seu avatar",
+      "avatarSubtitle": "Atualize seu avatar para o seu perfil profissional.",
+      "changePhoto": "Alterar foto",
+      "remove": "Remover",
+      "fullName": "Nome completo",
+      "fullNamePlaceholder": "Digite seu nome completo",
+      "email": "E-mail",
+      "clinicName": "Nome da clínica",
+      "clinicPlaceholder": "Digite o nome da clínica"
+    },
+    "account": {
+      "title": "Configuração da conta",
+      "website": "Site",
+      "websitePlaceholder": "www.seusite.com",
+      "category": "Categoria",
+      "categoryPlaceholder": "Escolha a categoria",
+      "address": "Endereço",
+      "addressPlaceholder": "Digite o endereço"
+    },
+    "appearance": {
+      "title": "Aparência",
+      "subtitle": "Escolha como a Selma deve parecer",
+      "light": "Claro",
+      "system": "Igual ao sistema",
+      "dark": "Escuro"
+    },
+    "language": {
+      "title": "Idioma",
+      "label": "Idioma preferido"
+    }
+  }
+}

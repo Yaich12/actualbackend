@@ -49,6 +49,14 @@ const mapAppointmentDoc = (doc) => {
   return {
     id: doc.id,
     therapistId: data.therapistId || null,
+    calendarOwner:
+      data.calendarOwner ||
+      data.ownerName ||
+      data.staffName ||
+      data.employeeName ||
+      data.teamMember ||
+      data.assignedTo ||
+      null,
     client: data.client || data.title || '',
     clientId: data.clientId ?? null,
     clientEmail: data.clientEmail || '',
@@ -140,5 +148,4 @@ const useAppointments = (therapistId) => {
 };
 
 export default useAppointments;
-
 

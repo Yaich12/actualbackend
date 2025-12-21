@@ -2,3 +2,4 @@ firebase-functions @ git+https://github.com/firebase/firebase-functions-python.g
 requests>=2.32.0
 openai>=1.0.0
 python-dotenv>=1.0.0
+firebase-admin>=6.6.0

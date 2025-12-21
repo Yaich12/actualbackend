@@ -23,11 +23,6 @@
 .journal-client-info {
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-
-.journal-client-icon {
-  font-size: 20px;
 }
 
 .journal-client-name {
@@ -35,6 +30,61 @@
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
+}
+
+.journal-client-prefix {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.journal-client-value {
+  color: var(--text-primary);
+}
+
+.journal-inline-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.journal-inline-input {
+  min-width: 220px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.journal-inline-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.journal-inline-btn {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.journal-inline-btn:hover {
+  background-color: #f9fafb;
+}
+
+.journal-inline-btn.secondary {
+  background-color: #f3f4f6;
+}
+
+.journal-inline-error {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #b91c1c;
+  font-weight: 500;
 }
 
 .journal-header-actions {
@@ -121,11 +171,20 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .journal-create-appointment-btn:hover {
   background-color: #2563eb;
   border-color: #2563eb;
+}
+
+.journal-create-appointment-btn .journal-create-entry-icon {
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .journal-create-actions {
@@ -134,6 +193,7 @@
   gap: 8px;
 }
 .journal-create-entry-btn.inline {
+  width: 100%;
   padding: 12px 16px;
   border: 1px solid #d1d5db;
   background-color: #ffffff;
@@ -143,9 +203,9 @@
   color: #374151;
   cursor: pointer;
   transition: all 0.2s;
-  margin-left: 12px;
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
 }
 
@@ -188,57 +248,116 @@
 
 .journal-appointment-actions {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.journal-summary {
+  margin-top: 14px;
+}
+
+.journal-summary-error {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  background-color: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.journal-summary-card {
+  margin-top: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+  padding: 12px 12px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.journal-summary-card h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.journal-summary-card pre {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap; /* wrap + preserve newlines */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
 }
 
 .journal-action-btn {
-  padding: 8px 12px;
-  border: 1px solid var(--border-subtle);
-  background-color: var(--bg-surface);
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
-  color: var(--text-primary);
+  color: #374151;
   cursor: pointer;
   transition: all 0.2s;
+  text-align: center;
 }
 
 .journal-action-btn:hover {
-  background-color: var(--bg-subtle);
-  border-color: var(--border-subtle);
+  background-color: #f9fafb;
+  border-color: #9ca3af;
 }
 
 .journal-delete-btn {
-  background-color: #ffe5e5;
-  color: #b00020;
-  border-color: #f8bcbc;
+  background-color: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 600;
 }
 
 .journal-delete-btn:hover {
-  background-color: #ffcccc;
-  border-color: #f59aa0;
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.journal-delete-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.18);
+}
+
+.journal-delete-icon {
+  flex: 0 0 auto;
 }
 
 .journal-icon-btn {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 1px solid var(--border-subtle);
-  background-color: var(--bg-surface);
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
   border-radius: 6px;
-  font-size: 16px;
+  font-size: 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  color: var(--text-primary);
+  color: #374151;
 }
 
 .journal-icon-btn:hover {
-  background-color: var(--bg-subtle);
-  border-color: var(--border-subtle);
+  background-color: #f9fafb;
+  border-color: #9ca3af;
 }
 
 .journal-booking-source {
@@ -272,7 +391,9 @@
 
 .journal-participants {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
   gap: 8px;
 }
 
@@ -285,7 +406,8 @@
   color: #0f172a;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 10px;
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.2s ease;
 }

@@ -1,0 +1,198 @@
+{
+  "language": {
+    "title": "Välj språk",
+    "subtitle": "Du kan ändra detta senare i inställningarna."
+  },
+  "onboarding": {
+    "eyebrow": "Kontoinställning",
+    "topLabel": "Kontoinställning",
+    "loading": "Laddar…",
+    "actions": {
+      "close": "Stäng",
+      "continue": "Fortsätt",
+      "finish": "Klart",
+      "saving": "Sparar…"
+    },
+    "aria": {
+      "back": "Tillbaka",
+      "previous": "Föregående",
+      "next": "Nästa"
+    },
+    "steps": {
+      "business": {
+        "title": "Vad heter ditt företag?",
+        "subtitle": "Det här är varumärket som dina kunder ser. Fakturering och juridiskt namn kan läggas till senare.",
+        "nameLabel": "Företagsnamn",
+        "namePlaceholder": "t.ex. Selma Klinik",
+        "websiteLabel": "Webbplats (valfritt)",
+        "websitePlaceholder": "www.dinwebbplats.se"
+      },
+      "categories": {
+        "title": "Välj det alternativ som passar ditt företag bäst",
+        "subtitle": "Du kan ändra detta senare",
+        "hint": "{count}/{max} valda",
+        "options": ["Fysioterapeut", "Osteopat", "Kiropraktor"]
+      },
+      "accountType": {
+        "title": "Välj kontotyp",
+        "subtitle": "Detta hjälper oss att ställa in ditt konto korrekt",
+        "solo": "Jag är egenföretagare",
+        "team": "Jag har ett team"
+      },
+      "teamSize": {
+        "title": "Hur många medarbetare har du",
+        "options": ["2-5 personer", "6-10 personer", "11+ personer"]
+      },
+      "serviceModel": {
+        "title": "Var erbjuder du dina tjänster?",
+        "options": [
+          "Kunder besöker mig på en fysisk plats",
+          "Jag reser runt och besöker mina kunder",
+          "Jag erbjuder virtuella tjänster online"
+        ]
+      },
+      "address": {
+        "title": "Ange företagets fysiska plats",
+        "subtitle": "Lägg till din primära plats så att kunder enkelt kan hitta dig. Du kan lägga till fler platser senare.",
+        "label": "Var finns företagets adress?",
+        "placeholder": "Ange adress"
+      },
+      "software": {
+        "title": "Vilken programvara använder du för närvarande?",
+        "subtitle": "Om du vill byta kan vi hjälpa till att snabba upp din företagsuppsättning och importera dina data till ditt nya Selma-konto.",
+        "options": [
+          "Acuity",
+          "Booksy",
+          "Calendly",
+          "Goldie",
+          "Janeapp",
+          "Mindbody",
+          "Salon Iris",
+          "Setmore",
+          "Shortcuts",
+          "Square",
+          "Styleseat",
+          "Timely",
+          "Treatwell",
+          "Vagaro",
+          "Zenoti",
+          "Jag använder ingen programvara",
+          "Annat"
+        ]
+      },
+      "heardFrom": {
+        "title": "Hur hörde du talas om Selma?",
+        "options": [
+          "Rekommenderad av en vän",
+          "Sökmotor (t.ex. Google eller Yahoo)",
+          "Sociala medier",
+          "Annons i e-post",
+          "Annons i en tidskrift",
+          "Recensionssajter (t.ex. Capterra, Trustpilot)",
+          "AI-chattbot (t.ex. ChatGPT, Gemini, DeepSeek)",
+          "Annat"
+        ]
+      }
+    },
+    "completion": {
+      "title": "Ditt företag är klart!",
+      "subtitle": "Få 14 dagars gratis användning av Selma för företag",
+      "button": "Klart"
+    }
+  },
+  "booking": {
+    "sidebar": {
+      "calendar": "Kalender",
+      "clients": "Kunder",
+      "services": "Tjänster",
+      "forloeb": "Program",
+      "invoices": "Fakturor",
+      "stats": "Statistik",
+      "team": "Team",
+      "settings": "Inställningar",
+      "apps": "Appar",
+      "catalog": "Katalog",
+      "logout": "Logga ut"
+    },
+    "topbar": {
+      "confirmEmail": "Bekräfta din e-postadress",
+      "protectAccount": "Skydda ditt konto",
+      "profile": "Min profil",
+      "personalSettings": "Personliga inställningar",
+      "help": "Hjälp och support",
+      "logout": "Logga ut",
+      "defaultUser": "Selma-användare",
+      "clinicSettings": "Klinikinställningar"
+    },
+    "calendar": {
+      "today": "Idag",
+      "previous": "Föregående",
+      "next": "Nästa",
+      "filters": "Filter",
+      "freeze": "Frys",
+      "settings": "Inställningar",
+      "refresh": "Uppdatera",
+      "viewLabel": "Kalendervy",
+      "view": {
+        "month": "Månad",
+        "week": "Vecka",
+        "day": "Dag"
+      },
+      "add": "Lägg till",
+      "entireTeam": "Hela teamet",
+      "teamOnDuty": "Team i tjänst",
+      "members": "Medarbetare",
+      "clearAll": "Rensa alla",
+      "appointment": "Bokning",
+      "program": "Program",
+      "memberFallback": "Medarbetare",
+      "you": "Du",
+      "notLoggedIn": "Inte inloggad",
+      "loginToContinue": "Logga in för att fortsätta"
+    }
+  },
+  "settings": {
+    "title": "Inställningar",
+    "close": "Stäng",
+    "save": "Spara",
+    "saving": "Sparar…",
+    "sections": {
+      "profile": "Profil",
+      "account": "Kontoinställning",
+      "appearance": "Utseende",
+      "language": "Språk"
+    },
+    "profile": {
+      "title": "Redigera din onlineprofil",
+      "avatarTitle": "Din avatar",
+      "avatarSubtitle": "Uppdatera din avatar för din professionella profil.",
+      "changePhoto": "Byt bild",
+      "remove": "Ta bort",
+      "fullName": "Fullständigt namn",
+      "fullNamePlaceholder": "Ange ditt fullständiga namn",
+      "email": "E-post",
+      "clinicName": "Kliniknamn",
+      "clinicPlaceholder": "Ange klinikens namn"
+    },
+    "account": {
+      "title": "Kontoinställning",
+      "website": "Webbplats",
+      "websitePlaceholder": "www.dinwebbplats.se",
+      "category": "Kategori",
+      "categoryPlaceholder": "Välj kategori",
+      "address": "Adress",
+      "addressPlaceholder": "Ange adress"
+    },
+    "appearance": {
+      "title": "Utseende",
+      "subtitle": "Välj hur Selma ska se ut",
+      "light": "Ljust",
+      "system": "Matcha system",
+      "dark": "Mörkt"
+    },
+    "language": {
+      "title": "Språk",
+      "label": "Föredraget språk"
+    }
+  }
+}

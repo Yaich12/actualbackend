@@ -1,11 +1,28 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  serverTimestamp,
+  doc,
+  updateDoc,
+  deleteDoc,
+  getDoc,
+} from 'firebase/firestore';
 import './addklient.css';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
 import { useLoadScript, Autocomplete } from '@react-google-maps/api';
 
 const libraries = ['places'];
+
+const getEmptyClientensOplysninger = () => ({
+  diagnose: '',
+  foersteKonsultation: '',
+  maalForForloebet: '',
+  tilknyttetTerapeut: '',
+  startdato: '',
+  forventetSlutdato: '',
+});
 
 const sanitizeIdentifier = (value) =>
   value
@@ -86,11 +103,16 @@ function AddKlient({
   initialClient = null,
   clientId = null,
   onDelete,
+  editView = 'forloeb', // 'personal' or 'forloeb' - only used when mode === 'edit'
 }) {
   const [formData, setFormData] = useState(() => getInitialFormData(mode, initialClient));
+  const [clientensOplysninger, setClientensOplysninger] = useState(() =>
+    getEmptyClientensOplysninger()
+  );
 
   const [showAddressLine2, setShowAddressLine2] = useState(Boolean(initialClient?.adresse2));
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingClientensOplysninger, setIsLoadingClientensOplysninger] = useState(false);
   const [saveError, setSaveError] = useState('');
   const { user } = useAuth();
 
@@ -134,11 +156,109 @@ function AddKlient({
     }));
   };
 
+  const handleClientensOplysningerChange = (e) => {
+    const { name, value } = e.target;
+    setClientensOplysninger((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
   useEffect(() => {
     setFormData(getInitialFormData(mode, initialClient));
     setShowAddressLine2(Boolean(initialClient?.adresse2));
+    setClientensOplysninger(getEmptyClientensOplysninger());
     setSaveError('');
   }, [mode, initialClient]);
+
+  useEffect(() => {
+    if (mode !== 'edit') {
+      setIsLoadingClientensOplysninger(false);
+      return;
+    }
+
+    if (!user?.uid || !clientId) {
+      setSaveError('Manglende klient-id – kunne ikke hente klientens oplysninger.');
+      setIsLoadingClientensOplysninger(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadClientData = async () => {
+      setIsLoadingClientensOplysninger(true);
+      setSaveError('');
+
+      try {
+        const clientRef = doc(db, 'users', user.uid, 'clients', clientId);
+        const snapshot = await getDoc(clientRef);
+
+        if (!snapshot.exists()) {
+          setSaveError('Klienten blev ikke fundet.');
+          return;
+        }
+
+        const data = snapshot.data() || {};
+
+        if (cancelled) return;
+
+        if (editView === 'personal') {
+          // Load personal information
+          const telefonLand = data.telefonLand || '+45';
+          const telefonValue = data.telefon || '';
+          const telefonUdenLand = telefonValue.startsWith(telefonLand)
+            ? telefonValue.slice(telefonLand.length).trim().replace(/^\s+/, '')
+            : telefonValue;
+
+          setFormData({
+            navn: data.navn || '',
+            cpr: data.cpr || '',
+            email: data.email || '',
+            telefon: telefonUdenLand || '',
+            telefonLand,
+            adresse: data.adresse || '',
+            adresse2: data.adresse2 || '',
+            postnummer: data.postnummer || '',
+            by: data.by || '',
+            land: data.land || 'Danmark',
+            status: data.status || 'Aktiv',
+          });
+          setShowAddressLine2(Boolean(data.adresse2));
+        } else {
+          // Load forløbsoplysninger
+          const stored = data.clientensoplysninger || {};
+          setClientensOplysninger({
+            ...getEmptyClientensOplysninger(),
+            diagnose: typeof stored.diagnose === 'string' ? stored.diagnose : '',
+            foersteKonsultation:
+              typeof stored.foersteKonsultation === 'string' ? stored.foersteKonsultation : '',
+            maalForForloebet:
+              typeof stored.maalForForloebet === 'string' ? stored.maalForForloebet : '',
+            tilknyttetTerapeut:
+              typeof stored.tilknyttetTerapeut === 'string' ? stored.tilknyttetTerapeut : '',
+            startdato: typeof stored.startdato === 'string' ? stored.startdato : '',
+            forventetSlutdato:
+              typeof stored.forventetSlutdato === 'string' ? stored.forventetSlutdato : '',
+          });
+        }
+      } catch (error) {
+        console.error('[AddKlient] Failed to load client data', error);
+        if (!cancelled) {
+          setSaveError('Kunne ikke hente klientens oplysninger. Prøv igen.');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingClientensOplysninger(false);
+        }
+      }
+    };
+
+    loadClientData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, mode, user?.uid, editView]);
 
   // Når bruger vælger adresse fra Google-forslag
   const handlePlaceChanged = () => {
@@ -195,6 +315,59 @@ function AddKlient({
     setIsSaving(true);
 
     try {
+      if (mode === 'edit') {
+        if (!clientId) {
+          setSaveError('Manglende klient-id – kunne ikke gemme.');
+          return;
+        }
+
+        const clientRef = doc(db, 'users', user.uid, 'clients', clientId);
+
+        if (editView === 'personal') {
+          // Save personal information
+          const { telefonLand, telefon, land, ...restFormData } = formData;
+          const telefonLandValue = (telefonLand || '+45').trim();
+          const telefonValue = (telefon || '').trim();
+
+          await updateDoc(clientRef, {
+            ...restFormData,
+            land: land || 'Danmark',
+            telefonLand: telefonLandValue,
+            telefon: telefonValue,
+            telefonKomplet: telefonValue ? `${telefonLandValue} ${telefonValue}` : '',
+            status: formData.status || 'Aktiv',
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          // Save forløbsoplysninger
+          const cleaned = {
+            diagnose: (clientensOplysninger.diagnose || '').trim(),
+            foersteKonsultation: clientensOplysninger.foersteKonsultation || '',
+            maalForForloebet: (clientensOplysninger.maalForForloebet || '').trim(),
+            tilknyttetTerapeut: (clientensOplysninger.tilknyttetTerapeut || '').trim(),
+            startdato: clientensOplysninger.startdato || '',
+            forventetSlutdato: clientensOplysninger.forventetSlutdato || '',
+          };
+
+          await updateDoc(clientRef, {
+            'clientensoplysninger.diagnose': cleaned.diagnose,
+            'clientensoplysninger.foersteKonsultation': cleaned.foersteKonsultation,
+            'clientensoplysninger.maalForForloebet': cleaned.maalForForloebet,
+            'clientensoplysninger.tilknyttetTerapeut': cleaned.tilknyttetTerapeut,
+            'clientensoplysninger.startdato': cleaned.startdato,
+            'clientensoplysninger.forventetSlutdato': cleaned.forventetSlutdato,
+            updatedAt: serverTimestamp(),
+          });
+        }
+
+        if (typeof onSave === 'function') {
+          onSave();
+        }
+
+        onClose();
+        return;
+      }
+
       const nowIso = new Date().toISOString();
       const ownerIdentifier = deriveUserIdentifier(user);
       const { telefonLand, telefon, land, ...restFormData } = formData;
@@ -220,10 +393,7 @@ function AddKlient({
           : {}),
       };
 
-      if (mode === 'edit' && clientId) {
-        const clientRef = doc(db, 'users', user.uid, 'clients', clientId);
-        await updateDoc(clientRef, clientPayload);
-      } else {
+      if (mode === 'create') {
         const clientsCollection = collection(db, 'users', user.uid, 'clients');
         const docRef = await addDoc(clientsCollection, clientPayload);
 
@@ -244,10 +414,6 @@ function AddKlient({
         if (typeof onSave === 'function') {
           onSave(savedClientForList);
         }
-      }
-
-      if (typeof onSave === 'function' && mode === 'edit') {
-        onSave();
       }
 
       onClose();
@@ -288,7 +454,11 @@ function AddKlient({
       <div className="addklient-modal" onClick={(e) => e.stopPropagation()}>
         <div className="addklient-modal-header">
           <h2 className="addklient-modal-title">
-            {mode === 'edit' ? 'Rediger klient' : 'Tilføj klient'}
+            {mode === 'edit' && editView === 'personal'
+              ? 'Ændre klientoplysninger'
+              : mode === 'edit' && editView === 'forloeb'
+              ? 'Tilføj forløbsoplysninger'
+              : 'Tilføj klient'}
           </h2>
           <button className="addklient-close-btn" onClick={handleCancel}>
             ×
@@ -296,164 +466,424 @@ function AddKlient({
         </div>
 
         <form className="addklient-form" onSubmit={handleSubmit}>
-          {/* Name */}
-          <div className="addklient-form-section">
-            <label className="addklient-form-label" htmlFor="navn">
-              Navn
-            </label>
-            <input
-              type="text"
-              id="navn"
-              name="navn"
-              value={formData.navn}
-              onChange={handleChange}
-              className="addklient-input"
-              required
-            />
-          </div>
+          {mode === 'edit' && editView === 'forloeb' ? (
+            <>
+              {isLoadingClientensOplysninger && (
+                <p className="addklient-status-hint">Henter klientens oplysninger…</p>
+              )}
 
-          {/* CPR */}
-          <div className="addklient-form-section">
-            <label className="addklient-form-label" htmlFor="cpr">
-              CPR
-            </label>
-            <input
-              type="text"
-              id="cpr"
-              name="cpr"
-              value={formData.cpr}
-              onChange={handleChange}
-              className="addklient-input"
-            />
-          </div>
+              <div className="addklient-form-section">
+                <label className="addklient-form-label" htmlFor="diagnose">
+                  Diagnose
+                </label>
+                <input
+                  type="text"
+                  id="diagnose"
+                  name="diagnose"
+                  value={clientensOplysninger.diagnose}
+                  onChange={handleClientensOplysningerChange}
+                  className="addklient-input"
+                  disabled={isSaving || isLoadingClientensOplysninger}
+                />
+              </div>
 
-          {/* Email */}
-          <div className="addklient-form-section">
-            <label className="addklient-form-label" htmlFor="email">
-              E-mail
-            </label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              className="addklient-input"
-              required
-            />
-          </div>
+              <div className="addklient-form-section">
+                <label className="addklient-form-label" htmlFor="foersteKonsultation">
+                  Førstekonsultation
+                </label>
+                <textarea
+                  id="foersteKonsultation"
+                  name="foersteKonsultation"
+                  value={clientensOplysninger.foersteKonsultation}
+                  onChange={handleClientensOplysningerChange}
+                  className="addklient-textarea"
+                  disabled={isSaving || isLoadingClientensOplysninger}
+                />
+              </div>
 
-          {/* Phone */}
-          <div className="addklient-form-section">
-            <label className="addklient-form-label" htmlFor="telefon">
-              Telefon
-            </label>
-            <div className="addklient-phone-group">
-              <select
-                name="telefonLand"
-                value={formData.telefonLand}
-                onChange={handleChange}
-                className="addklient-phone-country"
-              >
-                <option value="+45">+45</option>
-                <option value="+46">+46</option>
-                <option value="+47">+47</option>
-                <option value="+358">+358</option>
-              </select>
-              <input
-                type="tel"
-                id="telefon"
-                name="telefon"
-                value={formData.telefon}
-                onChange={handleChange}
-                className="addklient-input addklient-phone-input"
-              />
-            </div>
-          </div>
+              <div className="addklient-form-section">
+                <label className="addklient-form-label" htmlFor="tilknyttetTerapeut">
+                  Tilknyttet terapeut
+                </label>
+                <input
+                  type="text"
+                  id="tilknyttetTerapeut"
+                  name="tilknyttetTerapeut"
+                  value={clientensOplysninger.tilknyttetTerapeut}
+                  onChange={handleClientensOplysningerChange}
+                  className="addklient-input"
+                  disabled={isSaving || isLoadingClientensOplysninger}
+                />
+              </div>
 
-          {/* Address + Google Autocomplete */}
-          <div className="addklient-form-section">
-            <label className="addklient-form-label" htmlFor="adresse">
-              Adresse
-            </label>
-            {isAutocompleteReady ? (
-              <Autocomplete
-                onLoad={(autocomplete) => (autocompleteRef.current = autocomplete)}
-                onPlaceChanged={handlePlaceChanged}
-              >
-                <input {...addressInputProps} />
-              </Autocomplete>
-            ) : (
-              <>
-                <input {...addressInputProps} />
-                {showAutocompleteStatus && (
-                  <p
-                    className={`addklient-status-hint${
-                      autocompleteStatus.tone === 'error' ? ' error' : ''
-                    }`}
+              <div className="addklient-form-section">
+                <label className="addklient-form-label" htmlFor="maalForForloebet">
+                  Mål for forløbet
+                </label>
+                <textarea
+                  id="maalForForloebet"
+                  name="maalForForloebet"
+                  value={clientensOplysninger.maalForForloebet}
+                  onChange={handleClientensOplysningerChange}
+                  className="addklient-textarea"
+                  disabled={isSaving || isLoadingClientensOplysninger}
+                />
+              </div>
+
+              <div className="addklient-form-row">
+                <div className="addklient-form-section addklient-form-section-half">
+                  <label className="addklient-form-label" htmlFor="startdato">
+                    Startdato
+                  </label>
+                  <input
+                    type="date"
+                    id="startdato"
+                    name="startdato"
+                    value={clientensOplysninger.startdato}
+                    onChange={handleClientensOplysningerChange}
+                    className="addklient-input"
+                    disabled={isSaving || isLoadingClientensOplysninger}
+                  />
+                </div>
+                <div className="addklient-form-section addklient-form-section-half">
+                  <label className="addklient-form-label" htmlFor="forventetSlutdato">
+                    Forventet slutdato
+                  </label>
+                  <input
+                    type="date"
+                    id="forventetSlutdato"
+                    name="forventetSlutdato"
+                    value={clientensOplysninger.forventetSlutdato}
+                    onChange={handleClientensOplysningerChange}
+                    className="addklient-input"
+                    disabled={isSaving || isLoadingClientensOplysninger}
+                  />
+                </div>
+              </div>
+            </>
+          ) : mode === 'edit' && editView === 'personal' ? (
+            <>
+              {isLoadingClientensOplysninger && (
+                <p className="addklient-status-hint">Henter klientens oplysninger…</p>
+              )}
+
+              {/* Name */}
+              <div className="addklient-form-section">
+                <label className="addklient-form-label" htmlFor="navn">
+                  Navn
+                </label>
+                <input
+                  type="text"
+                  id="navn"
+                  name="navn"
+                  value={formData.navn}
+                  onChange={handleChange}
+                  className="addklient-input"
+                  required
+                  disabled={isSaving || isLoadingClientensOplysninger}
+                />
+              </div>
+
+              {/* CPR */}
+              <div className="addklient-form-section">
+                <label className="addklient-form-label" htmlFor="cpr">
+                  CPR
+                </label>
+                <input
+                  type="text"
+                  id="cpr"
+                  name="cpr"
+                  value={formData.cpr}
+                  onChange={handleChange}
+                  className="addklient-input"
+                  disabled={isSaving || isLoadingClientensOplysninger}
+                />
+              </div>
+
+              {/* Email */}
+              <div className="addklient-form-section">
+                <label className="addklient-form-label" htmlFor="email">
+                  E-mail
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  className="addklient-input"
+                  required
+                  disabled={isSaving || isLoadingClientensOplysninger}
+                />
+              </div>
+
+              {/* Phone */}
+              <div className="addklient-form-section">
+                <label className="addklient-form-label" htmlFor="telefon">
+                  Telefon
+                </label>
+                <div className="addklient-phone-group">
+                  <select
+                    name="telefonLand"
+                    value={formData.telefonLand}
+                    onChange={handleChange}
+                    className="addklient-phone-country"
+                    disabled={isSaving || isLoadingClientensOplysninger}
                   >
-                    {autocompleteStatus.text}
-                  </p>
+                    <option value="+45">+45</option>
+                    <option value="+46">+46</option>
+                    <option value="+47">+47</option>
+                    <option value="+358">+358</option>
+                  </select>
+                  <input
+                    type="tel"
+                    id="telefon"
+                    name="telefon"
+                    value={formData.telefon}
+                    onChange={handleChange}
+                    className="addklient-input addklient-phone-input"
+                    disabled={isSaving || isLoadingClientensOplysninger}
+                  />
+                </div>
+              </div>
+
+              {/* Address + Google Autocomplete */}
+              <div className="addklient-form-section">
+                <label className="addklient-form-label" htmlFor="adresse">
+                  Adresse
+                </label>
+                {isAutocompleteReady ? (
+                  <Autocomplete
+                    onLoad={(autocomplete) => (autocompleteRef.current = autocomplete)}
+                    onPlaceChanged={handlePlaceChanged}
+                  >
+                    <input {...addressInputProps} disabled={isSaving || isLoadingClientensOplysninger} />
+                  </Autocomplete>
+                ) : (
+                  <>
+                    <input {...addressInputProps} disabled={isSaving || isLoadingClientensOplysninger} />
+                    {showAutocompleteStatus && (
+                      <p
+                        className={`addklient-status-hint${
+                          autocompleteStatus.tone === 'error' ? ' error' : ''
+                        }`}
+                      >
+                        {autocompleteStatus.text}
+                      </p>
+                    )}
+                  </>
                 )}
-              </>
-            )}
 
-            {!showAddressLine2 && (
-              <button
-                type="button"
-                className="addklient-add-line-btn"
-                onClick={() => setShowAddressLine2(true)}
-              >
-                Tilføj 2. linje
-              </button>
-            )}
-            {showAddressLine2 && (
-              <input
-                type="text"
-                name="adresse2"
-                value={formData.adresse2}
-                onChange={handleChange}
-                className="addklient-input addklient-input-margin-top"
-                placeholder="Adresse 2. linje"
-              />
-            )}
-          </div>
+                {!showAddressLine2 && (
+                  <button
+                    type="button"
+                    className="addklient-add-line-btn"
+                    onClick={() => setShowAddressLine2(true)}
+                    disabled={isSaving || isLoadingClientensOplysninger}
+                  >
+                    Tilføj 2. linje
+                  </button>
+                )}
+                {showAddressLine2 && (
+                  <input
+                    type="text"
+                    name="adresse2"
+                    value={formData.adresse2}
+                    onChange={handleChange}
+                    className="addklient-input addklient-input-margin-top"
+                    placeholder="Adresse 2. linje"
+                    disabled={isSaving || isLoadingClientensOplysninger}
+                  />
+                )}
+              </div>
 
-          {/* Postal Code and City */}
-          <div className="addklient-form-row">
-            <div className="addklient-form-section addklient-form-section-half">
-              <label className="addklient-form-label" htmlFor="postnummer">
-                Postnummer
-              </label>
-              <input
-                type="text"
-                id="postnummer"
-                name="postnummer"
-                value={formData.postnummer}
-                onChange={handleChange}
-                className="addklient-input"
-              />
-            </div>
-            <div className="addklient-form-section addklient-form-section-half">
-              <label className="addklient-form-label" htmlFor="by">
-                By
-              </label>
-              <input
-                type="text"
-                id="by"
-                name="by"
-                value={formData.by}
-                onChange={handleChange}
-                className="addklient-input"
-              />
-            </div>
-          </div>
+              {/* Postal Code and City */}
+              <div className="addklient-form-row">
+                <div className="addklient-form-section addklient-form-section-half">
+                  <label className="addklient-form-label" htmlFor="postnummer">
+                    Postnummer
+                  </label>
+                  <input
+                    type="text"
+                    id="postnummer"
+                    name="postnummer"
+                    value={formData.postnummer}
+                    onChange={handleChange}
+                    className="addklient-input"
+                    disabled={isSaving || isLoadingClientensOplysninger}
+                  />
+                </div>
+                <div className="addklient-form-section addklient-form-section-half">
+                  <label className="addklient-form-label" htmlFor="by">
+                    By
+                  </label>
+                  <input
+                    type="text"
+                    id="by"
+                    name="by"
+                    value={formData.by}
+                    onChange={handleChange}
+                    className="addklient-input"
+                    disabled={isSaving || isLoadingClientensOplysninger}
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Name */}
+              <div className="addklient-form-section">
+                <label className="addklient-form-label" htmlFor="navn">
+                  Navn
+                </label>
+                <input
+                  type="text"
+                  id="navn"
+                  name="navn"
+                  value={formData.navn}
+                  onChange={handleChange}
+                  className="addklient-input"
+                  required
+                />
+              </div>
 
-          {/* Error Message */}
-          {saveError && (
-            <p className="addklient-error" role="alert">
-              {saveError}
-            </p>
+              {/* CPR */}
+              <div className="addklient-form-section">
+                <label className="addklient-form-label" htmlFor="cpr">
+                  CPR
+                </label>
+                <input
+                  type="text"
+                  id="cpr"
+                  name="cpr"
+                  value={formData.cpr}
+                  onChange={handleChange}
+                  className="addklient-input"
+                />
+              </div>
+
+              {/* Email */}
+              <div className="addklient-form-section">
+                <label className="addklient-form-label" htmlFor="email">
+                  E-mail
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  className="addklient-input"
+                  required
+                />
+              </div>
+
+              {/* Phone */}
+              <div className="addklient-form-section">
+                <label className="addklient-form-label" htmlFor="telefon">
+                  Telefon
+                </label>
+                <div className="addklient-phone-group">
+                  <select
+                    name="telefonLand"
+                    value={formData.telefonLand}
+                    onChange={handleChange}
+                    className="addklient-phone-country"
+                  >
+                    <option value="+45">+45</option>
+                    <option value="+46">+46</option>
+                    <option value="+47">+47</option>
+                    <option value="+358">+358</option>
+                  </select>
+                  <input
+                    type="tel"
+                    id="telefon"
+                    name="telefon"
+                    value={formData.telefon}
+                    onChange={handleChange}
+                    className="addklient-input addklient-phone-input"
+                  />
+                </div>
+              </div>
+
+              {/* Address + Google Autocomplete */}
+              <div className="addklient-form-section">
+                <label className="addklient-form-label" htmlFor="adresse">
+                  Adresse
+                </label>
+                {isAutocompleteReady ? (
+                  <Autocomplete
+                    onLoad={(autocomplete) => (autocompleteRef.current = autocomplete)}
+                    onPlaceChanged={handlePlaceChanged}
+                  >
+                    <input {...addressInputProps} />
+                  </Autocomplete>
+                ) : (
+                  <>
+                    <input {...addressInputProps} />
+                    {showAutocompleteStatus && (
+                      <p
+                        className={`addklient-status-hint${
+                          autocompleteStatus.tone === 'error' ? ' error' : ''
+                        }`}
+                      >
+                        {autocompleteStatus.text}
+                      </p>
+                    )}
+                  </>
+                )}
+
+                {!showAddressLine2 && (
+                  <button
+                    type="button"
+                    className="addklient-add-line-btn"
+                    onClick={() => setShowAddressLine2(true)}
+                  >
+                    Tilføj 2. linje
+                  </button>
+                )}
+                {showAddressLine2 && (
+                  <input
+                    type="text"
+                    name="adresse2"
+                    value={formData.adresse2}
+                    onChange={handleChange}
+                    className="addklient-input addklient-input-margin-top"
+                    placeholder="Adresse 2. linje"
+                  />
+                )}
+              </div>
+
+              {/* Postal Code and City */}
+              <div className="addklient-form-row">
+                <div className="addklient-form-section addklient-form-section-half">
+                  <label className="addklient-form-label" htmlFor="postnummer">
+                    Postnummer
+                  </label>
+                  <input
+                    type="text"
+                    id="postnummer"
+                    name="postnummer"
+                    value={formData.postnummer}
+                    onChange={handleChange}
+                    className="addklient-input"
+                  />
+                </div>
+                <div className="addklient-form-section addklient-form-section-half">
+                  <label className="addklient-form-label" htmlFor="by">
+                    By
+                  </label>
+                  <input
+                    type="text"
+                    id="by"
+                    name="by"
+                    value={formData.by}
+                    onChange={handleChange}
+                    className="addklient-input"
+                  />
+                </div>
+              </div>
+            </>
           )}
 
           {/* Error Message */}
@@ -486,7 +916,7 @@ function AddKlient({
             <button
               type="submit"
               className="addklient-save-btn"
-              disabled={isSaving}
+              disabled={isSaving || (mode === 'edit' && isLoadingClientensOplysninger)}
               aria-busy={isSaving}
             >
               {isSaving ? 'Gemmer...' : 'Gem'}

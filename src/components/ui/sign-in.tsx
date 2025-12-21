@@ -27,7 +27,8 @@ interface SignInPageProps {
   onSignIn?: (event: React.FormEvent<HTMLFormElement>) => void;
   onGoogleSignIn?: () => void;
   onResetPassword?: () => void;
-  onCreateAccount?: () => void;
+  onLoginLink?: () => void;
+  onSignUp?: () => void;
 }
 
 const GlassInputWrapper = ({ children }: { children: React.ReactNode }) => (
@@ -55,7 +56,8 @@ export const SignInPage: React.FC<SignInPageProps> = ({
   onSignIn,
   onGoogleSignIn,
   onResetPassword,
-  onCreateAccount,
+  onLoginLink,
+  onSignUp,
 }) => {
   const [showPassword, setShowPassword] = useState(false);
 
@@ -111,9 +113,28 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                 Continue with Google
             </button>
 
-            <p className="animate-element animate-delay-900 text-center text-sm text-muted-foreground">
-              New to our platform? <a href="#" onClick={(e) => { e.preventDefault(); onCreateAccount?.(); }} className="text-violet-400 hover:underline transition-colors">Create Account</a>
-            </p>
+            <div className="animate-element animate-delay-900 flex justify-center gap-6 text-sm text-muted-foreground">
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onLoginLink?.();
+                }}
+                className="text-violet-400 hover:underline transition-colors"
+              >
+                Login
+              </a>
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onSignUp?.();
+                }}
+                className="text-violet-400 hover:underline transition-colors"
+              >
+                Opret konto
+              </a>
+            </div>
           </div>
         </div>
       </section>

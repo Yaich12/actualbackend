@@ -100,13 +100,60 @@
 }
 
 .indlæg-container {
-  width: 100%;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: var(--booking-sidebar-width, 72px);
+  width: calc(100% - var(--booking-sidebar-width, 72px));
   height: 100%;
+  z-index: 5;
   background-color: var(--bg-surface);
   color: var(--text-primary);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding-top: 0;
+}
+
+.indlæg-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.indlæg-ai-pane {
+  width: 32%;
+  min-width: 260px;
+  background-color: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  overflow: auto;
+}
+
+.indlæg-main-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.indlæg-resize-handle {
+  width: 10px;
+  cursor: ew-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(90deg, #e5e7eb 0, #f8fafc 50%, #e5e7eb 100%);
+  border-right: 1px solid #e5e7eb;
+  border-left: 1px solid #e5e7eb;
+}
+
+.indlæg-resize-icon {
+  font-size: 12px;
+  color: #9ca3af;
+  user-select: none;
 }
 
 .booking-main-full .indlæg-container {
@@ -115,25 +162,28 @@
   box-shadow: none;
 }
 
-/* Header */
+/* Header + top actions (shown when journal header is needed) */
 .indlæg-header {
-  flex: 0 0 auto;
-  padding: 20px;
-  border-bottom: 1px solid var(--border-subtle);
+  display: block;
+  padding: 8px 16px 0;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #ffffff;
 }
 
 .indlæg-header-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .indlæg-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-primary);
+  display: block;
   margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
 }
 
 .indlæg-header-actions {
@@ -143,68 +193,78 @@
 }
 
 .indlæg-action-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  border: 1px solid var(--border-subtle);
-  background-color: var(--bg-surface);
+  border: 1px solid #d1d5db;
+  background-color: #f9fafb;
   border-radius: 6px;
   font-size: 13px;
-  font-weight: 500;
-  color: var(--text-primary);
+  font-weight: 600;
+  color: #111827;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s, border-color 0.2s;
 }
 
 .indlæg-action-btn:hover {
-  background-color: var(--bg-subtle);
-  border-color: var(--border-subtle);
+  background-color: #eef2ff;
+  border-color: #c7d2fe;
 }
 
 .indlæg-action-icon {
-  font-size: 16px;
+  display: inline-block;
+  font-size: 14px;
 }
 
 .indlæg-icon-btn {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 1px solid var(--border-subtle);
-  background-color: var(--bg-surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
   border-radius: 6px;
   font-size: 16px;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  color: var(--text-primary);
+  transition: background-color 0.2s, border-color 0.2s;
 }
 
 .indlæg-icon-btn:hover {
-  background-color: var(--bg-subtle);
-  border-color: var(--border-subtle);
+  background-color: #f9fafb;
+  border-color: #cbd5e1;
 }
 
 .indlæg-close-btn {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 18px;
-  cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  transition: all 0.2s;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  border-radius: 50%;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
 }
 
 .indlæg-close-btn:hover {
-  background-color: var(--bg-subtle);
-  color: var(--text-primary);
+  background-color: #fef2f2;
+  border-color: #fecdd3;
+}
+
+.indlæg-container.in-fullwidth {
+  left: 0;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .indlæg-container {
+    left: 0;
+    width: 100%;
+  }
 }
 
 .indlæg-mikrofon-container {
@@ -740,7 +800,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 4px 20px 20px;
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
@@ -1173,4 +1233,131 @@
   .indlæg-save-btn {
     width: 100%;
   }
+}
+
+/* Seneste sessioner / historik */
+.indlæg-history {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background-color: #ffffff;
+}
+
+.indlæg-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.indlæg-history-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.indlæg-history-chevron {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.indlæg-history-status,
+.indlæg-history-empty {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.indlæg-history-error {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #b91c1c;
+}
+
+.indlæg-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.indlæg-history-item {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.indlæg-history-item:hover {
+  background-color: #eff6ff;
+  border-color: #3b82f6;
+  transform: translateY(-1px);
+}
+
+.indlæg-history-item-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.indlæg-history-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.indlæg-history-date {
+  font-size: 12px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.indlæg-history-snippet {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #4b5563;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.indlæg-history-link {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #2563eb;
+  display: inline-block;
+}
+
+.indlæg-history-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.indlæg-history-list::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+.indlæg-history-list::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }

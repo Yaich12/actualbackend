@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import '../bookingpage.css';
 import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayout';
 import { useAuth } from '../../../AuthContext';
@@ -324,8 +323,7 @@ function ForlobCreate({ onSave, isSaving = false }) {
 }
 
 function Forloeb() {
-  const navigate = useNavigate();
-  const { user, signOutUser } = useAuth();
+  const { user } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [forloebList, setForloebList] = useState([]);
@@ -427,21 +425,6 @@ function Forloeb() {
   return (
     <BookingSidebarLayout>
       <div className="booking-page">
-        <div className="booking-topbar">
-          <div className="topbar-left">
-            <button
-              className="topbar-logo-btn"
-              onClick={async () => {
-                await signOutUser();
-                navigate('/');
-              }}
-            >
-              Forside
-            </button>
-          </div>
-          <div className="topbar-right" />
-        </div>
-
         <div className="booking-content">
           <div className="booking-main">
           <div className="flex h-full flex-col gap-4 rounded-2xl bg-slate-50/60 p-4 md:p-6">
@@ -623,4 +606,3 @@ function Forloeb() {
 
 export { ForlobCreate };
 export default Forloeb;
-

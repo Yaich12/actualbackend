@@ -1,0 +1,198 @@
+{
+  "language": {
+    "title": "اختر لغتك",
+    "subtitle": "يمكنك تغيير ذلك لاحقًا في الإعدادات."
+  },
+  "onboarding": {
+    "eyebrow": "إعداد الحساب",
+    "topLabel": "إعداد الحساب",
+    "loading": "جارٍ التحميل…",
+    "actions": {
+      "close": "إغلاق",
+      "continue": "متابعة",
+      "finish": "إنهاء",
+      "saving": "جارٍ الحفظ…"
+    },
+    "aria": {
+      "back": "رجوع",
+      "previous": "السابق",
+      "next": "التالي"
+    },
+    "steps": {
+      "business": {
+        "title": "ما اسم عملك؟",
+        "subtitle": "هذا هو الاسم الذي سيراه عملاؤك. يمكن إضافة اسم الفاتورة والاسم القانوني لاحقًا.",
+        "nameLabel": "اسم النشاط التجاري",
+        "namePlaceholder": "مثال: عيادة سلما",
+        "websiteLabel": "الموقع الإلكتروني (اختياري)",
+        "websitePlaceholder": "www.yoursite.com"
+      },
+      "categories": {
+        "title": "اختر الخيار الأنسب لعملك",
+        "subtitle": "يمكنك تغيير ذلك لاحقًا",
+        "hint": "{count}/{max} تم الاختيار",
+        "options": ["أخصائي علاج طبيعي", "أخصائي تقويم العظام", "معالج يدوي"]
+      },
+      "accountType": {
+        "title": "اختر نوع الحساب",
+        "subtitle": "يساعدنا ذلك على إعداد حسابك بشكل صحيح",
+        "solo": "أنا أعمل لحسابي الخاص",
+        "team": "لدي فريق"
+      },
+      "teamSize": {
+        "title": "كم عدد الموظفين لديك",
+        "options": ["2-5 أشخاص", "6-10 أشخاص", "11+ أشخاص"]
+      },
+      "serviceModel": {
+        "title": "أين تقدم خدماتك؟",
+        "options": [
+          "يزورني العملاء في موقع فعلي",
+          "أتنقل لزيارة عملائي",
+          "أقدم خدمات افتراضية عبر الإنترنت"
+        ]
+      },
+      "address": {
+        "title": "أضف موقع نشاطك التجاري",
+        "subtitle": "أضف موقعك الأساسي حتى يتمكن العملاء من العثور عليك بسهولة. يمكنك إضافة مواقع أخرى لاحقًا.",
+        "label": "ما عنوان نشاطك التجاري؟",
+        "placeholder": "أدخل العنوان"
+      },
+      "software": {
+        "title": "ما البرنامج الذي تستخدمه حاليًا؟",
+        "subtitle": "إذا كنت تريد التبديل، يمكننا مساعدتك في تسريع إعداد نشاطك واستيراد بياناتك إلى حساب Selma الجديد.",
+        "options": [
+          "Acuity",
+          "Booksy",
+          "Calendly",
+          "Goldie",
+          "Janeapp",
+          "Mindbody",
+          "Salon Iris",
+          "Setmore",
+          "Shortcuts",
+          "Square",
+          "Styleseat",
+          "Timely",
+          "Treatwell",
+          "Vagaro",
+          "Zenoti",
+          "لا أستخدم أي برنامج",
+          "أخرى"
+        ]
+      },
+      "heardFrom": {
+        "title": "كيف سمعت عن Selma؟",
+        "options": [
+          "موصى به من صديق",
+          "محرك بحث (مثل Google أو Yahoo)",
+          "وسائل التواصل الاجتماعي",
+          "إعلان عبر البريد الإلكتروني",
+          "إعلان في مجلة",
+          "مواقع المراجعات (مثل Capterra وTrustpilot)",
+          "روبوت محادثة بالذكاء الاصطناعي (مثل ChatGPT وGemini وDeepSeek)",
+          "أخرى"
+        ]
+      }
+    },
+    "completion": {
+      "title": "تم إعداد نشاطك التجاري!",
+      "subtitle": "احصل على 14 يومًا مجانيًا من Selma للأعمال",
+      "button": "إنهاء"
+    }
+  },
+  "booking": {
+    "sidebar": {
+      "calendar": "التقويم",
+      "clients": "العملاء",
+      "services": "الخدمات",
+      "forloeb": "البرامج",
+      "invoices": "الفواتير",
+      "stats": "الإحصائيات",
+      "team": "الفريق",
+      "settings": "الإعدادات",
+      "apps": "التطبيقات",
+      "catalog": "الكتالوج",
+      "logout": "تسجيل الخروج"
+    },
+    "topbar": {
+      "confirmEmail": "تأكيد عنوان البريد الإلكتروني",
+      "protectAccount": "حماية حسابك",
+      "profile": "ملفي الشخصي",
+      "personalSettings": "الإعدادات الشخصية",
+      "help": "المساعدة والدعم",
+      "logout": "تسجيل الخروج",
+      "defaultUser": "مستخدم Selma",
+      "clinicSettings": "إعدادات العيادة"
+    },
+    "calendar": {
+      "today": "اليوم",
+      "previous": "السابق",
+      "next": "التالي",
+      "filters": "الفلاتر",
+      "freeze": "تجميد",
+      "settings": "الإعدادات",
+      "refresh": "تحديث",
+      "viewLabel": "عرض التقويم",
+      "view": {
+        "month": "شهر",
+        "week": "أسبوع",
+        "day": "يوم"
+      },
+      "add": "إضافة",
+      "entireTeam": "الفريق بالكامل",
+      "teamOnDuty": "فريق العمل",
+      "members": "الموظفون",
+      "clearAll": "مسح الكل",
+      "appointment": "موعد",
+      "program": "برنامج",
+      "memberFallback": "موظف",
+      "you": "أنت",
+      "notLoggedIn": "غير مسجل الدخول",
+      "loginToContinue": "سجّل الدخول للمتابعة"
+    }
+  },
+  "settings": {
+    "title": "الإعدادات",
+    "close": "إغلاق",
+    "save": "حفظ",
+    "saving": "جارٍ الحفظ…",
+    "sections": {
+      "profile": "الملف الشخصي",
+      "account": "إعداد الحساب",
+      "appearance": "المظهر",
+      "language": "اللغة"
+    },
+    "profile": {
+      "title": "تعديل ملفك الشخصي",
+      "avatarTitle": "صورتك الرمزية",
+      "avatarSubtitle": "حدّث صورتك الرمزية لملفك المهني.",
+      "changePhoto": "تغيير الصورة",
+      "remove": "إزالة",
+      "fullName": "الاسم الكامل",
+      "fullNamePlaceholder": "أدخل اسمك الكامل",
+      "email": "البريد الإلكتروني",
+      "clinicName": "اسم العيادة",
+      "clinicPlaceholder": "أدخل اسم العيادة"
+    },
+    "account": {
+      "title": "إعداد الحساب",
+      "website": "الموقع الإلكتروني",
+      "websitePlaceholder": "www.yoursite.com",
+      "category": "الفئة",
+      "categoryPlaceholder": "اختر الفئة",
+      "address": "العنوان",
+      "addressPlaceholder": "أدخل العنوان"
+    },
+    "appearance": {
+      "title": "المظهر",
+      "subtitle": "اختر شكل Selma",
+      "light": "فاتح",
+      "system": "مطابقة النظام",
+      "dark": "داكن"
+    },
+    "language": {
+      "title": "اللغة",
+      "label": "اللغة المفضلة"
+    }
+  }
+}

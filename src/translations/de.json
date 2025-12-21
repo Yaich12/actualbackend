@@ -1,0 +1,198 @@
+{
+  "language": {
+    "title": "Sprache wählen",
+    "subtitle": "Du kannst die Sprache später in den Einstellungen ändern."
+  },
+  "onboarding": {
+    "eyebrow": "Kontoeinrichtung",
+    "topLabel": "Kontoeinrichtung",
+    "loading": "Wird geladen…",
+    "actions": {
+      "close": "Schließen",
+      "continue": "Weiter",
+      "finish": "Fertig",
+      "saving": "Speichert…"
+    },
+    "aria": {
+      "back": "Zurück",
+      "previous": "Vorherige",
+      "next": "Nächste"
+    },
+    "steps": {
+      "business": {
+        "title": "Wie heißt dein Unternehmen?",
+        "subtitle": "Das ist die Marke, die deine Kunden sehen. Rechnungs- und rechtlicher Name können später hinzugefügt werden.",
+        "nameLabel": "Unternehmensname",
+        "namePlaceholder": "z. B. Selma Klinik",
+        "websiteLabel": "Website (optional)",
+        "websitePlaceholder": "www.deineseite.de"
+      },
+      "categories": {
+        "title": "Wähle die Option, die am besten zu deinem Unternehmen passt",
+        "subtitle": "Du kannst das später ändern",
+        "hint": "{count}/{max} gewählt",
+        "options": ["Physiotherapeut", "Osteopath", "Chiropraktiker"]
+      },
+      "accountType": {
+        "title": "Kontotyp auswählen",
+        "subtitle": "Das hilft uns, dein Konto richtig einzurichten",
+        "solo": "Ich bin selbstständig",
+        "team": "Ich habe ein Team"
+      },
+      "teamSize": {
+        "title": "Wie viele Mitarbeitende hast du",
+        "options": ["2-5 Personen", "6-10 Personen", "11+ Personen"]
+      },
+      "serviceModel": {
+        "title": "Wo bietest du deine Dienstleistungen an?",
+        "options": [
+          "Kunden besuchen mich an einem festen Standort",
+          "Ich reise zu meinen Kunden",
+          "Ich biete virtuelle Dienstleistungen online an"
+        ]
+      },
+      "address": {
+        "title": "Gib den physischen Standort deines Unternehmens an",
+        "subtitle": "Füge deinen Hauptstandort hinzu, damit Kunden dich leicht finden. Du kannst später weitere Standorte hinzufügen.",
+        "label": "Wo befindet sich die Adresse deines Unternehmens?",
+        "placeholder": "Adresse eingeben"
+      },
+      "software": {
+        "title": "Welche Software nutzt du derzeit?",
+        "subtitle": "Wenn du wechseln möchtest, können wir die Einrichtung beschleunigen und deine Daten in dein neues Selma-Konto importieren.",
+        "options": [
+          "Acuity",
+          "Booksy",
+          "Calendly",
+          "Goldie",
+          "Janeapp",
+          "Mindbody",
+          "Salon Iris",
+          "Setmore",
+          "Shortcuts",
+          "Square",
+          "Styleseat",
+          "Timely",
+          "Treatwell",
+          "Vagaro",
+          "Zenoti",
+          "Ich nutze keine Software",
+          "Andere"
+        ]
+      },
+      "heardFrom": {
+        "title": "Wie hast du von Selma erfahren?",
+        "options": [
+          "Von einem Freund empfohlen",
+          "Suchmaschine (z. B. Google oder Yahoo)",
+          "Soziale Medien",
+          "E-Mail-Werbung",
+          "Anzeige in einem Magazin",
+          "Bewertungsseiten (z. B. Capterra, Trustpilot)",
+          "KI-Chatbot (z. B. ChatGPT, Gemini, DeepSeek)",
+          "Andere"
+        ]
+      }
+    },
+    "completion": {
+      "title": "Dein Unternehmen ist bereit!",
+      "subtitle": "Erhalte 14 Tage Selma kostenlos für Unternehmen",
+      "button": "Fertig"
+    }
+  },
+  "booking": {
+    "sidebar": {
+      "calendar": "Kalender",
+      "clients": "Kunden",
+      "services": "Leistungen",
+      "forloeb": "Programme",
+      "invoices": "Rechnungen",
+      "stats": "Statistiken",
+      "team": "Team",
+      "settings": "Einstellungen",
+      "apps": "Apps",
+      "catalog": "Katalog",
+      "logout": "Abmelden"
+    },
+    "topbar": {
+      "confirmEmail": "E-Mail-Adresse bestätigen",
+      "protectAccount": "Konto schützen",
+      "profile": "Mein Profil",
+      "personalSettings": "Persönliche Einstellungen",
+      "help": "Hilfe und Support",
+      "logout": "Abmelden",
+      "defaultUser": "Selma-Nutzer",
+      "clinicSettings": "Klinikeinstellungen"
+    },
+    "calendar": {
+      "today": "Heute",
+      "previous": "Zurück",
+      "next": "Weiter",
+      "filters": "Filter",
+      "freeze": "Einfrieren",
+      "settings": "Einstellungen",
+      "refresh": "Aktualisieren",
+      "viewLabel": "Kalenderansicht",
+      "view": {
+        "month": "Monat",
+        "week": "Woche",
+        "day": "Tag"
+      },
+      "add": "Hinzufügen",
+      "entireTeam": "Gesamtes Team",
+      "teamOnDuty": "Team im Dienst",
+      "members": "Mitarbeitende",
+      "clearAll": "Alle löschen",
+      "appointment": "Termin",
+      "program": "Programm",
+      "memberFallback": "Mitarbeiter",
+      "you": "Du",
+      "notLoggedIn": "Nicht angemeldet",
+      "loginToContinue": "Bitte anmelden, um fortzufahren"
+    }
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "close": "Schließen",
+    "save": "Speichern",
+    "saving": "Speichert…",
+    "sections": {
+      "profile": "Profil",
+      "account": "Kontoeinrichtung",
+      "appearance": "Erscheinungsbild",
+      "language": "Sprache"
+    },
+    "profile": {
+      "title": "Onlineprofil bearbeiten",
+      "avatarTitle": "Dein Avatar",
+      "avatarSubtitle": "Aktualisiere deinen Avatar für dein professionelles Profil.",
+      "changePhoto": "Bild ändern",
+      "remove": "Entfernen",
+      "fullName": "Vollständiger Name",
+      "fullNamePlaceholder": "Gib deinen vollständigen Namen ein",
+      "email": "E-Mail",
+      "clinicName": "Klinikname",
+      "clinicPlaceholder": "Name der Klinik angeben"
+    },
+    "account": {
+      "title": "Kontoeinrichtung",
+      "website": "Website",
+      "websitePlaceholder": "www.deineseite.de",
+      "category": "Kategorie",
+      "categoryPlaceholder": "Kategorie wählen",
+      "address": "Adresse",
+      "addressPlaceholder": "Adresse eingeben"
+    },
+    "appearance": {
+      "title": "Erscheinungsbild",
+      "subtitle": "Wähle, wie Selma aussehen soll",
+      "light": "Hell",
+      "system": "Wie System",
+      "dark": "Dunkel"
+    },
+    "language": {
+      "title": "Sprache",
+      "label": "Bevorzugte Sprache"
+    }
+  }
+}

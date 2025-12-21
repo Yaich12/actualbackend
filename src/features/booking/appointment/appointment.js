@@ -27,6 +27,9 @@ function AppointmentForm({
   onUpdate,
   initialAppointment,
   mode = 'create',
+  teamMembers = [],
+  hasTeamAccess = false,
+  defaultOwnerName = '',
 }) {
   const {
     clients,
@@ -48,9 +51,12 @@ function AppointmentForm({
   );
   const [endDate, setEndDate] = useState(initialAppointment?.endDate || defaultDate);
   const [endTime, setEndTime] = useState(initialAppointment?.endTime || '11:00');
-  const [selectedClientId, setSelectedClientId] = useState(
-    initialAppointment?.clientId || ''
+  const [selectedClientIds, setSelectedClientIds] = useState(
+    initialAppointment?.participants?.map(p => p.id).filter(Boolean) ||
+    (initialAppointment?.clientId ? [initialAppointment.clientId] : [])
   );
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
+  const clientDropdownRef = useRef(null);
   const [selectedServiceId, setSelectedServiceId] = useState(
     initialAppointment?.serviceId || ''
   );
@@ -64,6 +70,11 @@ function AppointmentForm({
   const [recurrenceWeeks, setRecurrenceWeeks] = useState(8);
   const [recurrenceDays, setRecurrenceDays] = useState(['1', '3']); // default Mon/Wed (Mon=1)
   const [selectedColor, setSelectedColor] = useState(initialAppointment?.color || null);
+  const [selectedMemberId, setSelectedMemberId] = useState(
+    initialAppointment?.calendarOwnerId ||
+      teamMembers[0]?.id ||
+      null
+  );
   const selectedServiceData = useMemo(
     () => availableServices.find((service) => service.id === selectedServiceId) || null,
     [availableServices, selectedServiceId]
@@ -104,6 +115,12 @@ function AppointmentForm({
       ) {
         setShowEndDropdown(false);
       }
+      if (
+        clientDropdownRef.current &&
+        !clientDropdownRef.current.contains(event.target)
+      ) {
+        setShowClientDropdown(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -117,19 +134,34 @@ function AppointmentForm({
     setStartTime(initialAppointment?.startTime || '10:00');
     setEndDate(initialAppointment?.endDate || defaultDate);
     setEndTime(initialAppointment?.endTime || '11:00');
-    setSelectedClientId(initialAppointment?.clientId || '');
+    setSelectedClientIds(
+      initialAppointment?.participants?.map(p => p.id).filter(Boolean) ||
+      (initialAppointment?.clientId ? [initialAppointment.clientId] : [])
+    );
     setSelectedServiceId(initialAppointment?.serviceId || '');
     setNotes(initialAppointment?.notes || '');
     setShowStartDropdown(false);
     setShowEndDropdown(false);
+    setShowClientDropdown(false);
     setSelectedColor(initialAppointment?.color || null);
-  }, [initialAppointment, defaultDate]);
+    setSelectedMemberId(
+      initialAppointment?.calendarOwnerId ||
+        initialAppointment?.therapistId ||
+        teamMembers[0]?.id ||
+        null
+    );
+  }, [initialAppointment, defaultDate, teamMembers]);
 
   useEffect(() => {
     if (selectedServiceData?.color) {
       setSelectedColor(selectedServiceData.color);
     }
   }, [selectedServiceData]);
+
+  const selectedMember = useMemo(() => {
+    if (!hasTeamAccess) return null;
+    return teamMembers.find((m) => m.id === selectedMemberId) || teamMembers[0] || null;
+  }, [hasTeamAccess, selectedMemberId, teamMembers]);
 
   useEffect(() => {
     if (mode !== 'create') return;
@@ -179,10 +211,31 @@ function AppointmentForm({
   const handleSubmit = (e) => {
     e.preventDefault();
     const base = initialAppointment || {};
-    const selectedClientData =
-      clients.find((client) => client.id === selectedClientId) || null;
+    const selectedClientsData = clients.filter((client) => 
+      selectedClientIds.includes(client.id)
+    );
     const selectedServiceData =
       availableServices.find((service) => service.id === selectedServiceId) || null;
+
+    // Build participants array from all selected clients
+    const participants = selectedClientsData.map((client) => ({
+      id: client.id,
+      name: client.navn || 'Klient',
+      email: client.email || '',
+      phone: client.telefon || '',
+    }));
+
+    // Use first client as primary for backwards compatibility
+    const primaryClient = selectedClientsData[0] || null;
+    const ownerName = hasTeamAccess
+      ? selectedMember?.name || defaultOwnerName
+      : defaultOwnerName || base.calendarOwner || base.ownerName || '';
+    const ownerColor =
+      selectedMember?.calendarColor ||
+      selectedMember?.avatarColor ||
+      selectedColor ||
+      base.color ||
+      '#3B82F6';
 
     const appointmentPayload = {
       ...base,
@@ -191,10 +244,10 @@ function AppointmentForm({
       startTime,
       endDate,
       endTime,
-      clientId: selectedClientId || base.clientId || null,
-      client: selectedClientData?.navn || base.client || '',
-      clientEmail: selectedClientData?.email || base.clientEmail || '',
-      clientPhone: selectedClientData?.telefon || base.clientPhone || '',
+      clientId: primaryClient?.id || base.clientId || null,
+      client: primaryClient?.navn || base.client || '',
+      clientEmail: primaryClient?.email || base.clientEmail || '',
+      clientPhone: primaryClient?.telefon || base.clientPhone || '',
       serviceId: selectedServiceId || base.serviceId || null,
       service: selectedServiceData?.navn || base.service || '',
       serviceType: selectedServiceData?.type || 'service',
@@ -218,12 +271,16 @@ function AppointmentForm({
         base.color ||
         '#3B82F6',
       notes,
-      participants: [
+      calendarOwner: ownerName,
+      calendarOwnerId: hasTeamAccess ? selectedMember?.id || null : null,
+      ownerName,
+      calendarColor: ownerColor,
+      participants: participants.length > 0 ? participants : [
         {
-          id: selectedClientId || base.clientId || 'client-1',
-          name: selectedClientData?.navn || base.client || 'Klient',
-          email: selectedClientData?.email || base.clientEmail || '',
-          phone: selectedClientData?.telefon || base.clientPhone || '',
+          id: base.clientId || 'client-1',
+          name: base.client || 'Klient',
+          email: base.clientEmail || '',
+          phone: base.clientPhone || '',
         },
       ],
     };
@@ -363,30 +420,103 @@ function AppointmentForm({
         </div>
 
         {/* Select Client */}
+        {hasTeamAccess && (
+          <div className="form-section">
+            <label className="form-label">Vælg medarbejder</label>
+            <select
+              className="form-select"
+              value={selectedMemberId || ''}
+              onChange={(e) => setSelectedMemberId(e.target.value || null)}
+            >
+              {teamMembers.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Select Client */}
         <div className="form-section">
-          <label className="form-label">Vælg klient</label>
+          <label className="form-label">Vælg klienter</label>
+          
+          {/* Selected clients chips */}
+          {selectedClientIds.length > 0 && (
+            <div className="selected-clients-chips">
+              {selectedClientIds.map((clientId) => {
+                const client = clients.find((c) => c.id === clientId);
+                if (!client) return null;
+                return (
+                  <span key={clientId} className="client-chip">
+                    {client.navn}
+                    <button
+                      type="button"
+                      className="client-chip-remove"
+                      onClick={() => setSelectedClientIds((prev) => 
+                        prev.filter((id) => id !== clientId)
+                      )}
+                    >
+                      ×
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
           <div className="client-select-row">
-            <div className="select-wrapper">
-              <select
-                className="select-input"
-                value={selectedClientId}
-                onChange={(e) => setSelectedClientId(e.target.value)}
+            <div className="client-multiselect-wrapper" ref={clientDropdownRef}>
+              <button
+                type="button"
+                className={`client-multiselect-trigger ${showClientDropdown ? 'open' : ''}`}
+                onClick={() => setShowClientDropdown((prev) => !prev)}
                 disabled={clientsLoading}
               >
-                <option value="">Vælg klient</option>
-                {clientsLoading && (
-                  <option value="loading" disabled>
-                    Henter klienter…
-                  </option>
-                )}
-                {!clientsLoading &&
-                  clients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.navn} – {client.email}
-                    </option>
-                  ))}
-              </select>
-              <span className="dropdown-arrow">▼</span>
+                <span className="client-multiselect-text">
+                  {clientsLoading 
+                    ? 'Henter klienter…' 
+                    : selectedClientIds.length === 0 
+                      ? 'Vælg klienter' 
+                      : `${selectedClientIds.length} klient${selectedClientIds.length > 1 ? 'er' : ''} valgt`
+                  }
+                </span>
+                <span className="dropdown-arrow">{showClientDropdown ? '▲' : '▼'}</span>
+              </button>
+              
+              {showClientDropdown && !clientsLoading && (
+                <div className="client-multiselect-dropdown">
+                  <div className="client-multiselect-list">
+                    {clients.map((client) => {
+                      const isSelected = selectedClientIds.includes(client.id);
+                      return (
+                        <label
+                          key={client.id}
+                          className={`client-multiselect-option ${isSelected ? 'selected' : ''}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedClientIds((prev) => [...prev, client.id]);
+                              } else {
+                                setSelectedClientIds((prev) => 
+                                  prev.filter((id) => id !== client.id)
+                                );
+                              }
+                            }}
+                          />
+                          <span className="client-option-info">
+                            <span className="client-option-name">{client.navn}</span>
+                            <span className="client-option-email">{client.email}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
             <button
               type="button"
@@ -514,7 +644,7 @@ function AppointmentForm({
           onClose={() => setShowAddClient(false)}
           onSave={(newClient) => {
             if (newClient?.id) {
-              setSelectedClientId(newClient.id);
+              setSelectedClientIds((prev) => [...prev, newClient.id]);
             }
             setShowAddClient(false);
           }}

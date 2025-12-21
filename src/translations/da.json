@@ -1,0 +1,198 @@
+{
+  "language": {
+    "title": "Vælg sprog",
+    "subtitle": "Du kan ændre sproget senere i indstillinger."
+  },
+  "onboarding": {
+    "eyebrow": "Kontoopsætning",
+    "topLabel": "Kontoopsætning",
+    "loading": "Indlæser…",
+    "actions": {
+      "close": "Luk",
+      "continue": "Fortsæt",
+      "finish": "Færdig",
+      "saving": "Gemmer…"
+    },
+    "aria": {
+      "back": "Tilbage",
+      "previous": "Forrige",
+      "next": "Næste"
+    },
+    "steps": {
+      "business": {
+        "title": "Hvad hedder din virksomhed?",
+        "subtitle": "Dette er det varemærke, dine kunder vil se. Din fakturering og dit juridiske navn kan tilføjes senere.",
+        "nameLabel": "Virksomhedens navn",
+        "namePlaceholder": "F.eks. Selma Klinik",
+        "websiteLabel": "Websted (Valgfrit)",
+        "websitePlaceholder": "www.ditwebsted.com"
+      },
+      "categories": {
+        "title": "Vælg den mulighed der passer bedst til din virksomhed",
+        "subtitle": "Du kan ændre dette senere",
+        "hint": "{count}/{max} valgt",
+        "options": ["Physiotherapist", "Osteopath", "Chiropractor"]
+      },
+      "accountType": {
+        "title": "Vælg kontotype",
+        "subtitle": "Dette hjælper os med at konfigurere din konto korrekt",
+        "solo": "Jeg er selvstændig",
+        "team": "Jeg har et team"
+      },
+      "teamSize": {
+        "title": "Hvor mange medarbejdere har du",
+        "options": ["2-5 personer", "6-10 personer", "11+ personer"]
+      },
+      "serviceModel": {
+        "title": "Hvor tilbyder du dine tjenester?",
+        "options": [
+          "Kunder besøger mig på et fysisk sted",
+          "Jeg rejser rundt og besøger mine kunder",
+          "Jeg tilbyder virtuelle tjenester online"
+        ]
+      },
+      "address": {
+        "title": "Angiv din virksomheds fysiske placering",
+        "subtitle": "Tilføj din primære virksomhedsplacering, så kunderne nemt kan finde dig. Du kan tilføje flere steder senere.",
+        "label": "Hvor har din virksomheds adresse?",
+        "placeholder": "Indtast adresse"
+      },
+      "software": {
+        "title": "Hvilken software bruger du i øjeblikket?",
+        "subtitle": "Hvis du vil skifte, kan vi hjælpe med at fremskynde din virksomhedopsætning og importere dine data til din nye Selma-konto.",
+        "options": [
+          "Acuity",
+          "Booksy",
+          "Calendly",
+          "Goldie",
+          "Janeapp",
+          "Mindbody",
+          "Salon Iris",
+          "Setmore",
+          "Shortcuts",
+          "Square",
+          "Styleseat",
+          "Timely",
+          "Treatwell",
+          "Vagaro",
+          "Zenoti",
+          "Jeg bruger ikke nogen software",
+          "Andet"
+        ]
+      },
+      "heardFrom": {
+        "title": "Hvordan hørte du om Selma?",
+        "options": [
+          "Anbefalet af en ven",
+          "Søgemaskine (f.eks. Google eller Yahoo)",
+          "Sociale medier",
+          "Annonce i e-mailen",
+          "Annonce i et magasin",
+          "Websteder med anmeldelser (f.eks. Capterra, Trustpilot)",
+          "AI Chatbot (f.eks. ChatGPT, Gemini, DeepSeek)",
+          "Andet"
+        ]
+      }
+    },
+    "completion": {
+      "title": "Din virksomhed er oprettet!",
+      "subtitle": "Få 14 dages gratis brug af Selma for virksomheder",
+      "button": "Færdig"
+    }
+  },
+  "booking": {
+    "sidebar": {
+      "calendar": "Kalender",
+      "clients": "Klienter",
+      "services": "Ydelser",
+      "forloeb": "Forløb",
+      "invoices": "Fakturaer",
+      "stats": "Statistik",
+      "team": "Team",
+      "settings": "Indstillinger",
+      "apps": "Apps",
+      "catalog": "Katalog",
+      "logout": "Log ud"
+    },
+    "topbar": {
+      "confirmEmail": "Bekræft din e-mailadresse",
+      "protectAccount": "Beskyt din konto",
+      "profile": "Min profil",
+      "personalSettings": "Personlige indstillinger",
+      "help": "Hjælp og support",
+      "logout": "Log ud",
+      "defaultUser": "Selma bruger",
+      "clinicSettings": "Klinikindstillinger"
+    },
+    "calendar": {
+      "today": "I dag",
+      "previous": "Forrige",
+      "next": "Næste",
+      "filters": "Filtre",
+      "freeze": "Frys",
+      "settings": "Indstillinger",
+      "refresh": "Opdater",
+      "viewLabel": "Kalendervisning",
+      "view": {
+        "month": "Måned",
+        "week": "Uge",
+        "day": "Dag"
+      },
+      "add": "Tilføj",
+      "entireTeam": "Hele teamet",
+      "teamOnDuty": "Team på arbejde",
+      "members": "Medarbejdere",
+      "clearAll": "Ryd alle",
+      "appointment": "Aftale",
+      "program": "Forløb",
+      "memberFallback": "Medarbejder",
+      "you": "Dig",
+      "notLoggedIn": "Ikke logget ind",
+      "loginToContinue": "Log ind for at fortsætte"
+    }
+  },
+  "settings": {
+    "title": "Indstillinger",
+    "close": "Luk",
+    "save": "Gem",
+    "saving": "Gemmer…",
+    "sections": {
+      "profile": "Profil",
+      "account": "Kontoopsætning",
+      "appearance": "Appearance",
+      "language": "Sprog"
+    },
+    "profile": {
+      "title": "Rediger din onlineprofil",
+      "avatarTitle": "Din avatar",
+      "avatarSubtitle": "Opdater din avatar til din professionelle profil.",
+      "changePhoto": "Skift billede",
+      "remove": "Fjern",
+      "fullName": "Fulde navn",
+      "fullNamePlaceholder": "Indtast dit fulde navn",
+      "email": "E-mail",
+      "clinicName": "Kliniknavn",
+      "clinicPlaceholder": "Angiv navnet på klinikken"
+    },
+    "account": {
+      "title": "Kontoopsætning",
+      "website": "Websted",
+      "websitePlaceholder": "www.ditwebsted.com",
+      "category": "Kategori",
+      "categoryPlaceholder": "Vælg kategori",
+      "address": "Adresse",
+      "addressPlaceholder": "Indtast adresse"
+    },
+    "appearance": {
+      "title": "Appearance",
+      "subtitle": "Vælg hvordan Selma skal se ud",
+      "light": "Light",
+      "system": "Match system",
+      "dark": "Dark"
+    },
+    "language": {
+      "title": "Sprog",
+      "label": "Foretrukket sprog"
+    }
+  }
+}

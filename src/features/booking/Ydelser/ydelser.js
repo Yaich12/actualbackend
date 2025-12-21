@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import '../bookingpage.css';
 import './ydelser.css';
 import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayout';
@@ -37,8 +36,7 @@ const normalizeService = (stored = {}) => {
 };
 
 function Ydelser() {
-  const navigate = useNavigate();
-  const { user, signOutUser } = useAuth();
+  const { user } = useAuth();
   const { services: remoteServices, loading: isLoadingServices, error: servicesLoadError } = useUserServices();
   const [searchQuery, setSearchQuery] = useState('');
   const [serviceList, setServiceList] = useState([]);
@@ -156,19 +154,6 @@ function Ydelser() {
   return (
     <BookingSidebarLayout>
       <div className="booking-page">
-        {/* Top Navigation Bar */}
-        <div className="booking-topbar">
-          <div className="topbar-left">
-            <button className="topbar-logo-btn" onClick={async () => {
-              await signOutUser();
-              navigate('/');
-            }}>
-              Forside
-            </button>
-          </div>
-          <div className="topbar-right" />
-        </div>
-
         <div className="booking-content">
           {/* Main Content Area - Services */}
           <div className="ydelser-main">

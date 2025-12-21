@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import React, { useCallback, useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   getRedirectResult,
   isSignInWithEmailLink,
@@ -7,8 +7,10 @@ import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
   createUserWithEmailAndPassword,
+  fetchSignInMethodsForEmail,
 } from "firebase/auth";
-import { auth } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../firebase";
 import { signInWithGoogle } from "../googleauth";
 import { useAuth } from "../AuthContext";
 import { Gem } from "lucide-react";
@@ -22,23 +24,16 @@ import "./SignUp.css";
 
 const EMAIL_STORAGE_KEY = "selmaEmailForSignIn";
 
-const SelmaAuthLogo = () => (
-  <Link to="/" className="signup-logo-chip" aria-label="Tilbage til forsiden">
-    <Gem className="h-4 w-4" />
-  </Link>
-);
-
 function SignUp() {
   const [status, setStatus] = useState(null);
-  const [sending, setSending] = useState(false);
+  const [sending] = useState(false);
   const [processingLink, setProcessingLink] = useState(false);
-  const [shouldRedirectToWelcome, setShouldRedirectToWelcome] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const [lastEmail, setLastEmail] = useState("");
 
-  const persistUserProfile = async (authUser) => {
+  const persistUserProfile = useCallback(async (authUser) => {
     if (!authUser) {
       return;
     }
@@ -47,26 +42,42 @@ function SignUp() {
     } catch (error) {
       console.error("Failed to ensure user document:", error);
     }
-  };
+  }, []);
 
-  const redirectToWelcome = () => {
-    setShouldRedirectToWelcome(true);
-    navigate("/welcome", { replace: true });
+  const resolvePostLoginRoute = useCallback(async (authUser) => {
+    if (!authUser?.uid) {
+      return "/welcome";
+    }
+
+    try {
+      const ref = doc(db, "users", authUser.uid);
+      const snap = await getDoc(ref);
+      const data = snap.exists() ? snap.data() : null;
+      const onboardingComplete = data?.onboardingComplete === true;
+      return onboardingComplete ? "/booking" : "/welcome";
+    } catch (error) {
+      console.error("[SignUp] Failed to resolve onboarding state", error);
+      return "/welcome";
+    }
+  }, []);
+
+  const redirectAfterAuth = useCallback(async (authUser) => {
+    const target = await resolvePostLoginRoute(authUser);
     clearPostAuthRedirectTarget();
-  };
+    navigate(target, { replace: true });
+  }, [navigate, resolvePostLoginRoute]);
 
   useEffect(() => {
     console.log("[SignUp] auth state:", { loading, user });
     if (!loading && user) {
       const persistAndRedirect = async () => {
         await persistUserProfile(user);
-        console.log("[SignUp] navigating to /welcome");
-        redirectToWelcome();
+        await redirectAfterAuth(user);
       };
 
       void persistAndRedirect();
     }
-  }, [user, loading, navigate]);
+  }, [loading, persistUserProfile, redirectAfterAuth, user]);
 
   useEffect(() => {
     let isMounted = true;
@@ -85,10 +96,9 @@ function SignUp() {
         await persistUserProfile(redirectResult.user);
         setStatus({
           type: "success",
-          message: "Du er nu logget ind. Sender dig til velkomstskærmen…",
+          message: "Du er nu logget ind. Klargør din konto…",
         });
-        console.log("[SignUp] navigating to /welcome after Google sign-in");
-        redirectToWelcome();
+        await redirectAfterAuth(redirectResult.user);
       } catch (error) {
         console.error("[SignUp] Google redirect completion failed:", error);
         if (!isMounted) {
@@ -116,7 +126,7 @@ function SignUp() {
     return () => {
       isMounted = false;
     };
-  }, [navigate]);
+  }, [persistUserProfile, redirectAfterAuth]);
 
   useEffect(() => {
     const finishSignInFromLink = async () => {
@@ -152,10 +162,9 @@ function SignUp() {
         window.localStorage.removeItem(EMAIL_STORAGE_KEY);
         setStatus({
           type: "success",
-          message: "Du er nu logget ind. Sender dig til velkomstskærmen…",
+          message: "Du er nu logget ind. Klargør din konto…",
         });
-        console.log("[SignUp] navigating to /welcome after email link sign-in");
-        redirectToWelcome();
+        await redirectAfterAuth(credential?.user);
       } catch (error) {
         console.error("[SignUp] email link sign-in failed:", error);
         setStatus({
@@ -168,11 +177,7 @@ function SignUp() {
     };
 
     finishSignInFromLink();
-  }, [navigate]);
-
-  if (shouldRedirectToWelcome && !loading) {
-    return <Navigate to="/welcome" replace />;
-  }
+  }, [persistUserProfile, redirectAfterAuth]);
 
   const handleGoogleSignIn = async () => {
     setStatus(null);
@@ -184,7 +189,7 @@ function SignUp() {
       if (result?.user) {
         console.log("[SignUp] Google popup sign-in success:", result.user);
         await persistUserProfile(result.user);
-        redirectToWelcome();
+        await redirectAfterAuth(result.user);
       } else {
         console.log(
           "[SignUp] Switched to redirect flow for Google sign-in (popup unavailable)"
@@ -203,41 +208,137 @@ function SignUp() {
     event.preventDefault();
     if (!auth) return;
     setStatusMessage(null);
+    setPostAuthRedirectTarget("/welcome");
+    setStatus({
+      type: "success",
+      message: "Logger ind…",
+    });
+    setProcessingLink(true);
     const formData = new FormData(event.currentTarget);
     const emailInput = (formData.get("email") || "").toString().trim();
     const passwordInput = (formData.get("password") || "").toString();
     setLastEmail(emailInput);
     try {
-      const credential = await signInWithEmailAndPassword(auth, emailInput, passwordInput);
+      if (!emailInput || !passwordInput) {
+        setStatusMessage("Indtast både email og kodeord.");
+        return;
+      }
+
+      const methods = await fetchSignInMethodsForEmail(auth, emailInput);
+      const credential =
+        methods.length === 0
+          ? await createUserWithEmailAndPassword(auth, emailInput, passwordInput)
+          : await signInWithEmailAndPassword(auth, emailInput, passwordInput);
+
       await persistUserProfile(credential.user);
-      redirectToWelcome();
+      await redirectAfterAuth(credential.user);
     } catch (error) {
       console.error("[SignUp] email/password sign-in failed:", error);
-      setStatusMessage(error.message || "Could not sign in with email/password.");
+      if (error?.code === "auth/wrong-password" || error?.code === "auth/invalid-credential") {
+        setStatusMessage("Forkert kodeord. Prøv igen.");
+        return;
+      }
+      if (error?.code === "auth/weak-password") {
+        setStatusMessage("Kodeordet er for svagt. Brug mindst 6 tegn.");
+        return;
+      }
+      if (error?.code === "auth/invalid-email") {
+        setStatusMessage("Ugyldig email. Tjek stavning og prøv igen.");
+        return;
+      }
+      if (error?.code === "auth/email-already-in-use") {
+        setStatusMessage("Emailen findes allerede. Prøv at logge ind med dit kodeord.");
+        return;
+      }
+      setStatusMessage(error.message || "Kunne ikke logge ind eller oprette bruger.");
+    } finally {
+      setProcessingLink(false);
+      setStatus(null);
+    }
+  };
+
+  const handleEmailPasswordLoginOnly = async () => {
+    if (!auth) return;
+    setStatusMessage(null);
+    setPostAuthRedirectTarget("/welcome");
+    setStatus({
+      type: "success",
+      message: "Logger ind…",
+    });
+    setProcessingLink(true);
+
+    const emailInput = (document.querySelector('input[name="email"]')?.value || "")
+      .toString()
+      .trim();
+    const passwordInput = (document.querySelector('input[name="password"]')?.value || "").toString();
+
+    try {
+      if (!emailInput || !passwordInput) {
+        setStatusMessage("Indtast email og kodeord først.");
+        return;
+      }
+
+      const credential = await signInWithEmailAndPassword(auth, emailInput, passwordInput);
+      await persistUserProfile(credential.user);
+      await redirectAfterAuth(credential.user);
+    } catch (error) {
+      console.error("[SignUp] login-only failed:", error);
+      if (error?.code === "auth/user-not-found") {
+        setStatusMessage("Email findes ikke. Tryk på 'Opret konto' for at oprette en bruger.");
+        return;
+      }
+      if (error?.code === "auth/wrong-password" || error?.code === "auth/invalid-credential") {
+        setStatusMessage("Forkert kodeord. Prøv igen.");
+        return;
+      }
+      if (error?.code === "auth/invalid-email") {
+        setStatusMessage("Ugyldig email. Tjek stavning og prøv igen.");
+        return;
+      }
+      setStatusMessage(error.message || "Kunne ikke logge ind.");
+    } finally {
+      setProcessingLink(false);
+      setStatus(null);
     }
   };
 
   const handleCreateAccount = async () => {
     if (!auth) return;
     setStatusMessage(null);
-    // Use last entered email/password if available
-    const emailInput = lastEmail;
-    if (!emailInput) {
-      setStatusMessage("Enter email and password, then tap Create Account.");
-      return;
-    }
-    const formPassword = document.querySelector('input[name="password"]')?.value || "";
-    if (!formPassword) {
-      setStatusMessage("Enter a password to create your account.");
+    setPostAuthRedirectTarget("/welcome");
+    // Use current form values (works even if user didn't press "Sign In" first)
+    const emailInput =
+      (document.querySelector('input[name="email"]')?.value || "").toString().trim() || lastEmail;
+    const formPassword = (document.querySelector('input[name="password"]')?.value || "").toString();
+
+    if (!emailInput || !formPassword) {
+      setStatusMessage("Indtast email og kodeord først.");
       return;
     }
     try {
-      const credential = await createUserWithEmailAndPassword(auth, emailInput, formPassword);
+      const methods = await fetchSignInMethodsForEmail(auth, emailInput);
+      const credential =
+        methods.length === 0
+          ? await createUserWithEmailAndPassword(auth, emailInput, formPassword)
+          : await signInWithEmailAndPassword(auth, emailInput, formPassword);
+
       await persistUserProfile(credential.user);
-      redirectToWelcome();
+      await redirectAfterAuth(credential.user);
     } catch (error) {
       console.error("[SignUp] create account failed:", error);
-      setStatusMessage(error.message || "Could not create account.");
+      if (error?.code === "auth/wrong-password" || error?.code === "auth/invalid-credential") {
+        setStatusMessage("Forkert kodeord. Prøv igen.");
+        return;
+      }
+      if (error?.code === "auth/weak-password") {
+        setStatusMessage("Kodeordet er for svagt. Brug mindst 6 tegn.");
+        return;
+      }
+      if (error?.code === "auth/invalid-email") {
+        setStatusMessage("Ugyldig email. Tjek stavning og prøv igen.");
+        return;
+      }
+      setStatusMessage(error.message || "Kunne ikke oprette eller logge ind.");
     }
   };
 
@@ -271,7 +372,8 @@ function SignUp() {
           onSignIn={handleEmailPasswordSignIn}
           onGoogleSignIn={handleGoogleSignIn}
           onResetPassword={handleResetPassword}
-          onCreateAccount={handleCreateAccount}
+          onLoginLink={handleEmailPasswordLoginOnly}
+          onSignUp={handleCreateAccount}
           title={<span className="font-light">Velkommen tilbage</span>}
           description="Log ind med email og kode eller fortsæt med Google. Du kan stadig bruge din magiske link-login hvis du har en aktiv email link."
         />

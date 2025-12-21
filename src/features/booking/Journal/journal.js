@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import './journal.css';
 import { useUserServices } from '../Ydelser/hooks/useUserServices';
 import SeHistorik from './Historik/sehistorik';
@@ -17,6 +17,16 @@ function Journal({
 }) {
   const [showHistory, setShowHistory] = useState(false);
   const [journalEntryCount, setJournalEntryCount] = useState(null);
+  const [historyTarget, setHistoryTarget] = useState(null); // { id, navn }
+  const [isEditingGroupName, setIsEditingGroupName] = useState(false);
+  const [groupNameDraft, setGroupNameDraft] = useState('');
+  const [groupNameError, setGroupNameError] = useState('');
+  const [isSavingGroupName, setIsSavingGroupName] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [summaryText, setSummaryText] = useState('');
+  const [summaryError, setSummaryError] = useState('');
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [suggestError, setSuggestError] = useState('');
   const { services: savedServices } = useUserServices();
   const { user } = useAuth();
 
@@ -147,7 +157,107 @@ function Journal({
     (selectedAppointment.serviceType === 'forloeb' ||
       (typeof selectedAppointment.serviceId === 'string' && selectedAppointment.serviceId.startsWith('forloeb:')));
 
-  const participantList = (() => {
+  const currentGroupName = useMemo(() => {
+    if (!isForloeb) return '';
+    return (
+      appointmentService?.navn ||
+      selectedAppointment?.service ||
+      selectedAppointment?.title ||
+      'Forløb'
+    );
+  }, [appointmentService?.navn, isForloeb, selectedAppointment?.service, selectedAppointment?.title]);
+
+  const forloebDocId = useMemo(() => {
+    const raw = selectedAppointment?.serviceId;
+    if (!raw || typeof raw !== 'string') return null;
+    if (!raw.startsWith('forloeb:')) return null;
+    return raw.slice('forloeb:'.length) || null;
+  }, [selectedAppointment?.serviceId]);
+
+  const beginEditGroupName = () => {
+    setGroupNameError('');
+    setGroupNameDraft(currentGroupName || '');
+    setIsEditingGroupName(true);
+  };
+
+  const cancelEditGroupName = () => {
+    setIsEditingGroupName(false);
+    setGroupNameDraft('');
+    setGroupNameError('');
+  };
+
+  const saveGroupName = async () => {
+    if (isSavingGroupName) return;
+    setGroupNameError('');
+
+    const nextName = (groupNameDraft || '').trim();
+    if (!nextName) {
+      setGroupNameError('Indtast et holdnavn.');
+      return;
+    }
+    if (!user?.uid) {
+      setGroupNameError('Du skal være logget ind for at gemme.');
+      return;
+    }
+    if (!isForloeb || !selectedAppointment?.serviceId) {
+      setGroupNameError('Mangler forløbs-id – kunne ikke gemme.');
+      return;
+    }
+
+    setIsSavingGroupName(true);
+    try {
+      // 1) Rename the forløb definition (if we have a doc id)
+      if (forloebDocId) {
+        const forloebRef = doc(db, 'users', user.uid, 'forloeb', forloebDocId);
+        await updateDoc(forloebRef, {
+          name: nextName,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // 2) Update all appointments in this forløb so calendar + details reflect the new name
+      const apptRef = collection(db, 'users', user.uid, 'appointments');
+      const q = query(apptRef, where('serviceId', '==', selectedAppointment.serviceId));
+      const snap = await getDocs(q);
+
+      if (!snap.empty) {
+        let batch = writeBatch(db);
+        let opCount = 0;
+
+        const flush = async () => {
+          if (opCount === 0) return;
+          await batch.commit();
+          batch = writeBatch(db);
+          opCount = 0;
+        };
+
+        for (const d of snap.docs) {
+          batch.update(d.ref, {
+            service: nextName,
+            title: nextName,
+            client: nextName,
+            updatedAt: serverTimestamp(),
+          });
+          opCount += 1;
+          if (opCount >= 450) {
+            await flush();
+          }
+        }
+
+        await flush();
+      }
+
+      setIsEditingGroupName(false);
+      setGroupNameDraft('');
+    } catch (err) {
+      console.error('[Journal] Failed to rename group', err);
+      setGroupNameError('Kunne ikke gemme holdnavnet. Prøv igen.');
+    } finally {
+      setIsSavingGroupName(false);
+    }
+  };
+
+  const participantEntries = useMemo(() => {
     const extractName = (p) => {
       if (!p) return null;
       if (typeof p === 'string') return p.trim() || null;
@@ -166,25 +276,276 @@ function Journal({
       );
     };
 
-    const names = [];
-
+    const items = [];
     if (Array.isArray(selectedAppointment?.participants)) {
       selectedAppointment.participants.forEach((p) => {
         const name = extractName(p);
-        if (name) names.push(name);
+        const id = typeof p === 'object' && p ? p.id : null;
+        if (name) {
+          items.push({ id: id || null, navn: name });
+        }
       });
     }
 
+    // For non-forløb, fall back to client name
+    if (!isForloeb) {
     if (selectedAppointment?.client) {
-      names.push(selectedAppointment.client);
+        items.push({ id: selectedAppointment?.clientId || null, navn: selectedAppointment.client });
     }
     if (client?.navn) {
-      names.push(client.navn);
+        items.push({ id: client?.id || null, navn: client.navn });
+      }
     }
 
-    // Deduplicate while preserving order
-    return names.filter((n, idx) => n && names.indexOf(n) === idx);
-  })();
+    // Deduplicate (prefer entries with ids)
+    const byKey = new Map();
+    items.forEach((item) => {
+      const key = (item.navn || '').trim().toLowerCase();
+      if (!key) return;
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, item);
+        return;
+      }
+      if (!existing.id && item.id) {
+        byKey.set(key, item);
+      }
+    });
+    return Array.from(byKey.values());
+  }, [client?.id, client?.navn, isForloeb, selectedAppointment]);
+
+  const openParticipantHistory = (participant) => {
+    if (!participant?.navn) return;
+
+    let clientId = participant.id || null;
+    if (!clientId && Array.isArray(clients) && clients.length) {
+      const match = clients.find(
+        (c) => (c?.navn || '').trim().toLowerCase() === participant.navn.trim().toLowerCase()
+      );
+      clientId = match?.id || null;
+    }
+
+    setHistoryTarget({ id: clientId, navn: participant.navn });
+    setShowHistory(true);
+  };
+
+  const toIsoFromDateAndTime = (dateStr, timeStr) => {
+    if (!dateStr || !timeStr) return null;
+
+    // Accepts both dd-mm-yyyy and yyyy-mm-dd
+    let dd, mm, yyyy;
+    if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+      [dd, mm, yyyy] = dateStr.split('-').map(Number);
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      [yyyy, mm, dd] = dateStr.split('-').map(Number);
+    } else {
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) return null;
+      dd = d.getDate();
+      mm = d.getMonth() + 1;
+      yyyy = d.getFullYear();
+    }
+
+    const [h, m] = String(timeStr).split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return null;
+
+    const d = new Date(yyyy, mm - 1, dd, h, m, 0, 0);
+    return d.toISOString();
+  };
+
+  const handleSummarizePatient = async () => {
+    if (!client?.id || !user) {
+      setSummaryError('Mangler klient eller bruger.');
+      return;
+    }
+
+    if (!process.env.REACT_APP_SUMMARIZE_JOURNAL_URL) {
+      setSummaryError('Manglende opsummerings-URL (REACT_APP_SUMMARIZE_JOURNAL_URL).');
+      return;
+    }
+
+    try {
+      setIsSummarizing(true);
+      setSummaryError('');
+      setSummaryText('');
+
+      const auth = getAuth();
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        setSummaryError('Kunne ikke hente login-token.');
+        setIsSummarizing(false);
+        return;
+      }
+
+      const res = await fetch(process.env.REACT_APP_SUMMARIZE_JOURNAL_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ clientId: client.id }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        console.error('summarize error', data);
+        setSummaryError(data?.error || 'Ukendt fejl ved opsummering.');
+        return;
+      }
+
+      setSummaryText(data?.summary || '');
+    } catch (err) {
+      console.error(err);
+      setSummaryError('Der opstod en fejl. Prøv igen.');
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
+  const handleSuggestNextAppointment = async () => {
+    if (!selectedAppointment || !client || !user) {
+      setSuggestError('Mangler aftale, klient eller bruger.');
+      return;
+    }
+
+    if (!process.env.REACT_APP_SUGGEST_NEXT_APPOINTMENT_URL) {
+      setSuggestError(
+        'Manglende URL til forslag af næste aftale (REACT_APP_SUGGEST_NEXT_APPOINTMENT_URL).'
+      );
+      return;
+    }
+
+    const lastAppointmentIso = toIsoFromDateAndTime(
+      selectedAppointment.startDate,
+      selectedAppointment.startTime
+    );
+    if (!lastAppointmentIso) {
+      setSuggestError('Kunne ikke beregne dato/tid for sidste aftale.');
+      return;
+    }
+
+    const computeDurationMinutes = () => {
+      const startIso = toIsoFromDateAndTime(
+        selectedAppointment.startDate,
+        selectedAppointment.startTime
+      );
+      const endIso = toIsoFromDateAndTime(
+        selectedAppointment.endDate || selectedAppointment.startDate,
+        selectedAppointment.endTime || selectedAppointment.startTime
+      );
+      if (!startIso || !endIso) return 60;
+      const start = new Date(startIso);
+      const end = new Date(endIso);
+      const diff = Math.round((end.getTime() - start.getTime()) / 60000);
+      return diff > 0 ? diff : 60;
+    };
+
+    try {
+      setIsSuggesting(true);
+      setSuggestError('');
+
+      const auth = getAuth();
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        setSuggestError('Kunne ikke hente login-token.');
+        setIsSuggesting(false);
+        return;
+      }
+
+      const diagnosis =
+        selectedAppointment?.diagnose ||
+        selectedAppointment?.diagnosis ||
+        client?.diagnose ||
+        client?.diagnosis ||
+        '';
+
+      const body = {
+        clientId: client.id,
+        diagnosis,
+        lastAppointmentIso,
+        sessionCount: selectedAppointment?.sessionCount || null,
+        journalSummary: null,
+        durationMinutes: computeDurationMinutes(),
+      };
+
+      const res = await fetch(process.env.REACT_APP_SUGGEST_NEXT_APPOINTMENT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        console.error('suggestNextAppointment error', data);
+        setSuggestError(data?.error || 'Ukendt fejl ved forslag af næste aftale.');
+        return;
+      }
+
+      const { suggested, rationale, safetyNote, intervalDays } = data || {};
+      if (!suggested?.startDate || !suggested?.startTime) {
+        setSuggestError('Manglede forslag til dato/tid i svaret.');
+        return;
+      }
+
+      if (!onCreateAppointment) return;
+
+      const baseNotes = selectedAppointment.notes || '';
+      const newNotes =
+        (baseNotes ? baseNotes + '\n\n' : '') +
+        'AI-forslag til næste tid' +
+        (typeof intervalDays === 'number' ? ` (${intervalDays} dage):\n` : ':\n') +
+        (rationale || '') +
+        (safetyNote ? '\n\nSikkerhedsnote: ' + safetyNote : '');
+
+      const nextAppointmentTemplate = {
+        ...selectedAppointment,
+        startDate: suggested.startDate,
+        startTime: suggested.startTime,
+        endDate: suggested.endDate || suggested.startDate,
+        endTime: suggested.endTime || selectedAppointment.endTime,
+        notes: newNotes,
+      };
+
+      onCreateAppointment({
+        appointment: nextAppointmentTemplate,
+        client,
+        suggested: true,
+      });
+    } catch (err) {
+      console.error(err);
+      setSuggestError('Der opstod en fejl ved forslag af næste aftale. Prøv igen.');
+    } finally {
+      setIsSuggesting(false);
+    }
+  };
+
+  // NOTE: Early returns must come AFTER all hooks to satisfy rules-of-hooks.
+  if (!selectedClient) {
+    return (
+      <div className="journal-empty">
+        Ingen klient valgt – vælg en klient for at se journalen.
+      </div>
+    );
+  }
+
+  // If showing history, render SeHistorik component
+  if (showHistory) {
+    const activeClient = historyTarget || selectedClient;
+    return (
+      <SeHistorik 
+        clientId={activeClient?.id || null}
+        clientName={activeClient?.navn || 'Ukendt klient'}
+        onClose={() => {
+          setShowHistory(false);
+          setHistoryTarget(null);
+        }}
+        onCreateEntry={onCreateJournalEntry}
+      />
+    );
+  }
 
   return (
     <div className="journal-container">
@@ -192,46 +553,89 @@ function Journal({
       <div className="journal-header">
         <div className="journal-header-top">
           <div className="journal-client-info">
-            <span className="journal-client-icon">👤</span>
             <h2 className="journal-client-name">
-              {isForloeb && appointmentService?.navn
-                ? `Forløb: ${appointmentService.navn}`
-                : client?.navn || 'Ukendt klient'}
+              {isForloeb ? (
+                <>
+                  <span className="journal-client-prefix">Forløb:</span>{' '}
+                  {isEditingGroupName ? (
+                    <span className="journal-inline-edit">
+                      <input
+                        className="journal-inline-input"
+                        value={groupNameDraft}
+                        onChange={(e) => setGroupNameDraft(e.target.value)}
+                        placeholder="Holdnavn…"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        className="journal-inline-btn"
+                        onClick={saveGroupName}
+                        disabled={isSavingGroupName}
+                      >
+                        {isSavingGroupName ? 'Gemmer…' : 'Gem'}
+                      </button>
+                      <button
+                        type="button"
+                        className="journal-inline-btn secondary"
+                        onClick={cancelEditGroupName}
+                        disabled={isSavingGroupName}
+                      >
+                        Annuller
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="journal-client-value">{currentGroupName}</span>
+                  )}
+                </>
+              ) : (
+                client?.navn || 'Ukendt klient'
+              )}
             </h2>
           </div>
           <div className="journal-header-actions">
-            <button className="journal-edit-client-btn">Rediger klient</button>
             <button className="journal-close-btn" onClick={onClose}>✕</button>
           </div>
         </div>
+        {isForloeb && groupNameError && (
+          <div className="journal-inline-error" role="alert">
+            {groupNameError}
+          </div>
+        )}
       </div>
 
       {/* Content */}
       <div className="journal-content">
-        {/* Client Contact */}
-        {!isForloeb && (
+        {/* Date and service info */}
+        {selectedAppointment && (
           <div className="journal-section">
-            <div className="journal-label">E-mail</div>
-            <div className="journal-value">{client?.email || selectedAppointment?.clientEmail || '—'}</div>
+            <div className="journal-appointment-date">
+              {formatDate(selectedAppointment.startDate)}, {formatTime(selectedAppointment.startTime)} til {getEndTime(selectedAppointment.startTime)}
+            </div>
+            {!isForloeb && appointmentService && (
+              <>
+                <div className="journal-appointment-service">
+                  {appointmentService.navn}
+                </div>
+                <div className="journal-appointment-price">
+                  DKK {formatPrice(appointmentService.pris)}
+                </div>
+              </>
+            )}
           </div>
         )}
 
-        {isForloeb && participantList.length > 0 && (
+        {isForloeb && participantEntries.length > 0 && (
           <div className="journal-section">
             <div className="journal-label">Deltagere</div>
             <div className="journal-participants">
-              {participantList.map((name) => (
+              {participantEntries.map((participant) => (
                 <button
-                  key={name}
+                  key={`${participant.id || 'no-id'}:${participant.navn}`}
                   type="button"
                   className="journal-participant-chip"
-                  onClick={() => {
-                    if (onCreateJournalEntry) {
-                      onCreateJournalEntry();
-                    }
-                  }}
+                  onClick={() => openParticipantHistory(participant)}
                 >
-                  {name}
+                  {participant.navn}
                   <span className="journal-participant-link">Se journal</span>
                 </button>
               ))}
@@ -239,69 +643,77 @@ function Journal({
           </div>
         )}
 
-        {/* Create Next Appointment Button */}
-        <div className="journal-section">
-          <div className="journal-create-actions">
-            <button
-              className="journal-create-appointment-btn"
-              onClick={() => {
-                if (!onCreateAppointment) return;
-                onCreateAppointment({
-                  appointment: selectedAppointment || null,
-                  client,
-                });
-              }}
-            >
-              Opret næste aftale
-            </button>
+        {/* Create Journal Entry Button */}
+        {onCreateJournalEntry && (
+          <div className="journal-section">
+            <div className="journal-create-actions">
+              <button
+                className="journal-create-appointment-btn"
+                onClick={onCreateJournalEntry}
+              >
+                <span className="journal-create-entry-icon">+</span>
+                Opret indlæg
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Selected Appointment Details */}
         {selectedAppointment && (
           <>
             <div className="journal-section journal-appointment-section">
-              <div className="journal-appointment-date">
-                {formatDate(selectedAppointment.startDate)}, {formatTime(selectedAppointment.startTime)} til {getEndTime(selectedAppointment.startTime)}
-              </div>
-              {appointmentService && (
-                <>
-                  <div className="journal-appointment-service">
-                    {isForloeb ? `Forløb: ${appointmentService.navn}` : appointmentService.navn}
-                  </div>
-                  {!isForloeb && (
-                    <div className="journal-appointment-price">
-                      DKK {formatPrice(appointmentService.pris)}
-                    </div>
-                  )}
-                </>
-              )}
-              {isForloeb && participantList.length > 0 && (
-                <div className="journal-section">
-                  <div className="journal-label">Deltagere</div>
-                  <div className="journal-value">
-                    {participantList.join(', ')}
-                  </div>
-                </div>
-              )}
               <div className="journal-appointment-actions">
                 <button 
                   className="journal-action-btn"
-                  onClick={() => setShowHistory(true)}
+                  onClick={() => {
+                    setHistoryTarget(null);
+                    setShowHistory(true);
+                  }}
                 >
                   Se journal
                 </button>
-                <button className="journal-action-btn">Opret ny faktura</button>
+                <MovingBorderButton
+                  borderRadius="0.75rem"
+                  onClick={handleSummarizePatient}
+                  disabled={isSummarizing}
+                  containerClassName="w-full h-12 text-base disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="bg-white text-slate-900 border-slate-200 font-medium"
+                  borderClassName="bg-[radial-gradient(var(--sky-500)_40%,transparent_60%)]"
+                >
+                  {isSummarizing ? 'Opsummerer…' : 'Opsummér patient'}
+                </MovingBorderButton>
                 <button
-                className="journal-icon-btn"
-                onClick={() => {
-                  if (onEditAppointment && selectedAppointment) {
-                    onEditAppointment(selectedAppointment);
-                  }
-                }}
-              >
-                ✏️
-              </button>
+                  className="journal-action-btn"
+                  onClick={() => {
+                    if (onEditAppointment && selectedAppointment) {
+                      onEditAppointment(selectedAppointment);
+                    }
+                  }}
+                >
+                  Rediger aftale
+                </button>
+                <button
+                  className="journal-action-btn"
+                  onClick={() => {
+                    if (!onCreateAppointment) return;
+                    onCreateAppointment({
+                      appointment: selectedAppointment || null,
+                      client,
+                    });
+                  }}
+                >
+                  Opret næste aftale
+                </button>
+                <MovingBorderButton
+                  borderRadius="0.75rem"
+                  onClick={handleSuggestNextAppointment}
+                  disabled={isSuggesting}
+                  containerClassName="w-full h-12 text-base disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="bg-white text-slate-900 border-slate-200 font-medium"
+                  borderClassName="bg-[radial-gradient(var(--violet-500)_40%,transparent_60%)]"
+                >
+                  {isSuggesting ? 'Foreslår…' : 'Foreslå næste aftale'}
+                </MovingBorderButton>
                 <button
                   className="journal-action-btn journal-delete-btn"
                   onClick={() => {
@@ -314,29 +726,21 @@ function Journal({
                     }
                   }}
                 >
+                  <Trash2 className="journal-delete-icon" size={16} aria-hidden="true" />
                   Slet aftale
                 </button>
-                {onCreateJournalEntry && (
-                  <button
-                    className="journal-create-entry-btn inline"
-                    onClick={onCreateJournalEntry}
-                  >
-                    <span className="journal-create-entry-icon">+</span>
-                    Opret indlæg
-                  </button>
-                )}
               </div>
-            </div>
-
-            {!isForloeb && (
-              <>
-                {/* Booking Source */}
-                <div className="journal-section">
-                  <div className="journal-booking-source">
-                    <span className="journal-booking-icon">🔗</span>
-                    <div>
-                      <div className="journal-label">Bookingkilde</div>
-                      <div className="journal-value">Denne aftale blev booket manuelt</div>
+              {(summaryError || summaryText) && (
+                <div className="journal-summary">
+                  {summaryError && (
+                    <div className="journal-summary-error" role="alert">
+                      {summaryError}
+                    </div>
+                  )}
+                  {summaryText && (
+                    <div className="journal-summary-card">
+                      <h3>Opsummering af journal</h3>
+                      <pre>{summaryText}</pre>
                     </div>
                   </div>
                 </div>
@@ -355,8 +759,8 @@ function Journal({
                     {typeof journalEntryCount === 'number' ? ` (${journalEntryCount})` : ''}
                   </button>
                 </div>
-              </>
-            )}
+              )}
+            </div>
           </>
         )}
       </div>

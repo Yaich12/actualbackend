@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './bookingpage.css';
 import { BookingSidebarLayout } from '../../components/ui/BookingSidebarLayout';
@@ -6,15 +6,39 @@ import AppointmentForm from './appointment/appointment';
 import Journal from './Journal/journal';
 import Indlæg from './Journal/indlæg/indlæg';
 import { useAuth } from '../../AuthContext';
-import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, where, getDocs, writeBatch, query } from 'firebase/firestore';
+import { useLanguage } from '../../LanguageContext';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, where, getDocs, writeBatch, query, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import useAppointments from '../../hooks/useAppointments';
 import { combineDateAndTimeToIso } from '../../utils/appointmentFormat';
 import { useUserClients } from './Klienter/hooks/useUserClients';
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+  Settings,
+  SlidersHorizontal,
+  Snowflake,
+} from 'lucide-react';
+
+const getInitials = (value) => {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (!trimmed) return '?';
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  const candidateParts =
+    parts.length > 1 ? parts : parts[0].split(/[@._-]+/).filter(Boolean);
+  return candidateParts
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+};
 
 function BookingPage() {
   const navigate = useNavigate();
-  const { user, signOutUser } = useAuth();
+  const { user } = useAuth();
+  const { t, locale } = useLanguage();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentView, setCurrentView] = useState('week'); // 'month' | 'week' | 'day'
   const [now, setNow] = useState(new Date());
@@ -26,10 +50,42 @@ function BookingPage() {
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showJournalEntryForm, setShowJournalEntryForm] = useState(false);
   const [journalEntryClient, setJournalEntryClient] = useState(null);
+  const [journalEntryParticipants, setJournalEntryParticipants] = useState([]);
+  const [journalEntryDate, setJournalEntryDate] = useState('');
   const [dragState, setDragState] = useState(null); // { mode, appointmentId, dayIndex, startClientX, startClientY, daysRect, columnRect, originalStart, originalEnd, currentStart, currentEnd }
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState('');
+  const ownerNameFallback = useMemo(
+    () =>
+      user?.displayName ||
+      user?.email ||
+      t('booking.topbar.defaultUser', 'Selma bruger'),
+    [t, user?.displayName, user?.email]
+  );
+  const ownerInitials = useMemo(
+    () => getInitials(ownerNameFallback),
+    [ownerNameFallback]
+  );
+  const ownerEntry = useMemo(
+    () => ({
+      id: user?.uid || 'owner',
+      name: ownerNameFallback,
+      avatarUrl: profilePhotoUrl || user?.photoURL || '',
+      avatarColor: '#0ea5e9',
+      avatarText: ownerInitials,
+    }),
+    [ownerInitials, ownerNameFallback, profilePhotoUrl, user?.photoURL, user?.uid]
+  );
+  const [teamMembers, setTeamMembers] = useState(() => [ownerEntry]);
+  const [teamMenuOpen, setTeamMenuOpen] = useState(false);
+  const [teamFilter, setTeamFilter] = useState('all'); // 'all' | 'custom'
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState([ownerEntry.name]);
+  const [hasTeamAccess, setHasTeamAccess] = useState(false);
+  const teamMenuRef = useRef(null);
   const daysContainerRef = React.useRef(null);
   const { appointments = [] } = useAppointments(user?.uid || null);
   const { clients } = useUserClients();
+  const appointmentFallback = t('booking.calendar.appointment', 'Aftale');
+  const programFallback = t('booking.calendar.program', 'Forløb');
   const START_HOUR = 6;
   const END_HOUR = 19;
   const VISIBLE_HOURS = END_HOUR - START_HOUR;
@@ -57,13 +113,212 @@ function BookingPage() {
     return () => clearInterval(intervalId);
   }, []);
 
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (teamMenuRef.current && !teamMenuRef.current.contains(event.target)) {
+        setTeamMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-  const monthNames = [
-    'januar', 'februar', 'marts', 'april', 'maj', 'juni',
-    'juli', 'august', 'september', 'oktober', 'november', 'december'
-  ];
+  const toggleMember = (name) => {
+    setSelectedTeamMembers((prev) => {
+      if (prev.includes(name)) {
+        const next = prev.filter((n) => n !== name);
+        setTeamFilter(next.length === teamMembers.length ? 'all' : 'custom');
+        return next;
+      }
+      const next = [...prev, name];
+      setTeamFilter(next.length === teamMembers.length ? 'all' : 'custom');
+      return next;
+    });
+  };
 
-  const dayNames = ['MAN', 'TIR', 'ONS', 'TOR', 'FRE', 'LØR', 'SØN'];
+  const clearMembers = () => {
+    setSelectedTeamMembers([]);
+    setTeamFilter('custom');
+  };
+
+  const selectAllMembers = () => {
+    setSelectedTeamMembers(teamMembers.map((m) => m.name));
+    setTeamFilter('all');
+  };
+
+  const entireTeamLabel = t('booking.calendar.entireTeam', 'Hele teamet');
+  const teamOnDutyLabel = t('booking.calendar.teamOnDuty', 'Team på arbejde');
+  const primaryCalendarOwner = teamMembers[0]?.name || entireTeamLabel;
+
+  const getAppointmentOwner = (appointment) =>
+    appointment?.calendarOwner || appointment?.ownerName || primaryCalendarOwner;
+
+  const visibleAppointments = useMemo(() => {
+    if (!selectedTeamMembers.length) return appointments;
+    const selected = new Set(selectedTeamMembers);
+    return appointments.filter((appointment) => selected.has(getAppointmentOwner(appointment)));
+  }, [appointments, selectedTeamMembers, primaryCalendarOwner]);
+
+  const selectedLabel = (() => {
+    const total = teamMembers.length;
+    if (selectedTeamMembers.length === total && total > 0) return entireTeamLabel;
+    if (selectedTeamMembers.length === 1) return selectedTeamMembers[0];
+    if (selectedTeamMembers.length === 0) return teamOnDutyLabel;
+    return teamOnDutyLabel;
+  })();
+
+  const isMultiTeam = selectedTeamMembers.length > 1;
+  const hourHeight = isMultiTeam ? 44 : HOUR_HEIGHT;
+  const singleTeamMember =
+    selectedTeamMembers.length === 1
+      ? teamMembers.find((member) => member.name === selectedTeamMembers[0]) || {
+          id: selectedTeamMembers[0],
+          name: selectedTeamMembers[0],
+          avatarText: selectedTeamMembers[0]?.charAt(0) || '?',
+          avatarColor: '#0ea5e9',
+        }
+      : null;
+
+  const mapTeamDoc = (docSnap) => {
+    const data = docSnap.data() || {};
+    const name =
+      (typeof data.name === 'string' && data.name.trim()) ||
+      `${data.firstName || ''}${data.lastName ? ` ${data.lastName}` : ''}`.trim() ||
+      t('booking.calendar.memberFallback', 'Medarbejder');
+    const avatarText =
+      (typeof data.avatarText === 'string' && data.avatarText.trim()) ||
+      name.charAt(0).toUpperCase() ||
+      'S';
+    return {
+      id: docSnap.id,
+      name,
+      email: data.email || '',
+      phone: data.phone || '',
+      avatarUrl: data.avatarUrl || '',
+      avatarColor: data.calendarColor || data.avatarColor || '#0ea5e9',
+      avatarText,
+      role: data.role || '',
+    };
+  };
+
+  useEffect(() => {
+    setTeamMembers([ownerEntry]);
+    setSelectedTeamMembers([ownerEntry.name]);
+  }, [ownerEntry]);
+
+  useEffect(() => {
+    if (!user?.uid || !hasTeamAccess) {
+      setTeamMembers([ownerEntry]);
+      setSelectedTeamMembers([ownerEntry.name]);
+      setTeamFilter('custom');
+      setTeamMenuOpen(false);
+      return;
+    }
+
+    const ref = collection(db, 'users', user.uid, 'team');
+    const unsubscribe = onSnapshot(
+      ref,
+      (snap) => {
+        const loaded = snap.docs.map(mapTeamDoc);
+        const membersWithOwner = loaded.length ? loaded : [ownerEntry];
+        setTeamMembers(membersWithOwner);
+
+        setSelectedTeamMembers((prev) => {
+          const validNames = membersWithOwner.map((m) => m.name);
+          const filtered = prev.filter((n) => validNames.includes(n));
+          if (filtered.length > 0) return filtered;
+          return [membersWithOwner[0]?.name || ownerEntry.name];
+        });
+
+        if (membersWithOwner.length === 1) {
+          setTeamFilter('custom');
+        }
+      },
+      (error) => {
+        console.error('[BookingPage] Failed to load team members', error);
+        setTeamMembers([ownerEntry]);
+        setSelectedTeamMembers([ownerEntry.name]);
+        setTeamFilter('custom');
+        setTeamMenuOpen(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [hasTeamAccess, ownerEntry, t, user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setHasTeamAccess(false);
+      setSelectedTeamMembers([
+        teamMembers[0]?.name || t('booking.topbar.defaultUser', 'Selma bruger'),
+      ]);
+      setTeamFilter('custom');
+      return;
+    }
+
+    const ref = doc(db, 'users', user.uid);
+    const unsubscribe = onSnapshot(
+      ref,
+      (snap) => {
+        const data = snap.exists() ? snap.data() : null;
+        const teamAllowed = data?.accountType === 'team' || data?.hasTeam === true;
+        setHasTeamAccess(teamAllowed);
+        if (typeof data?.photoURL === 'string') {
+          setProfilePhotoUrl(data.photoURL);
+        } else {
+          setProfilePhotoUrl(user.photoURL || '');
+        }
+
+        if (!teamAllowed) {
+          const fallbackName =
+            data?.fullName ||
+            data?.clinicName ||
+            user.displayName ||
+            user.email ||
+            t('booking.topbar.defaultUser', 'Selma bruger');
+          setSelectedTeamMembers((prev) => {
+            if (prev.length === 1 && prev[0] === fallbackName) return prev;
+            return [fallbackName];
+          });
+          setTeamFilter('custom');
+          setTeamMenuOpen(false);
+        } else if (selectedTeamMembers.length === 0) {
+          setSelectedTeamMembers(teamMembers.map((m) => m.name));
+          setTeamFilter('all');
+        }
+      },
+      (err) => {
+        console.error('[BookingPage] Failed to load account type', err);
+        setHasTeamAccess(false);
+        setProfilePhotoUrl(user?.photoURL || '');
+        setSelectedTeamMembers([
+          teamMembers[0]?.name || t('booking.topbar.defaultUser', 'Selma bruger'),
+        ]);
+        setTeamFilter('custom');
+        setTeamMenuOpen(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [selectedTeamMembers.length, t, teamMembers, user?.displayName, user?.email, user?.photoURL, user?.uid]);
+
+  const dayNameFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { weekday: 'short' }),
+    [locale]
+  );
+  const toolbarDayFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+      }),
+    [locale]
+  );
+  const toolbarMonthFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }),
+    [locale]
+  );
 
   const startOfWeek = (date) => {
     const copy = new Date(date);
@@ -82,6 +337,23 @@ function BookingPage() {
       return day;
     });
   };
+
+  const formatToolbarDay = (date) => {
+    return toolbarDayFormatter.format(date);
+  };
+
+  const formatToolbarWeek = (date) => {
+    const start = startOfWeek(date);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return `${formatToolbarDay(start)} - ${formatToolbarDay(end)}`;
+  };
+
+  const toolbarDateLabel = useMemo(() => {
+    if (currentView === 'day') return formatToolbarDay(currentDate);
+    if (currentView === 'week') return formatToolbarWeek(currentDate);
+    return toolbarMonthFormatter.format(currentDate);
+  }, [currentDate, currentView, toolbarDayFormatter, toolbarMonthFormatter]);
 
   const formatDateKey = (date) =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -130,7 +402,7 @@ function BookingPage() {
   const appointmentsByDay = useMemo(() => {
     const map = {};
 
-    appointments.forEach((appointmentItem) => {
+    visibleAppointments.forEach((appointmentItem) => {
       const { startDate, endDate } = parseAppointmentDateTimes(appointmentItem);
       if (!startDate) return;
 
@@ -146,7 +418,7 @@ function BookingPage() {
     });
 
     return map;
-  }, [appointments]);
+  }, [visibleAppointments]);
 
   const deriveServiceType = (appointment) => {
     if (!appointment) return 'service';
@@ -183,10 +455,33 @@ function BookingPage() {
         if (name) names.push(name);
       });
     }
-    if (appointment?.client) names.push(appointment.client);
+    const isForloeb =
+      deriveServiceType(appointment) === 'forloeb' ||
+      (typeof appointment?.serviceId === 'string' && appointment.serviceId.startsWith('forloeb:'));
+    if (!isForloeb && appointment?.client) names.push(appointment.client);
 
     const uniq = Array.from(new Set(names.filter(Boolean)));
-    return uniq.sort((a, b) => a.localeCompare(b, 'da', { sensitivity: 'base' }));
+    return uniq.sort((a, b) => a.localeCompare(b, locale, { sensitivity: 'base' }));
+  };
+
+  const renderNamesPreview = (names) => {
+    if (!Array.isArray(names) || names.length === 0) return null;
+
+    const visible = names.slice(0, 2);
+    const remaining = Math.max(0, names.length - visible.length);
+
+    return (
+      <span className="chip-names-stack">
+        {visible.map((n) => (
+          <span key={n} className="chip-name-line">
+            {n}
+          </span>
+        ))}
+        {remaining > 0 && (
+          <span className="chip-name-more">+{remaining}</span>
+        )}
+      </span>
+    );
   };
 
   const toRgb = (hex) => {
@@ -218,10 +513,10 @@ function BookingPage() {
   };
 
   const getServiceLabel = (appointment) => {
-    if (!appointment) return 'Aftale';
+    if (!appointment) return appointmentFallback;
     if (appointment.service) return appointment.service;
-    if (appointment.serviceType === 'forloeb') return 'Forløb';
-    return appointment.title || appointment.client || 'Aftale';
+    if (appointment.serviceType === 'forloeb') return programFallback;
+    return appointment.title || appointment.client || appointmentFallback;
   };
 
   const groupDayEvents = (dayEvents) => {
@@ -230,7 +525,8 @@ function BookingPage() {
       const startLabel = ev.startTime || formatTime(ev.startDateObj);
       const endLabel = ev.endTime || formatTime(ev.endDateObj);
       const type = deriveServiceType(ev);
-      const key = `${startLabel}|${endLabel}|${type}`;
+      const serviceKey = ev.serviceId || ev.service || ev.title || '';
+      const key = `${startLabel}|${endLabel}|${type}|${serviceKey}`;
       if (!groups[key]) {
         groups[key] = { events: [], start: ev.startDateObj, end: ev.endDateObj, type };
       }
@@ -396,6 +692,20 @@ function BookingPage() {
     setNow(today);
   };
 
+  const handleRefresh = () => {
+    setNow(new Date());
+    setCurrentDate((prev) => new Date(prev));
+  };
+
+  const handleOpenAppointmentForm = () => {
+    setEditingAppointment(null);
+    setNextAppointmentTemplate(null);
+    setSelectedAppointment(null);
+    setSelectedClientId(null);
+    setSelectedClientFallback(null);
+    setShowAppointmentForm(true);
+  };
+
   const getWeekNumber = (date) => {
     const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
     const dayNum = d.getUTCDay() || 7;
@@ -472,6 +782,54 @@ function BookingPage() {
     try {
       const appointmentsCollection = collection(db, 'users', user.uid, 'appointments');
 
+      const normalizeParticipant = (p) => {
+        if (!p) return null;
+        if (typeof p === 'string') {
+          const name = p.trim();
+          return name ? { id: null, name } : null;
+        }
+        const name =
+          p.name ||
+          p.navn ||
+          p.fullName ||
+          (p.firstName || p.lastName ? `${p.firstName || ''} ${p.lastName || ''}`.trim() : null);
+        if (!name && !p.email) return null;
+        return {
+          id: p.id || null,
+          name: name || null,
+          email: p.email || null,
+          phone: p.phone || p.telefon || null,
+        };
+      };
+
+      const mergeParticipants = (...lists) => {
+        const all = [];
+        lists.forEach((list) => {
+          if (!Array.isArray(list)) return;
+          list.forEach((p) => {
+            const normalized = normalizeParticipant(p);
+            if (normalized) all.push(normalized);
+          });
+        });
+
+        const seen = new Set();
+        const result = [];
+        all.forEach((p) => {
+          const key =
+            (p.id && `id:${p.id}`) ||
+            (p.email && `email:${String(p.email).toLowerCase()}`) ||
+            (p.name && `name:${String(p.name).toLowerCase()}`) ||
+            null;
+          if (!key || seen.has(key)) return;
+          seen.add(key);
+          result.push(p);
+        });
+        return result;
+      };
+
+      const forloebGroups = new Map(); // key -> payload
+      const normalPayloads = [];
+
       for (const appt of items) {
         const startIso = combineDateAndTimeToIso(appt.startDate, appt.startTime);
         const endIso = combineDateAndTimeToIso(appt.endDate, appt.endTime);
@@ -480,18 +838,32 @@ function BookingPage() {
           throw new Error('Invalid start or end time');
         }
 
-        const title = appt.client || appt.service || 'Aftale';
+        const serviceType = deriveServiceType(appt);
+        const isForloeb =
+          serviceType === 'forloeb' ||
+          (typeof appt?.serviceId === 'string' && appt.serviceId.startsWith('forloeb:'));
+        const title = isForloeb
+          ? appt.service || appt.title || programFallback
+          : appt.client || appt.service || appointmentFallback;
+        const selectedOwnerName =
+          appt.calendarOwner ||
+          appt.ownerName ||
+          (selectedTeamMembers.length === 1 ? selectedTeamMembers[0] : teamMembers[0]?.name) ||
+          ownerEntry.name;
+        const selectedOwnerId = appt.calendarOwnerId || null;
 
         const payload = {
           therapistId: user.uid,
+          calendarOwner: selectedOwnerName,
+          calendarOwnerId: selectedOwnerId,
           title,
-          client: appt.client || title,
-          clientId: appt.clientId || null,
-          clientEmail: appt.clientEmail || '',
-          clientPhone: appt.clientPhone || '',
+          client: isForloeb ? title : appt.client || title,
+          clientId: isForloeb ? null : appt.clientId || null,
+          clientEmail: isForloeb ? '' : appt.clientEmail || '',
+          clientPhone: isForloeb ? '' : appt.clientPhone || '',
           service: appt.service || '',
           serviceId: appt.serviceId || null,
-          serviceType: deriveServiceType(appt),
+          serviceType,
           serviceDuration: appt.serviceDuration || '',
           servicePrice:
             typeof appt.servicePrice === 'number' ? appt.servicePrice : null,
@@ -524,8 +896,86 @@ function BookingPage() {
           updatedAt: serverTimestamp(),
         };
 
+        if (isForloeb && payload.serviceId) {
+          const key = `${startIso}|${endIso}|${payload.serviceId}`;
+          const existing = forloebGroups.get(key);
+          if (existing) {
+            existing.participants = mergeParticipants(existing.participants, payload.participants);
+            if (!existing.notes && payload.notes) existing.notes = payload.notes;
+            if (!existing.color && payload.color) existing.color = payload.color;
+            continue;
+          }
+          forloebGroups.set(key, {
+            ...payload,
+            participants: mergeParticipants(payload.participants),
+          });
+        } else {
+          normalPayloads.push(payload);
+        }
+      }
+
+      // Create normal (non-forløb) appointments
+      for (const payload of normalPayloads) {
         console.log('[BookingPage] Creating appointment document', payload);
         await addDoc(appointmentsCollection, payload);
+      }
+
+      // Upsert forløb appointments (merge participants when same time+forløb)
+      for (const payload of forloebGroups.values()) {
+        const q = query(
+          appointmentsCollection,
+          where('serviceId', '==', payload.serviceId),
+          where('serviceType', '==', 'forloeb'),
+          where('start', '==', payload.start),
+          where('end', '==', payload.end),
+          limit(5)
+        );
+        const snap = await getDocs(q);
+
+        if (snap.empty) {
+          console.log('[BookingPage] Creating forløb appointment document', payload);
+          await addDoc(appointmentsCollection, payload);
+          continue;
+        }
+
+        const primary = snap.docs[0];
+        const primaryData = primary.data() || {};
+        const mergedParticipants = mergeParticipants(
+          primaryData.participants,
+          payload.participants
+        );
+
+        await updateDoc(primary.ref, {
+          title: payload.title,
+          client: payload.client,
+          clientId: payload.clientId,
+          clientEmail: payload.clientEmail,
+          clientPhone: payload.clientPhone,
+          service: payload.service,
+          serviceId: payload.serviceId,
+          serviceType: 'forloeb',
+          serviceDuration: payload.serviceDuration,
+          servicePrice: payload.servicePrice,
+          servicePriceInclVat: payload.servicePriceInclVat,
+          participants: mergedParticipants,
+          notes: payload.notes || primaryData.notes || '',
+          color: payload.color || primaryData.color || null,
+          start: payload.start,
+          end: payload.end,
+          startDate: payload.startDate,
+          startTime: payload.startTime,
+          endDate: payload.endDate,
+          endTime: payload.endTime,
+          status: primaryData.status || payload.status || 'booked',
+          updatedAt: serverTimestamp(),
+        });
+
+        if (snap.docs.length > 1) {
+          const batch = writeBatch(db);
+          snap.docs.slice(1).forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+          console.log('[BookingPage] Deduplicated forløb appointments:', snap.docs.length);
+        }
       }
     } catch (error) {
       console.error('[BookingPage] Failed to create appointment', error);
@@ -550,11 +1000,17 @@ function BookingPage() {
         throw new Error('Invalid start or end time');
       }
 
-      const title = appointment.client || appointment.service || 'Aftale';
+      const title = appointment.client || appointment.service || appointmentFallback;
+      const calendarOwner =
+        appointment.calendarOwner ||
+        (selectedTeamMembers.length === 1
+          ? selectedTeamMembers[0]
+          : teamMembers[0]?.name || null);
       const docRef = doc(db, 'users', user.uid, 'appointments', appointment.id);
 
       await updateDoc(docRef, {
         title,
+        calendarOwner,
         client: appointment.client || title,
         clientId: appointment.clientId || null,
         clientEmail: appointment.clientEmail || '',
@@ -803,29 +1259,46 @@ function BookingPage() {
   const handleOpenJournalEntry = () => {
     if (!derivedSelectedClient) return;
     setJournalEntryClient(derivedSelectedClient);
+    if (selectedAppointment?.participants) {
+      setJournalEntryParticipants(selectedAppointment.participants);
+    } else {
+      setJournalEntryParticipants([]);
+    }
+    if (selectedAppointment?.startDate) {
+      setJournalEntryDate(selectedAppointment.startDate);
+    } else {
+      setJournalEntryDate('');
+    }
     setShowJournalEntryForm(true);
   };
 
   const handleJournalEntrySaved = (entry) => {
     console.log('[BookingPage] journal entry saved', entry);
     setShowJournalEntryForm(false);
+    setJournalEntryParticipants([]);
+    setJournalEntryDate('');
   };
 
   const handleCloseJournalEntry = () => {
     setShowJournalEntryForm(false);
+    setJournalEntryParticipants([]);
+    setJournalEntryDate('');
   };
 
   const userIdentity = useMemo(() => {
     if (!user) {
       return {
-        name: 'Ikke logget ind',
-        email: 'Log ind for at fortsætte',
+        name: t('booking.calendar.notLoggedIn', 'Ikke logget ind'),
+        email: t('booking.calendar.loginToContinue', 'Log ind for at fortsætte'),
         initials: '?',
         photoURL: null,
       };
     }
 
-    const name = user.displayName || user.email || 'Selma bruger';
+    const name =
+      user.displayName ||
+      user.email ||
+      t('booking.topbar.defaultUser', 'Selma bruger');
     const email = user.email || '—';
     const initialsSource = (user.displayName || user.email || '?').trim();
     const initials = initialsSource
@@ -849,8 +1322,7 @@ function BookingPage() {
         <div className="week-number-header"></div>
         {(calendarWeeks[0] || []).map((day, index) => {
           const dateObj = toDate(day);
-          const dayNameIndex = dateObj.getDay(); // 0 (Sun) - 6 (Sat)
-          const labelDayName = dayNames[(dayNameIndex + 6) % 7];
+          const labelDayName = dayNameFormatter.format(dateObj);
           const dayNumber = day.day;
           const month = day.month + 1;
           return (
@@ -868,7 +1340,7 @@ function BookingPage() {
             <React.Fragment key={weekIndex}>
               <div className="week-number-cell">{weekNumber}</div>
               {week.map((day, dayIndex) => {
-                const dayAppointments = appointments.filter((appointment) => {
+                const dayAppointments = visibleAppointments.filter((appointment) => {
                   if (!appointment.startDate) return false;
                   const [dayStr, monthStr, yearStr] = appointment.startDate.split('-');
                   const appDay = parseInt(dayStr, 10);
@@ -900,6 +1372,10 @@ function BookingPage() {
                             key={appointment.id}
                             className={`day-appointment-chip service-type-${deriveServiceType(appointment)}`}
                             onClick={() => handleAppointmentClick(appointment)}
+                            title={(() => {
+                              const names = participantNames(appointment);
+                              return names.length ? names.join(', ') : '';
+                            })()}
                             style={{
                               cursor: 'pointer',
                               ...(appointment.color ? getSoftColorStyle(appointment.color) : {}),
@@ -909,17 +1385,11 @@ function BookingPage() {
                             {(() => {
                               const names = participantNames(appointment);
                               if (names.length > 1) {
-                                return (
-                                  <span className="chip-names-stack">
-                                    {names.map((n) => (
-                                      <span key={n} className="chip-name-line">
-                                        {n}
-                                      </span>
-                                    ))}
-                                  </span>
-                                );
+                                return renderNamesPreview(names);
                               }
-                              return appointment.client ? `– ${appointment.client.split(' ')[0]}` : '– Aftale';
+                              return appointment.client
+                                ? `– ${appointment.client.split(' ')[0]}`
+                                : `– ${appointmentFallback}`;
                             })()}
                           </span>
                         ))}
@@ -937,12 +1407,13 @@ function BookingPage() {
 
   const renderTimeGrid = () => {
     const daysToRender = currentView === 'week' ? weekDays : [currentDate];
+    const dayColumnWidth = currentView === 'day' ? 420 : 160;
     const gridStyle = {
       '--days-count': daysToRender.length,
-      '--hour-height': `${HOUR_HEIGHT}px`,
+      '--hour-height': `${hourHeight}px`,
       '--visible-hours': VISIBLE_HOURS,
-      '--time-grid-height': `${VISIBLE_HOURS * HOUR_HEIGHT}px`,
-      minWidth: `${80 + daysToRender.length * 120}px`,
+      '--time-grid-height': `${VISIBLE_HOURS * hourHeight}px`,
+      minWidth: `${80 + daysToRender.length * dayColumnWidth}px`,
     };
     const nowMinutes = getMinutesFromMidnight(now);
     const nowTopPercent =
@@ -959,8 +1430,7 @@ function BookingPage() {
           {daysToRender.map((day) => {
             const isHighlighted = currentView === 'day' || isSameDate(day, currentDate);
             const isToday = isSameDate(day, now);
-            const dayNameIndex = day.getDay(); // 0 (Sun) - 6 (Sat)
-            const labelDayName = dayNames[(dayNameIndex + 6) % 7];
+            const labelDayName = dayNameFormatter.format(day);
             return (
               <button
                 key={formatDateKey(day)}
@@ -1013,7 +1483,7 @@ function BookingPage() {
                 >
                   <div
                     className="time-grid-day-body"
-                    style={{ height: `${VISIBLE_HOURS * HOUR_HEIGHT}px` }}
+                    style={{ height: `${VISIBLE_HOURS * hourHeight}px` }}
                   >
                     {showNowLine && (
                       <div className="time-indicator-line" style={{ top: `${nowTopPercent}%` }} />
@@ -1048,6 +1518,7 @@ function BookingPage() {
                           {isDragged && ghostStyle && (
                             <div
                               className={`time-grid-event time-grid-event-ghost service-type-${group.type}`}
+                              title={uniqNames.length ? uniqNames.join(', ') : ''}
                               style={{
                                 ...ghostStyle,
                               ...(first.color ? getSoftColorStyle(first.color) : {}),
@@ -1059,15 +1530,20 @@ function BookingPage() {
                                 </span>
                                 {uniqNames.length > 1 ? (
                                   <div className="time-grid-event-names">
-                                    {uniqNames.map((n) => (
+                                    {uniqNames.slice(0, 2).map((n) => (
                                       <div key={n} className="time-grid-event-name">
                                         {n}
                                       </div>
                                     ))}
+                                    {uniqNames.length > 2 && (
+                                      <div className="time-grid-event-more">
+                                        +{uniqNames.length - 2}
+                                      </div>
+                                    )}
                                   </div>
                                 ) : (
                                   <span className="time-grid-event-title">
-                                    {first.client || first.title || 'Aftale'}
+                                    {first.client || first.title || appointmentFallback}
                                   </span>
                                 )}
                               </div>
@@ -1078,6 +1554,7 @@ function BookingPage() {
                             className={`time-grid-event service-type-${group.type} ${
                               isDragged ? 'is-dragging' : ''
                             }`}
+                            title={uniqNames.length ? uniqNames.join(', ') : ''}
                             style={{
                               ...style,
                               ...(first.color ? getSoftColorStyle(first.color) : {}),
@@ -1115,15 +1592,20 @@ function BookingPage() {
                               </span>
                               {uniqNames.length > 1 ? (
                                 <div className="time-grid-event-names">
-                                  {uniqNames.map((n) => (
+                                  {uniqNames.slice(0, 2).map((n) => (
                                     <div key={n} className="time-grid-event-name">
                                       {n}
                                     </div>
                                   ))}
+                                  {uniqNames.length > 2 && (
+                                    <div className="time-grid-event-more">
+                                      +{uniqNames.length - 2}
+                                    </div>
+                                  )}
                                 </div>
                               ) : (
                                 <span className="time-grid-event-title">
-                                  {first.client || first.title || 'Aftale'}
+                                  {first.client || first.title || appointmentFallback}
                                 </span>
                               )}
                             </div>
@@ -1155,64 +1637,405 @@ function BookingPage() {
     );
   };
 
+  const getMemberMeta = (name) => {
+    const match = teamMembers.find((member) => member.name === name);
+    if (match) return match;
+    return { id: name, name, avatarText: name?.charAt(0) || '?', avatarColor: '#0ea5e9' };
+  };
+
+  const renderTeamEvents = ({ memberName, dayKey, nowTopPercent, showNowLine }) => {
+    const dayEvents = (appointmentsByDay[dayKey] || [])
+      .filter((appointment) => getAppointmentOwner(appointment) === memberName)
+      .slice()
+      .sort(
+        (a, b) => (a.startDateObj?.getTime?.() || 0) - (b.startDateObj?.getTime?.() || 0)
+      );
+
+    const groupedEvents = groupDayEvents(dayEvents);
+
+    return (
+      <div className="time-grid-day-body" style={{ height: `${VISIBLE_HOURS * HOUR_HEIGHT}px` }}>
+        {showNowLine && nowTopPercent !== null && (
+          <div className="time-indicator-line" style={{ top: `${nowTopPercent}%` }} />
+        )}
+        {groupedEvents.map((group, idx) => {
+          const first = group.events[0];
+          const allNames = group.events.flatMap(participantNames).filter(Boolean);
+          const uniqNames = Array.from(new Set(allNames));
+          const style = group.start ? getEventPosition(group.start, group.end || group.start) : {};
+          return (
+            <div
+              key={`${dayKey}-${memberName}-${idx}`}
+              className={`time-grid-event service-type-${group.type}`}
+              title={uniqNames.length ? uniqNames.join(', ') : ''}
+              style={{
+                ...style,
+                ...(first.color ? getSoftColorStyle(first.color) : {}),
+              }}
+              onClick={() => handleAppointmentClick(first)}
+            >
+              <div className="time-grid-event-inner">
+                <span className="time-grid-event-time">{getServiceLabel(first)}</span>
+                {uniqNames.length > 1 ? (
+                  <div className="time-grid-event-names">
+                    {uniqNames.slice(0, 2).map((n) => (
+                      <div key={n} className="time-grid-event-name">
+                        {n}
+                      </div>
+                    ))}
+                    {uniqNames.length > 2 && (
+                      <div className="time-grid-event-more">+{uniqNames.length - 2}</div>
+                    )}
+                  </div>
+                ) : (
+                  <span className="time-grid-event-title">
+                    {first.client || first.title || appointmentFallback}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderTeamDayGrid = () => {
+    const membersToShow = selectedTeamMembers.map(getMemberMeta);
+    const gridStyle = {
+      '--members-count': membersToShow.length,
+      '--hour-height': `${hourHeight}px`,
+      '--visible-hours': VISIBLE_HOURS,
+      '--time-grid-height': `${VISIBLE_HOURS * hourHeight}px`,
+      minWidth: `${80 + membersToShow.length * 260}px`,
+    };
+
+    const nowMinutes = getMinutesFromMidnight(now);
+    const nowTopPercent =
+      nowMinutes >= START_HOUR * 60 && nowMinutes <= END_HOUR * 60
+        ? ((nowMinutes - START_HOUR * 60) / TOTAL_MINUTES) * 100
+        : null;
+    const isToday = isSameDate(currentDate, now);
+
+    return (
+      <div className="team-time-grid team-day-view" style={gridStyle}>
+        <div className="team-time-grid-header">
+          <div className="team-hours-spacer"></div>
+          {membersToShow.map((member) => (
+            <div key={member.name} className="team-member-header">
+              <span
+                className="team-calendar-avatar"
+                style={{ backgroundColor: member.avatarColor || '#0ea5e9' }}
+              >
+                {member.avatarUrl ? (
+                  <img src={member.avatarUrl} alt={member.name} />
+                ) : (
+                  member.avatarText || member.name?.charAt(0)
+                )}
+              </span>
+              <span className="team-member-name">{member.name}</span>
+            </div>
+          ))}
+        </div>
+        <div className="team-time-grid-body">
+          <div className="time-grid-hours" style={{ height: `${VISIBLE_HOURS * hourHeight}px` }}>
+            {hourLabels.map((hour, index) => (
+              <div
+                key={hour}
+                className="time-grid-hour-label"
+                style={{ top: `${(index / VISIBLE_HOURS) * 100}%` }}
+              >
+                {String(hour).padStart(2, '0')}:00
+              </div>
+            ))}
+          </div>
+          <div className="team-member-columns">
+            {membersToShow.map((member) => {
+              const dayKey = formatDateKey(currentDate);
+              return (
+                <div key={member.name} className="team-member-day">
+                  {renderTeamEvents({
+                    memberName: member.name,
+                    dayKey,
+                    nowTopPercent,
+                    showNowLine: isToday,
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderTeamWeekGrid = () => {
+    const membersToShow = selectedTeamMembers.map(getMemberMeta);
+    const daysToRender = weekDays;
+    const gridStyle = {
+      '--members-count': membersToShow.length,
+      '--days-count': daysToRender.length,
+      '--hour-height': `${hourHeight}px`,
+      '--visible-hours': VISIBLE_HOURS,
+      '--time-grid-height': `${VISIBLE_HOURS * hourHeight}px`,
+      minWidth: `${110 + daysToRender.length * 150}px`,
+    };
+
+    const nowMinutes = getMinutesFromMidnight(now);
+    const nowTopPercent =
+      nowMinutes >= START_HOUR * 60 && nowMinutes <= END_HOUR * 60
+        ? ((nowMinutes - START_HOUR * 60) / TOTAL_MINUTES) * 100
+        : null;
+
+    return (
+      <div className="team-week-grid" style={gridStyle}>
+        <div className="team-week-header">
+          <div className="team-week-member-spacer"></div>
+          {daysToRender.map((day) => {
+            const isHighlighted = isSameDate(day, currentDate);
+            const isToday = isSameDate(day, now);
+            const labelDayName = dayNameFormatter.format(day);
+            return (
+              <button
+                key={formatDateKey(day)}
+                type="button"
+                className={`time-grid-day-header ${isHighlighted ? 'is-selected' : ''} ${
+                  isToday ? 'is-today' : ''
+                }`}
+                onClick={() => setCurrentDate(new Date(day))}
+              >
+                <span className="day-name">{labelDayName}</span>
+                <span className="day-date">
+                  {day.getDate()}/{day.getMonth() + 1}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="team-week-body">
+          {membersToShow.map((member) => (
+            <div key={member.name} className="team-week-row">
+              <div className="team-week-member-cell">
+                <span
+                  className="team-calendar-avatar"
+                  style={{ backgroundColor: member.avatarColor || '#0ea5e9' }}
+                >
+                  {member.avatarUrl ? (
+                    <img src={member.avatarUrl} alt={member.name} />
+                  ) : (
+                    member.avatarText || member.name?.charAt(0)
+                  )}
+                </span>
+                <span className="team-week-member-name">{member.name}</span>
+              </div>
+              {daysToRender.map((day) => {
+                const dayKey = formatDateKey(day);
+                const isToday = isSameDate(day, now);
+                return (
+                  <div key={`${member.name}-${dayKey}`} className="team-week-day">
+                    {renderTeamEvents({
+                      memberName: member.name,
+                      dayKey,
+                      nowTopPercent,
+                      showNowLine: isToday,
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderTeamTimeGrid = () => {
+    if (currentView === 'week') return renderTeamWeekGrid();
+    return renderTeamDayGrid();
+  };
+
   return (
     <BookingSidebarLayout>
       <div className="booking-page">
         {/* Top Navigation Bar */}
-        <div className="booking-topbar">
-          <div className="topbar-left">
-            <button className="topbar-logo-btn" onClick={async () => {
-              await signOutUser();
-              navigate('/');
-            }}>
-              Forside
-            </button>
-          </div>
-          <div className="topbar-center">
-            <div className="topbar-navigation">
-              <button className="nav-arrow" onClick={() => navigateByView(-1)}>←</button>
-              <button className="nav-today" onClick={goToToday}>i dag</button>
-              <button className="nav-arrow" onClick={() => navigateByView(1)}>→</button>
+        <div className="booking-topbar booking-topbar-calendar">
+          <div className="calendar-toolbar">
+            <div className="calendar-toolbar-group">
+              <button type="button" className="toolbar-pill" onClick={goToToday}>
+                {t('booking.calendar.today', 'I dag')}
+              </button>
+              <div className="toolbar-pill toolbar-segment">
+                <button
+                  type="button"
+                  className="toolbar-segment-btn"
+                  onClick={() => navigateByView(-1)}
+                  aria-label={t('booking.calendar.previous', 'Forrige')}
+                >
+                  <ChevronLeft className="toolbar-icon" />
+                </button>
+                <span className="toolbar-date-label">{toolbarDateLabel}</span>
+                <button
+                  type="button"
+                  className="toolbar-segment-btn"
+                  onClick={() => navigateByView(1)}
+                  aria-label={t('booking.calendar.next', 'Næste')}
+                >
+                  <ChevronRight className="toolbar-icon" />
+                </button>
+              </div>
+              {hasTeamAccess ? (
+                <div className="team-filter-wrapper" ref={teamMenuRef}>
+                  <button
+                    type="button"
+                    className="team-filter-trigger"
+                    onClick={() => setTeamMenuOpen((open) => !open)}
+                  >
+                    <span className="team-filter-label">{selectedLabel}</span>
+                    <ChevronDown className={`team-filter-caret ${teamMenuOpen ? 'open' : ''}`} />
+                  </button>
+                  {teamMenuOpen && (
+                    <div className="team-filter-menu">
+                      <button
+                        type="button"
+                        className={`team-filter-option ${teamFilter === 'all' ? 'active' : ''}`}
+                        onClick={selectAllMembers}
+                      >
+                        👥 {entireTeamLabel}
+                      </button>
+
+                      <div className="team-filter-section">
+                        <div className="team-filter-item">
+                          <span
+                            className="avatar avatar-small"
+                            style={{ backgroundColor: ownerEntry.avatarColor || '#0ea5e9' }}
+                          >
+                            {ownerEntry.avatarUrl ? (
+                              <img src={ownerEntry.avatarUrl} alt={ownerEntry.name} />
+                            ) : (
+                              ownerEntry.avatarText || ownerEntry.name?.charAt(0)
+                            )}
+                          </span>
+                          <span>
+                            {ownerEntry.name}{' '}
+                            ({t('booking.calendar.you', 'Dig')})
+                          </span>
+                        </div>
+                      </div>
+
+                      <hr className="team-filter-divider" />
+
+                      <div className="team-filter-section header">
+                        <span className="section-title">
+                          {t('booking.calendar.members', 'Medarbejdere')}
+                        </span>
+                        <button type="button" className="clear-link" onClick={clearMembers}>
+                          {t('booking.calendar.clearAll', 'Ryd alle')}
+                        </button>
+                      </div>
+
+                      <div className="team-filter-list">
+                        {teamMembers.map((member) => {
+                          const checked = selectedTeamMembers.includes(member.name);
+                          return (
+                            <button
+                              key={member.id}
+                              type="button"
+                              className={`team-filter-member ${checked ? 'selected' : ''}`}
+                              onClick={() => toggleMember(member.name)}
+                            >
+                              <span className="checkmark">{checked ? '✔' : ''}</span>
+                              <span
+                                className="avatar avatar-small"
+                                style={{ backgroundColor: member.avatarColor || '#0ea5e9' }}
+                              >
+                                {member.avatarUrl ? (
+                                  <img src={member.avatarUrl} alt={member.name} />
+                                ) : (
+                                  member.avatarText || member.name?.charAt(0)
+                                )}
+                              </span>
+                              <span>{member.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="toolbar-pill toolbar-static">{selectedLabel}</div>
+              )}
+              <button
+                type="button"
+                className="toolbar-icon-btn"
+                aria-label={t('booking.calendar.filters', 'Filtre')}
+              >
+                <SlidersHorizontal className="toolbar-icon" />
+              </button>
+              <button
+                type="button"
+                className="toolbar-icon-btn"
+                aria-label={t('booking.calendar.freeze', 'Frys')}
+              >
+                <Snowflake className="toolbar-icon" />
+              </button>
             </div>
-            <div className="topbar-view-toggle">
+            <div className="calendar-toolbar-group">
               <button
-                className={`view-toggle-btn ${currentView === 'month' ? 'active' : ''}`}
-                onClick={() => setCurrentView('month')}
+                type="button"
+                className="toolbar-icon-btn"
+                aria-label={t('booking.calendar.settings', 'Indstillinger')}
+                onClick={() => navigate('/booking/settings')}
               >
-                Måned
+                <Settings className="toolbar-icon" />
               </button>
               <button
-                className={`view-toggle-btn ${currentView === 'week' ? 'active' : ''}`}
-                onClick={() => setCurrentView('week')}
+                type="button"
+                className="toolbar-icon-btn"
+                aria-label={t('booking.calendar.refresh', 'Opdater')}
+                onClick={handleRefresh}
               >
-                Uge
+                <RefreshCw className="toolbar-icon" />
               </button>
-              <button
-                className={`view-toggle-btn ${currentView === 'day' ? 'active' : ''}`}
-                onClick={() => setCurrentView('day')}
+              <div
+                className="toolbar-view-toggle"
+                role="group"
+                aria-label={t('booking.calendar.viewLabel', 'Kalendervisning')}
               >
-                Dag
-              </button>
+                <button
+                  type="button"
+                  className={`view-toggle-btn ${currentView === 'month' ? 'active' : ''}`}
+                  onClick={() => setCurrentView('month')}
+                >
+                  {t('booking.calendar.view.month', 'Måned')}
+                </button>
+                <button
+                  type="button"
+                  className={`view-toggle-btn ${currentView === 'week' ? 'active' : ''}`}
+                  onClick={() => setCurrentView('week')}
+                >
+                  {t('booking.calendar.view.week', 'Uge')}
+                </button>
+                <button
+                  type="button"
+                  className={`view-toggle-btn ${currentView === 'day' ? 'active' : ''}`}
+                  onClick={() => setCurrentView('day')}
+                >
+                  {t('booking.calendar.view.day', 'Dag')}
+                </button>
+              </div>
+              {!selectedAppointment && (
+                <button
+                  type="button"
+                  className="toolbar-pill toolbar-primary"
+                  onClick={handleOpenAppointmentForm}
+                >
+                  {t('booking.calendar.add', 'Tilføj')}
+                  <ChevronDown className="toolbar-caret" />
+                </button>
+              )}
             </div>
-            <span className="current-month">
-              {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-            </span>
-          </div>
-          <div className="topbar-right">
-            <button 
-              className="create-appointment-btn"
-              onClick={() => {
-                setEditingAppointment(null);
-                setNextAppointmentTemplate(null);
-                setSelectedAppointment(null);
-                setSelectedClientId(null);
-                setSelectedClientFallback(null);
-                setShowAppointmentForm(true);
-              }}
-            >
-              <span className="plus-icon">+</span>
-              Opret aftale
-            </button>
           </div>
         </div>
 
@@ -1228,14 +2051,20 @@ function BookingPage() {
                 clientName={journalEntryClient?.navn}
                 onClose={handleCloseJournalEntry}
                 onSave={handleJournalEntrySaved}
+                participants={journalEntryParticipants}
+                initialDate={journalEntryDate}
               />
             </div>
           ) : (
             <>
               {/* Main Calendar Area */}
               <div className="booking-main">
-                <div className="calendar-container">
-                  {currentView === 'month' ? renderMonthView() : renderTimeGrid()}
+                <div className={`calendar-container ${isMultiTeam ? 'calendar-compact' : ''}`}>
+                  {currentView === 'month'
+                    ? renderMonthView()
+                    : isMultiTeam
+                      ? renderTeamTimeGrid()
+                      : renderTimeGrid()}
                 </div>
               </div>
 
@@ -1263,6 +2092,9 @@ function BookingPage() {
                   <AppointmentForm
                     initialAppointment={editingAppointment || nextAppointmentTemplate || null}
                     mode={editingAppointment ? 'edit' : 'create'}
+                    teamMembers={teamMembers}
+                    hasTeamAccess={hasTeamAccess}
+                    defaultOwnerName={ownerEntry.name}
                     onClose={() => {
                       setShowAppointmentForm(false);
                       setEditingAppointment(null);

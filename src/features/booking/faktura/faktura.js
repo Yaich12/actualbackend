@@ -46,7 +46,7 @@ function StatusPill({ status }) {
 
 function InvoicesPage() {
   const navigate = useNavigate();
-  const { user, signOutUser } = useAuth();
+  const { user } = useAuth();
   const { clients, loading: clientsLoading } = useUserClients();
   const [invoices] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -169,21 +169,6 @@ function InvoicesPage() {
   return (
     <BookingSidebarLayout>
       <div className="booking-page">
-        <div className="booking-topbar">
-          <div className="topbar-left">
-            <button
-              className="topbar-logo-btn"
-              onClick={async () => {
-                await signOutUser();
-                navigate('/');
-              }}
-            >
-              Forside
-            </button>
-          </div>
-          <div className="topbar-right" />
-        </div>
-
         <div className="booking-content">
           <div className="booking-main">
           <div className="flex h-full flex-col gap-4 rounded-2xl bg-slate-50/60 p-4 md:p-6">
@@ -834,4 +819,3 @@ function InvoicesPage() {
 }
 
 export default InvoicesPage;
-

@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import '../bookingpage.css';
 import './klientoversigt.css';
 import AddKlient from './addklient/addklient';
@@ -8,8 +7,7 @@ import { useAuth } from '../../../AuthContext';
 import { useUserClients } from './hooks/useUserClients';
 
 function Klientoversigt() {
-  const navigate = useNavigate();
-  const { user, signOutUser } = useAuth();
+  const { user } = useAuth();
   const {
     clients,
     loading: isLoadingClients,
@@ -20,6 +18,11 @@ function Klientoversigt() {
   const [sortDirection, setSortDirection] = useState('asc');
   const [showAddClient, setShowAddClient] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
+  const [editView, setEditView] = useState('forloeb'); // 'personal' or 'forloeb'
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [sortOption, setSortOption] = useState('alphabetical'); // 'newest', 'oldest', 'alphabetical'
+  const [selectedClientId, setSelectedClientId] = useState(null);
+  const [clientMenuPosition, setClientMenuPosition] = useState({ x: 0, y: 0 });
 
   const handleSort = (column) => {
     if (sortColumn === column) {
@@ -32,20 +35,39 @@ function Klientoversigt() {
 
   const filteredClients = useMemo(() => {
     const queryValue = searchQuery.trim().toLowerCase();
-    if (!queryValue) {
-      return clients;
+    let result = clients;
+    
+    if (queryValue) {
+      result = clients.filter((client) => {
+        const name = client.navn?.toLowerCase?.() || '';
+        const email = client.email?.toLowerCase?.() || '';
+        const city = client.by?.toLowerCase?.() || '';
+        return (
+          name.includes(queryValue) ||
+          email.includes(queryValue) ||
+          city.includes(queryValue)
+        );
+      });
     }
-    return clients.filter((client) => {
-      const name = client.navn?.toLowerCase?.() || '';
-      const email = client.email?.toLowerCase?.() || '';
-      const city = client.by?.toLowerCase?.() || '';
-      return (
-        name.includes(queryValue) ||
-        email.includes(queryValue) ||
-        city.includes(queryValue)
-      );
+
+    // Apply sorting based on sortOption
+    return [...result].sort((a, b) => {
+      if (sortOption === 'alphabetical') {
+        const nameA = (a.navn || '').toLowerCase();
+        const nameB = (b.navn || '').toLowerCase();
+        return nameA.localeCompare(nameB, 'da');
+      } else if (sortOption === 'newest') {
+        const dateA = a.createdAt?.toDate?.() || a.createdAt || new Date(0);
+        const dateB = b.createdAt?.toDate?.() || b.createdAt || new Date(0);
+        return dateB - dateA;
+      } else if (sortOption === 'oldest') {
+        const dateA = a.createdAt?.toDate?.() || a.createdAt || new Date(0);
+        const dateB = b.createdAt?.toDate?.() || b.createdAt || new Date(0);
+        return dateA - dateB;
+      }
+      return 0;
     });
-  }, [clients, searchQuery]);
+  }, [clients, searchQuery, sortOption]);
 
   const openCreateClient = () => {
     setEditingClient(null);
@@ -65,6 +87,51 @@ function Klientoversigt() {
   const handleDeleteClient = () => {
     setShowAddClient(false);
     setEditingClient(null);
+  };
+
+  const handleSortOptionSelect = (option) => {
+    setSortOption(option);
+    setShowSortDropdown(false);
+  };
+
+  const getSortLabel = () => {
+    switch (sortOption) {
+      case 'newest': return 'Nyeste';
+      case 'oldest': return 'Ældste';
+      case 'alphabetical': return 'Alfabetisk';
+      default: return 'Sortér';
+    }
+  };
+
+  const handleClientRowClick = (e, client) => {
+    // Ignore clicks on checkbox
+    if (e.target.type === 'checkbox') {
+      return;
+    }
+
+    // Get position for menu
+    const rect = e.currentTarget.getBoundingClientRect();
+    setClientMenuPosition({
+      x: rect.left + rect.width / 2,
+      y: rect.bottom + 4,
+    });
+    setSelectedClientId(client.id);
+  };
+
+  const handleEditClientInfo = (client) => {
+    setEditView('personal');
+    openEditClient(client);
+    setSelectedClientId(null);
+  };
+
+  const handleAddForloebInfo = (client) => {
+    setEditView('forloeb');
+    openEditClient(client);
+    setSelectedClientId(null);
+  };
+
+  const handleCloseMenu = () => {
+    setSelectedClientId(null);
   };
 
   const userIdentity = useMemo(() => {
@@ -98,19 +165,6 @@ function Klientoversigt() {
   return (
     <BookingSidebarLayout>
       <div className="booking-page">
-        {/* Top Navigation Bar */}
-        <div className="booking-topbar">
-          <div className="topbar-left">
-            <button className="topbar-logo-btn" onClick={async () => {
-              await signOutUser();
-              navigate('/');
-            }}>
-              Forside
-            </button>
-          </div>
-          <div className="topbar-right" />
-        </div>
-
         <div className="booking-content">
           {/* Main Content Area - Client Overview */}
           <div className="klientoversigt-main">
@@ -134,16 +188,37 @@ function Klientoversigt() {
 
           {/* Filter Bar */}
           <div className="filter-bar">
-            <button className="filter-btn">Filter</button>
-            <button className="saved-filters-btn">
-              <span className="bookmark-icon">🔖</span>
-              Gemte Filtre
-              <span className="dropdown-arrow">▼</span>
-            </button>
-            <button className="edit-columns-btn">
-              Rediger kolonner
-              <span className="dropdown-arrow">▼</span>
-            </button>
+            <div className="sort-dropdown-container">
+              <button 
+                className="edit-columns-btn"
+                onClick={() => setShowSortDropdown(!showSortDropdown)}
+              >
+                Sortér: {getSortLabel()}
+                <span className="dropdown-arrow">{showSortDropdown ? '▲' : '▼'}</span>
+              </button>
+              {showSortDropdown && (
+                <div className="sort-dropdown-menu">
+                  <button 
+                    className={`sort-dropdown-item ${sortOption === 'newest' ? 'active' : ''}`}
+                    onClick={() => handleSortOptionSelect('newest')}
+                  >
+                    Nyeste
+                  </button>
+                  <button 
+                    className={`sort-dropdown-item ${sortOption === 'oldest' ? 'active' : ''}`}
+                    onClick={() => handleSortOptionSelect('oldest')}
+                  >
+                    Ældste
+                  </button>
+                  <button 
+                    className={`sort-dropdown-item ${sortOption === 'alphabetical' ? 'active' : ''}`}
+                    onClick={() => handleSortOptionSelect('alphabetical')}
+                  >
+                    Alfabetisk
+                  </button>
+                </div>
+              )}
+            </div>
             <div className="search-bar">
               <span className="search-icon-small">🔍</span>
               <input 
@@ -262,8 +337,13 @@ function Klientoversigt() {
               </thead>
               <tbody>
                 {filteredClients.map((client) => (
-                  <tr key={client.id}>
-                    <td className="checkbox-col">
+                  <tr 
+                    key={client.id}
+                    onClick={(e) => handleClientRowClick(e, client)}
+                    className={selectedClientId === client.id ? 'row-selected' : ''}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <td className="checkbox-col" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={false}
@@ -292,6 +372,41 @@ function Klientoversigt() {
         </div>
       </div>
 
+      {/* Client Action Menu */}
+      {selectedClientId && (() => {
+        const client = filteredClients.find((c) => c.id === selectedClientId);
+        if (!client) return null;
+        
+        return (
+          <>
+            <div 
+              className="client-menu-overlay" 
+              onClick={handleCloseMenu}
+            />
+            <div 
+              className="client-menu"
+              style={{
+                left: `${clientMenuPosition.x}px`,
+                top: `${clientMenuPosition.y}px`,
+              }}
+            >
+              <button
+                className="client-menu-item"
+                onClick={() => handleEditClientInfo(client)}
+              >
+                Ændre klientoplysninger
+              </button>
+              <button
+                className="client-menu-item"
+                onClick={() => handleAddForloebInfo(client)}
+              >
+                Tilføj forløbsoplysninger
+              </button>
+            </div>
+          </>
+        );
+      })()}
+
       {/* Add Klient Modal */}
       {showAddClient && (
         <AddKlient
@@ -299,9 +414,11 @@ function Klientoversigt() {
           mode={editingClient ? 'edit' : 'create'}
           clientId={editingClient?.id || null}
           initialClient={editingClient || null}
+          editView={editView}
           onClose={() => {
             setShowAddClient(false);
             setEditingClient(null);
+            setEditView('forloeb');
           }}
           onSave={handleAddClientSave}
           onDelete={handleDeleteClient}
