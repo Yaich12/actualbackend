@@ -12,10 +12,11 @@ function HeroDevices() {
       <div className="hero-devices__inner">
         <div className="hero-devices__text">
           <p className="hero-devices__eyebrow">Selma+ platform</p>
-          <h1>Booking, journal og overblik i ét roligt workspace.</h1>
+          <h1>Overblikket der kommer til dig.</h1>
           <p className="hero-devices__sub">
-            En kalender der ligner dit faktiske produkt: klare blokke, rolige farver og klinisk
-            ro. Designet til fysioterapeuter, der vil have færre klik og mere tid til patienter.
+            Glem at klikke rundt efter information inden næste konsultation. Når en patient nærmer
+            sig, serverer Selma+ automatisk det hele for dig: Hvem der kommer, et AI-resume af sidste
+            session og en klar plan for i dag. Du er klar, før patienten træder ind ad døren.
           </p>
           <div className="hero-devices__cta">
             <button className="hero-devices__button">Prøv Selma+ booking</button>
@@ -30,6 +31,7 @@ function HeroDevices() {
               <div className="hero-tablet__camera" />
               <div className="hero-tablet__screen">
                 <div className="hero-tablet__calendar-bg">
+                <div className="calendar-bg__content">
                   <div className="calendar-bg__header">
                     <span>Uge 24 · Booking</span>
                     <span className="calendar-bg__pill">Team-view</span>
@@ -49,72 +51,51 @@ function HeroDevices() {
                     ))}
                   </div>
                 </div>
+                <div className="calendar-bg__veil" aria-hidden="true" />
+              </div>
 
-                <div className="active-session">
-                  <div className="active-session__badge">Aktiv session</div>
-
-                  <div className="active-session__header">
-                    <div>
-                      <span className="active-session__label">Patient</span>
-                      <span className="active-session__value">Lars Jensen</span>
-                    </div>
-                    <div>
-                      <span className="active-session__label">Tid</span>
-                      <span className="active-session__value">14:00 - 14:45</span>
+              <div className="session-card">
+                <div className="session-card__header">
+                  <div className="session-card__avatar" aria-hidden="true">
+                    MH
+                  </div>
+                  <div className="session-card__identity">
+                    <div className="session-card__name">Mette Hansen</div>
+                    <div className="session-card__meta">
+                      10:00 - 10:45 • Fysioterapi - Opfølgning
                     </div>
                   </div>
+                </div>
 
-                  <div className="active-session__summary">
-                    <span className="active-session__section-title">Resume fra sidst</span>
-                    <p>
-                      Patient oplevede bedring i lænd efter øvelser. Smerte niveau faldet fra 7/10
-                      til 4/10. Fokus i dag: Progression af styrke.
-                    </p>
-                  </div>
-
-                  <div className="active-session__listener">
-                    <div className="listener__top">
-                      <span className="listener__pill">Live recording</span>
-                      <span className="listener__status">
-                        <span className="listener__dot" />
-                        Factr lytter...
-                      </span>
-                    </div>
-                    <div className="listener__wave">
-                      {[...Array(12)].map((_, index) => (
-                        <span
-                          key={index}
-                          className="wave-bar"
-                          style={{ animationDelay: `${index * 0.07}s` }}
-                        />
-                      ))}
-                    </div>
-                    <div className="listener__note">Transkriberer samtale i realtid</div>
-                  </div>
-
-                  <div className="active-session__insight">
-                    <div className="insight__icon" aria-hidden="true">
+                <div className="session-card__insight">
+                  <div className="session-card__insight-header">
+                    <span className="session-card__spark" aria-hidden="true">
                       <svg viewBox="0 0 24 24" role="img">
                         <path
                           d="M12 3.5l1.9 4.2 4.6.6-3.3 3.2.8 4.6-4-2.2-4 2.2.8-4.6-3.3-3.2 4.6-.6L12 3.5z"
                           fill="currentColor"
                         />
                       </svg>
-                    </div>
-                    <div className="insight__content">
-                      <span className="insight__label">Ally Insight</span>
-                      <p>
-                        Forslag: Overvej McKenzie-øvelser baseret på dagens symptomer. Skal jeg
-                        klargøre en øvelsesplan?
-                      </p>
-                    </div>
+                    </span>
+                    <span>AI Resume &amp; Fokus</span>
                   </div>
+                  <p>
+                    Sidste session: Smerter i lænd reduceret. Patienten har lavet hjemmeøvelser.
+                    Fokus i dag: Øvelsesprogression + Manuelle greb omkring L4/L5.
+                  </p>
+                </div>
 
-                  <button className="active-session__cta">Afslut &amp; Journaliser</button>
+                <div className="session-card__footer">
+                  <div className="session-card__status">
+                    <span className="status-dot status-dot--warning" />
+                    Betaling: Ikke betalt
+                  </div>
+                  <button className="session-card__cta">Start Journal / Optagelse</button>
                 </div>
               </div>
             </div>
           </div>
+        </div>
         </div>
       </div>
     </section>

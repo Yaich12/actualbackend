@@ -3,6 +3,7 @@ import './appointments.css';
 import { useUserClients } from '../Klienter/hooks/useUserClients';
 import ServiceSelector from '../Ydelser/ServiceSelector';
 import AddKlient from '../Klienter/addklient/addklient';
+import { normalizeDateString, parseDateString } from '../../../utils/appointmentFormat';
 
 const getAutoEndTime = (startTime, timeSlots) => {
   if (!startTime || !Array.isArray(timeSlots) || timeSlots.length === 0) {
@@ -174,10 +175,9 @@ function AppointmentForm({
   }, [selectedServiceId, startTime, mode, timeSlots, startDate]);
 
   const parseDateStr = (dateStr) => {
-    if (!dateStr) return null;
-    const [dd, mm, yyyy] = dateStr.split('-').map((n) => parseInt(n, 10));
-    if ([dd, mm, yyyy].some((n) => Number.isNaN(n))) return null;
-    return new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
+    const parsed = parseDateString(dateStr);
+    if (!parsed) return null;
+    return new Date(parsed.year, parsed.month - 1, parsed.day, 0, 0, 0, 0);
   };
 
   const formatDateStr = (dateObj) => {
@@ -217,6 +217,9 @@ function AppointmentForm({
     const selectedServiceData =
       availableServices.find((service) => service.id === selectedServiceId) || null;
 
+    const normalizedStartDate = normalizeDateString(startDate);
+    const normalizedEndDate = normalizeDateString(endDate);
+
     // Build participants array from all selected clients
     const participants = selectedClientsData.map((client) => ({
       id: client.id,
@@ -240,9 +243,9 @@ function AppointmentForm({
     const appointmentPayload = {
       ...base,
       id: base.id || Date.now(),
-      startDate,
+      startDate: normalizedStartDate,
       startTime,
-      endDate,
+      endDate: normalizedEndDate,
       endTime,
       clientId: primaryClient?.id || base.clientId || null,
       client: primaryClient?.navn || base.client || '',

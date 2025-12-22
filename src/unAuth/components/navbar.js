@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import {
   Bot,
   CalendarDays,
+  LineChart,
   LayoutTemplate,
   Sparkles,
   UserRound,
@@ -60,6 +61,11 @@ function Navbar() {
             title: 'Intelligent booking system',
             url: '/features',
             icon: <CalendarDays className="h-5 w-5" />,
+          },
+          {
+            title: 'Det fundamentale kliniksystem',
+            url: '/features/operations',
+            icon: <LineChart className="h-5 w-5" />,
           },
           {
             title: 'Selma Copilot',

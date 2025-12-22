@@ -10,7 +10,7 @@ import { useLanguage } from '../../LanguageContext';
 import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, where, getDocs, writeBatch, query, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import useAppointments from '../../hooks/useAppointments';
-import { combineDateAndTimeToIso } from '../../utils/appointmentFormat';
+import { combineDateAndTimeToIso, parseDateString } from '../../utils/appointmentFormat';
 import { useUserClients } from './Klienter/hooks/useUserClients';
 import {
   ChevronDown,
@@ -367,10 +367,16 @@ function BookingPage() {
     }
 
     if (dateStr && timeStr) {
-      const [day, month, year] = dateStr.split('-').map((part) => parseInt(part, 10));
+      const parsedDate = parseDateString(dateStr);
       const [hours, minutes] = timeStr.split(':').map((part) => parseInt(part, 10));
-      if ([day, month, year, hours, minutes].every((value) => !Number.isNaN(value))) {
-        return new Date(year, month - 1, day, hours, minutes);
+      if (parsedDate && [hours, minutes].every((value) => !Number.isNaN(value))) {
+        return new Date(
+          parsedDate.year,
+          parsedDate.month - 1,
+          parsedDate.day,
+          hours,
+          minutes
+        );
       }
     }
 

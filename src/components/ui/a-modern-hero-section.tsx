@@ -52,11 +52,16 @@ export default function HeroSection() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Top section with title and text */}
         <div className="text-center mb-8 sm:mb-12">
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-black mb-4 sm:mb-6 tracking-tight">
-            Selma+
-          </h1>
-          <p className="text-lg sm:text-xl text-black mb-8 sm:mb-10 max-w-2xl mx-auto">
-            Say hello to the newest members of the family.
+          <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-black mb-4 sm:mb-6 tracking-tight">
+            The first clinic system designed to disappear.
+          </h2>
+          <p className="text-lg sm:text-xl text-black/80 mb-6 sm:mb-8 max-w-3xl mx-auto leading-relaxed">
+            You became a therapist to heal people, not to manage software. That&apos;s why we built Selma+. It handles
+            the booking, writes the journals, and balances the books—automatically. So you can stop looking at the
+            screen, and start looking at your patient.
+          </p>
+          <p className="text-sm sm:text-base text-black/70 font-medium tracking-wide mb-8 sm:mb-10">
+            See how we give you your time back:
           </p>
           
           {/* Action buttons */}
@@ -79,131 +84,118 @@ export default function HeroSection() {
         {/* Acuity-style feature cards */}
         <div className="mt-10 grid gap-8 lg:grid-cols-3">
           {/* Card 1: Website Builder + AI Agent */}
-          <div className="rounded-[36px] bg-[#5a7cc8] p-6 shadow-xl shadow-slate-200/60">
-            <div className="rounded-[28px] bg-white p-5">
+          <div className="rounded-[36px] bg-[#5a7cc8] p-7 sm:p-8 shadow-xl shadow-slate-200/60">
+            <div className="rounded-[28px] bg-white p-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <div className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-                  WEBSITE &amp; AI AGENT
+                  DIGITAL RECEPTION
                 </div>
                 <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">
                   <CalendarDays className="h-5 w-5" />
                 </div>
               </div>
               <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="mx-auto w-full max-w-[220px] rounded-[26px] border border-slate-200 bg-white p-3 shadow-sm">
-                  <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                    Booking
+                <div className="rounded-2xl bg-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700">
+                    <span>Selma+ Reception</span>
                     <span className="h-2 w-2 rounded-full bg-emerald-400" />
                   </div>
-                  <div className="mt-3 text-sm font-semibold text-slate-900">Book your visit</div>
-                  <div className="mt-3 space-y-2 text-[11px] text-slate-600">
-                    {['Fysioterapi', 'Kiropraktik', 'Osteopati'].map((label) => (
-                      <div key={label} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
-                        <span>{label}</span>
-                        <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500">
-                          Vælg
-                        </span>
-                      </div>
-                    ))}
+                  <div className="mt-3 rounded-xl bg-slate-100 px-3 py-2 text-[12px] text-slate-600">
+                    Velkommen til Klinik Selma, hvad kan jeg hjælpe med?
                   </div>
-                  <button
-                    type="button"
-                    className="mt-3 w-full rounded-xl bg-slate-900 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white"
-                  >
-                    Vælg tid
-                  </button>
+                  <div className="mt-4 flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-400">
+                    Skriv en besked...
+                    <span className="ml-auto inline-flex items-center justify-center rounded-full bg-blue-600 px-3 py-1 text-[10px] font-semibold text-white">
+                      Send
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <h3 className="mt-8 text-2xl font-semibold text-white">Say hello to new patients 24/7</h3>
+            <h3 className="mt-8 text-2xl font-semibold text-white">Din klinik er altid åben</h3>
             <p className="mt-3 text-sm leading-relaxed text-white/90">
-              Via your new beautiful website we have built for you. And as a new feature, it is powered by an AI
-              secretary that will answer every question they could have about your services.
+              Få en smuk hjemmeside med indbygget AI-receptionist. Den tager imod nye patienter og svarer på spørgsmål
+              døgnet rundt – også mens du sover.
             </p>
-            <button
-              type="button"
-              onClick={handleScrollToBuilder}
-              className="mt-6 inline-flex items-center justify-center rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-[#4f6fc1] shadow-sm transition hover:bg-white"
+            <Link
+              to="/website-builder"
+              onClick={(event) => {
+                event.preventDefault();
+                handleScrollToBuilder();
+              }}
+              className="mt-6 inline-flex items-center justify-center text-sm font-semibold text-white/95 transition hover:text-white"
             >
-              Try it out now 👇
-            </button>
+              Se løsningen →
+            </Link>
           </div>
 
           {/* Card 2: Journal & Economy */}
-          <div className="rounded-[36px] bg-[#5a7cc8] p-6 shadow-xl shadow-slate-200/60">
-            <div className="rounded-[28px] bg-white p-5">
+          <div className="rounded-[36px] bg-[#5a7cc8] p-7 sm:p-8 shadow-xl shadow-slate-200/60">
+            <div className="rounded-[28px] bg-white p-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <div className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-                  CLINIC SYSTEM
+                  INTELLIGENT SYSTEM
                 </div>
                 <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">
                   <Mic className="h-5 w-5" />
                 </div>
               </div>
               <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="relative overflow-hidden rounded-2xl bg-white p-4 shadow-sm">
-                  <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                    Team calendar
-                    <span className="text-slate-500">Week 32</span>
-                  </div>
-                  <div className="mt-4 grid grid-cols-3 gap-3 text-[11px] text-slate-500">
-                    {[
-                      { name: "Anna", shade: "bg-blue-200/70" },
-                      { name: "Jonas", shade: "bg-emerald-200/70" },
-                      { name: "Sara", shade: "bg-violet-200/70" },
-                    ].map((col) => (
-                      <div key={col.name} className="space-y-2">
-                        <div className="text-[10px] font-semibold text-slate-500">{col.name}</div>
-                        <div className={`h-3 rounded-full ${col.shade}`} />
-                        <div className="h-3 rounded-full bg-slate-100" />
-                        <div className={`h-3 rounded-full ${col.shade}`} />
+                <div className="rounded-2xl bg-white p-4 shadow-sm">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <div className="text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-400">Kalender</div>
+                      <div className="mt-3 space-y-2">
+                        <div className="h-2 w-full rounded-full bg-blue-200/80" />
+                        <div className="h-2 w-5/6 rounded-full bg-slate-200" />
+                        <div className="h-2 w-4/5 rounded-full bg-blue-200/70" />
+                        <div className="h-2 w-2/3 rounded-full bg-slate-200" />
                       </div>
-                    ))}
-                  </div>
-
-                  <div className="absolute bottom-3 right-3 w-[170px] rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-lg">
-                    <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-white">
-                        <Mic className="h-3 w-3" />
-                      </span>
-                      AI forslag
                     </div>
-                    <div className="mt-2 text-sm font-semibold text-slate-900">Ny tid foreslået</div>
-                    <div className="mt-1 text-xs text-slate-500">Patient: Emil • Ons 10:30</div>
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <div className="flex items-center justify-between text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                        Journal
+                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[9px] font-semibold text-white">
+                          AI
+                        </span>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        <div className="h-2 w-full rounded-full bg-emerald-200/70" />
+                        <div className="h-2 w-4/5 rounded-full bg-slate-200" />
+                        <div className="h-2 w-5/6 rounded-full bg-emerald-200/60" />
+                        <div className="h-2 w-2/3 rounded-full bg-slate-200" />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <h3 className="mt-8 text-2xl font-semibold text-white">Det intelligente kliniksystem</h3>
+            <h3 className="mt-8 text-2xl font-semibold text-white">Mere tid til behandling</h3>
             <p className="mt-3 text-sm leading-relaxed text-white/90">
-              Glem alt om separate systemer. Få booking, team-kalender og AI-journalisering i ét flow. Fra
-              stemmestyrede notater (Factr) til automatiske SMS-påmindelser og statistik – alt er samlet her.
+              Slut med at klikke rundt. I Selma+ er din kalender og journal smeltet sammen, og AI-assistenten hjælper
+              dig med at skrive notaterne lynhurtigt.
             </p>
-            <ul className="mt-5 grid gap-2 text-xs text-white/85">
-              {[
-                "✓ Team-overblik & Kalender",
-                "✓ Voice-to-Text Journal (Factr)",
-                "✓ AI-Agenter & Rådgivning",
-                "✓ Patient-mål & Statistik",
-              ].map((item) => (
-                <li key={item} className="rounded-full bg-white/10 px-3 py-1">
-                  {item}
-                </li>
-              ))}
-            </ul>
-            <Link
-              to="/features"
-              className="mt-6 inline-flex items-center justify-center rounded-full border border-white/80 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-[#4f6fc1]"
-            >
-              Udforsk systemet →
-            </Link>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <Link
+                to="/features"
+                className="inline-flex items-center justify-center rounded-full border border-white/80 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-[#4f6fc1]"
+              >
+                Udforsk systemet →
+              </Link>
+              <Link
+                to="/selma-copilot"
+                className="inline-flex items-center justify-center rounded-full border border-white/80 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-[#4f6fc1]"
+              >
+                Mød Ally →
+              </Link>
+            </div>
           </div>
 
           {/* Card 3: Admin overview */}
-          <div className="rounded-[36px] bg-[#5a7cc8] p-6 shadow-xl shadow-slate-200/60">
-            <div className="rounded-[28px] bg-white p-5">
+          <div className="rounded-[36px] bg-[#5a7cc8] p-7 sm:p-8 shadow-xl shadow-slate-200/60">
+            <div className="rounded-[28px] bg-white p-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <div className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
                   OVERBLIK
@@ -213,31 +205,36 @@ export default function HeroSection() {
                 </div>
               </div>
               <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {[
-                    { label: 'Bookinger', value: '28' },
-                    { label: 'Omsætning', value: 'DKK 42k' },
-                    { label: 'Nye klienter', value: '12' },
-                    { label: 'Ugeplan', value: '7 dage' },
-                  ].map((item) => (
-                    <div key={item.label} className="rounded-2xl bg-white px-4 py-3 shadow-sm">
-                      <div className="text-xs uppercase tracking-[0.2em] text-slate-400">{item.label}</div>
-                      <div className="mt-2 text-lg font-semibold text-slate-900">{item.value}</div>
+                <div className="rounded-2xl bg-white p-4 shadow-sm">
+                  <div className="rounded-2xl border border-emerald-100 bg-white p-4">
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                      <span>Omsætning</span>
+                      <span className="text-emerald-600">+12%</span>
                     </div>
-                  ))}
+                    <div className="mt-3 h-12 rounded-xl bg-emerald-50 p-2">
+                      <div className="h-full w-full rounded-lg bg-gradient-to-r from-emerald-200 via-emerald-100 to-white" />
+                    </div>
+                    <div className="mt-4 flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">
+                      Status: Alt afstemt
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-semibold text-white">
+                        ✓
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <h3 className="mt-8 text-2xl font-semibold text-white">Fuldt overblik over klinikken</h3>
+            <h3 className="mt-8 text-2xl font-semibold text-white">Ro i maven omkring tallene</h3>
             <p className="mt-3 text-sm leading-relaxed text-white/90">
-              Styr kalender, patienter og omsætning ét sted. Få ro i maven og fokus på behandling.
+              Slip for det manuelle bøvl. Fakturering, indberetning til &quot;danmark&quot; og regnskab sker automatisk
+              i baggrunden.
             </p>
             <Link
-              to="/features"
+              to="/features/operations"
               className="mt-6 inline-flex text-sm font-semibold text-white/90 transition hover:text-white"
             >
-              Se admin-funktioner →
+              Se funktioner →
             </Link>
           </div>
         </div>

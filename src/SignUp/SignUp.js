@@ -17,7 +17,6 @@ import { Gem } from "lucide-react";
 import { SignInPage } from "../components/ui/sign-in";
 import { ensureUserDocument } from "../services/userService";
 import {
-  clearPostAuthRedirectTarget,
   consumePostAuthRedirectTarget,
   peekPostAuthRedirectTarget,
   setPostAuthRedirectTarget,
@@ -46,12 +45,38 @@ function SignUp() {
     }
   }, []);
 
-  const redirectToWelcome = () => {
-    setShouldRedirectToWelcome(true);
-    navigate("/welcome", { replace: true });
-    clearPostAuthRedirectTarget();
-    navigate(target, { replace: true });
-  }, [navigate, resolvePostLoginRoute]);
+  const resolvePostLoginRoute = useCallback(
+    async (authUser) => {
+      const storedTarget = consumePostAuthRedirectTarget();
+      let resolvedTarget = storedTarget || "/welcome";
+
+      if (resolvedTarget.startsWith("/welcome") && authUser?.uid) {
+        try {
+          const snap = await getDoc(doc(db, "users", authUser.uid));
+          const data = snap.exists() ? snap.data() : null;
+          if (data?.onboardingComplete === true) {
+            resolvedTarget = "/booking";
+          }
+        } catch (error) {
+          console.error("[SignUp] Failed to resolve onboarding state:", error);
+        }
+      }
+
+      return resolvedTarget;
+    },
+    []
+  );
+
+  const redirectAfterAuth = useCallback(
+    async (authUser) => {
+      const target = await resolvePostLoginRoute(authUser);
+      if (!target) {
+        return;
+      }
+      navigate(target, { replace: true });
+    },
+    [navigate, resolvePostLoginRoute]
+  );
 
   useEffect(() => {
     console.log("[SignUp] auth state:", { loading, user });
