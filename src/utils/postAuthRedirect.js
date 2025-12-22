@@ -7,6 +7,13 @@ export const setPostAuthRedirectTarget = (path = "/welcome") => {
   window.localStorage.setItem(POST_AUTH_REDIRECT_KEY, path);
 };
 
+export const peekPostAuthRedirectTarget = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.localStorage.getItem(POST_AUTH_REDIRECT_KEY);
+};
+
 export const consumePostAuthRedirectTarget = () => {
   if (typeof window === "undefined") {
     return null;

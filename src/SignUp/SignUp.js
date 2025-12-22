@@ -18,6 +18,8 @@ import { SignInPage } from "../components/ui/sign-in";
 import { ensureUserDocument } from "../services/userService";
 import {
   clearPostAuthRedirectTarget,
+  consumePostAuthRedirectTarget,
+  peekPostAuthRedirectTarget,
   setPostAuthRedirectTarget,
 } from "../utils/postAuthRedirect";
 import "./SignUp.css";
@@ -44,25 +46,9 @@ function SignUp() {
     }
   }, []);
 
-  const resolvePostLoginRoute = useCallback(async (authUser) => {
-    if (!authUser?.uid) {
-      return "/welcome";
-    }
-
-    try {
-      const ref = doc(db, "users", authUser.uid);
-      const snap = await getDoc(ref);
-      const data = snap.exists() ? snap.data() : null;
-      const onboardingComplete = data?.onboardingComplete === true;
-      return onboardingComplete ? "/booking" : "/welcome";
-    } catch (error) {
-      console.error("[SignUp] Failed to resolve onboarding state", error);
-      return "/welcome";
-    }
-  }, []);
-
-  const redirectAfterAuth = useCallback(async (authUser) => {
-    const target = await resolvePostLoginRoute(authUser);
+  const redirectToWelcome = () => {
+    setShouldRedirectToWelcome(true);
+    navigate("/welcome", { replace: true });
     clearPostAuthRedirectTarget();
     navigate(target, { replace: true });
   }, [navigate, resolvePostLoginRoute]);
@@ -183,7 +169,9 @@ function SignUp() {
     setStatus(null);
     setStatusMessage(null);
     console.log("[SignUp] handleGoogleSignIn triggered");
-    setPostAuthRedirectTarget("/welcome");
+    if (!peekPostAuthRedirectTarget()) {
+      setPostAuthRedirectTarget("/welcome");
+    }
     try {
       const result = await signInWithGoogle();
       if (result?.user) {

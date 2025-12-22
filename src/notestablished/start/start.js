@@ -27,6 +27,9 @@ const STEPS = [
   "Summary",
 ] 
 
+const LAUNCH_PLANNER_COMPLETE_KEY = "selmaLaunchPlannerComplete";
+const LANDING_BUILDER_DRAFT_KEY = "selmaLandingBuilderDraft";
+
 export function LaunchPlannerPage() {
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
   const navigate = useNavigate()
@@ -169,6 +172,56 @@ export function LaunchPlannerPage() {
   const goBack = () => {
     setCurrentStepIndex((prev) => Math.max(prev - 1, 0))
   }
+
+  const handleFinish = () => {
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(LAUNCH_PLANNER_COMPLETE_KEY, "1");
+
+        const existingDraftRaw = window.localStorage.getItem(LANDING_BUILDER_DRAFT_KEY);
+        const existingDraft = existingDraftRaw ? JSON.parse(existingDraftRaw) : {};
+
+        const nextDraft = { ...existingDraft };
+        const nextServices = Array.isArray(nextDraft.services) ? [...nextDraft.services] : ["", "", ""];
+
+        if (!nextDraft.profession && startingPoint.profession) {
+          nextDraft.profession = startingPoint.profession;
+        }
+
+        if (!nextServices[0] && servicesPricing.coreServiceName) {
+          nextServices[0] = servicesPricing.coreServiceName;
+        }
+        if (!nextServices[1] && servicesPricing.packageName) {
+          nextServices[1] = servicesPricing.packageName;
+        }
+        if (!nextServices[2] && Array.isArray(nicheAudience.problemTypes) && nicheAudience.problemTypes[0]) {
+          nextServices[2] = nicheAudience.problemTypes[0];
+        }
+
+        nextDraft.services = nextServices;
+
+        if (!nextDraft.targetAudience && nicheAudience.primaryNiche) {
+          nextDraft.targetAudience = nicheAudience.primaryNiche;
+        }
+
+        if (!nextDraft.approach && servicesPricing.coreServiceDescription) {
+          nextDraft.approach = servicesPricing.coreServiceDescription;
+        }
+
+        window.localStorage.setItem(LANDING_BUILDER_DRAFT_KEY, JSON.stringify(nextDraft));
+      } catch (_) {}
+    }
+
+    navigate("/getting-started/digital-front");
+  };
+
+  const handleNextOrFinish = () => {
+    if (currentStepIndex === STEPS.length - 1) {
+      handleFinish();
+      return;
+    }
+    goNext();
+  };
 
   return (
     <div className="w-full bg-muted/40 py-12 md:py-16 lg:py-20">
@@ -943,8 +996,8 @@ export function LaunchPlannerPage() {
                     Save draft
                   </Button>
                 </div>
-                <Button size="sm" onClick={goNext}>
-                  {currentStepIndex === STEPS.length - 1 ? "Finish" : "Next step"}
+                <Button size="sm" onClick={handleNextOrFinish}>
+                  {currentStepIndex === STEPS.length - 1 ? "Fortsæt til hjemmeside-builder" : "Next step"}
                 </Button>
               </div>
             </CardContent>

@@ -1,4 +1,5 @@
-import { Book, Menu, Sunset, Trees, Zap } from "lucide-react";
+import { useEffect, useRef, type ReactNode } from "react";
+import { Book, Menu } from "lucide-react";
 import { Link as RouterLink } from "react-router-dom";
 import {
   Accordion,
@@ -28,9 +29,112 @@ interface MenuItem {
   title: string;
   url: string;
   description?: string;
-  icon?: React.ReactNode;
+  icon?: ReactNode;
   items?: MenuItem[];
+  itemsHeader?: string;
+  itemsNote?: string;
+  itemsColumns?: number;
+  featured?: {
+    title: string;
+    description?: string;
+    url?: string;
+    image: string;
+    alt?: string;
+    items?: string[];
+    syncWithHeroVideo?: boolean;
+  };
 }
+
+const HERO_VIDEO_EVENT = "landing-hero-video-change";
+
+type HeroVideoEventDetail = {
+  src?: string;
+  time?: number;
+};
+
+const HeroVideoPreview = ({
+  fallbackImage,
+  alt,
+  className,
+}: {
+  fallbackImage: string;
+  alt: string;
+  className?: string;
+}) => {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const pendingTimeRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const video = videoRef.current;
+    if (!video) return;
+
+    const syncTime = (time?: number) => {
+      if (typeof time !== "number" || Number.isNaN(time)) return;
+      pendingTimeRef.current = time;
+      if (video.readyState < 1) return;
+      const drift = Math.abs(video.currentTime - time);
+      if (drift < 0.02) {
+        pendingTimeRef.current = null;
+        return;
+      }
+      try {
+        video.currentTime = time;
+      } catch (_) {}
+      pendingTimeRef.current = null;
+    };
+
+    const applySync = (detail?: HeroVideoEventDetail) => {
+      if (!detail) return;
+      const { src, time } = detail;
+      if (src && video.dataset.src !== src) {
+        video.dataset.src = src;
+        video.src = src;
+        video.load();
+      }
+      syncTime(time);
+      const playPromise = video.play();
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(() => {});
+      }
+    };
+
+    const handleLoadedMetadata = () => {
+      syncTime(pendingTimeRef.current ?? undefined);
+    };
+
+    const initial = (window as typeof window & {
+      __landingHeroVideo?: HeroVideoEventDetail;
+    }).__landingHeroVideo;
+    applySync(initial);
+
+    const handleChange = (event: Event) => {
+      const detail = (event as CustomEvent<HeroVideoEventDetail>).detail;
+      applySync(detail);
+    };
+
+    video.addEventListener("loadedmetadata", handleLoadedMetadata);
+    window.addEventListener(HERO_VIDEO_EVENT, handleChange);
+    return () => {
+      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      window.removeEventListener(HERO_VIDEO_EVENT, handleChange);
+    };
+  }, []);
+
+  return (
+    <video
+      ref={videoRef}
+      className={className}
+      poster={fallbackImage}
+      muted
+      playsInline
+      autoPlay
+      preload="metadata"
+      aria-label={alt}
+    />
+  );
+};
 
 interface Navbar1Props {
   logo?: {
@@ -212,34 +316,162 @@ const Navbar1 = ({
 
 const renderMenuItem = (item: MenuItem) => {
   if (item.items) {
+    const hasFeatured = Boolean(item.featured);
+    const columnCount = item.itemsColumns && item.itemsColumns > 1 ? 2 : 1;
+    const listWidthClass = columnCount === 2 ? "w-[560px]" : "w-80";
+    const listClassName = cn(
+      "grid gap-2",
+      columnCount === 2 ? "grid-cols-2 gap-x-4" : "grid-cols-1",
+      item.itemsHeader || item.itemsNote ? "mt-3" : ""
+    );
     return (
       <NavigationMenuItem key={item.title} className="text-white">
-        <NavigationMenuTrigger>{item.title}</NavigationMenuTrigger>
+        <NavigationMenuTrigger className="rounded-full bg-transparent text-white/90 hover:bg-white/10 hover:text-white data-[state=open]:bg-white/10 data-[state=open]:text-white">
+          {item.title}
+        </NavigationMenuTrigger>
         <NavigationMenuContent>
-          <ul className="w-80 p-3 bg-background text-foreground">
-            <NavigationMenuLink>
-              {item.items.map((subItem) => (
-                <li key={subItem.title}>
-                  <a
-                    className="flex select-none gap-4 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-muted hover:text-accent-foreground"
-                    href={subItem.url}
-                  >
-                    {subItem.icon}
+          {hasFeatured ? (
+            <div className="w-[680px] p-5">
+              <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_240px]">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                    {item.itemsHeader || "By business size"}
+                  </div>
+                  <ul className="mt-4 grid gap-3">
+                    {item.items.map((subItem) => (
+                      <li key={subItem.title}>
+                        <NavigationMenuLink asChild>
+                          <a
+                            className="group flex items-start gap-4 rounded-2xl p-3 transition hover:bg-slate-50"
+                            href={subItem.url}
+                          >
+                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 transition group-hover:bg-blue-100">
+                              {subItem.icon}
+                            </span>
+                            <span>
+                              <span className="block text-sm font-semibold text-slate-900">
+                                {subItem.title}
+                              </span>
+                              {subItem.description && (
+                                <span className="mt-1 block text-xs text-slate-500">
+                                  {subItem.description}
+                                </span>
+                              )}
+                            </span>
+                          </a>
+                        </NavigationMenuLink>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                {item.featured ? (
+                  <div className="flex h-full flex-col gap-4 border-l border-slate-200 pl-6">
                     <div>
-                      <div className="text-sm font-semibold">
-                        {subItem.title}
+                      <div className="text-sm font-semibold text-slate-700">
+                        {item.featured.title}
                       </div>
-                      {subItem.description && (
-                        <p className="text-sm leading-snug text-muted-foreground">
-                          {subItem.description}
+                      {item.featured.description && (
+                        <p className="mt-1 text-xs text-slate-500">
+                          {item.featured.description}
                         </p>
                       )}
+                      {item.featured.items && item.featured.items.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-slate-500">
+                          {item.featured.items.map((label) => (
+                            <span
+                              key={label}
+                              className="rounded-full border border-slate-200 bg-white px-2.5 py-1"
+                            >
+                              {label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </a>
-                </li>
-              ))}
-            </NavigationMenuLink>
-          </ul>
+                    {item.featured.url ? (
+                      <a
+                        href={item.featured.url}
+                        className="group overflow-hidden rounded-2xl border border-slate-200/70 shadow-sm"
+                      >
+                        {item.featured.syncWithHeroVideo ? (
+                          <HeroVideoPreview
+                            fallbackImage={item.featured.image}
+                            alt={item.featured.alt || item.featured.title}
+                            className="h-36 w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                          />
+                        ) : (
+                          <img
+                            src={item.featured.image}
+                            alt={item.featured.alt || item.featured.title}
+                            className="h-36 w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                            loading="lazy"
+                          />
+                        )}
+                      </a>
+                    ) : (
+                      <div className="overflow-hidden rounded-2xl border border-slate-200/70 shadow-sm">
+                        {item.featured.syncWithHeroVideo ? (
+                          <HeroVideoPreview
+                            fallbackImage={item.featured.image}
+                            alt={item.featured.alt || item.featured.title}
+                            className="h-36 w-full object-cover"
+                          />
+                        ) : (
+                          <img
+                            src={item.featured.image}
+                            alt={item.featured.alt || item.featured.title}
+                            className="h-36 w-full object-cover"
+                            loading="lazy"
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : (
+            <div className={cn("p-4 bg-background text-foreground", listWidthClass)}>
+              {item.itemsHeader && (
+                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  {item.itemsHeader}
+                </div>
+              )}
+              {item.itemsNote && (
+                <p className="mt-2 text-xs font-semibold text-slate-500">
+                  {item.itemsNote}
+                </p>
+              )}
+              <ul className={listClassName}>
+                {item.items.map((subItem) => (
+                  <li key={subItem.title}>
+                    <NavigationMenuLink asChild>
+                      <a
+                        className="flex select-none items-start gap-3 rounded-lg p-3 leading-none no-underline outline-none transition-colors hover:bg-muted hover:text-accent-foreground"
+                        href={subItem.url}
+                      >
+                        {subItem.icon ? (
+                          <span className="mt-0.5 text-slate-500">
+                            {subItem.icon}
+                          </span>
+                        ) : null}
+                        <div>
+                          <div className="text-sm font-semibold">
+                            {subItem.title}
+                          </div>
+                          {subItem.description && (
+                            <p className="text-sm leading-snug text-muted-foreground">
+                              {subItem.description}
+                            </p>
+                          )}
+                        </div>
+                      </a>
+                    </NavigationMenuLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </NavigationMenuContent>
       </NavigationMenuItem>
     );
@@ -264,7 +496,17 @@ const renderMobileMenuItem = (item: MenuItem) => {
         <AccordionTrigger className="py-0 font-semibold hover:no-underline">
           {item.title}
         </AccordionTrigger>
-        <AccordionContent className="mt-2">
+        <AccordionContent className="mt-3 space-y-2">
+          {item.itemsHeader && (
+            <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              {item.itemsHeader}
+            </div>
+          )}
+          {item.itemsNote && (
+            <div className="px-3 text-xs font-semibold text-muted-foreground">
+              {item.itemsNote}
+            </div>
+          )}
           {item.items.map((subItem) => (
             <a
               key={subItem.title}
@@ -282,6 +524,33 @@ const renderMobileMenuItem = (item: MenuItem) => {
               </div>
             </a>
           ))}
+          {item.featured ? (
+            <a
+              className="flex flex-col gap-2 rounded-md p-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+              href={item.featured.url || "#"}
+            >
+              <span>{item.featured.title}</span>
+              {item.featured.items && item.featured.items.length > 0 && (
+                <span className="text-xs font-medium text-muted-foreground">
+                  {item.featured.items.join(", ")}
+                </span>
+              )}
+              {item.featured.syncWithHeroVideo ? (
+                <HeroVideoPreview
+                  fallbackImage={item.featured.image}
+                  alt={item.featured.alt || item.featured.title}
+                  className="h-24 w-full rounded-md object-cover"
+                />
+              ) : (
+                <img
+                  src={item.featured.image}
+                  alt={item.featured.alt || item.featured.title}
+                  className="h-24 w-full rounded-md object-cover"
+                  loading="lazy"
+                />
+              )}
+            </a>
+          ) : null}
         </AccordionContent>
       </AccordionItem>
     );
