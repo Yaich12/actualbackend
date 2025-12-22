@@ -1,8 +1,11 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import './indlæg.css';
 import Whisper from './whisper';
 import Prompt from './prompt';
+import FactsRPanel from './FactsRPanel';
+import { useFactsRStream } from './useFactsRStream';
+import { Component as AiAssistantCard } from '../../../../components/ui/ai-assistant-card';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
 
@@ -58,6 +61,90 @@ const deriveUserIdentifier = (user) => {
   return 'unknown-user';
 };
 
+const ANAMNESIS_TEMPLATES = {
+  first: {
+    subjective: '- Hovedklage\n- Debut\n- Forvaerrende/lindrende',
+    objective: '- Objektive fund\n- Relevante tests',
+    assessment: '- Vurdering\n- Hypoteser',
+    plan: '- Plan\n- Naeste skridt',
+  },
+  follow_up: {
+    subjective: '- Status siden sidst\n- Aendringer i symptomer',
+    objective: '- Nye fund\n- Progression',
+    assessment: '- Vurdering af udvikling',
+    plan: '- Justeret plan\n- Naeste skridt',
+  },
+};
+
+const normalizeBullet = (value) =>
+  String(value || '')
+    .replace(/^[-•\s]+/, '')
+    .trim();
+
+const toBulletItems = (text) =>
+  String(text || '')
+    .split(/\r?\n+/)
+    .map((line) => normalizeBullet(line))
+    .filter(Boolean);
+
+const appendBulletsDedup = (currentText, items) => {
+  const existingItems = toBulletItems(currentText);
+  const incomingItems = Array.isArray(items) ? items : toBulletItems(items);
+  const seen = new Set(existingItems.map((item) => item.toLowerCase()));
+  const merged = [...existingItems];
+
+  incomingItems.forEach((item) => {
+    const normalized = normalizeBullet(item);
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(normalized);
+  });
+
+  return merged.map((item) => `- ${item}`).join('\n');
+};
+
+const FACTSR_SAMPLE_RATE = 16000;
+
+const resampleBuffer = (input, inputRate, outputRate) => {
+  if (inputRate === outputRate) {
+    return input;
+  }
+
+  const ratio = inputRate / outputRate;
+  const outputLength = Math.max(1, Math.round(input.length / ratio));
+  const output = new Float32Array(outputLength);
+
+  for (let i = 0; i < outputLength; i += 1) {
+    const position = i * ratio;
+    const leftIndex = Math.floor(position);
+    const rightIndex = Math.min(leftIndex + 1, input.length - 1);
+    const blend = position - leftIndex;
+    output[i] = input[leftIndex] + (input[rightIndex] - input[leftIndex]) * blend;
+  }
+
+  return output;
+};
+
+const float32ToPcm16 = (input) => {
+  const buffer = new ArrayBuffer(input.length * 2);
+  const view = new DataView(buffer);
+
+  for (let i = 0; i < input.length; i += 1) {
+    let sample = Math.max(-1, Math.min(1, input[i]));
+    sample = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+    view.setInt16(i * 2, sample, true);
+  }
+
+  return buffer;
+};
+
+const toPcm16Buffer = (input, inputRate) => {
+  const resampled = resampleBuffer(input, inputRate, FACTSR_SAMPLE_RATE);
+  return float32ToPcm16(resampled);
+};
+
 function Indlæg({
   clientId,
   clientName,
@@ -71,6 +158,7 @@ function Indlæg({
   const [date, setDate] = useState('14-11-2025');
   const [isPrivate, setIsPrivate] = useState(false);
   const [content, setContent] = useState('');
+  const [consultationType, setConsultationType] = useState('first');
   const [anamnesisSections, setAnamnesisSections] = useState(() => ({
     subjective: '',
     objective: '',
@@ -83,8 +171,14 @@ function Indlæg({
   const [conclusionReflection, setConclusionReflection] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [dictationStatus, setDictationStatus] = useState('');
+  const [transcriptionResult, setTranscriptionResult] = useState(null);
+  const [isDictating, setIsDictating] = useState(false);
+  const [highlightField, setHighlightField] = useState('');
+  const [factsInsertTarget, setFactsInsertTarget] = useState('auto');
+  const [factsRecordingStatus, setFactsRecordingStatus] = useState('');
+  const [isFactsRecording, setIsFactsRecording] = useState(false);
 
   // NYT: state til seneste sessioner
   const [recentEntries, setRecentEntries] = useState([]);
@@ -92,7 +186,383 @@ function Indlæg({
   const [historyError, setHistoryError] = useState('');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
+  const streamRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const factsMediaStreamRef = useRef(null);
+  const factsAudioContextRef = useRef(null);
+  const factsProcessorRef = useRef(null);
+  const factsSourceRef = useRef(null);
+  const factsSilenceRef = useRef(null);
+  const anamnesisSubjectiveRef = useRef(null);
+  const anamnesisObjectiveRef = useRef(null);
+  const anamnesisAssessmentRef = useRef(null);
+  const anamnesisPlanRef = useRef(null);
+  const conclusionFocusRef = useRef(null);
+  const conclusionContentRef = useRef(null);
+  const conclusionTasksRef = useRef(null);
+  const conclusionReflectionRef = useRef(null);
+  const combinedRef = useRef(null);
+
   const { user } = useAuth();
+  const {
+    status: factsStatus,
+    interactionId: factsInteractionId,
+    error: factsError,
+    transcripts: factsTranscripts,
+    facts: factsItems,
+    start: startFactsStream,
+    sendAudio: sendFactsAudio,
+    flush: flushFactsStream,
+    end: endFactsStream,
+    clear: clearFactsStream,
+  } = useFactsRStream();
+
+  const activeAnamnesisTemplate = useMemo(() => {
+    return ANAMNESIS_TEMPLATES[consultationType] || ANAMNESIS_TEMPLATES.first;
+  }, [consultationType]);
+
+  const anamnesisContent = useMemo(() => {
+    const sections = [
+      ['Subjektivt', anamnesisSections.subjective],
+      ['Objektivt', anamnesisSections.objective],
+      ['Vurdering', anamnesisSections.assessment],
+      ['Plan', anamnesisSections.plan],
+    ];
+
+    return sections
+      .filter(([, value]) => value && value.trim())
+      .map(([label, value]) => `${label}:\n${value.trim()}`)
+      .join('\n\n');
+  }, [anamnesisSections]);
+
+  const konklusionSuggestions = useMemo(() => {
+    const subjectiveItems = toBulletItems(anamnesisSections.subjective);
+    const objectiveItems = toBulletItems(anamnesisSections.objective);
+    const assessmentItems = toBulletItems(anamnesisSections.assessment);
+    const planItems = toBulletItems(anamnesisSections.plan);
+
+    return {
+      focusAreas: subjectiveItems.slice(0, 6),
+      sessionContent: objectiveItems.slice(0, 6),
+      tasksNext: planItems.slice(0, 6),
+      reflection: assessmentItems.slice(0, 6),
+    };
+  }, [anamnesisSections]);
+
+  useEffect(() => {
+    if (initialDate) {
+      setDate(initialDate);
+    }
+  }, [initialDate]);
+
+  const flashHighlight = (field) => {
+    setHighlightField(field);
+    window.setTimeout(() => setHighlightField(''), 1200);
+  };
+
+  const handleInsertTemplate = () => {
+    setAnamnesisSections((current) => ({
+      subjective: current.subjective || activeAnamnesisTemplate.subjective,
+      objective: current.objective || activeAnamnesisTemplate.objective,
+      assessment: current.assessment || activeAnamnesisTemplate.assessment,
+      plan: current.plan || activeAnamnesisTemplate.plan,
+    }));
+    flashHighlight('anamnesis_subjective');
+  };
+
+  const insertIntoJournal = (text, mode = 'append') => {
+    if (!text) return;
+
+    if (mode === 'replace') {
+      setContent(text);
+    } else {
+      setContent((current) => (current ? `${current}\n${text}` : text));
+    }
+
+    flashHighlight('combined');
+  };
+
+  const handleMikrofonClick = () => {
+    if (isDictating) {
+      stopDictation();
+      return;
+    }
+    startDictation();
+  };
+
+  const suggestionForFact = useCallback((fact) => {
+    const group = (fact?.group || fact?.type || '').toLowerCase();
+
+    if (group.includes('objective') || group.includes('objektiv') || group.includes('fund')) {
+      return { key: 'anamnesis_objective', label: 'Objektivt' };
+    }
+    if (group.includes('assessment') || group.includes('vurdering')) {
+      return { key: 'anamnesis_assessment', label: 'Vurdering' };
+    }
+    if (group.includes('plan') || group.includes('anbefaling')) {
+      return { key: 'anamnesis_plan', label: 'Plan' };
+    }
+    if (group.includes('reflection') || group.includes('refleksion')) {
+      return { key: 'conclusion_reflection', label: 'Refleksion' };
+    }
+
+    return { key: 'anamnesis_subjective', label: 'Subjektivt' };
+  }, []);
+
+  const insertFactText = useCallback(
+    (text, targetKey) => {
+      const safeText = String(text || '').trim();
+      if (!safeText) return;
+
+      const target = targetKey || 'anamnesis_subjective';
+
+      if (target === 'combined') {
+        insertIntoJournal(safeText, 'append');
+        return;
+      }
+
+      if (target === 'conclusion_focus') {
+        setConclusionFocusAreas((current) => appendBulletsDedup(current, safeText));
+        flashHighlight('conclusion_focus');
+        return;
+      }
+      if (target === 'conclusion_content') {
+        setConclusionSessionContent((current) => appendBulletsDedup(current, safeText));
+        flashHighlight('conclusion_content');
+        return;
+      }
+      if (target === 'conclusion_tasks') {
+        setConclusionTasksNext((current) => appendBulletsDedup(current, safeText));
+        flashHighlight('conclusion_tasks');
+        return;
+      }
+      if (target === 'conclusion_reflection') {
+        setConclusionReflection((current) => appendBulletsDedup(current, safeText));
+        flashHighlight('conclusion_reflection');
+        return;
+      }
+
+      if (target === 'anamnesis_objective') {
+        setAnamnesisSections((current) => ({
+          ...current,
+          objective: appendBulletsDedup(current.objective, safeText),
+        }));
+        flashHighlight('anamnesis_objective');
+        return;
+      }
+      if (target === 'anamnesis_assessment') {
+        setAnamnesisSections((current) => ({
+          ...current,
+          assessment: appendBulletsDedup(current.assessment, safeText),
+        }));
+        flashHighlight('anamnesis_assessment');
+        return;
+      }
+      if (target === 'anamnesis_plan') {
+        setAnamnesisSections((current) => ({
+          ...current,
+          plan: appendBulletsDedup(current.plan, safeText),
+        }));
+        flashHighlight('anamnesis_plan');
+        return;
+      }
+
+      setAnamnesisSections((current) => ({
+        ...current,
+        subjective: appendBulletsDedup(current.subjective, safeText),
+      }));
+      flashHighlight('anamnesis_subjective');
+    },
+    [flashHighlight, insertIntoJournal]
+  );
+
+  const insertFactsList = useCallback(
+    (texts, target) => {
+      if (!Array.isArray(texts) || texts.length === 0) return;
+      const resolvedTarget = target === 'auto' ? 'anamnesis_subjective' : target;
+      texts.forEach((text) => insertFactText(text, resolvedTarget));
+    },
+    [insertFactText]
+  );
+
+  const handleInsertAllFacts = useCallback(
+    (texts) => {
+      if (factsInsertTarget === 'auto') {
+        (factsItems || [])
+          .filter((fact) => fact && !fact.isDiscarded)
+          .forEach((fact) => {
+            const suggestion = suggestionForFact(fact);
+            insertFactText(fact.text, suggestion?.key);
+          });
+        return;
+      }
+
+      insertFactsList(texts, factsInsertTarget);
+    },
+    [factsInsertTarget, factsItems, insertFactText, insertFactsList, suggestionForFact]
+  );
+
+  const handleInsertSelectedFacts = useCallback(
+    (texts) => {
+      insertFactsList(texts, factsInsertTarget);
+    },
+    [factsInsertTarget, insertFactsList]
+  );
+
+  const handleInsertOneFact = useCallback(
+    (text, targetKey) => {
+      const resolvedTarget =
+        targetKey || (factsInsertTarget === 'auto' ? 'anamnesis_subjective' : factsInsertTarget);
+      insertFactText(text, resolvedTarget);
+    },
+    [factsInsertTarget, insertFactText]
+  );
+
+  const cleanupFactsAudio = useCallback(() => {
+    if (factsProcessorRef.current) {
+      factsProcessorRef.current.disconnect();
+      factsProcessorRef.current.onaudioprocess = null;
+    }
+    if (factsSourceRef.current) {
+      factsSourceRef.current.disconnect();
+    }
+    if (factsSilenceRef.current) {
+      factsSilenceRef.current.disconnect();
+    }
+    if (factsMediaStreamRef.current) {
+      factsMediaStreamRef.current.getTracks().forEach((track) => track.stop());
+    }
+    if (factsAudioContextRef.current && factsAudioContextRef.current.state !== 'closed') {
+      factsAudioContextRef.current.close();
+    }
+
+    factsProcessorRef.current = null;
+    factsSourceRef.current = null;
+    factsSilenceRef.current = null;
+    factsMediaStreamRef.current = null;
+    factsAudioContextRef.current = null;
+
+    setIsFactsRecording(false);
+  }, []);
+
+  const startFactsRRecording = useCallback(async () => {
+    if (isFactsRecording) return;
+
+    if (!navigator.mediaDevices || typeof window === 'undefined') {
+      setFactsRecordingStatus('Din browser understotter ikke FactsR optagelse.');
+      return;
+    }
+
+    try {
+      setFactsRecordingStatus('Starter FactsR...');
+      await startFactsStream({
+        primaryLanguage: 'da',
+        outputLocale: 'da',
+        encounterIdentifier: clientId ? `journal-${clientId}-${Date.now()}` : `journal-${Date.now()}`,
+        title: clientName ? `Journal: ${clientName}` : 'Journal session',
+      });
+
+      if (isDictating) {
+        const recorder = mediaRecorderRef.current;
+        if (recorder && recorder.state !== 'inactive') {
+          recorder.stop();
+        }
+        setIsDictating(false);
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } });
+      factsMediaStreamRef.current = stream;
+
+      const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+      const audioContext = new AudioContextCtor({ sampleRate: FACTSR_SAMPLE_RATE });
+      factsAudioContextRef.current = audioContext;
+      await audioContext.resume();
+
+      const source = audioContext.createMediaStreamSource(stream);
+      factsSourceRef.current = source;
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      factsProcessorRef.current = processor;
+
+      processor.onaudioprocess = (event) => {
+        if (!factsAudioContextRef.current) return;
+        const input = event.inputBuffer.getChannelData(0);
+        const buffer = toPcm16Buffer(input, audioContext.sampleRate || FACTSR_SAMPLE_RATE);
+        sendFactsAudio(buffer);
+      };
+
+      const silence = audioContext.createGain();
+      silence.gain.value = 0;
+      factsSilenceRef.current = silence;
+
+      source.connect(processor);
+      processor.connect(silence);
+      silence.connect(audioContext.destination);
+
+      setIsFactsRecording(true);
+      setFactsRecordingStatus('Optager...');
+    } catch (error) {
+      console.error('FactsR start error:', error);
+      setFactsRecordingStatus('Kunne ikke starte FactsR.');
+      cleanupFactsAudio();
+      clearFactsStream();
+    }
+  }, [
+    cleanupFactsAudio,
+    clearFactsStream,
+    clientId,
+    clientName,
+    isDictating,
+    isFactsRecording,
+    sendFactsAudio,
+    startFactsStream,
+  ]);
+
+  const stopFactsRRecording = useCallback(() => {
+    if (!isFactsRecording) return;
+    endFactsStream();
+    cleanupFactsAudio();
+    setFactsRecordingStatus('');
+  }, [cleanupFactsAudio, endFactsStream, isFactsRecording]);
+
+  const handleToggleFactsR = useCallback(() => {
+    if (isFactsRecording) {
+      stopFactsRRecording();
+      return;
+    }
+    startFactsRRecording();
+  }, [isFactsRecording, startFactsRRecording, stopFactsRRecording]);
+
+  const handleClearFactsR = useCallback(() => {
+    stopFactsRRecording();
+    clearFactsStream();
+    setFactsRecordingStatus('');
+  }, [clearFactsStream, stopFactsRRecording]);
+
+  useEffect(() => {
+    if (!isFactsRecording) return;
+
+    if (factsStatus === 'connecting') {
+      setFactsRecordingStatus('Forbinder...');
+    } else if (factsStatus === 'streaming') {
+      setFactsRecordingStatus('Live optagelse');
+    } else if (factsStatus === 'finalizing') {
+      setFactsRecordingStatus('Afslutter...');
+    } else if (factsStatus === 'ended') {
+      setFactsRecordingStatus('Afsluttet');
+      cleanupFactsAudio();
+    } else if (factsStatus === 'error') {
+      setFactsRecordingStatus('Fejl i FactsR');
+      cleanupFactsAudio();
+    }
+  }, [cleanupFactsAudio, factsStatus, isFactsRecording]);
+
+  useEffect(() => {
+    return () => {
+      cleanupFactsAudio();
+      clearFactsStream();
+    };
+  }, [cleanupFactsAudio, clearFactsStream]);
 
   const handleSave = async () => {
     if (isSaving) {
@@ -178,45 +648,6 @@ function Indlæg({
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const handleSaveDraft = () => {
-    // Handle save as draft
-    console.log('Save as draft');
-    const draftEntry = {
-      id: Date.now(),
-      title,
-      date,
-      content,
-      consultationType,
-      // New structure
-      anamnesisContent,
-      conclusion: {
-        focusAreas: conclusionFocusAreas,
-        sessionContent: conclusionSessionContent,
-        tasksNext: conclusionTasksNext,
-        reflection: conclusionReflection,
-      },
-      // Legacy fields kept for backwards compatibility (optional)
-      subjectiveContent: anamnesisContent,
-      objectiveContent: '',
-      planContent: conclusionTasksNext,
-      summaryContent: conclusionReflection,
-      isPrivate,
-      isStarred: false,
-      isLocked: false,
-      isDraft: true,
-    };
-    
-    if (typeof onSave === 'function') {
-      onSave(draftEntry);
-    }
-    
-    onClose();
-  };
-
-  const handleCancel = () => {
-    onClose();
   };
 
   const handleAddFile = () => {
@@ -504,18 +935,10 @@ function Indlæg({
     setIsDictating(false);
   };
 
-  const startResize = (e) => {
-    e.preventDefault();
-    setIsResizing(true);
-  };
-
   return (
     <div className="indlæg-container">
-      <div className="indlæg-layout" ref={layoutRef}>
-        <div
-          className="indlæg-main-pane"
-          style={{ width: `${100 - aiPaneWidth}%` }}
-        >
+      <div className="indlæg-layout">
+        <div className="indlæg-main-pane">
       {/* Header */}
       <div className="indlæg-header">
         <div className="indlæg-header-top">
@@ -594,6 +1017,8 @@ function Indlæg({
 
       {/* Content */}
       <div className="indlæg-content">
+        <div className="indlæg-workspace">
+          <div className="indlæg-main">
         {/* Title and Date Section */}
         <div className="indlæg-form-section">
           <div className="indlæg-form-row">
@@ -907,16 +1332,27 @@ function Indlæg({
           />
           <div className="indlæg-mikrofon-container">
             <div className="indlæg-mikrofon-wrapper">
-              <button
-                type="button"
-                className={`indlæg-mikrofon-btn${isDictating ? ' active' : ''}`}
-                onClick={handleMikrofonClick}
-                title={isDictating ? 'Stop diktering' : 'Start diktering'}
-                aria-pressed={isDictating}
-              >
-                <span className="indlæg-mikrofon-icon">🎤</span>
-                Mikrofon
-              </button>
+              <div className="indlæg-mikrofon-actions">
+                <button
+                  type="button"
+                  className={`indlæg-mikrofon-btn${isDictating ? ' active' : ''}`}
+                  onClick={handleMikrofonClick}
+                  title={isDictating ? 'Stop diktering' : 'Start diktering'}
+                  aria-pressed={isDictating}
+                >
+                  <span className="indlæg-mikrofon-icon">🎤</span>
+                  Mikrofon
+                </button>
+                <button
+                  type="button"
+                  className="indlæg-save-btn indlæg-save-btn--inline"
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  aria-busy={isSaving}
+                >
+                  {isSaving ? 'Gemmer...' : 'Gem og luk'}
+                </button>
+              </div>
               {dictationStatus && (
                 <p className="indlæg-dictation-status">{dictationStatus}</p>
               )}
@@ -924,58 +1360,77 @@ function Indlæg({
             <Prompt onResult={appendContentFromExternalSource} />
           </div>
           {transcriptionResult && <Whisper data={transcriptionResult} />}
+          {saveError && (
+            <p className="indlæg-save-error" role="alert">
+              {saveError}
+            </p>
+          )}
         </div>
-      </div>
-
-      {saveError && (
-        <p className="indlæg-save-error" role="alert">
-          {saveError}
-        </p>
-      )}
-
-      {/* Footer Actions */}
-      <div className="indlæg-footer">
-        <button className="indlæg-cancel-btn" onClick={handleCancel}>
-          ✕ Annuller
-        </button>
-        <button className="indlæg-draft-btn" onClick={handleSaveDraft} disabled={isSavingDraft}>
-          {isSavingDraft ? 'Gemmer kladde...' : 'Gem som kladde'}
-        </button>
-        <button
-          className="indlæg-save-btn"
-          onClick={handleSave}
-          disabled={isSaving}
-          aria-busy={isSaving}
-        >
-          <span className="indlæg-save-icon">💾</span>
-          {isSaving ? 'Gemmer...' : 'Gem og luk'}
-        </button>
+        <div className="indlæg-agents indlæg-agents--hidden">
+          <div className="indlæg-agents-title">AI agenter</div>
+          <div className="indlæg-agent-grid">
+            <div className="indlæg-agent-card">
+              <AiAssistantCard
+                agentId="reasoner"
+                agentTitle="Agent 1 · Ræsonnering"
+                clientId={clientId || null}
+                clientName={clientName || null}
+                draftText={content}
+                onInsert={insertIntoJournal}
+              />
+            </div>
+            <div className="indlæg-agent-card">
+              <AiAssistantCard
+                agentId="guidelines"
+                agentTitle="Agent 2 · Evidens"
+                clientId={clientId || null}
+                clientName={clientName || null}
+                draftText={content}
+                onInsert={insertIntoJournal}
+              />
+            </div>
+            <div className="indlæg-agent-card">
+              <AiAssistantCard
+                agentId="planner"
+                agentTitle="Agent 3 · Forløbsplanlægger"
+                clientId={clientId || null}
+                clientName={clientName || null}
+                draftText={content}
+                onInsert={insertIntoJournal}
+              />
+            </div>
           </div>
         </div>
-        <div
-          className="indlæg-resize-handle"
-          onMouseDown={startResize}
-          role="separator"
-          aria-label="Resize AI panel"
-          aria-valuemin={15}
-          aria-valuemax={70}
-          aria-valuenow={aiPaneWidth}
-        >
-          <span className="indlæg-resize-icon">⇔</span>
-        </div>
-        <div
-          className="indlæg-ai-pane"
-          style={{ width: `${aiPaneWidth}%` }}
-        >
-          <AiPanel
-            clientId={clientId}
-            clientName={clientName}
-            draftText={content}
-            onInsert={insertIntoJournal}
-          />
-        </div>
       </div>
+      <aside className="indlæg-sidePanel">
+        <div className="indlæg-sideStack">
+          <div className="indlæg-factsr-section">
+            <FactsRPanel
+              status={factsStatus}
+              interactionId={factsInteractionId}
+              error={factsError}
+              transcripts={factsTranscripts}
+              facts={factsItems}
+              isRecording={isFactsRecording}
+              recordingStatus={factsRecordingStatus}
+              onToggleRecording={handleToggleFactsR}
+              insertTarget={factsInsertTarget}
+              onChangeInsertTarget={setFactsInsertTarget}
+              suggestionForFact={suggestionForFact}
+              onInsertSelected={handleInsertSelectedFacts}
+              onInsertAll={handleInsertAllFacts}
+              onInsertOne={handleInsertOneFact}
+              onFlush={flushFactsStream}
+              onClear={handleClearFactsR}
+            />
+          </div>
+        </div>
+      </aside>
     </div>
+  </div>
+    </div>
+  </div>
+</div>
   );
 }
 

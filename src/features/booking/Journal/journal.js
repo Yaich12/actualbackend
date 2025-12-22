@@ -1,10 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import './journal.css';
 import { useUserServices } from '../Ydelser/hooks/useUserServices';
+import { useUserClients } from '../Klienter/hooks/useUserClients';
 import SeHistorik from './Historik/sehistorik';
-import { collection, onSnapshot } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDocs,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+  writeBatch,
+} from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { db } from '../../../firebase';
 import { useAuth } from '../../../AuthContext';
+import { Button as MovingBorderButton } from '../../../components/ui/moving-border';
+import { Trash2 } from 'lucide-react';
 
 function Journal({
   selectedClient,
@@ -28,6 +42,7 @@ function Journal({
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestError, setSuggestError] = useState('');
   const { services: savedServices } = useUserServices();
+  const { clients } = useUserClients();
   const { user } = useAuth();
 
   useEffect(() => {
@@ -53,26 +68,6 @@ function Journal({
 
     return () => unsubscribe();
   }, [user, selectedClient?.id]);
-
-  if (!selectedClient) {
-    return (
-      <div className="journal-empty">
-        Ingen klient valgt – vælg en klient for at se journalen.
-      </div>
-    );
-  }
-
-  // If showing history, render SeHistorik component
-  if (showHistory) {
-    return (
-      <SeHistorik 
-        clientId={selectedClient?.id || null}
-        clientName={selectedClient?.navn || 'Ukendt klient'}
-        onClose={() => setShowHistory(false)}
-        onCreateEntry={onCreateJournalEntry}
-      />
-    );
-  }
 
   const client = selectedClient;
 
@@ -742,22 +737,14 @@ function Journal({
                       <h3>Opsummering af journal</h3>
                       <pre>{summaryText}</pre>
                     </div>
-                  </div>
+                  )}
                 </div>
-                {/* Last Appointment */}
-                <div className="journal-section">
-                  <div className="journal-label">Sidste aftale</div>
-                  <div className="journal-value">
-                    {getDayName(selectedAppointment.startDate)} d. {formatDate(selectedAppointment.startDate)}, {formatTime(selectedAppointment.startTime)} til {getEndTime(selectedAppointment.startTime)}
+              )}
+              {suggestError && (
+                <div className="journal-summary">
+                  <div className="journal-summary-error" role="alert">
+                    {suggestError}
                   </div>
-                  <button
-                    type="button"
-                    className="journal-view-all-btn"
-                    onClick={() => setShowHistory(true)}
-                  >
-                    Se tidligere journaler
-                    {typeof journalEntryCount === 'number' ? ` (${journalEntryCount})` : ''}
-                  </button>
                 </div>
               )}
             </div>

@@ -5,6 +5,7 @@ import AddKlient from './addklient/addklient';
 import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayout';
 import { useAuth } from '../../../AuthContext';
 import { useUserClients } from './hooks/useUserClients';
+import { ChevronDown } from 'lucide-react';
 
 function Klientoversigt() {
   const { user } = useAuth();
@@ -176,12 +177,13 @@ function Klientoversigt() {
               </div>
             </div>
             <div className="header-right">
-              <button 
-                className="add-client-btn"
+              <button
+                type="button"
+                className="toolbar-pill toolbar-primary"
                 onClick={openCreateClient}
               >
-                <span className="add-icon">👤+</span>
                 Tilføj klient
+                <ChevronDown className="toolbar-caret" />
               </button>
             </div>
           </div>

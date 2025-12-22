@@ -4,6 +4,7 @@ import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayou
 import { useAuth } from '../../../AuthContext';
 import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../firebase';
+import { ChevronDown } from 'lucide-react';
 
 function ForlobCreate({ onSave, isSaving = false }) {
   const [form, setForm] = useState({
@@ -436,10 +437,12 @@ function Forloeb() {
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setShowCreateModal(true)}
-                className="inline-flex items-center rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700"
+                className="toolbar-pill toolbar-primary"
               >
-                + Opret forløb
+                Opret forløb
+                <ChevronDown className="toolbar-caret" />
               </button>
             </div>
 

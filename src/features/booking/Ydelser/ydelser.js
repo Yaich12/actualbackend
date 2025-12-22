@@ -5,6 +5,7 @@ import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayou
 import AddNewServiceModal from './addnew/addnew';
 import { useAuth } from '../../../AuthContext';
 import { useUserServices } from './hooks/useUserServices';
+import { ChevronDown } from 'lucide-react';
 
 const normalizeService = (stored = {}) => {
   const price =
@@ -164,12 +165,12 @@ function Ydelser() {
             </div>
             <div className="header-right">
               <button
-                className="create-service-btn"
                 type="button"
+                className="toolbar-pill toolbar-primary"
                 onClick={openCreateService}
               >
-                <span className="plus-icon">+</span>
                 Opret ny
+                <ChevronDown className="toolbar-caret" />
               </button>
             </div>
           </div>

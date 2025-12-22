@@ -116,7 +116,12 @@ export function useFactsRStream() {
           return;
         }
 
-        if (msg?.type === 'CONFIG_ACCEPTED') {
+        if (
+          msg?.type === 'CONFIG_ACCEPTED' ||
+          msg?.type === 'CONFIGURATION_ACCEPTED' ||
+          msg?.type === 'config_accepted' ||
+          msg?.type === 'open'
+        ) {
           setAccepted(true);
           setStatus('streaming');
           return;
@@ -206,5 +211,4 @@ export function useFactsRStream() {
     clear,
   };
 }
-
 

@@ -40,6 +40,53 @@
   color: #2563eb;
 }
 
+.toolbar-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s, color 0.2s;
+}
+
+.toolbar-pill:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.toolbar-pill.toolbar-primary {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+}
+
+.toolbar-pill.toolbar-primary:hover {
+  background: #1e293b;
+  border-color: #1e293b;
+}
+
+.toolbar-pill.toolbar-static {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #0f172a;
+}
+
+.toolbar-caret {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.2s ease;
+}
+
+.toolbar-caret.open {
+  transform: rotate(180deg);
+}
+
 .booking-topbar-calendar {
   height: auto;
   padding: 12px 24px;

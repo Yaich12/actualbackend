@@ -4,6 +4,7 @@ import '../bookingpage.css';
 import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayout';
 import { useAuth } from '../../../AuthContext';
 import { useUserClients } from '../Klienter/hooks/useUserClients';
+import { ChevronDown } from 'lucide-react';
 
 const statusLabels = {
   pending: 'Afventer betaling',
@@ -182,10 +183,12 @@ function InvoicesPage() {
                 </p>
               </div>
               <button
+                type="button"
                 onClick={handleNewInvoice}
-                className="inline-flex items-center rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700"
+                className="toolbar-pill toolbar-primary"
               >
-                + Ny faktura
+                Ny faktura
+                <ChevronDown className="toolbar-caret" />
               </button>
             </div>
 
