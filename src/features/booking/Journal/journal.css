@@ -135,10 +135,32 @@
   display: flex;
   flex-direction: column;
   padding: 20px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   min-height: 0;
   color: var(--text-primary);
+}
+
+.journal-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 24px;
+  height: 100%;
+  min-height: 0;
+}
+
+.journal-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+}
+
+.journal-assistant {
+  min-width: 0;
+  height: 100%;
+  min-height: 420px;
 }
 
 .journal-section {
@@ -433,5 +455,23 @@
   .journal-header-actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .journal-content {
+    overflow-y: auto;
+  }
+
+  .journal-content-grid {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .journal-main {
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .journal-assistant {
+    height: auto;
   }
 }

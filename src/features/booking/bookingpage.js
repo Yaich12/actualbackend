@@ -83,6 +83,7 @@ function BookingPage() {
   const teamMenuRef = useRef(null);
   const daysContainerRef = React.useRef(null);
   const { appointments = [] } = useAppointments(user?.uid || null);
+  const [optimisticAppointments, setOptimisticAppointments] = useState([]);
   const { clients } = useUserClients();
   const appointmentFallback = t('booking.calendar.appointment', 'Aftale');
   const programFallback = t('booking.calendar.program', 'Forløb');
@@ -152,12 +153,6 @@ function BookingPage() {
 
   const getAppointmentOwner = (appointment) =>
     appointment?.calendarOwner || appointment?.ownerName || primaryCalendarOwner;
-
-  const visibleAppointments = useMemo(() => {
-    if (!selectedTeamMembers.length) return appointments;
-    const selected = new Set(selectedTeamMembers);
-    return appointments.filter((appointment) => selected.has(getAppointmentOwner(appointment)));
-  }, [appointments, selectedTeamMembers, primaryCalendarOwner]);
 
   const selectedLabel = (() => {
     const total = teamMembers.length;
@@ -358,6 +353,9 @@ function BookingPage() {
   const formatDateKey = (date) =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
+  const formatDateValue = (date) =>
+    `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`;
+
   const parseDateTime = (isoString, dateStr, timeStr) => {
     if (isoString) {
       const parsed = new Date(isoString);
@@ -404,6 +402,70 @@ function BookingPage() {
     const minutes = String(date.getMinutes()).padStart(2, '0');
     return `${hours}:${minutes}`;
   };
+
+  const getAppointmentIdentity = (appointment) => {
+    if (!appointment) return '';
+    let startDate = appointment.startDate;
+    let startTime = appointment.startTime;
+    let endDate = appointment.endDate;
+    let endTime = appointment.endTime;
+
+    if (!startDate || !startTime) {
+      const parsed = parseAppointmentDateTimes(appointment);
+      if (!parsed.startDate) return '';
+      startDate = formatDateValue(parsed.startDate);
+      startTime = formatTime(parsed.startDate);
+      endDate = formatDateValue(parsed.endDate || parsed.startDate);
+      endTime = formatTime(parsed.endDate || parsed.startDate);
+    }
+
+    const serviceKey = appointment.service || appointment.title || '';
+    const clientKey = appointment.client || '';
+    return `${startDate}|${startTime}|${endDate || ''}|${endTime || ''}|${serviceKey}|${clientKey}`.toLowerCase();
+  };
+
+  const allAppointments = useMemo(() => {
+    if (!optimisticAppointments.length) return appointments;
+    const remoteIds = new Set(appointments.map((appointment) => appointment.id));
+    const remoteKeys = new Set(
+      appointments.map(getAppointmentIdentity).filter(Boolean)
+    );
+    const merged = [...appointments];
+    optimisticAppointments.forEach((appointment) => {
+      const key = getAppointmentIdentity(appointment);
+      if (key && remoteKeys.has(key)) {
+        return;
+      }
+      if (!remoteIds.has(appointment.id)) {
+        merged.push(appointment);
+      }
+    });
+    return merged;
+  }, [appointments, optimisticAppointments]);
+
+  const visibleAppointments = useMemo(() => {
+    if (!selectedTeamMembers.length) return allAppointments;
+    const selected = new Set(selectedTeamMembers);
+    return allAppointments.filter((appointment) =>
+      selected.has(getAppointmentOwner(appointment))
+    );
+  }, [allAppointments, selectedTeamMembers, primaryCalendarOwner]);
+
+  useEffect(() => {
+    if (!optimisticAppointments.length || !appointments.length) return;
+    const remoteKeys = new Set(
+      appointments.map(getAppointmentIdentity).filter(Boolean)
+    );
+    setOptimisticAppointments((prev) =>
+      prev.filter((appointment) => {
+        const key = getAppointmentIdentity(appointment);
+        if (key && remoteKeys.has(key)) {
+          return false;
+        }
+        return true;
+      })
+    );
+  }, [appointments]);
 
   const appointmentsByDay = useMemo(() => {
     const map = {};
@@ -1252,6 +1314,124 @@ function BookingPage() {
     setNextAppointmentTemplate(null);
   };
 
+  const handleNewBooking = async (bookingDetails) => {
+    if (!bookingDetails?.start) return;
+    const start =
+      bookingDetails.start instanceof Date
+        ? bookingDetails.start
+        : new Date(bookingDetails.start);
+    if (Number.isNaN(start.getTime())) return;
+
+    const endCandidate = bookingDetails.end
+      ? bookingDetails.end instanceof Date
+        ? bookingDetails.end
+        : new Date(bookingDetails.end)
+      : null;
+    const end =
+      endCandidate && !Number.isNaN(endCandidate.getTime())
+        ? endCandidate
+        : new Date(start.getTime() + 60 * 60 * 1000);
+
+    const pad = (value) => String(value).padStart(2, '0');
+    const toDateStr = (date) =>
+      `${pad(date.getDate())}-${pad(date.getMonth() + 1)}-${date.getFullYear()}`;
+    const toTimeStr = (date) => `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+
+    const serviceLabel =
+      bookingDetails.title ||
+      bookingDetails.service ||
+      t('booking.calendar.followup', 'Opfølgende konsultation');
+    const clientLabel =
+      bookingDetails.patient ||
+      bookingDetails.client ||
+      bookingDetails.patientName ||
+      t('booking.calendar.unknownClient', 'Ukendt klient');
+
+    const optimisticId = bookingDetails.id || `temp-${Date.now()}`;
+    const optimisticAppointment = {
+      id: optimisticId,
+      service: serviceLabel,
+      title: serviceLabel,
+      client: clientLabel,
+      status: 'booked',
+      startDate: toDateStr(start),
+      startTime: toTimeStr(start),
+      endDate: toDateStr(end),
+      endTime: toTimeStr(end),
+      calendarOwner: ownerEntry.name,
+      serviceType: bookingDetails.type || 'service',
+      color: bookingDetails.color || null,
+      isTemporary: true,
+    };
+
+    setOptimisticAppointments((prev) => [optimisticAppointment, ...prev]);
+    setCurrentDate(start);
+
+    if (!user?.uid) return;
+
+    const startIso = combineDateAndTimeToIso(
+      optimisticAppointment.startDate,
+      optimisticAppointment.startTime
+    );
+    const endIso = combineDateAndTimeToIso(
+      optimisticAppointment.endDate,
+      optimisticAppointment.endTime
+    );
+
+    if (!startIso || !endIso) {
+      console.error('[BookingPage] Invalid booking dates for Firestore');
+      return;
+    }
+
+    try {
+      const appointmentsCollection = collection(db, 'users', user.uid, 'appointments');
+      const payload = {
+        therapistId: user.uid,
+        calendarOwner: ownerEntry.name,
+        calendarOwnerId: ownerEntry.id || user.uid,
+        title: serviceLabel,
+        client: clientLabel,
+        clientId: bookingDetails.clientId || bookingDetails.patientId || null,
+        clientEmail: bookingDetails.clientEmail || '',
+        clientPhone: bookingDetails.clientPhone || '',
+        service: serviceLabel,
+        serviceId: bookingDetails.serviceId || null,
+        serviceType: bookingDetails.type || 'service',
+        serviceDuration: bookingDetails.duration || '',
+        servicePrice:
+          typeof bookingDetails.price === 'number' ? bookingDetails.price : null,
+        participants: clientLabel
+          ? [
+              {
+                id: bookingDetails.clientId || bookingDetails.patientId || null,
+                name: clientLabel,
+                email: bookingDetails.clientEmail || '',
+                phone: bookingDetails.clientPhone || '',
+              },
+            ]
+          : [],
+        notes: bookingDetails.notes || '',
+        color: bookingDetails.color || null,
+        start: startIso,
+        end: endIso,
+        startDate: optimisticAppointment.startDate,
+        startTime: optimisticAppointment.startTime,
+        endDate: optimisticAppointment.endDate,
+        endTime: optimisticAppointment.endTime,
+        status: 'booked',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      await addDoc(appointmentsCollection, payload);
+    } catch (error) {
+      console.error('[BookingPage] Failed to persist booking', error);
+      setOptimisticAppointments((prev) =>
+        prev.filter((appointment) => appointment.id !== optimisticId)
+      );
+    }
+  };
+
   const handleCreateNextAppointment = (payload) => {
     const fromJournal = payload?.appointment || null;
     setNextAppointmentTemplate(fromJournal);
@@ -2083,6 +2263,7 @@ function BookingPage() {
                     onClose={handleCloseJournal}
                     onCreateAppointment={handleCreateNextAppointment}
                     onCreateJournalEntry={handleOpenJournalEntry}
+                    onBookingSuccess={handleNewBooking}
                     onEditAppointment={(appointment) => {
                       setEditingAppointment(appointment);
                       setShowAppointmentForm(true);

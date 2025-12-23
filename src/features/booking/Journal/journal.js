@@ -19,6 +19,7 @@ import { db } from '../../../firebase';
 import { useAuth } from '../../../AuthContext';
 import { Button as MovingBorderButton } from '../../../components/ui/moving-border';
 import { Trash2 } from 'lucide-react';
+import AllyChat from '../../../components/AllyChat';
 
 function Journal({
   selectedClient,
@@ -28,7 +29,13 @@ function Journal({
   onCreateJournalEntry,
   onEditAppointment,
   onDeleteAppointment,
+  onBookingSuccess,
 }) {
+  const demoMoniqueNotes =
+    'Diagnose: Frossen skulder (Adhesive Capsulitis) i venstre side.\n' +
+    'Anamnese: Smerter opstået gradvist over 3 måneder. Ingen traumer.\n' +
+    'Objektivt: Nedsat bevægelighed i abduktion (80 grader) og udadrotation.\n' +
+    'Plan: Opstart af konservativ behandling med mobiliseringsøvelser.';
   const [showHistory, setShowHistory] = useState(false);
   const [journalEntryCount, setJournalEntryCount] = useState(null);
   const [historyTarget, setHistoryTarget] = useState(null); // { id, navn }
@@ -251,6 +258,40 @@ function Journal({
       setIsSavingGroupName(false);
     }
   };
+
+  const currentPatient = useMemo(() => {
+    if (!client) return null;
+    const clientName = client.navn || '';
+    const isMoniqueDemo =
+      clientName.trim().toLowerCase() === 'monique vang damm';
+    return {
+      id: client.id,
+      name: clientName,
+      age: isMoniqueDemo ? 34 : client.age || client.alder || '',
+      email: client.email || '',
+      phone: client.telefon || '',
+      status: client.status || '',
+      address: [client.adresse, client.adresse2].filter(Boolean).join(', '),
+      postalCode: client.postnummer || '',
+      city: client.by || '',
+      country: client.land || '',
+      journal_notes: isMoniqueDemo ? demoMoniqueNotes : '',
+      journalEntryCount: journalEntryCount ?? 0,
+      appointment: selectedAppointment
+        ? {
+            id: selectedAppointment.id || null,
+            service: appointmentService?.navn || selectedAppointment.service || '',
+            date: selectedAppointment.startDate || '',
+            startTime: selectedAppointment.startTime || '',
+            endTime:
+              selectedAppointment.endTime ||
+              getEndTime(selectedAppointment.startTime),
+            status: selectedAppointment.status || '',
+            notes: selectedAppointment.notes || '',
+          }
+        : null,
+    };
+  }, [client, selectedAppointment, appointmentService, journalEntryCount, demoMoniqueNotes]);
 
   const participantEntries = useMemo(() => {
     const extractName = (p) => {
@@ -600,157 +641,162 @@ function Journal({
 
       {/* Content */}
       <div className="journal-content">
-        {/* Date and service info */}
-        {selectedAppointment && (
-          <div className="journal-section">
-            <div className="journal-appointment-date">
-              {formatDate(selectedAppointment.startDate)}, {formatTime(selectedAppointment.startTime)} til {getEndTime(selectedAppointment.startTime)}
-            </div>
-            {!isForloeb && appointmentService && (
-              <>
-                <div className="journal-appointment-service">
-                  {appointmentService.navn}
+        <div className="journal-main">
+            {/* Date and service info */}
+            {selectedAppointment && (
+              <div className="journal-section">
+                <div className="journal-appointment-date">
+                  {formatDate(selectedAppointment.startDate)},{' '}
+                  {formatTime(selectedAppointment.startTime)} til{' '}
+                  {getEndTime(selectedAppointment.startTime)}
                 </div>
-                <div className="journal-appointment-price">
-                  DKK {formatPrice(appointmentService.pris)}
+                {!isForloeb && appointmentService && (
+                  <>
+                    <div className="journal-appointment-service">
+                      {appointmentService.navn}
+                    </div>
+                    <div className="journal-appointment-price">
+                      DKK {formatPrice(appointmentService.pris)}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {isForloeb && participantEntries.length > 0 && (
+              <div className="journal-section">
+                <div className="journal-label">Deltagere</div>
+                <div className="journal-participants">
+                  {participantEntries.map((participant) => (
+                    <button
+                      key={`${participant.id || 'no-id'}:${participant.navn}`}
+                      type="button"
+                      className="journal-participant-chip"
+                      onClick={() => openParticipantHistory(participant)}
+                    >
+                      {participant.navn}
+                      <span className="journal-participant-link">Se journal</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Create Journal Entry Button */}
+            {onCreateJournalEntry && (
+              <div className="journal-section">
+                <div className="journal-create-actions">
+                  <button
+                    className="journal-create-appointment-btn"
+                    onClick={onCreateJournalEntry}
+                  >
+                    <span className="journal-create-entry-icon">+</span>
+                    Opret indlæg
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Selected Appointment Details */}
+            {selectedAppointment && (
+              <>
+                <div className="journal-section journal-appointment-section">
+                  <div className="journal-appointment-actions">
+                    <button 
+                      className="journal-action-btn"
+                      onClick={() => {
+                        setHistoryTarget(null);
+                        setShowHistory(true);
+                      }}
+                    >
+                      Se journal
+                    </button>
+                    <MovingBorderButton
+                      borderRadius="0.75rem"
+                      onClick={handleSummarizePatient}
+                      disabled={isSummarizing}
+                      containerClassName="w-full h-12 text-base disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="bg-white text-slate-900 border-slate-200 font-medium"
+                      borderClassName="bg-[radial-gradient(var(--sky-500)_40%,transparent_60%)]"
+                    >
+                      {isSummarizing ? 'Opsummerer…' : 'Opsummér patient'}
+                    </MovingBorderButton>
+                    <button
+                      className="journal-action-btn"
+                      onClick={() => {
+                        if (onEditAppointment && selectedAppointment) {
+                          onEditAppointment(selectedAppointment);
+                        }
+                      }}
+                    >
+                      Rediger aftale
+                    </button>
+                    <button
+                      className="journal-action-btn"
+                      onClick={() => {
+                        if (!onCreateAppointment) return;
+                        onCreateAppointment({
+                          appointment: selectedAppointment || null,
+                          client,
+                        });
+                      }}
+                    >
+                      Opret næste aftale
+                    </button>
+                    <MovingBorderButton
+                      borderRadius="0.75rem"
+                      onClick={handleSuggestNextAppointment}
+                      disabled={isSuggesting}
+                      containerClassName="w-full h-12 text-base disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="bg-white text-slate-900 border-slate-200 font-medium"
+                      borderClassName="bg-[radial-gradient(var(--violet-500)_40%,transparent_60%)]"
+                    >
+                      {isSuggesting ? 'Foreslår…' : 'Foreslå næste aftale'}
+                    </MovingBorderButton>
+                    <button
+                      className="journal-action-btn journal-delete-btn"
+                      onClick={() => {
+                        if (!selectedAppointment || !onDeleteAppointment) return;
+                        const confirmed = window.confirm(
+                          'Er du sikker på, at du vil slette denne aftale? Dette kan ikke fortrydes.'
+                        );
+                        if (confirmed) {
+                          onDeleteAppointment(selectedAppointment);
+                        }
+                      }}
+                    >
+                      <Trash2 className="journal-delete-icon" size={16} aria-hidden="true" />
+                      Slet aftale
+                    </button>
+                  </div>
+                  {(summaryError || summaryText) && (
+                    <div className="journal-summary">
+                      {summaryError && (
+                        <div className="journal-summary-error" role="alert">
+                          {summaryError}
+                        </div>
+                      )}
+                      {summaryText && (
+                        <div className="journal-summary-card">
+                          <h3>Opsummering af journal</h3>
+                          <pre>{summaryText}</pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {suggestError && (
+                    <div className="journal-summary">
+                      <div className="journal-summary-error" role="alert">
+                        {suggestError}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}
-          </div>
-        )}
-
-        {isForloeb && participantEntries.length > 0 && (
-          <div className="journal-section">
-            <div className="journal-label">Deltagere</div>
-            <div className="journal-participants">
-              {participantEntries.map((participant) => (
-                <button
-                  key={`${participant.id || 'no-id'}:${participant.navn}`}
-                  type="button"
-                  className="journal-participant-chip"
-                  onClick={() => openParticipantHistory(participant)}
-                >
-                  {participant.navn}
-                  <span className="journal-participant-link">Se journal</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Create Journal Entry Button */}
-        {onCreateJournalEntry && (
-          <div className="journal-section">
-            <div className="journal-create-actions">
-              <button
-                className="journal-create-appointment-btn"
-                onClick={onCreateJournalEntry}
-              >
-                <span className="journal-create-entry-icon">+</span>
-                Opret indlæg
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Selected Appointment Details */}
-        {selectedAppointment && (
-          <>
-            <div className="journal-section journal-appointment-section">
-              <div className="journal-appointment-actions">
-                <button 
-                  className="journal-action-btn"
-                  onClick={() => {
-                    setHistoryTarget(null);
-                    setShowHistory(true);
-                  }}
-                >
-                  Se journal
-                </button>
-                <MovingBorderButton
-                  borderRadius="0.75rem"
-                  onClick={handleSummarizePatient}
-                  disabled={isSummarizing}
-                  containerClassName="w-full h-12 text-base disabled:opacity-60 disabled:cursor-not-allowed"
-                  className="bg-white text-slate-900 border-slate-200 font-medium"
-                  borderClassName="bg-[radial-gradient(var(--sky-500)_40%,transparent_60%)]"
-                >
-                  {isSummarizing ? 'Opsummerer…' : 'Opsummér patient'}
-                </MovingBorderButton>
-                <button
-                  className="journal-action-btn"
-                  onClick={() => {
-                    if (onEditAppointment && selectedAppointment) {
-                      onEditAppointment(selectedAppointment);
-                    }
-                  }}
-                >
-                  Rediger aftale
-                </button>
-                <button
-                  className="journal-action-btn"
-                  onClick={() => {
-                    if (!onCreateAppointment) return;
-                    onCreateAppointment({
-                      appointment: selectedAppointment || null,
-                      client,
-                    });
-                  }}
-                >
-                  Opret næste aftale
-                </button>
-                <MovingBorderButton
-                  borderRadius="0.75rem"
-                  onClick={handleSuggestNextAppointment}
-                  disabled={isSuggesting}
-                  containerClassName="w-full h-12 text-base disabled:opacity-60 disabled:cursor-not-allowed"
-                  className="bg-white text-slate-900 border-slate-200 font-medium"
-                  borderClassName="bg-[radial-gradient(var(--violet-500)_40%,transparent_60%)]"
-                >
-                  {isSuggesting ? 'Foreslår…' : 'Foreslå næste aftale'}
-                </MovingBorderButton>
-                <button
-                  className="journal-action-btn journal-delete-btn"
-                  onClick={() => {
-                    if (!selectedAppointment || !onDeleteAppointment) return;
-                    const confirmed = window.confirm(
-                      'Er du sikker på, at du vil slette denne aftale? Dette kan ikke fortrydes.'
-                    );
-                    if (confirmed) {
-                      onDeleteAppointment(selectedAppointment);
-                    }
-                  }}
-                >
-                  <Trash2 className="journal-delete-icon" size={16} aria-hidden="true" />
-                  Slet aftale
-                </button>
-              </div>
-              {(summaryError || summaryText) && (
-                <div className="journal-summary">
-                  {summaryError && (
-                    <div className="journal-summary-error" role="alert">
-                      {summaryError}
-                    </div>
-                  )}
-                  {summaryText && (
-                    <div className="journal-summary-card">
-                      <h3>Opsummering af journal</h3>
-                      <pre>{summaryText}</pre>
-                    </div>
-                  )}
-                </div>
-              )}
-              {suggestError && (
-                <div className="journal-summary">
-                  <div className="journal-summary-error" role="alert">
-                    {suggestError}
-                  </div>
-                </div>
-              )}
-            </div>
-          </>
-        )}
+        </div>
       </div>
+      <AllyChat patientData={currentPatient} onBookingSuccess={onBookingSuccess} />
     </div>
   );
 }
