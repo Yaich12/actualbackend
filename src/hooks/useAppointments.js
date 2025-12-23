@@ -83,6 +83,9 @@ const mapAppointmentDoc = (doc) => {
       typeof data.servicePriceInclVat === 'number'
         ? data.servicePriceInclVat
         : null,
+    additionalServices: Array.isArray(data.additionalServices)
+      ? data.additionalServices
+      : [],
     title: data.title || '',
     notes: data.notes || '',
     status: data.status || 'booked',

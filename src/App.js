@@ -13,9 +13,9 @@ import Ydelser from './features/booking/Ydelser/ydelser';
 import Forloeb from './features/booking/forløb/forløb';
 import JournalPage from './features/booking/Journal/JournalPage';
 import FakturaerPage from './features/booking/faktura/faktura';
+import Overview from './features/booking/overview/Overview';
 import UserSettings from './features/booking/usersettings';
 import TeamPage from './features/booking/team/team';
-import Statistik from './features/booking/statistik/statistik';
 import SignUp from './SignUp/SignUp';
 import SignInPageDemo from './components/ui/sign-in-demo';
 import { useAuth } from './AuthContext';
@@ -72,12 +72,12 @@ function App() {
           <Route path="/getting-started/start" element={<LaunchPlannerPage />} />
           <Route path="/getting-started/digital-front" element={<DigitalFrontPage />} />
           <Route path="/booking" element={<BookingPage />} />
+          <Route path="/booking/overview" element={<Overview />} />
           <Route path="/journal" element={<JournalPage />} />
           <Route path="/booking/klienter" element={<Klientoversigt />} />
           <Route path="/booking/ydelser" element={<Ydelser />} />
           <Route path="/booking/forloeb" element={<Forloeb />} />
           <Route path="/booking/fakturaer/*" element={<FakturaerPage />} />
-          <Route path="/booking/statistik" element={<Statistik />} />
           <Route path="/booking/team" element={<TeamPage />} />
           <Route path="/booking/settings" element={<UserSettings />} />
           <Route path="/signup" element={<SignUp />} />

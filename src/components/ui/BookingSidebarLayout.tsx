@@ -7,13 +7,11 @@ import {
   Users,
   BadgeDollarSign,
   FileText,
-  BarChart3,
   Settings,
   AppWindow,
   LogOut,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../AuthContext";
 import { useLanguage } from "../../LanguageContext";
@@ -50,7 +48,9 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
   const { t, language, languageOptions } = useLanguage();
   const userName =
     user?.displayName || user?.email || t("booking.topbar.defaultUser", "Selma bruger");
-  const clinicLabel = clinicName || t("booking.topbar.clinicSettings", "Klinikindstillinger");
+  const clinicDisplayName =
+    clinicName || t("booking.topbar.clinicSettings", "Klinikindstillinger");
+  const clinicOverviewLabel = `S+ ${clinicDisplayName}`.trim();
   const userInitials = getInitials(user?.displayName || user?.email);
   const currentLanguageLabel = useMemo(() => {
     const match = languageOptions.find((option) => option.code === language);
@@ -129,14 +129,9 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
       icon: <BadgeDollarSign className="h-5 w-5 flex-shrink-0" />,
     },
     {
-      label: t("booking.sidebar.invoices", "Fakturaer"),
+      label: t("booking.sidebar.invoices", "Salg"),
       href: "/booking/fakturaer",
       icon: <FileText className="h-5 w-5 flex-shrink-0" />,
-    },
-    {
-      label: t("booking.sidebar.stats", "Statistik"),
-      href: "/booking/statistik",
-      icon: <BarChart3 className="h-5 w-5 flex-shrink-0" />,
     },
     ...(hasTeamAccess
       ? [
@@ -153,7 +148,7 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
       icon: <Settings className="h-5 w-5 flex-shrink-0" />,
     },
     {
-      label: t("booking.sidebar.apps", "Apps"),
+      label: t("booking.sidebar.apps", "Integrationer"),
       href: "/booking/apps",
       icon: <AppWindow className="h-5 w-5 flex-shrink-0" />,
     },
@@ -264,8 +259,22 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
               )}
             >
               <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
-                {open ? <SelmaLogoFull /> : <SelmaLogoIcon />}
-                <div className="mt-8 flex flex-col gap-1">
+                <button
+                  type="button"
+                  onClick={() => navigate("/booking/overview")}
+                  className="flex items-center gap-2 rounded-xl px-2 py-2 hover:bg-white/10 transition"
+                >
+                  <div className="h-8 w-8 flex-shrink-0 rounded-full bg-gradient-to-br from-indigo-400 via-sky-400 to-violet-500 shadow-[0_0_0_1px_rgba(255,255,255,0.2)] flex items-center justify-center text-xs font-semibold text-white">
+                    S+
+                  </div>
+                  {open && (
+                    <div className="flex flex-col text-left text-xs text-slate-100">
+                      <span className="font-medium">{clinicOverviewLabel}</span>
+                    </div>
+                  )}
+                </button>
+
+                <div className="mt-6 flex flex-col gap-1">
                   {links.map((link) => {
                     const isActive =
                       link.href === "/booking/ydelser"
@@ -298,30 +307,6 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
               </div>
 
               <div className="flex flex-col gap-2 pb-3">
-                <button
-                  type="button"
-                  onClick={() => navigate("/booking/settings")}
-                  className="flex items-center gap-2 rounded-xl px-2 py-2 hover:bg-white/10 transition"
-                >
-                  <div className="h-8 w-8 flex-shrink-0 rounded-full bg-gradient-to-tr from-sky-500 to-violet-500 flex items-center justify-center text-xs font-semibold text-white overflow-hidden">
-                    {profilePhotoUrl ? (
-                      <img
-                        src={profilePhotoUrl}
-                        alt={t("booking.topbar.profile", "Min profil")}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      "S+"
-                    )}
-                  </div>
-                  {open && (
-                    <div className="flex flex-col text-left text-xs text-slate-100">
-                      <span className="font-medium">{userName}</span>
-                      <span className="opacity-70">{clinicLabel}</span>
-                    </div>
-                  )}
-                </button>
-
                 <SidebarLink
                   link={{
                     label: t("booking.sidebar.logout", "Log ud"),
@@ -386,35 +371,6 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
     </div>
   );
 }
-
-const SelmaLogoFull = () => (
-  <button
-    type="button"
-    className="font-normal flex space-x-2 items-center text-sm text-white py-1 relative z-20"
-  >
-    <div className="h-6 w-7 bg-white rounded-br-lg rounded-tr-sm rounded-tl-lg rounded-bl-sm flex-shrink-0 flex items-center justify-center text-[10px] font-semibold text-slate-900">
-      S+
-    </div>
-    <motion.span
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="font-medium text-white whitespace-pre"
-    >
-      Selma Booking
-    </motion.span>
-  </button>
-);
-
-const SelmaLogoIcon = () => (
-  <button
-    type="button"
-    className="font-normal flex space-x-2 items-center text-sm text-white py-1 relative z-20"
-  >
-    <div className="h-6 w-7 bg-white rounded-br-lg rounded-tr-sm rounded-tl-lg rounded-bl-sm flex-shrink-0 flex items-center justify-center text-[10px] font-semibold text-slate-900">
-      S+
-    </div>
-  </button>
-);
 
 const SelmaLogoMark = () => (
   <div className="booking-shell-logo">

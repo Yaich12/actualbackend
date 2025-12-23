@@ -13,14 +13,43 @@ const resolveDate = (value) => {
   return null;
 };
 
+const normalizeNumber = (value) => {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const cleaned = value.replace(/[^\d,.-]/g, "");
+    if (!cleaned) return 0;
+    const hasComma = cleaned.includes(",");
+    const hasDot = cleaned.includes(".");
+    let normalized = cleaned;
+    if (hasComma && hasDot) {
+      normalized = cleaned.replace(/\./g, "").replace(",", ".");
+    } else if (hasComma) {
+      normalized = cleaned.replace(",", ".");
+    }
+    const parsed = Number(normalized);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+};
+
+const normalizeStatus = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
 const mapSaleDoc = (doc) => {
   const data = doc.data() || {};
   const completedAtDate = resolveDate(data.completedAt);
   const createdAtDate = resolveDate(data.createdAt);
-  const totals = data.totals || {
-    subtotal: data.subtotal ?? 0,
-    vat: data.vat ?? 0,
-    total: data.total ?? 0,
+  const rawTotals = data.totals || {};
+  const totals = {
+    subtotal: normalizeNumber(
+      rawTotals.subtotal ?? rawTotals.subTotal ?? data.subtotal ?? 0
+    ),
+    vat: normalizeNumber(rawTotals.vat ?? rawTotals.moms ?? data.vat ?? 0),
+    total: normalizeNumber(rawTotals.total ?? data.total ?? 0),
   };
 
   return {
@@ -51,8 +80,19 @@ const mapSaleDoc = (doc) => {
     saleNumber:
       data.saleNumber || data.saleNo || data.saleRef || data.saleRefNo || null,
     location: data.location || "",
-    tips: typeof data.tips === "number" ? data.tips : 0,
+    tips: typeof data.tips === "number" ? data.tips : normalizeNumber(data.tips),
   };
+};
+
+const matchesStatus = (saleStatus, filterStatus) => {
+  if (!filterStatus) return true;
+  const normalizedSale = normalizeStatus(saleStatus);
+  const normalizedFilter = normalizeStatus(filterStatus);
+  if (!normalizedFilter) return true;
+  if (normalizedFilter === "completed") {
+    return ["completed", "gennemfort", "complete"].includes(normalizedSale);
+  }
+  return normalizedSale === normalizedFilter;
 };
 
 const useSales = (userId, options = {}) => {
@@ -80,7 +120,7 @@ const useSales = (userId, options = {}) => {
       (snapshot) => {
         const mapped = snapshot.docs.map(mapSaleDoc);
         const filtered = status
-          ? mapped.filter((sale) => sale.status === status)
+          ? mapped.filter((sale) => matchesStatus(sale.status, status))
           : mapped;
         setSales(filtered);
         setLoading(false);

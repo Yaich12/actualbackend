@@ -104,6 +104,10 @@ function Journal({
     return null;
   })();
 
+  const additionalServices = Array.isArray(selectedAppointment?.additionalServices)
+    ? selectedAppointment.additionalServices
+    : [];
+
   // Format date
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -614,6 +618,25 @@ function Journal({
                 <div className="journal-appointment-price">
                   DKK {formatPrice(appointmentService.pris)}
                 </div>
+                {additionalServices.length > 0 && (
+                  <div className="journal-appointment-services">
+                    {additionalServices.map((service, index) => (
+                      <div
+                        key={`${service.id || 'extra'}-${index}`}
+                        className="journal-appointment-service-row"
+                      >
+                        <span className="journal-appointment-service-name">
+                          {service.navn || 'Tillægstjeneste'}
+                        </span>
+                        <span className="journal-appointment-service-meta">
+                          {typeof service.pris === 'number'
+                            ? `DKK ${formatPrice(service.pris)}`
+                            : '—'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </div>
