@@ -1,35 +1,29 @@
 import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import '../bookingpage.css';
 import './klientoversigt.css';
 import AddKlient from './addklient/addklient';
+import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayout';
 import { useAuth } from '../../../AuthContext';
 import { useUserClients } from './hooks/useUserClients';
+import { ChevronDown } from 'lucide-react';
 
 function Klientoversigt() {
-  const navigate = useNavigate();
-  const { user, signOutUser } = useAuth();
+  const { user } = useAuth();
   const {
     clients,
     loading: isLoadingClients,
     error: clientsLoadError,
   } = useUserClients();
-  const [activeNav, setActiveNav] = useState('klienter');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortColumn, setSortColumn] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
   const [showAddClient, setShowAddClient] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
-
-
-  const handleNavClick = (navItem) => {
-    setActiveNav(navItem);
-    if (navItem === 'kalender') {
-      navigate('/booking');
-    } else if (navItem === 'ydelser') {
-      navigate('/booking/ydelser');
-    }
-  };
+  const [editView, setEditView] = useState('forloeb'); // 'personal' or 'forloeb'
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [sortOption, setSortOption] = useState('alphabetical'); // 'newest', 'oldest', 'alphabetical'
+  const [selectedClientId, setSelectedClientId] = useState(null);
+  const [clientMenuPosition, setClientMenuPosition] = useState({ x: 0, y: 0 });
 
   const handleSort = (column) => {
     if (sortColumn === column) {
@@ -42,20 +36,39 @@ function Klientoversigt() {
 
   const filteredClients = useMemo(() => {
     const queryValue = searchQuery.trim().toLowerCase();
-    if (!queryValue) {
-      return clients;
+    let result = clients;
+    
+    if (queryValue) {
+      result = clients.filter((client) => {
+        const name = client.navn?.toLowerCase?.() || '';
+        const email = client.email?.toLowerCase?.() || '';
+        const city = client.by?.toLowerCase?.() || '';
+        return (
+          name.includes(queryValue) ||
+          email.includes(queryValue) ||
+          city.includes(queryValue)
+        );
+      });
     }
-    return clients.filter((client) => {
-      const name = client.navn?.toLowerCase?.() || '';
-      const email = client.email?.toLowerCase?.() || '';
-      const city = client.by?.toLowerCase?.() || '';
-      return (
-        name.includes(queryValue) ||
-        email.includes(queryValue) ||
-        city.includes(queryValue)
-      );
+
+    // Apply sorting based on sortOption
+    return [...result].sort((a, b) => {
+      if (sortOption === 'alphabetical') {
+        const nameA = (a.navn || '').toLowerCase();
+        const nameB = (b.navn || '').toLowerCase();
+        return nameA.localeCompare(nameB, 'da');
+      } else if (sortOption === 'newest') {
+        const dateA = a.createdAt?.toDate?.() || a.createdAt || new Date(0);
+        const dateB = b.createdAt?.toDate?.() || b.createdAt || new Date(0);
+        return dateB - dateA;
+      } else if (sortOption === 'oldest') {
+        const dateA = a.createdAt?.toDate?.() || a.createdAt || new Date(0);
+        const dateB = b.createdAt?.toDate?.() || b.createdAt || new Date(0);
+        return dateA - dateB;
+      }
+      return 0;
     });
-  }, [clients, searchQuery]);
+  }, [clients, searchQuery, sortOption]);
 
   const openCreateClient = () => {
     setEditingClient(null);
@@ -75,6 +88,51 @@ function Klientoversigt() {
   const handleDeleteClient = () => {
     setShowAddClient(false);
     setEditingClient(null);
+  };
+
+  const handleSortOptionSelect = (option) => {
+    setSortOption(option);
+    setShowSortDropdown(false);
+  };
+
+  const getSortLabel = () => {
+    switch (sortOption) {
+      case 'newest': return 'Nyeste';
+      case 'oldest': return 'Ældste';
+      case 'alphabetical': return 'Alfabetisk';
+      default: return 'Sortér';
+    }
+  };
+
+  const handleClientRowClick = (e, client) => {
+    // Ignore clicks on checkbox
+    if (e.target.type === 'checkbox') {
+      return;
+    }
+
+    // Get position for menu
+    const rect = e.currentTarget.getBoundingClientRect();
+    setClientMenuPosition({
+      x: rect.left + rect.width / 2,
+      y: rect.bottom + 4,
+    });
+    setSelectedClientId(client.id);
+  };
+
+  const handleEditClientInfo = (client) => {
+    setEditView('personal');
+    openEditClient(client);
+    setSelectedClientId(null);
+  };
+
+  const handleAddForloebInfo = (client) => {
+    setEditView('forloeb');
+    openEditClient(client);
+    setSelectedClientId(null);
+  };
+
+  const handleCloseMenu = () => {
+    setSelectedClientId(null);
   };
 
   const userIdentity = useMemo(() => {
@@ -106,117 +164,11 @@ function Klientoversigt() {
   }, [user]);
 
   return (
-    <div className="booking-page">
-      {/* Top Navigation Bar */}
-      <div className="booking-topbar">
-        <div className="topbar-left">
-          <button className="topbar-logo-btn" onClick={async () => {
-            await signOutUser();
-            navigate('/');
-          }}>
-            Forside
-          </button>
-        </div>
-        <div className="topbar-right" />
-      </div>
-
-      <div className="booking-content">
-        {/* Left Sidebar */}
-        <div className="booking-sidebar">
-          <div className="sidebar-search">
-            <span className="search-icon">🔍</span>
-            <input type="text" placeholder="Søg" className="search-input" />
-          </div>
-
-          <div className="sidebar-notifications">
-            <span className="bell-icon">🔔</span>
-            <span>Notifikationer</span>
-          </div>
-
-          <div className="sidebar-section">
-            <div className="section-label">KLINIK</div>
-            <nav className="sidebar-nav">
-              <button 
-                className={`nav-item ${activeNav === 'kalender' ? 'active' : ''}`}
-                onClick={() => handleNavClick('kalender')}
-              >
-                <span className="nav-icon calendar-icon">📅</span>
-                <span className="nav-text">Kalender</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'klienter' ? 'active' : ''}`}
-                onClick={() => handleNavClick('klienter')}
-              >
-                <span className="nav-icon">👤</span>
-                <span className="nav-text">Klienter</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'ydelser' ? 'active' : ''}`}
-                onClick={() => handleNavClick('ydelser')}
-              >
-                <span className="nav-icon">🏷️</span>
-                <span className="nav-text">Ydelser</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'fakturaer' ? 'active' : ''}`}
-                onClick={() => handleNavClick('fakturaer')}
-              >
-                <span className="nav-icon">📄</span>
-                <span className="nav-text">Fakturaer</span>
-                <span className="nav-badge-launching">(launching soon)</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'statistik' ? 'active' : ''}`}
-                onClick={() => handleNavClick('statistik')}
-              >
-                <span className="nav-icon">📊</span>
-                <span className="nav-text">Statistik</span>
-                <span className="nav-badge-launching">(launching soon)</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'indstillinger' ? 'active' : ''}`}
-                onClick={() => handleNavClick('indstillinger')}
-              >
-                <span className="nav-icon">⚙️</span>
-                <span className="nav-text">Indstillinger</span>
-                <span className="nav-badge-launching">(launching soon)</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'apps' ? 'active' : ''}`}
-                onClick={() => handleNavClick('apps')}
-              >
-                <span className="nav-icon">📱</span>
-                <span className="nav-text">Apps</span>
-                <span className="nav-badge-launching">(launching soon)</span>
-              </button>
-            </nav>
-          </div>
-
-          <button
-            type="button"
-            className="sidebar-clinic"
-            onClick={() => navigate('/booking/settings')}
-          >
-            {userIdentity.photoURL ? (
-              <img
-                src={userIdentity.photoURL}
-                alt={userIdentity.name}
-                className="clinic-avatar"
-              />
-            ) : (
-              <div className="clinic-avatar clinic-avatar-placeholder">
-                {userIdentity.initials}
-              </div>
-            )}
-            <div className="clinic-user-details">
-              <div className="clinic-user-name">{userIdentity.name}</div>
-              <div className="clinic-user-email">{userIdentity.email}</div>
-            </div>
-          </button>
-        </div>
-
-        {/* Main Content Area - Client Overview */}
-        <div className="klientoversigt-main">
+    <BookingSidebarLayout>
+      <div className="booking-page">
+        <div className="booking-content">
+          {/* Main Content Area - Client Overview */}
+          <div className="klientoversigt-main">
           {/* Page Header */}
           <div className="klientoversigt-header">
             <div className="header-left">
@@ -225,28 +177,50 @@ function Klientoversigt() {
               </div>
             </div>
             <div className="header-right">
-              <button 
-                className="add-client-btn"
+              <button
+                type="button"
+                className="toolbar-pill toolbar-primary"
                 onClick={openCreateClient}
               >
-                <span className="add-icon">👤+</span>
                 Tilføj klient
+                <ChevronDown className="toolbar-caret" />
               </button>
             </div>
           </div>
 
           {/* Filter Bar */}
           <div className="filter-bar">
-            <button className="filter-btn">Filter</button>
-            <button className="saved-filters-btn">
-              <span className="bookmark-icon">🔖</span>
-              Gemte Filtre
-              <span className="dropdown-arrow">▼</span>
-            </button>
-            <button className="edit-columns-btn">
-              Rediger kolonner
-              <span className="dropdown-arrow">▼</span>
-            </button>
+            <div className="sort-dropdown-container">
+              <button 
+                className="edit-columns-btn"
+                onClick={() => setShowSortDropdown(!showSortDropdown)}
+              >
+                Sortér: {getSortLabel()}
+                <span className="dropdown-arrow">{showSortDropdown ? '▲' : '▼'}</span>
+              </button>
+              {showSortDropdown && (
+                <div className="sort-dropdown-menu">
+                  <button 
+                    className={`sort-dropdown-item ${sortOption === 'newest' ? 'active' : ''}`}
+                    onClick={() => handleSortOptionSelect('newest')}
+                  >
+                    Nyeste
+                  </button>
+                  <button 
+                    className={`sort-dropdown-item ${sortOption === 'oldest' ? 'active' : ''}`}
+                    onClick={() => handleSortOptionSelect('oldest')}
+                  >
+                    Ældste
+                  </button>
+                  <button 
+                    className={`sort-dropdown-item ${sortOption === 'alphabetical' ? 'active' : ''}`}
+                    onClick={() => handleSortOptionSelect('alphabetical')}
+                  >
+                    Alfabetisk
+                  </button>
+                </div>
+              )}
+            </div>
             <div className="search-bar">
               <span className="search-icon-small">🔍</span>
               <input 
@@ -365,8 +339,13 @@ function Klientoversigt() {
               </thead>
               <tbody>
                 {filteredClients.map((client) => (
-                  <tr key={client.id}>
-                    <td className="checkbox-col">
+                  <tr 
+                    key={client.id}
+                    onClick={(e) => handleClientRowClick(e, client)}
+                    className={selectedClientId === client.id ? 'row-selected' : ''}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <td className="checkbox-col" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={false}
@@ -395,6 +374,41 @@ function Klientoversigt() {
         </div>
       </div>
 
+      {/* Client Action Menu */}
+      {selectedClientId && (() => {
+        const client = filteredClients.find((c) => c.id === selectedClientId);
+        if (!client) return null;
+        
+        return (
+          <>
+            <div 
+              className="client-menu-overlay" 
+              onClick={handleCloseMenu}
+            />
+            <div 
+              className="client-menu"
+              style={{
+                left: `${clientMenuPosition.x}px`,
+                top: `${clientMenuPosition.y}px`,
+              }}
+            >
+              <button
+                className="client-menu-item"
+                onClick={() => handleEditClientInfo(client)}
+              >
+                Ændre klientoplysninger
+              </button>
+              <button
+                className="client-menu-item"
+                onClick={() => handleAddForloebInfo(client)}
+              >
+                Tilføj forløbsoplysninger
+              </button>
+            </div>
+          </>
+        );
+      })()}
+
       {/* Add Klient Modal */}
       {showAddClient && (
         <AddKlient
@@ -402,15 +416,18 @@ function Klientoversigt() {
           mode={editingClient ? 'edit' : 'create'}
           clientId={editingClient?.id || null}
           initialClient={editingClient || null}
+          editView={editView}
           onClose={() => {
             setShowAddClient(false);
             setEditingClient(null);
+            setEditView('forloeb');
           }}
           onSave={handleAddClientSave}
           onDelete={handleDeleteClient}
         />
       )}
     </div>
+    </BookingSidebarLayout>
   );
 }
 

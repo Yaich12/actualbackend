@@ -26,8 +26,6 @@ type OverlayCopyProps = {
 }
 
 export const TextParallaxContentExample = () => {
-  const [aiModalOpen, setAiModalOpen] = useState(false)
-
   return (
     <div className="bg-white">
       <TextParallaxContent
@@ -45,109 +43,6 @@ export const TextParallaxContentExample = () => {
         subheading="Quality"
         heading="Never compromise."
       />
-
-      <section className="bg-white px-4 pb-20 pt-12 md:px-12">
-        <article className="md:col-span-3 rounded-3xl bg-white p-8 shadow-sm ring-1 ring-slate-100">
-          <div className="flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
-            <div className="max-w-xl">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-rose-50 text-rose-500">
-                <Sparkles className="h-5 w-5" aria-hidden="true" />
-              </span>
-              <p className="mt-4 text-sm font-semibold uppercase tracking-wide text-stone-400">
-                Driften
-              </p>
-              <h3 className="mt-2 text-2xl font-semibold text-stone-900">Klinisk superkraft</h3>
-              <p className="mt-4 text-sm leading-relaxed text-stone-600">
-                Journalisering, fremskridtsmåling og klinisk sparring. Det hele sker automatisk,
-                mens du lytter.
-              </p>
-            </div>
-
-            <div className="relative w-full rounded-2xl border border-slate-100 bg-gradient-to-br from-rose-50 via-white to-slate-50 p-6">
-              <div className="rounded-2xl border border-white/60 bg-white p-5 shadow-sm">
-                <div className="text-xs font-semibold uppercase tracking-wide text-rose-500">
-                  AI Co-Pilot · Powered by CORTI
-                </div>
-                <div className="mt-4 space-y-4">
-                  <div className="rounded-2xl bg-rose-50 p-4 text-sm text-stone-700">
-                    Journalnotat for Søren oprettet. Vil du se handleplanen?
-                  </div>
-                  <button className="rounded-2xl bg-white p-4 text-sm text-stone-500 shadow-inner">
-                    Vis handleplan
-                  </button>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAiModalOpen(true)}
-                className="absolute bottom-6 right-6 inline-flex h-12 w-12 items-center justify-center rounded-full bg-rose-500 text-white shadow-lg shadow-rose-500/40 transition hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-400"
-              >
-                +
-              </button>
-            </div>
-          </div>
-        </article>
-      </section>
-
-      {aiModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-10 backdrop-blur-sm">
-          <div className="relative w-full max-w-6xl rounded-[28px] bg-white p-8 shadow-2xl shadow-black/20 ring-1 ring-slate-200 md:p-12">
-            <button
-              type="button"
-              onClick={() => setAiModalOpen(false)}
-              className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-400"
-              aria-label="Luk"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            <div className="space-y-6 md:space-y-8">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-500">
-                  Efficiency · Powered by Corti
-                </p>
-                <h2 className="text-3xl font-semibold leading-tight text-slate-900 md:text-4xl">
-                  Automatiser journalnoter med AI
-                </h2>
-                <p className="max-w-3xl text-base leading-relaxed text-slate-600 md:text-lg">
-                  Selma+ lytter med via CORTI og omdanner samtaler til strukturerede kliniske noter,
-                  handleplaner og faktureringsklare koder – helt automatisk.
-                </p>
-              </div>
-
-              <div className="grid gap-6 md:grid-cols-3">
-                <div className="md:col-span-2 space-y-4 rounded-[28px] bg-gradient-to-br from-rose-50/80 via-white to-indigo-50/60 p-6 shadow-sm ring-1 ring-white">
-                  <div className="h-32 rounded-2xl bg-white/70 shadow-inner shadow-rose-100" />
-                  <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
-                    <p className="text-sm font-semibold text-rose-500">AI Copilot</p>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-700">
-                      Vi har resuméet klar for din konsultation. Klik for at godkende eller redigere.
-                    </p>
-                    <p className="mt-3 text-xs uppercase tracking-wide text-slate-400">Powered by CORTI</p>
-                  </div>
-                </div>
-
-                <div className="space-y-4 rounded-[28px] bg-slate-50 p-6 shadow-inner ring-1 ring-white/60">
-                  <div>
-                    <p className="text-base font-semibold text-slate-900">Ambient speech</p>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-700">
-                      Brug din iPhone eller Mac til at optage sessionen. Vi transskribere, strukturerer
-                      og lægger det direkte ind som journalnoter og handleplaner.
-                    </p>
-                  </div>
-                  <div className="pt-2">
-                    <p className="text-base font-semibold text-slate-900">Epic-grade kontrol</p>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-700">
-                      Redigér noter i et Apple-lignende interface og send dem til EPJ på få sekunder. Du
-                      bevarer fuld kontrol – AI&apos;en gør det tunge arbejde.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

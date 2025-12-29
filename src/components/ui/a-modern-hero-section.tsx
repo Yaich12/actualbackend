@@ -1,23 +1,67 @@
 import { Link } from 'react-router-dom';
+import { CalendarDays, LayoutGrid, Mic } from 'lucide-react';
+
+const SCROLL_DURATION_MS = 1350;
+const SCROLL_KEY = 'selmaScrollToLiveBuilder';
+
+const easeInOutCubic = (value: number) =>
+  value < 0.5
+    ? 4 * value * value * value
+    : 1 - Math.pow(-2 * value + 2, 3) / 2;
+
+const animateScrollTo = (targetY: number, duration = SCROLL_DURATION_MS) => {
+  const startY = window.scrollY || window.pageYOffset;
+  const distance = targetY - startY;
+  let startTime: number | null = null;
+
+  const step = (timestamp: number) => {
+    if (startTime === null) startTime = timestamp;
+    const elapsed = timestamp - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = easeInOutCubic(progress);
+    window.scrollTo(0, startY + distance * eased);
+    if (elapsed < duration) {
+      window.requestAnimationFrame(step);
+    }
+  };
+
+  window.requestAnimationFrame(step);
+};
+
+const scrollToElementById = (id: string, duration = SCROLL_DURATION_MS) => {
+  if (typeof window === 'undefined') return false;
+  const element = document.getElementById(id);
+  if (!element) return false;
+  const targetY = Math.max(0, element.getBoundingClientRect().top + window.pageYOffset - 16);
+  animateScrollTo(targetY, duration);
+  return true;
+};
 
 export default function HeroSection() {
-  // Booking system screenshots - using Unsplash images that represent booking/dashboard interfaces
-  const bookingImages = [
-    "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1740&auto=format&fit=crop", // Dashboard/analytics
-    "https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=1715&auto=format&fit=crop", // Calendar/scheduling
-    "https://images.unsplash.com/photo-1551650975-87deedd944c3?q=80&w=1674&auto=format&fit=crop", // Data visualization/analytics
-  ];
+  const handleScrollToBuilder = () => {
+    const didScroll = scrollToElementById('live-builder-demo');
+    if (didScroll) return;
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(SCROLL_KEY, '1');
+      window.location.assign('/website-builder');
+    }
+  };
 
   return (
     <section className="py-16 sm:py-20 lg:py-24">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Top section with title and text */}
         <div className="text-center mb-8 sm:mb-12">
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-black mb-4 sm:mb-6 tracking-tight">
-            Selma+
-          </h1>
-          <p className="text-lg sm:text-xl text-black mb-8 sm:mb-10 max-w-2xl mx-auto">
-            Say hello to the newest members of the family.
+          <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-black mb-4 sm:mb-6 tracking-tight">
+            The first clinic system designed to disappear.
+          </h2>
+          <p className="text-lg sm:text-xl text-black/80 mb-6 sm:mb-8 max-w-3xl mx-auto leading-relaxed">
+            You became a therapist to heal people, not to manage software. That&apos;s why we built Selma+. It handles
+            the booking, writes the journals, and balances the books—automatically. So you can stop looking at the
+            screen, and start looking at your patient.
+          </p>
+          <p className="text-sm sm:text-base text-black/70 font-medium tracking-wide mb-8 sm:mb-10">
+            See how we give you your time back:
           </p>
           
           {/* Action buttons */}
@@ -37,42 +81,161 @@ export default function HeroSection() {
           </div>
         </div>
 
-        {/* Three booking system images - iPhone style layout */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 lg:gap-8 mt-8 sm:mt-12">
-          {/* Left image - angled rear-left perspective */}
-          <div className="relative w-full sm:w-[30%] max-w-[300px] transform -rotate-6 sm:-rotate-12 hover:rotate-0 transition-transform duration-300">
-            <div className="relative rounded-3xl overflow-hidden shadow-2xl bg-white">
-              <img
-                src={bookingImages[0]}
-                alt="Selma+ Booking System - Dashboard View"
-                className="w-full h-auto object-cover aspect-[9/16] sm:aspect-[3/4]"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none"></div>
+        {/* Acuity-style feature cards */}
+        <div className="mt-10 grid gap-8 lg:grid-cols-3">
+          {/* Card 1: Website Builder + AI Agent */}
+          <div className="rounded-[36px] bg-[#5a7cc8] p-7 sm:p-8 shadow-xl shadow-slate-200/60">
+            <div className="rounded-[28px] bg-white p-5 sm:p-6">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+                  DIGITAL RECEPTION
+                </div>
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">
+                  <CalendarDays className="h-5 w-5" />
+                </div>
+              </div>
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="rounded-2xl bg-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700">
+                    <span>Selma+ Reception</span>
+                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                  </div>
+                  <div className="mt-3 rounded-xl bg-slate-100 px-3 py-2 text-[12px] text-slate-600">
+                    Velkommen til Klinik Selma, hvad kan jeg hjælpe med?
+                  </div>
+                  <div className="mt-4 flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-400">
+                    Skriv en besked...
+                    <span className="ml-auto inline-flex items-center justify-center rounded-full bg-blue-600 px-3 py-1 text-[10px] font-semibold text-white">
+                      Send
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <h3 className="mt-8 text-2xl font-semibold text-white">Din klinik er altid åben</h3>
+            <p className="mt-3 text-sm leading-relaxed text-white/90">
+              Få en smuk hjemmeside med indbygget AI-receptionist. Den tager imod nye patienter og svarer på spørgsmål
+              døgnet rundt – også mens du sover.
+            </p>
+            <Link
+              to="/website-builder"
+              onClick={(event) => {
+                event.preventDefault();
+                handleScrollToBuilder();
+              }}
+              className="mt-6 inline-flex items-center justify-center text-sm font-semibold text-white/95 transition hover:text-white"
+            >
+              Se løsningen →
+            </Link>
+          </div>
+
+          {/* Card 2: Journal & Economy */}
+          <div className="rounded-[36px] bg-[#5a7cc8] p-7 sm:p-8 shadow-xl shadow-slate-200/60">
+            <div className="rounded-[28px] bg-white p-5 sm:p-6">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+                  INTELLIGENT SYSTEM
+                </div>
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">
+                  <Mic className="h-5 w-5" />
+                </div>
+              </div>
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="rounded-2xl bg-white p-4 shadow-sm">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <div className="text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-400">Kalender</div>
+                      <div className="mt-3 space-y-2">
+                        <div className="h-2 w-full rounded-full bg-blue-200/80" />
+                        <div className="h-2 w-5/6 rounded-full bg-slate-200" />
+                        <div className="h-2 w-4/5 rounded-full bg-blue-200/70" />
+                        <div className="h-2 w-2/3 rounded-full bg-slate-200" />
+                      </div>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <div className="flex items-center justify-between text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                        Journal
+                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[9px] font-semibold text-white">
+                          AI
+                        </span>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        <div className="h-2 w-full rounded-full bg-emerald-200/70" />
+                        <div className="h-2 w-4/5 rounded-full bg-slate-200" />
+                        <div className="h-2 w-5/6 rounded-full bg-emerald-200/60" />
+                        <div className="h-2 w-2/3 rounded-full bg-slate-200" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <h3 className="mt-8 text-2xl font-semibold text-white">Mere tid til behandling</h3>
+            <p className="mt-3 text-sm leading-relaxed text-white/90">
+              Slut med at klikke rundt. I Selma+ er din kalender og journal smeltet sammen, og AI-assistenten hjælper
+              dig med at skrive notaterne lynhurtigt.
+            </p>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <Link
+                to="/features"
+                className="inline-flex items-center justify-center rounded-full border border-white/80 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-[#4f6fc1]"
+              >
+                Udforsk systemet →
+              </Link>
+              <Link
+                to="/selma-copilot"
+                className="inline-flex items-center justify-center rounded-full border border-white/80 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-[#4f6fc1]"
+              >
+                Mød Ally →
+              </Link>
             </div>
           </div>
 
-          {/* Center image - side profile */}
-          <div className="relative w-full sm:w-[30%] max-w-[300px] z-10 transform hover:scale-105 transition-transform duration-300">
-            <div className="relative rounded-3xl overflow-hidden shadow-2xl bg-white">
-              <img
-                src={bookingImages[1]}
-                alt="Selma+ Booking System - Calendar View"
-                className="w-full h-auto object-cover aspect-[9/16] sm:aspect-[3/4]"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none"></div>
+          {/* Card 3: Admin overview */}
+          <div className="rounded-[36px] bg-[#5a7cc8] p-7 sm:p-8 shadow-xl shadow-slate-200/60">
+            <div className="rounded-[28px] bg-white p-5 sm:p-6">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+                  OVERBLIK
+                </div>
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">
+                  <LayoutGrid className="h-5 w-5" />
+                </div>
+              </div>
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="rounded-2xl bg-white p-4 shadow-sm">
+                  <div className="rounded-2xl border border-emerald-100 bg-white p-4">
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                      <span>Omsætning</span>
+                      <span className="text-emerald-600">+12%</span>
+                    </div>
+                    <div className="mt-3 h-12 rounded-xl bg-emerald-50 p-2">
+                      <div className="h-full w-full rounded-lg bg-gradient-to-r from-emerald-200 via-emerald-100 to-white" />
+                    </div>
+                    <div className="mt-4 flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">
+                      Status: Alt afstemt
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-semibold text-white">
+                        ✓
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
 
-          {/* Right image - angled rear-right perspective */}
-          <div className="relative w-full sm:w-[30%] max-w-[300px] transform rotate-6 sm:rotate-12 hover:rotate-0 transition-transform duration-300">
-            <div className="relative rounded-3xl overflow-hidden shadow-2xl bg-white">
-              <img
-                src={bookingImages[2]}
-                alt="Selma+ Booking System - Analytics View"
-                className="w-full h-auto object-cover aspect-[9/16] sm:aspect-[3/4]"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none"></div>
-            </div>
+            <h3 className="mt-8 text-2xl font-semibold text-white">Ro i maven omkring tallene</h3>
+            <p className="mt-3 text-sm leading-relaxed text-white/90">
+              Slip for det manuelle bøvl. Fakturering, indberetning til &quot;danmark&quot; og regnskab sker automatisk
+              i baggrunden.
+            </p>
+            <Link
+              to="/features/operations"
+              className="mt-6 inline-flex text-sm font-semibold text-white/90 transition hover:text-white"
+            >
+              Se funktioner →
+            </Link>
           </div>
         </div>
       </div>

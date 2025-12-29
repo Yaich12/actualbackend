@@ -27,6 +27,7 @@ const mapDocToService = (doc) => {
     prisInklMoms: priceInclVat,
     description: data.description || '',
     createdAt: createdAtIso,
+    color: data.color || '#3B82F6',
   };
 };
 

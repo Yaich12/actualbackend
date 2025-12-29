@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import '../bookingpage.css';
 import './ydelser.css';
+import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayout';
 import AddNewServiceModal from './addnew/addnew';
 import { useAuth } from '../../../AuthContext';
 import { useUserServices } from './hooks/useUserServices';
+import { ChevronDown } from 'lucide-react';
 
 const normalizeService = (stored = {}) => {
   const price =
@@ -31,28 +32,18 @@ const normalizeService = (stored = {}) => {
     prisInklMoms: priceIncl,
     description: stored.description || '',
     createdAt: stored.createdAt || stored.createdAtIso || null,
+    color: stored.color || '#3B82F6',
   };
 };
 
 function Ydelser() {
-  const navigate = useNavigate();
-  const { user, signOutUser } = useAuth();
+  const { user } = useAuth();
   const { services: remoteServices, loading: isLoadingServices, error: servicesLoadError } = useUserServices();
-  const [activeNav, setActiveNav] = useState('ydelser');
   const [searchQuery, setSearchQuery] = useState('');
   const [serviceList, setServiceList] = useState([]);
   const [selectedServices, setSelectedServices] = useState([]);
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [editingService, setEditingService] = useState(null);
-
-  const handleNavClick = (navItem) => {
-    setActiveNav(navItem);
-    if (navItem === 'kalender') {
-      navigate('/booking');
-    } else if (navItem === 'klienter') {
-      navigate('/booking/klienter');
-    }
-  };
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
@@ -162,117 +153,11 @@ function Ydelser() {
   }, [user]);
 
   return (
-    <div className="booking-page">
-      {/* Top Navigation Bar */}
-      <div className="booking-topbar">
-        <div className="topbar-left">
-          <button className="topbar-logo-btn" onClick={async () => {
-            await signOutUser();
-            navigate('/');
-          }}>
-            Forside
-          </button>
-        </div>
-        <div className="topbar-right" />
-      </div>
-
-      <div className="booking-content">
-        {/* Left Sidebar */}
-        <div className="booking-sidebar">
-          <div className="sidebar-search">
-            <span className="search-icon">🔍</span>
-            <input type="text" placeholder="Søg" className="search-input" />
-          </div>
-
-          <div className="sidebar-notifications">
-            <span className="bell-icon">🔔</span>
-            <span>Notifikationer</span>
-          </div>
-
-          <div className="sidebar-section">
-            <div className="section-label">KLINIK</div>
-            <nav className="sidebar-nav">
-              <button 
-                className={`nav-item ${activeNav === 'kalender' ? 'active' : ''}`}
-                onClick={() => handleNavClick('kalender')}
-              >
-                <span className="nav-icon calendar-icon">📅</span>
-                <span className="nav-text">Kalender</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'klienter' ? 'active' : ''}`}
-                onClick={() => handleNavClick('klienter')}
-              >
-                <span className="nav-icon">👤</span>
-                <span className="nav-text">Klienter</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'ydelser' ? 'active' : ''}`}
-                onClick={() => handleNavClick('ydelser')}
-              >
-                <span className="nav-icon">🏷️</span>
-                <span className="nav-text">Ydelser</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'fakturaer' ? 'active' : ''}`}
-                onClick={() => handleNavClick('fakturaer')}
-              >
-                <span className="nav-icon">📄</span>
-                <span className="nav-text">Fakturaer</span>
-                <span className="nav-badge-launching">(launching soon)</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'statistik' ? 'active' : ''}`}
-                onClick={() => handleNavClick('statistik')}
-              >
-                <span className="nav-icon">📊</span>
-                <span className="nav-text">Statistik</span>
-                <span className="nav-badge-launching">(launching soon)</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'indstillinger' ? 'active' : ''}`}
-                onClick={() => handleNavClick('indstillinger')}
-              >
-                <span className="nav-icon">⚙️</span>
-                <span className="nav-text">Indstillinger</span>
-                <span className="nav-badge-launching">(launching soon)</span>
-              </button>
-              <button 
-                className={`nav-item ${activeNav === 'apps' ? 'active' : ''}`}
-                onClick={() => handleNavClick('apps')}
-              >
-                <span className="nav-icon">📱</span>
-                <span className="nav-text">Apps</span>
-                <span className="nav-badge-launching">(launching soon)</span>
-              </button>
-            </nav>
-        </div>
-
-          <button
-            type="button"
-            className="sidebar-clinic"
-            onClick={() => navigate('/booking/settings')}
-          >
-            {userIdentity.photoURL ? (
-              <img
-                src={userIdentity.photoURL}
-                alt={userIdentity.name}
-                className="clinic-avatar"
-              />
-            ) : (
-              <div className="clinic-avatar clinic-avatar-placeholder">
-                {userIdentity.initials}
-              </div>
-            )}
-            <div className="clinic-user-details">
-              <div className="clinic-user-name">{userIdentity.name}</div>
-              <div className="clinic-user-email">{userIdentity.email}</div>
-            </div>
-          </button>
-        </div>
-
-        {/* Main Content Area - Services */}
-        <div className="ydelser-main">
+    <BookingSidebarLayout>
+      <div className="booking-page">
+        <div className="booking-content">
+          {/* Main Content Area - Services */}
+          <div className="ydelser-main">
           {/* Page Header */}
           <div className="ydelser-header">
             <div className="header-left">
@@ -280,30 +165,18 @@ function Ydelser() {
             </div>
             <div className="header-right">
               <button
-                className="create-service-btn"
                 type="button"
+                className="toolbar-pill toolbar-primary"
                 onClick={openCreateService}
               >
-                <span className="plus-icon">+</span>
                 Opret ny
+                <ChevronDown className="toolbar-caret" />
               </button>
             </div>
           </div>
 
-          {/* Selection Bar */}
+          {/* Selection Bar (kun søgning) */}
           <div className="selection-bar">
-            <div className="select-all-container">
-              <input 
-                type="checkbox" 
-                id="select-all"
-                checked={selectedServices.length === serviceList.length && serviceList.length > 0}
-                onChange={handleSelectAll}
-              />
-              <label htmlFor="select-all" className="select-all-label">
-                Vælg ydelser
-                <span className="dropdown-arrow">▼</span>
-              </label>
-            </div>
             <div className="search-bar-services">
               <span className="search-icon-small">🔍</span>
               <input 
@@ -344,10 +217,13 @@ function Ydelser() {
                     onChange={() => openEditService(service)}
                     onClick={(e) => e.stopPropagation()}
                   />
+                  <span
+                    className="service-color-dot"
+                    style={{ backgroundColor: service.color || '#3B82F6' }}
+                    aria-hidden="true"
+                  />
                 </div>
-                <div className="service-name">
-                  {service.navn}
-                </div>
+                <div className="service-name">{service.navn}</div>
                 <div className="service-duration">
                   {service.varighed}
                 </div>
@@ -376,6 +252,7 @@ function Ydelser() {
         initialService={editingService || null}
       />
     </div>
+    </BookingSidebarLayout>
   );
 }
 

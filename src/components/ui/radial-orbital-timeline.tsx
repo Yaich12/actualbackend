@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { ArrowRight, Link, Zap } from "lucide-react";
 
@@ -32,6 +33,14 @@ interface TimelineItem {
 
   energy: number;
 
+  cta?: {
+    label: string;
+    to: string;
+    description?: string;
+    disabled?: boolean;
+    variant?: "default" | "secondary" | "outline";
+  };
+
 }
 
 
@@ -49,6 +58,8 @@ export default function RadialOrbitalTimeline({
   timelineData,
 
 }: RadialOrbitalTimelineProps) {
+
+  const navigate = useNavigate();
 
   const [expandedItems, setExpandedItems] = useState<Record<number, boolean>>(
 
@@ -506,7 +517,7 @@ export default function RadialOrbitalTimeline({
 
                 {isExpanded && (
 
-                  <Card className="absolute top-20 left-1/2 -translate-x-1/2 w-64 bg-white/95 backdrop-blur-lg border-gray-300/50 shadow-xl shadow-gray-900/20 overflow-visible">
+                  <Card className="absolute top-20 left-1/2 -translate-x-1/2 w-80 bg-white/95 backdrop-blur-lg border-gray-300/50 shadow-xl shadow-gray-900/20 overflow-visible">
 
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-px h-3 bg-gray-400/60"></div>
 
@@ -515,25 +526,15 @@ export default function RadialOrbitalTimeline({
                       <div className="flex justify-between items-center">
 
                         <Badge
-
                           className={`px-2 text-xs ${getStatusStyles(
-
                             item.status
-
                           )}`}
-
                         >
-
                           {item.status === "completed"
-
-                            ? "COMPLETE"
-
+                            ? "COMPLETED"
                             : item.status === "in-progress"
-
                             ? "IN PROGRESS"
-
                             : "PENDING"}
-
                         </Badge>
 
                         <span className="text-xs font-mono text-gray-600/70">
@@ -555,6 +556,29 @@ export default function RadialOrbitalTimeline({
                     <CardContent className="text-xs text-gray-700/90">
 
                       <p>{item.content}</p>
+
+                      {item.cta ? (
+                        <div className="mt-4">
+                          <Button
+                            size="lg"
+                            variant={item.cta.variant ?? "default"}
+                            className="w-full justify-between"
+                            disabled={item.cta.disabled}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(item.cta.to);
+                            }}
+                          >
+                            <span>{item.cta.label}</span>
+                            <ArrowRight className="h-4 w-4" />
+                          </Button>
+                          {item.cta.description ? (
+                            <p className="mt-2 text-[11px] text-gray-600/80">
+                              {item.cta.description}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
 
 
 
@@ -681,4 +705,3 @@ export default function RadialOrbitalTimeline({
   );
 
 }
-

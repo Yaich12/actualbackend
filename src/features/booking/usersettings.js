@@ -1,52 +1,39 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import './usersettings.css';
 import './bookingpage.css';
-import { db } from '../../firebase';
+import { BookingSidebarLayout } from '../../components/ui/BookingSidebarLayout';
+import { auth, db, storage } from '../../firebase';
 import { useAuth } from '../../AuthContext';
+import { useLanguage } from '../../LanguageContext';
+import { updateProfile } from 'firebase/auth';
+import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 
 const THEME_STORAGE_KEY = 'selma_theme_mode';
 const NIGHT_START_HOUR = 18; // 18:00
 const NIGHT_END_HOUR = 5;    // 05:00
 
+const CATEGORY_OPTIONS = ['Physiotherapist', 'Osteopath', 'Chiropractor'];
+
 function UserSettings() {
   const { user, updateUserProfile } = useAuth();
   const navigate = useNavigate();
+  const { language, setLanguage, languageOptions, t } = useLanguage();
+  const [activeSection, setActiveSection] = useState('profile'); // profile | account | appearance | language
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [jobTitle, setJobTitle] = useState('');
+  const [clinicName, setClinicName] = useState('');
+  const [website, setWebsite] = useState('');
+  const [category, setCategory] = useState('');
+  const [address, setAddress] = useState('');
+  const [photoURL, setPhotoURL] = useState('');
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState('');
+  const [removeAvatar, setRemoveAvatar] = useState(false);
   const [colorMode, setColorMode] = useState('system');
   const [isSaving, setIsSaving] = useState(false);
-  const [activeNav, setActiveNav] = useState('indstillinger');
-
-  const userIdentity = useMemo(() => {
-    if (!user) {
-      return {
-        name: 'Ikke logget ind',
-        email: 'Log ind for at fortsætte',
-        initials: '?',
-        photoURL: null,
-      };
-    }
-
-    const name = user.displayName || user.email || 'Selma bruger';
-    const emailValue = user.email || '—';
-    const initialsSource = (user.displayName || user.email || '?').trim();
-    const initials = initialsSource
-      .split(/\s+/)
-      .map((part) => part[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase();
-
-    return {
-      name,
-      email: emailValue,
-      initials,
-      photoURL: user.photoURL || null,
-    };
-  }, [user]);
+  const [isAvatarUploading, setIsAvatarUploading] = useState(false);
 
   const applyTheme = (mode) => {
     let resolvedMode = mode;
@@ -81,7 +68,18 @@ function UserSettings() {
           const data = snap.data();
           setFullName(data.displayName || user.displayName || '');
           setEmail(data.email || user.email || '');
-          setJobTitle(data.jobTitle || '');
+          setClinicName(data.clinicName || '');
+          setWebsite(data.website || '');
+          setPhotoURL(data.photoURL || user.photoURL || '');
+          setAvatarPreviewUrl('');
+          setAvatarFile(null);
+          setRemoveAvatar(false);
+          const loadedCategory =
+            (Array.isArray(data.categories) && data.categories[0]) ||
+            data.category ||
+            '';
+          setCategory(loadedCategory || '');
+          setAddress(data.address || '');
           if (data.themeMode === 'light' || data.themeMode === 'dark' || data.themeMode === 'system') {
             setColorMode(data.themeMode);
             applyTheme(data.themeMode);
@@ -90,7 +88,14 @@ function UserSettings() {
         } else {
           setFullName(user.displayName || '');
           setEmail(user.email || '');
-          setJobTitle('');
+          setClinicName('');
+          setWebsite('');
+          setPhotoURL(user.photoURL || '');
+          setAvatarPreviewUrl('');
+          setAvatarFile(null);
+          setRemoveAvatar(false);
+          setCategory('');
+          setAddress('');
         }
       } catch (error) {
         console.error('[UserSettings] Failed to load profile', error);
@@ -106,6 +111,14 @@ function UserSettings() {
   }, [colorMode]);
 
   useEffect(() => {
+    return () => {
+      if (avatarPreviewUrl) {
+        URL.revokeObjectURL(avatarPreviewUrl);
+      }
+    };
+  }, [avatarPreviewUrl]);
+
+  useEffect(() => {
     if (colorMode !== 'system') return;
 
     const update = () => applyTheme('system');
@@ -119,12 +132,53 @@ function UserSettings() {
     if (!user) return;
     setIsSaving(true);
     try {
-      await updateUserProfile({ fullName, jobTitle });
+      const jobTitleForSave = category || '';
       const ref = doc(db, 'users', user.uid);
+
+      let resolvedPhotoURL = photoURL || '';
+      if (removeAvatar) {
+        resolvedPhotoURL = '';
+      }
+
+      if (avatarFile) {
+        setIsAvatarUploading(true);
+        const ext = avatarFile.name?.split('.').pop() || 'jpg';
+        const path = `userprofilepictures/${user.uid}/avatar-${Date.now()}.${ext}`;
+        const uploadRef = storageRef(storage, path);
+        await uploadBytes(uploadRef, avatarFile, { contentType: avatarFile.type || 'image/jpeg' });
+        resolvedPhotoURL = await getDownloadURL(uploadRef);
+        setIsAvatarUploading(false);
+        setAvatarFile(null);
+        setRemoveAvatar(false);
+        setAvatarPreviewUrl('');
+        setPhotoURL(resolvedPhotoURL);
+      }
+
+      if (auth.currentUser) {
+        await updateProfile(auth.currentUser, {
+          displayName: fullName || auth.currentUser.displayName || null,
+          photoURL: resolvedPhotoURL || null,
+        });
+      }
+
+      // Best-effort sync with legacy helper (keeps other parts of the app consistent).
+      try {
+        await updateUserProfile({ fullName, jobTitle: jobTitleForSave });
+      } catch (error) {
+        console.error('[UserSettings] Failed to sync auth profile helper', error);
+      }
+
       await setDoc(
         ref,
         {
           themeMode: colorMode,
+          displayName: fullName,
+          photoURL: resolvedPhotoURL || null,
+          jobTitle: jobTitleForSave,
+          clinicName,
+          website,
+          categories: category ? [category] : [],
+          address,
           updatedAt: serverTimestamp(),
         },
         { merge: true }
@@ -132,6 +186,7 @@ function UserSettings() {
     } catch (error) {
       console.error('[UserSettings] Failed to save profile', error);
     } finally {
+      setIsAvatarUploading(false);
       setIsSaving(false);
     }
   };
@@ -148,170 +203,296 @@ function UserSettings() {
   );
 
   return (
-    <div className="booking-page">
-      {/* Top Navigation Bar */}
-      <div className="booking-topbar">
-        <div className="topbar-left">
-          <button
-            className="topbar-logo-btn"
-            onClick={() => navigate('/booking')}
-          >
-            Forside
-          </button>
-        </div>
-        <div className="topbar-right" />
-      </div>
-
-      <div className="booking-content">
-        {/* Left Sidebar */}
-        <div className="booking-sidebar">
-          <div className="sidebar-search">
-            <span className="search-icon">🔍</span>
-            <input type="text" placeholder="Søg" className="search-input" />
-          </div>
-
-          <div className="sidebar-notifications">
-            <span className="bell-icon">🔔</span>
-            <span>Notifikationer</span>
-          </div>
-
-          <div className="sidebar-section">
-            <div className="section-label">KLINIK</div>
-            <nav className="sidebar-nav">
-              <button
-                className={`nav-item ${activeNav === 'kalender' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveNav('kalender');
-                  navigate('/booking');
-                }}
-              >
-                <span className="nav-icon calendar-icon">📅</span>
-                <span className="nav-text">Kalender</span>
-              </button>
-              <button
-                className={`nav-item ${activeNav === 'klienter' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveNav('klienter');
-                  navigate('/booking/klienter');
-                }}
-              >
-                <span className="nav-icon">👤</span>
-                <span className="nav-text">Klienter</span>
-              </button>
-              <button
-                className={`nav-item ${activeNav === 'ydelser' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveNav('ydelser');
-                  navigate('/booking/ydelser');
-                }}
-              >
-                <span className="nav-icon">🏷️</span>
-                <span className="nav-text">Ydelser</span>
-              </button>
-              <button
-                className={`nav-item ${activeNav === 'indstillinger' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveNav('indstillinger');
-                  navigate('/booking/settings');
-                }}
-              >
-                <span className="nav-icon">⚙️</span>
-                <span className="nav-text">Indstillinger</span>
-              </button>
-            </nav>
-          </div>
-
-          <button
-            type="button"
-            className="sidebar-clinic"
-            onClick={() => navigate('/booking/settings')}
-          >
-            {userIdentity.photoURL ? (
-              <img
-                src={userIdentity.photoURL}
-                alt={userIdentity.name}
-                className="clinic-avatar"
-              />
-            ) : (
-              <div className="clinic-avatar clinic-avatar-placeholder">
-                {userIdentity.initials}
-              </div>
-            )}
-            <div className="clinic-user-details">
-              <div className="clinic-user-name">{userIdentity.name}</div>
-              <div className="clinic-user-email">{userIdentity.email}</div>
-            </div>
-          </button>
-        </div>
-
-        {/* Main Content */}
-        <div className="usersettings-main">
+    <BookingSidebarLayout>
+      <div className="booking-page">
+        <div className="booking-content">
+          {/* Main Content */}
+          <div className="usersettings-main">
           <div className="usersettings-page">
             <div className="usersettings-card">
               <div className="usersettings-header">
-                <div className="usersettings-title">Profil</div>
-                <div className="usersettings-subtitle">Opdater dine brugeroplysninger</div>
+                <div className="usersettings-header-title">
+                  {t('settings.title', 'Indstillinger')}
+                </div>
+                <div className="usersettings-top-actions">
+                  <button
+                    type="button"
+                    className="usersettings-top-btn ghost"
+                    onClick={() => navigate('/booking')}
+                  >
+                    {t('settings.close', 'Luk')}
+                  </button>
+                  <button
+                    type="button"
+                    className="usersettings-top-btn primary"
+                    onClick={handleSaveProfile}
+                    disabled={isSaving || isAvatarUploading}
+                    aria-busy={isSaving || isAvatarUploading}
+                  >
+                    {isSaving || isAvatarUploading
+                      ? t('settings.saving', 'Gemmer…')
+                      : t('settings.save', 'Gem')}
+                  </button>
+                </div>
               </div>
+              <div className="usersettings-layout">
+                <aside className="usersettings-nav">
+                  <button
+                    type="button"
+                    className={`usersettings-nav-item ${activeSection === 'profile' ? 'active' : ''}`}
+                    onClick={() => setActiveSection('profile')}
+                  >
+                    {t('settings.sections.profile', 'Profil')}
+                  </button>
+                  <button
+                    type="button"
+                    className={`usersettings-nav-item ${activeSection === 'account' ? 'active' : ''}`}
+                    onClick={() => setActiveSection('account')}
+                  >
+                    {t('settings.sections.account', 'Kontoopsætning')}
+                  </button>
+                  <button
+                    type="button"
+                    className={`usersettings-nav-item ${activeSection === 'appearance' ? 'active' : ''}`}
+                    onClick={() => setActiveSection('appearance')}
+                  >
+                    {t('settings.sections.appearance', 'Appearance')}
+                  </button>
+                  <button
+                    type="button"
+                    className={`usersettings-nav-item ${activeSection === 'language' ? 'active' : ''}`}
+                    onClick={() => setActiveSection('language')}
+                  >
+                    {t('settings.sections.language', 'Sprog')}
+                  </button>
+                </aside>
 
-              <div className="usersettings-section">
-                <label className="usersettings-label">Fulde navn</label>
-                <input
-                  className="usersettings-input"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Indtast dit fulde navn"
-                />
-              </div>
+                <main className="usersettings-panel">
+                  {activeSection === 'profile' && (
+                    <>
+                      <div className="usersettings-header">
+                        <div className="usersettings-title">
+                          {t('settings.profile.title', 'Rediger din onlineprofil')}
+                        </div>
+                      </div>
 
-              <div className="usersettings-section">
-                <label className="usersettings-label">E-mail</label>
-                <input
-                  className="usersettings-input"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Indtast din e-mail"
-                />
-              </div>
+                      <div className="usersettings-avatar-row">
+                        <div className="usersettings-avatar-meta">
+                          <div className="usersettings-title">
+                            {t('settings.profile.avatarTitle', 'Din avatar')}
+                          </div>
+                          <div className="usersettings-subtitle">
+                            {t(
+                              'settings.profile.avatarSubtitle',
+                              'Opdater din avatar til din professionelle profil.'
+                            )}
+                          </div>
+                        </div>
 
-              <div className="usersettings-section">
-                <label className="usersettings-label">Jobtitel</label>
-                <input
-                  className="usersettings-input"
-                  value={jobTitle}
-                  onChange={(e) => setJobTitle(e.target.value)}
-                  placeholder="Angiv din jobtitel"
-                />
-              </div>
+                        <div className="usersettings-avatar-control">
+                          <div className="usersettings-avatar-circle">
+                            {avatarPreviewUrl || photoURL ? (
+                              <img
+                                src={avatarPreviewUrl || photoURL}
+                                alt="Din avatar"
+                                className="usersettings-avatar-img"
+                              />
+                            ) : (
+                              <span className="usersettings-avatar-fallback">
+                                {(fullName || email || 'S').charAt(0).toUpperCase()}
+                              </span>
+                            )}
+                          </div>
 
-              <div className="usersettings-divider" />
+                          <div className="usersettings-avatar-actions">
+                            <label className="usersettings-avatar-btn">
+                              {t('settings.profile.changePhoto', 'Skift billede')}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                hidden
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null;
+                                  if (!file) return;
+                                  if (avatarPreviewUrl) {
+                                    URL.revokeObjectURL(avatarPreviewUrl);
+                                  }
+                                  setAvatarFile(file);
+                                  setAvatarPreviewUrl(URL.createObjectURL(file));
+                                  setRemoveAvatar(false);
+                                }}
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              className="usersettings-avatar-btn ghost"
+                              onClick={() => {
+                                if (avatarPreviewUrl) {
+                                  URL.revokeObjectURL(avatarPreviewUrl);
+                                }
+                                setAvatarPreviewUrl('');
+                                setAvatarFile(null);
+                                setRemoveAvatar(true);
+                                setPhotoURL('');
+                              }}
+                              disabled={!photoURL && !avatarPreviewUrl}
+                            >
+                              {t('settings.profile.remove', 'Fjern')}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
 
-              <div className="usersettings-header">
-                <div className="usersettings-title">Appearance</div>
-                <div className="usersettings-subtitle">Vælg hvordan Selma skal se ud</div>
-              </div>
+                      <div className="usersettings-divider" />
 
-              <div className="usersettings-theme-grid">
-                {renderThemeCard('light', 'Light', 'theme-light')}
-                {renderThemeCard('system', 'Match system', 'theme-system')}
-                {renderThemeCard('dark', 'Dark', 'theme-dark')}
-              </div>
+                      <div className="usersettings-section">
+                        <label className="usersettings-label">
+                          {t('settings.profile.fullName', 'Fulde navn')}
+                        </label>
+                        <input
+                          className="usersettings-input"
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          placeholder={t(
+                            'settings.profile.fullNamePlaceholder',
+                            'Indtast dit fulde navn'
+                          )}
+                        />
+                      </div>
 
-              <div className="usersettings-actions">
-                <button
-                  type="button"
-                  className="usersettings-save-btn"
-                  onClick={handleSaveProfile}
-                  disabled={isSaving}
-                  aria-busy={isSaving}
-                >
-                  {isSaving ? 'Gemmer...' : 'Gem profil'}
-                </button>
+                      <div className="usersettings-section">
+                        <label className="usersettings-label">
+                          {t('settings.profile.email', 'E-mail')}
+                        </label>
+                        <input className="usersettings-input" value={email} readOnly />
+                      </div>
+
+                      <div className="usersettings-section">
+                        <label className="usersettings-label">
+                          {t('settings.profile.clinicName', 'Kliniknavn')}
+                        </label>
+                        <input
+                          className="usersettings-input"
+                          value={clinicName}
+                          onChange={(e) => setClinicName(e.target.value)}
+                          placeholder={t(
+                            'settings.profile.clinicPlaceholder',
+                            'Angiv navnet på klinikken'
+                          )}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {activeSection === 'account' && (
+                    <>
+                      <div className="usersettings-header">
+                        <div className="usersettings-title">
+                          {t('settings.account.title', 'Kontoopsætning')}
+                        </div>
+                      </div>
+
+                      <div className="usersettings-section">
+                        <label className="usersettings-label">
+                          {t('settings.account.website', 'Websted')}
+                        </label>
+                        <input
+                          className="usersettings-input"
+                          value={website}
+                          onChange={(e) => setWebsite(e.target.value)}
+                          placeholder={t('settings.account.websitePlaceholder', 'www.ditwebsted.com')}
+                        />
+                      </div>
+
+                      <div className="usersettings-section">
+                        <label className="usersettings-label">
+                          {t('settings.account.category', 'Kategori')}
+                        </label>
+                        <select
+                          className="usersettings-input"
+                          value={category}
+                          onChange={(e) => setCategory(e.target.value)}
+                        >
+                          <option value="">
+                            {t('settings.account.categoryPlaceholder', 'Vælg kategori')}
+                          </option>
+                          {CATEGORY_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="usersettings-section">
+                        <label className="usersettings-label">
+                          {t('settings.account.address', 'Adresse')}
+                        </label>
+                        <input
+                          className="usersettings-input"
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          placeholder={t('settings.account.addressPlaceholder', 'Indtast adresse')}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {activeSection === 'appearance' && (
+                    <>
+                      <div className="usersettings-header">
+                        <div className="usersettings-title">
+                          {t('settings.appearance.title', 'Appearance')}
+                        </div>
+                        <div className="usersettings-subtitle">
+                          {t('settings.appearance.subtitle', 'Vælg hvordan Selma skal se ud')}
+                        </div>
+                      </div>
+
+                      <div className="usersettings-theme-grid">
+                        {renderThemeCard('light', t('settings.appearance.light', 'Light'), 'theme-light')}
+                        {renderThemeCard('system', t('settings.appearance.system', 'Match system'), 'theme-system')}
+                        {renderThemeCard('dark', t('settings.appearance.dark', 'Dark'), 'theme-dark')}
+                      </div>
+                    </>
+                  )}
+
+                  {activeSection === 'language' && (
+                    <>
+                      <div className="usersettings-header">
+                        <div className="usersettings-title">
+                          {t('settings.language.title', 'Sprog')}
+                        </div>
+                      </div>
+
+                      <div className="usersettings-section">
+                        <label className="usersettings-label">
+                          {t('settings.language.label', 'Foretrukket sprog')}
+                        </label>
+                        <select
+                          className="usersettings-input"
+                          value={language}
+                          onChange={(e) => {
+                            void setLanguage(e.target.value);
+                          }}
+                        >
+                          {languageOptions.map((option) => (
+                            <option key={option.code} value={option.code}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
+                  )}
+                </main>
               </div>
             </div>
           </div>
         </div>
       </div>
     </div>
+    </BookingSidebarLayout>
   );
 }
 

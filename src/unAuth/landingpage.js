@@ -3,10 +3,10 @@ import './landingpage.css';
 import Navbar from './components/navbar';
 import Frontpage from './components/frontpage';
 import Demo from './components/demo';
-import Both from './components/Both';
 import Footer from './components/footer';
 import Preview from './components/preview';
 import ScrollSection from './components/scroll';
+import Manifesto from './components/Manifesto';
 
 const LandingDivider = () => (
   <div className="landing-divider" aria-label="Divider: from physios to physios">
@@ -33,10 +33,9 @@ function LandingPage() {
         <section className="landing-section landing-section-full landing-section-demo" id="demo">
           <Demo />
         </section>
-        <section className="landing-section landing-section-full" id="suite">
-          <div className="landing-section-inner">
-            <Both />
-          </div>
+        <LandingDivider />
+        <section className="landing-section landing-section-full" id="manifesto">
+          <Manifesto />
         </section>
       </main>
       <Footer />

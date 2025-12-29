@@ -1,0 +1,198 @@
+{
+  "language": {
+    "title": "Velg språk",
+    "subtitle": "Du kan endre dette senere i innstillinger."
+  },
+  "onboarding": {
+    "eyebrow": "Kontoinnstilling",
+    "topLabel": "Kontoinnstilling",
+    "loading": "Laster…",
+    "actions": {
+      "close": "Lukk",
+      "continue": "Fortsett",
+      "finish": "Ferdig",
+      "saving": "Lagrer…"
+    },
+    "aria": {
+      "back": "Tilbake",
+      "previous": "Forrige",
+      "next": "Neste"
+    },
+    "steps": {
+      "business": {
+        "title": "Hva heter bedriften din?",
+        "subtitle": "Dette er merkenavnet kundene dine vil se. Fakturering og juridisk navn kan legges til senere.",
+        "nameLabel": "Bedriftsnavn",
+        "namePlaceholder": "f.eks. Selma Klinikk",
+        "websiteLabel": "Nettsted (valgfritt)",
+        "websitePlaceholder": "www.dittnettsted.no"
+      },
+      "categories": {
+        "title": "Velg alternativet som passer best for bedriften din",
+        "subtitle": "Du kan endre dette senere",
+        "hint": "{count}/{max} valgt",
+        "options": ["Fysioterapeut", "Osteopat", "Kiropraktor"]
+      },
+      "accountType": {
+        "title": "Velg kontotype",
+        "subtitle": "Dette hjelper oss med å konfigurere kontoen din riktig",
+        "solo": "Jeg er selvstendig",
+        "team": "Jeg har et team"
+      },
+      "teamSize": {
+        "title": "Hvor mange ansatte har du",
+        "options": ["2-5 personer", "6-10 personer", "11+ personer"]
+      },
+      "serviceModel": {
+        "title": "Hvor tilbyr du tjenestene dine?",
+        "options": [
+          "Kunder besøker meg på et fysisk sted",
+          "Jeg reiser rundt og besøker kundene mine",
+          "Jeg tilbyr virtuelle tjenester på nett"
+        ]
+      },
+      "address": {
+        "title": "Oppgi bedriftens fysiske plassering",
+        "subtitle": "Legg til hovedstedet ditt slik at kunder enkelt kan finne deg. Du kan legge til flere steder senere.",
+        "label": "Hvor er bedriftens adresse?",
+        "placeholder": "Skriv inn adresse"
+      },
+      "software": {
+        "title": "Hvilken programvare bruker du for øyeblikket?",
+        "subtitle": "Hvis du vil bytte, kan vi hjelpe deg med å fremskynde oppsettet og importere data til din nye Selma-konto.",
+        "options": [
+          "Acuity",
+          "Booksy",
+          "Calendly",
+          "Goldie",
+          "Janeapp",
+          "Mindbody",
+          "Salon Iris",
+          "Setmore",
+          "Shortcuts",
+          "Square",
+          "Styleseat",
+          "Timely",
+          "Treatwell",
+          "Vagaro",
+          "Zenoti",
+          "Jeg bruker ikke noen programvare",
+          "Annet"
+        ]
+      },
+      "heardFrom": {
+        "title": "Hvordan hørte du om Selma?",
+        "options": [
+          "Anbefalt av en venn",
+          "Søkemotor (f.eks. Google eller Yahoo)",
+          "Sosiale medier",
+          "Annonse i e-post",
+          "Annonse i et magasin",
+          "Nettsteder med anmeldelser (f.eks. Capterra, Trustpilot)",
+          "AI-chatbot (f.eks. ChatGPT, Gemini, DeepSeek)",
+          "Annet"
+        ]
+      }
+    },
+    "completion": {
+      "title": "Bedriften din er opprettet!",
+      "subtitle": "Få 14 dagers gratis bruk av Selma for bedrifter",
+      "button": "Ferdig"
+    }
+  },
+  "booking": {
+    "sidebar": {
+      "calendar": "Kalender",
+      "clients": "Kunder",
+      "services": "Tjenester",
+      "forloeb": "Forløp",
+      "invoices": "Fakturaer",
+      "stats": "Statistikk",
+      "team": "Team",
+      "settings": "Innstillinger",
+      "apps": "Apper",
+      "catalog": "Katalog",
+      "logout": "Logg ut"
+    },
+    "topbar": {
+      "confirmEmail": "Bekreft e-postadressen din",
+      "protectAccount": "Beskytt kontoen din",
+      "profile": "Min profil",
+      "personalSettings": "Personlige innstillinger",
+      "help": "Hjelp og support",
+      "logout": "Logg ut",
+      "defaultUser": "Selma-bruker",
+      "clinicSettings": "Klinikkinnstillinger"
+    },
+    "calendar": {
+      "today": "I dag",
+      "previous": "Forrige",
+      "next": "Neste",
+      "filters": "Filtre",
+      "freeze": "Frys",
+      "settings": "Innstillinger",
+      "refresh": "Oppdater",
+      "viewLabel": "Kalendervisning",
+      "view": {
+        "month": "Måned",
+        "week": "Uke",
+        "day": "Dag"
+      },
+      "add": "Legg til",
+      "entireTeam": "Hele teamet",
+      "teamOnDuty": "Team på jobb",
+      "members": "Ansatte",
+      "clearAll": "Fjern alle",
+      "appointment": "Avtale",
+      "program": "Forløp",
+      "memberFallback": "Ansatt",
+      "you": "Du",
+      "notLoggedIn": "Ikke logget inn",
+      "loginToContinue": "Logg inn for å fortsette"
+    }
+  },
+  "settings": {
+    "title": "Innstillinger",
+    "close": "Lukk",
+    "save": "Lagre",
+    "saving": "Lagrer…",
+    "sections": {
+      "profile": "Profil",
+      "account": "Kontoinnstilling",
+      "appearance": "Utseende",
+      "language": "Språk"
+    },
+    "profile": {
+      "title": "Rediger din onlineprofil",
+      "avatarTitle": "Din avatar",
+      "avatarSubtitle": "Oppdater avataren din til din profesjonelle profil.",
+      "changePhoto": "Bytt bilde",
+      "remove": "Fjern",
+      "fullName": "Fullt navn",
+      "fullNamePlaceholder": "Skriv inn fullt navn",
+      "email": "E-post",
+      "clinicName": "Klinikknavn",
+      "clinicPlaceholder": "Angi klinikkens navn"
+    },
+    "account": {
+      "title": "Kontoinnstilling",
+      "website": "Nettsted",
+      "websitePlaceholder": "www.dittnettsted.no",
+      "category": "Kategori",
+      "categoryPlaceholder": "Velg kategori",
+      "address": "Adresse",
+      "addressPlaceholder": "Skriv inn adresse"
+    },
+    "appearance": {
+      "title": "Utseende",
+      "subtitle": "Velg hvordan Selma skal se ut",
+      "light": "Lys",
+      "system": "Match system",
+      "dark": "Mørk"
+    },
+    "language": {
+      "title": "Språk",
+      "label": "Foretrukket språk"
+    }
+  }
+}

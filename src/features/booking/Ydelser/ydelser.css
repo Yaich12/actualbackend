@@ -37,6 +37,47 @@
   gap: 12px;
 }
 
+.booking-page .ydelser-header .toolbar-pill,
+.services-header .toolbar-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s, color 0.2s;
+}
+
+.booking-page .ydelser-header .toolbar-pill:hover,
+.services-header .toolbar-pill:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.booking-page .ydelser-header .toolbar-pill.toolbar-primary,
+.services-header .toolbar-pill.toolbar-primary {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+}
+
+.booking-page .ydelser-header .toolbar-pill.toolbar-primary:hover,
+.services-header .toolbar-pill.toolbar-primary:hover {
+  background: #1e293b;
+  border-color: #1e293b;
+}
+
+.booking-page .ydelser-header .toolbar-caret,
+.services-header .toolbar-caret {
+  width: 14px;
+  height: 14px;
+}
+
 .booking-page .sort-btn,
 .booking-page .create-service-btn {
   display: flex;
@@ -118,16 +159,15 @@
 }
 
 .booking-page .search-bar-services {
-  flex: 1;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  background-color: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  max-width: 300px;
-  margin-left: auto;
+  padding: 10px 12px;
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  width: 260px;
+  margin: 0;
 }
 
 .booking-page .search-icon-small {
@@ -241,4 +281,3 @@
     text-align: left;
   }
 }
-

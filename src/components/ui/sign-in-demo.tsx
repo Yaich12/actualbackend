@@ -31,6 +31,10 @@ const SignInPageDemo = () => {
     alert("Sign In Submitted! Check console for data.");
   };
 
+  const handleLoginLink = () => {
+    alert("Login link clicked");
+  };
+
   const handleGoogleSignIn = () => {
     console.log("Continue with Google clicked");
     alert("Continue with Google clicked");
@@ -52,7 +56,8 @@ const SignInPageDemo = () => {
         onSignIn={handleSignIn}
         onGoogleSignIn={handleGoogleSignIn}
         onResetPassword={handleResetPassword}
-        onCreateAccount={handleCreateAccount}
+        onLoginLink={handleLoginLink}
+        onSignUp={handleCreateAccount}
       />
     </div>
   );

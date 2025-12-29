@@ -1,0 +1,3 @@
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+Missing Corti config: CORTI_CLIENT_ID, CORTI_CLIENT_SECRET, CORTI_TENANT_NAME
+API server listening on port 4000

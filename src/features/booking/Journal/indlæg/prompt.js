@@ -28,6 +28,7 @@ function Prompt({ onResult }) {
   const [prompts, setPrompts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -121,12 +122,19 @@ function Prompt({ onResult }) {
 
   return (
     <div className="prompt-container">
-      <form onSubmit={handleSubmit} className="prompt-form">
+      <div className="prompt-header">
+        <div className="prompt-title">Klinisk agent</div>
+        <div className="prompt-subtitle">
+          AI-assistent skræddersyet til din valgte profession
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="prompt-form" aria-label="Klinisk agent">
         <div className="prompt-input-group">
           <input
             type="text"
             className="prompt-input"
-            placeholder="What do you wanna know?"
+            placeholder="Spørg klinisk agent…"
             value={userPrompt}
             onChange={(e) => setUserPrompt(e.target.value)}
             disabled={isLoading}
@@ -136,30 +144,42 @@ function Prompt({ onResult }) {
             className="prompt-submit-btn"
             disabled={isLoading || !userPrompt.trim()}
           >
-            {isLoading ? 'Loading...' : 'Submit'}
+            {isLoading ? 'Sender…' : 'Send'}
           </button>
         </div>
         {error && <p className="prompt-error">{error}</p>}
       </form>
 
       <div className="prompt-history">
-        <h3 className="prompt-history-title">Your Prompts:</h3>
-        {prompts.length === 0 ? (
-          <p className="prompt-empty">No prompts yet. Start by adding one!</p>
-        ) : (
-          <div className="prompt-list">
-            {prompts.map((item) => (
-              <div key={item.id} className="prompt-item">
-                <div className="prompt-item-prompt">
-                  <strong>Prompt:</strong> {item.prompt}
+        <button
+          type="button"
+          className="prompt-history-toggle"
+          onClick={() => setShowHistory((v) => !v)}
+          aria-expanded={showHistory}
+        >
+          <span>Historik</span>
+          <span className="prompt-history-count">{prompts.length}</span>
+          <span className="prompt-history-chevron">{showHistory ? '▾' : '▸'}</span>
+        </button>
+
+        {showHistory ? (
+          prompts.length === 0 ? (
+            <p className="prompt-empty">Ingen historik endnu.</p>
+          ) : (
+            <div className="prompt-list">
+              {prompts.map((item) => (
+                <div key={item.id} className="prompt-item">
+                  <div className="prompt-item-prompt">
+                    <strong>Spørgsmål:</strong> {item.prompt}
+                  </div>
+                  <div className="prompt-item-response">
+                    <strong>Svar:</strong> {item.response}
+                  </div>
                 </div>
-                <div className="prompt-item-response">
-                  <strong>Response:</strong> {item.response}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )
+        ) : null}
       </div>
     </div>
   );

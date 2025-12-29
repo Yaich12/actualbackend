@@ -1,14 +1,33 @@
 .prompt-container {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 16px;
-  background-color: #f9fafb;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  flex: 1;
+  gap: 10px;
+  padding: 12px;
+  background-color: var(--bg-surface);
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  flex: 1 1 520px;
   min-width: 0;
-  max-width: 600px;
+  max-width: 720px;
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
+}
+
+.prompt-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.prompt-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.prompt-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .prompt-form {
@@ -23,12 +42,12 @@
 
 .prompt-input {
   flex: 1;
-  padding: 10px 14px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
   font-size: 14px;
-  color: #111827;
-  background-color: #ffffff;
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
   box-sizing: border-box;
 }
 
@@ -43,38 +62,41 @@
 }
 
 .prompt-input:disabled {
-  background-color: #f3f4f6;
+  background-color: var(--bg-subtle);
   cursor: not-allowed;
 }
 
 .prompt-submit-btn {
-  padding: 10px 20px;
+  padding: 10px 14px;
   border: none;
-  background-color: #3b82f6;
+  background: linear-gradient(180deg, #2563eb, #1d4ed8);
   color: #ffffff;
-  border-radius: 6px;
+  border-radius: 10px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
   transition: background-color 0.2s;
   white-space: nowrap;
+  box-shadow: 0 10px 18px rgba(37, 99, 235, 0.18);
 }
 
 .prompt-submit-btn:hover:not(:disabled) {
-  background-color: #2563eb;
+  filter: brightness(1.02);
 }
 
 .prompt-submit-btn:disabled {
-  background-color: #9ca3af;
+  background: #9ca3af;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .prompt-error {
   margin-top: 8px;
   padding: 8px;
-  background-color: #fee2e2;
-  color: #dc2626;
-  border-radius: 4px;
+  background-color: rgba(239, 68, 68, 0.08);
+  color: #991b1b;
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  border-radius: 10px;
   font-size: 13px;
 }
 
@@ -82,22 +104,43 @@
   width: 100%;
 }
 
-.prompt-history-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #111827;
-  margin: 0 0 12px 0;
+.prompt-history-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.prompt-history-toggle:hover {
+  background: var(--bg-subtle);
+}
+
+.prompt-history-count {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-weight: 800;
+}
+
+.prompt-history-chevron {
+  color: var(--text-muted);
 }
 
 .prompt-empty {
-  color: #6b7280;
-  font-size: 14px;
-  margin: 0;
-  padding: 12px;
-  background-color: #ffffff;
-  border-radius: 6px;
-  border: 1px solid #e5e7eb;
-  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  background-color: var(--bg-surface);
+  border-radius: 10px;
+  border: 1px dashed var(--border-subtle);
 }
 
 .prompt-list {
@@ -108,31 +151,31 @@
 
 .prompt-item {
   padding: 12px;
-  background-color: #ffffff;
-  border-radius: 6px;
-  border: 1px solid #e5e7eb;
+  background-color: var(--bg-surface);
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
 }
 
 .prompt-item-prompt {
   margin-bottom: 8px;
   font-size: 14px;
-  color: #374151;
+  color: var(--text-primary);
 }
 
 .prompt-item-prompt strong {
-  color: #111827;
-  font-weight: 600;
+  color: var(--text-primary);
+  font-weight: 800;
 }
 
 .prompt-item-response {
   font-size: 14px;
-  color: #374151;
+  color: var(--text-primary);
   padding-top: 8px;
   border-top: 1px solid #f3f4f6;
 }
 
 .prompt-item-response strong {
-  color: #111827;
-  font-weight: 600;
+  color: var(--text-primary);
+  font-weight: 800;
 }
 

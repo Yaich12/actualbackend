@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import './sehistorik.css';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../../../../firebase';
@@ -101,15 +101,6 @@ function SeHistorik({ clientId, clientName, onClose, onCreateEntry }) {
     };
   }, [user, clientId]);
 
-  const filteredEntries = useMemo(() => {
-    if (!clientName) {
-      return entries;
-    }
-    return entries.filter(
-      (entry) => (entry.clientName || '').toLowerCase() === clientName.toLowerCase()
-    );
-  }, [entries, clientName]);
-
   return (
     <div className="sehistorik-container">
       {/* Header */}
@@ -142,18 +133,18 @@ function SeHistorik({ clientId, clientName, onClose, onCreateEntry }) {
           <div className="sehistorik-empty">
             <p>{loadError}</p>
           </div>
-        ) : filteredEntries.length === 0 ? (
+        ) : entries.length === 0 ? (
           <div className="sehistorik-empty">
             <p>Ingen journalindlæg endnu</p>
           </div>
         ) : (
           <div className="sehistorik-entries">
-            {filteredEntries.map((entry) => (
+            {entries.map((entry) => (
               <div key={entry.id} className="sehistorik-entry-card">
                 <div className="sehistorik-entry-header">
                   <div className="sehistorik-entry-title-section">
                     <h3 className="sehistorik-entry-title">
-                      {entry.title} {formatDate(entry.date)}
+                      {entry.title} {formatDate(entry.date)} {entry.isDraft ? '(kladde)' : ''}
                     </h3>
                   </div>
                   <div className="sehistorik-entry-actions">

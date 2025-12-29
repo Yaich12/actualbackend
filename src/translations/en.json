@@ -1,0 +1,198 @@
+{
+  "language": {
+    "title": "Choose your language",
+    "subtitle": "You can change this later in settings."
+  },
+  "onboarding": {
+    "eyebrow": "Account setup",
+    "topLabel": "Account setup",
+    "loading": "Loading…",
+    "actions": {
+      "close": "Close",
+      "continue": "Continue",
+      "finish": "Finish",
+      "saving": "Saving…"
+    },
+    "aria": {
+      "back": "Back",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "steps": {
+      "business": {
+        "title": "What is your business name?",
+        "subtitle": "This is the brand your customers will see. Your billing and legal name can be added later.",
+        "nameLabel": "Business name",
+        "namePlaceholder": "e.g. Selma Clinic",
+        "websiteLabel": "Website (optional)",
+        "websitePlaceholder": "www.yoursite.com"
+      },
+      "categories": {
+        "title": "Choose the option that best fits your business",
+        "subtitle": "You can change this later",
+        "hint": "{count}/{max} selected",
+        "options": ["Physiotherapist", "Osteopath", "Chiropractor"]
+      },
+      "accountType": {
+        "title": "Choose account type",
+        "subtitle": "This helps us set up your account correctly",
+        "solo": "I'm self-employed",
+        "team": "I have a team"
+      },
+      "teamSize": {
+        "title": "How many team members do you have",
+        "options": ["2-5 people", "6-10 people", "11+ people"]
+      },
+      "serviceModel": {
+        "title": "Where do you offer your services?",
+        "options": [
+          "Clients visit me at a physical location",
+          "I travel to visit my clients",
+          "I offer virtual services online"
+        ]
+      },
+      "address": {
+        "title": "Add your business location",
+        "subtitle": "Add your primary business location so customers can find you easily. You can add more locations later.",
+        "label": "Where is your business address?",
+        "placeholder": "Enter address"
+      },
+      "software": {
+        "title": "What software do you currently use?",
+        "subtitle": "If you want to switch, we can help speed up your business setup and import your data to your new Selma account.",
+        "options": [
+          "Acuity",
+          "Booksy",
+          "Calendly",
+          "Goldie",
+          "Janeapp",
+          "Mindbody",
+          "Salon Iris",
+          "Setmore",
+          "Shortcuts",
+          "Square",
+          "Styleseat",
+          "Timely",
+          "Treatwell",
+          "Vagaro",
+          "Zenoti",
+          "I don't use any software",
+          "Other"
+        ]
+      },
+      "heardFrom": {
+        "title": "How did you hear about Selma?",
+        "options": [
+          "Recommended by a friend",
+          "Search engine (e.g. Google or Yahoo)",
+          "Social media",
+          "Email ad",
+          "Magazine ad",
+          "Review websites (e.g. Capterra, Trustpilot)",
+          "AI Chatbot (e.g. ChatGPT, Gemini, DeepSeek)",
+          "Other"
+        ]
+      }
+    },
+    "completion": {
+      "title": "Your business is ready!",
+      "subtitle": "Get 14 days of free Selma for business",
+      "button": "Finish"
+    }
+  },
+  "booking": {
+    "sidebar": {
+      "calendar": "Calendar",
+      "clients": "Clients",
+      "services": "Services",
+      "forloeb": "Programs",
+      "invoices": "Invoices",
+      "stats": "Statistics",
+      "team": "Team",
+      "settings": "Settings",
+      "apps": "Apps",
+      "catalog": "Catalog",
+      "logout": "Log out"
+    },
+    "topbar": {
+      "confirmEmail": "Confirm your email address",
+      "protectAccount": "Protect your account",
+      "profile": "My profile",
+      "personalSettings": "Personal settings",
+      "help": "Help & support",
+      "logout": "Log out",
+      "defaultUser": "Selma user",
+      "clinicSettings": "Clinic settings"
+    },
+    "calendar": {
+      "today": "Today",
+      "previous": "Previous",
+      "next": "Next",
+      "filters": "Filters",
+      "freeze": "Freeze",
+      "settings": "Settings",
+      "refresh": "Refresh",
+      "viewLabel": "Calendar view",
+      "view": {
+        "month": "Month",
+        "week": "Week",
+        "day": "Day"
+      },
+      "add": "Add",
+      "entireTeam": "Entire team",
+      "teamOnDuty": "Team on duty",
+      "members": "Employees",
+      "clearAll": "Clear all",
+      "appointment": "Appointment",
+      "program": "Program",
+      "memberFallback": "Staff member",
+      "you": "You",
+      "notLoggedIn": "Not logged in",
+      "loginToContinue": "Log in to continue"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "close": "Close",
+    "save": "Save",
+    "saving": "Saving…",
+    "sections": {
+      "profile": "Profile",
+      "account": "Account setup",
+      "appearance": "Appearance",
+      "language": "Language"
+    },
+    "profile": {
+      "title": "Edit your online profile",
+      "avatarTitle": "Your avatar",
+      "avatarSubtitle": "Update your avatar for your professional profile.",
+      "changePhoto": "Change photo",
+      "remove": "Remove",
+      "fullName": "Full name",
+      "fullNamePlaceholder": "Enter your full name",
+      "email": "Email",
+      "clinicName": "Clinic name",
+      "clinicPlaceholder": "Enter the clinic name"
+    },
+    "account": {
+      "title": "Account setup",
+      "website": "Website",
+      "websitePlaceholder": "www.yoursite.com",
+      "category": "Category",
+      "categoryPlaceholder": "Choose category",
+      "address": "Address",
+      "addressPlaceholder": "Enter address"
+    },
+    "appearance": {
+      "title": "Appearance",
+      "subtitle": "Choose how Selma should look",
+      "light": "Light",
+      "system": "Match system",
+      "dark": "Dark"
+    },
+    "language": {
+      "title": "Language",
+      "label": "Preferred language"
+    }
+  }
+}
