@@ -1,0 +1,46 @@
+.booking-add-dropdown {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.booking-add-dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 180px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+  z-index: 40;
+}
+
+.booking-add-dropdown-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #0f172a;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.booking-add-dropdown-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.booking-add-dropdown-item + .booking-add-dropdown-item {
+  margin-top: 4px;
+}
+
+.booking-add-dropdown button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

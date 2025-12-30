@@ -246,6 +246,32 @@
   margin-bottom: 16px;
 }
 
+.journal-appointment-services {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border-subtle);
+  margin-bottom: 12px;
+}
+
+.journal-appointment-service-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.journal-appointment-service-name {
+  font-weight: 500;
+}
+
+.journal-appointment-service-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .journal-appointment-actions {
   display: flex;
   flex-direction: column;

@@ -54,9 +54,25 @@ const deriveUserIdentifier = (user) => {
   return 'unknown-user';
 };
 
+const splitNameParts = (value) => {
+  if (!value || typeof value !== 'string') {
+    return { fornavn: '', efternavn: '' };
+  }
+  const parts = value.trim().split(/\s+/);
+  if (!parts.length) {
+    return { fornavn: '', efternavn: '' };
+  }
+  return {
+    fornavn: parts[0] || '',
+    efternavn: parts.slice(1).join(' '),
+  };
+};
+
 const getInitialFormData = (mode, initialClient) => {
   const base = {
     navn: '',
+    fornavn: '',
+    efternavn: '',
     cpr: '',
     email: '',
     telefon: '',
@@ -67,6 +83,12 @@ const getInitialFormData = (mode, initialClient) => {
     by: '',
     land: 'Danmark',
     status: 'Aktiv',
+    foedselsdag: '',
+    foedselsaar: '',
+    koen: '',
+    pronomer: '',
+    kundekilde: '',
+    henvistAf: '',
   };
 
   if (mode === 'edit' && initialClient) {
@@ -75,10 +97,13 @@ const getInitialFormData = (mode, initialClient) => {
     const telefonUdenLand = telefonValue.startsWith(telefonLand)
       ? telefonValue.slice(telefonLand.length).trim().replace(/^\s+/, '')
       : telefonValue;
+    const nameParts = splitNameParts(initialClient.navn || '');
 
     return {
       ...base,
       navn: initialClient.navn || '',
+      fornavn: initialClient.fornavn || nameParts.fornavn,
+      efternavn: initialClient.efternavn || nameParts.efternavn,
       cpr: initialClient.cpr || '',
       email: initialClient.email || '',
       telefon: telefonUdenLand || '',
@@ -89,6 +114,12 @@ const getInitialFormData = (mode, initialClient) => {
       by: initialClient.by || '',
       land: initialClient.land || 'Danmark',
       status: initialClient.status || 'Aktiv',
+      foedselsdag: initialClient.foedselsdag || '',
+      foedselsaar: initialClient.foedselsaar || '',
+      koen: initialClient.koen || '',
+      pronomer: initialClient.pronomer || '',
+      kundekilde: initialClient.kundekilde || '',
+      henvistAf: initialClient.henvistAf || '',
     };
   }
 
@@ -115,6 +146,7 @@ function AddKlient({
   const [isLoadingClientensOplysninger, setIsLoadingClientensOplysninger] = useState(false);
   const [saveError, setSaveError] = useState('');
   const { user } = useAuth();
+  const isDev = process.env.NODE_ENV !== 'production';
 
   // Google Maps / Places
   const googleMapsApiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
@@ -152,7 +184,21 @@ function AddKlient({
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      ...(name === 'navn'
+        ? {
+            navn: value,
+            ...splitNameParts(value),
+          }
+        : {
+            [name]: value,
+          }),
+      ...(name === 'fornavn' || name === 'efternavn'
+        ? {
+            navn: `${name === 'fornavn' ? value : prev.fornavn} ${
+              name === 'efternavn' ? value : prev.efternavn
+            }`.trim(),
+          }
+        : {}),
     }));
   };
 
@@ -315,6 +361,14 @@ function AddKlient({
     setIsSaving(true);
 
     try {
+      const fullName =
+        formData.navn?.trim() ||
+        `${formData.fornavn || ''} ${formData.efternavn || ''}`.trim();
+      const normalizedFormData = {
+        ...formData,
+        navn: fullName,
+      };
+
       if (mode === 'edit') {
         if (!clientId) {
           setSaveError('Manglende klient-id – kunne ikke gemme.');
@@ -325,7 +379,7 @@ function AddKlient({
 
         if (editView === 'personal') {
           // Save personal information
-          const { telefonLand, telefon, land, ...restFormData } = formData;
+          const { telefonLand, telefon, land, ...restFormData } = normalizedFormData;
           const telefonLandValue = (telefonLand || '+45').trim();
           const telefonValue = (telefon || '').trim();
 
@@ -370,7 +424,7 @@ function AddKlient({
 
       const nowIso = new Date().toISOString();
       const ownerIdentifier = deriveUserIdentifier(user);
-      const { telefonLand, telefon, land, ...restFormData } = formData;
+      const { telefonLand, telefon, land, ...restFormData } = normalizedFormData;
       const telefonLandValue = (telefonLand || '+45').trim();
       const telefonValue = (telefon || '').trim();
 
@@ -395,18 +449,26 @@ function AddKlient({
 
       if (mode === 'create') {
         const clientsCollection = collection(db, 'users', user.uid, 'clients');
+        const clientPath = `users/${user.uid}/clients`;
         const docRef = await addDoc(clientsCollection, clientPayload);
+        if (isDev) {
+          console.log('[AddKlient] Created client', {
+            path: clientPath,
+            uid: user.uid,
+            clientId: docRef.id,
+          });
+        }
 
         const savedClientForList = {
           id: docRef.id,
-          navn: formData.navn,
+          navn: normalizedFormData.navn,
           status: formData.status || 'Aktiv',
-          email: formData.email,
+          email: normalizedFormData.email,
           telefon: clientPayload.telefonKomplet,
-          cpr: formData.cpr,
-          adresse: formData.adresse,
-          by: formData.by,
-          postnummer: formData.postnummer,
+          cpr: normalizedFormData.cpr,
+          adresse: normalizedFormData.adresse,
+          by: normalizedFormData.by,
+          postnummer: normalizedFormData.postnummer,
           land: land || 'Danmark',
           createdAt: nowIso,
         };
@@ -419,6 +481,13 @@ function AddKlient({
       onClose();
     } catch (error) {
       console.error('Failed to save client data:', error);
+      if (isDev) {
+        console.error('[AddKlient] Client creation failed', {
+          path: user?.uid ? `users/${user.uid}/clients` : 'unknown',
+          uid: user?.uid || 'unknown',
+          errorCode: error?.code || 'unknown',
+        });
+      }
       setSaveError('Kunne ikke gemme klienten. Prøv igen.');
     } finally {
       setIsSaving(false);
@@ -448,6 +517,375 @@ function AddKlient({
       alert('Kunne ikke slette klienten. Prøv igen.');
     }
   };
+
+  if (mode === 'create') {
+    const initialsSource = `${formData.fornavn || ''} ${formData.efternavn || ''}`.trim() ||
+      formData.navn ||
+      '?';
+    const initials = initialsSource
+      .split(/\s+/)
+      .map((part) => part[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
+
+    return (
+      <div className="addklient-modal-overlay" onClick={handleCancel}>
+        <div
+          className="addklient-modal addklient-modal-create"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <form className="addklient-form addklient-form-create" onSubmit={handleSubmit}>
+            <div className="addklient-create-header">
+              <h2 className="addklient-create-title">Tilføj en ny kunde</h2>
+              <div className="addklient-create-actions">
+                <button
+                  type="button"
+                  className="addklient-create-btn addklient-create-btn-secondary"
+                  onClick={handleCancel}
+                  disabled={isSaving}
+                >
+                  Luk
+                </button>
+                <button
+                  type="submit"
+                  className="addklient-create-btn addklient-create-btn-primary"
+                  disabled={isSaving}
+                  aria-busy={isSaving}
+                >
+                  {isSaving ? 'Gemmer...' : 'Gem'}
+                </button>
+              </div>
+            </div>
+
+            {saveError && (
+              <p className="addklient-error" role="alert">
+                {saveError}
+              </p>
+            )}
+
+            <div className="addklient-create-body">
+              <aside className="addklient-create-nav">
+                <div className="addklient-create-nav-title">Personligt</div>
+                <button type="button" className="addklient-create-nav-item active">
+                  Profil
+                </button>
+                <button type="button" className="addklient-create-nav-item">
+                  Adresse
+                </button>
+                <button type="button" className="addklient-create-nav-item">
+                  Nødkontakter
+                </button>
+                <div className="addklient-create-nav-divider" />
+                <button type="button" className="addklient-create-nav-item">
+                  Indstillinger
+                </button>
+              </aside>
+
+              <div className="addklient-create-panel">
+                <div className="addklient-profile-header">
+                  <div>
+                    <h3>Profil</h3>
+                    <p>Administer din kundes personlige profil</p>
+                  </div>
+                  <div className="addklient-profile-avatar">
+                    <div className="addklient-profile-avatar-circle">{initials}</div>
+                    <button
+                      type="button"
+                      className="addklient-profile-avatar-edit"
+                      aria-label="Skift billede"
+                    >
+                      E
+                    </button>
+                  </div>
+                </div>
+
+                <div className="addklient-form-grid">
+                  <div className="addklient-field">
+                    <label htmlFor="fornavn">Fornavn</label>
+                    <input
+                      type="text"
+                      id="fornavn"
+                      name="fornavn"
+                      value={formData.fornavn}
+                      onChange={handleChange}
+                      className="addklient-input"
+                      placeholder="f.eks. Peter"
+                      required
+                      disabled={isSaving}
+                    />
+                  </div>
+                  <div className="addklient-field">
+                    <label htmlFor="efternavn">Efternavn</label>
+                    <input
+                      type="text"
+                      id="efternavn"
+                      name="efternavn"
+                      value={formData.efternavn}
+                      onChange={handleChange}
+                      className="addklient-input"
+                      placeholder="f.eks. Andersen"
+                      disabled={isSaving}
+                    />
+                  </div>
+                </div>
+
+                <div className="addklient-form-grid">
+                  <div className="addklient-field">
+                    <label htmlFor="email">E-mail</label>
+                    <input
+                      type="email"
+                      id="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      className="addklient-input"
+                      placeholder="example@domain.com"
+                      required
+                      disabled={isSaving}
+                    />
+                  </div>
+                  <div className="addklient-field">
+                    <label htmlFor="telefon">Telefon</label>
+                    <div className="addklient-phone-group">
+                      <select
+                        name="telefonLand"
+                        value={formData.telefonLand}
+                        onChange={handleChange}
+                        className="addklient-phone-country"
+                        disabled={isSaving}
+                      >
+                        <option value="+45">+45</option>
+                        <option value="+46">+46</option>
+                        <option value="+47">+47</option>
+                        <option value="+358">+358</option>
+                      </select>
+                      <input
+                        type="tel"
+                        id="telefon"
+                        name="telefon"
+                        value={formData.telefon}
+                        onChange={handleChange}
+                        className="addklient-input addklient-phone-input"
+                        placeholder="f.eks. +1234 567 890"
+                        disabled={isSaving}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="addklient-form-grid">
+                  <div className="addklient-field">
+                    <label htmlFor="cpr">CPR</label>
+                    <input
+                      type="text"
+                      id="cpr"
+                      name="cpr"
+                      value={formData.cpr}
+                      onChange={handleChange}
+                      className="addklient-input"
+                      disabled={isSaving}
+                    />
+                  </div>
+                  <div className="addklient-field">
+                    <label htmlFor="foedselsdag">Fødselsdag</label>
+                    <input
+                      type="text"
+                      id="foedselsdag"
+                      name="foedselsdag"
+                      value={formData.foedselsdag}
+                      onChange={handleChange}
+                      className="addklient-input"
+                      placeholder="Dag og måned"
+                      disabled={isSaving}
+                    />
+                  </div>
+                  <div className="addklient-field">
+                    <label htmlFor="foedselsaar">År</label>
+                    <input
+                      type="text"
+                      id="foedselsaar"
+                      name="foedselsaar"
+                      value={formData.foedselsaar}
+                      onChange={handleChange}
+                      className="addklient-input"
+                      placeholder="År"
+                      disabled={isSaving}
+                    />
+                  </div>
+                </div>
+
+                <div className="addklient-form-grid">
+                  <div className="addklient-field">
+                    <label htmlFor="koen">Køn</label>
+                    <select
+                      id="koen"
+                      name="koen"
+                      value={formData.koen}
+                      onChange={handleChange}
+                      className="addklient-select"
+                      disabled={isSaving}
+                    >
+                      <option value="">Vælg en mulighed</option>
+                      <option value="kvinde">Kvinde</option>
+                      <option value="mand">Mand</option>
+                      <option value="andet">Andet</option>
+                      <option value="vil-ikke-oplyse">Vil ikke oplyse</option>
+                    </select>
+                  </div>
+                  <div className="addklient-field">
+                    <label htmlFor="pronomer">Pronomen</label>
+                    <select
+                      id="pronomer"
+                      name="pronomer"
+                      value={formData.pronomer}
+                      onChange={handleChange}
+                      className="addklient-select"
+                      disabled={isSaving}
+                    >
+                      <option value="">Vælg en mulighed</option>
+                      <option value="hun-hende">Hun/hende</option>
+                      <option value="han-ham">Han/ham</option>
+                      <option value="de-dem">De/dem</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="addklient-section">
+                  <div className="addklient-section-header">
+                    <h4>Adresse</h4>
+                    <p>Administrer kundens adresseoplysninger.</p>
+                  </div>
+                  <div className="addklient-form-section">
+                    <label className="addklient-form-label" htmlFor="adresse">
+                      Adresse
+                    </label>
+                    {isAutocompleteReady ? (
+                      <Autocomplete
+                        onLoad={(autocomplete) => (autocompleteRef.current = autocomplete)}
+                        onPlaceChanged={handlePlaceChanged}
+                      >
+                        <input {...addressInputProps} disabled={isSaving} />
+                      </Autocomplete>
+                    ) : (
+                      <>
+                        <input {...addressInputProps} disabled={isSaving} />
+                        {showAutocompleteStatus && (
+                          <p
+                            className={`addklient-status-hint${
+                              autocompleteStatus.tone === 'error' ? ' error' : ''
+                            }`}
+                          >
+                            {autocompleteStatus.text}
+                          </p>
+                        )}
+                      </>
+                    )}
+
+                    {!showAddressLine2 && (
+                      <button
+                        type="button"
+                        className="addklient-add-line-btn"
+                        onClick={() => setShowAddressLine2(true)}
+                        disabled={isSaving}
+                      >
+                        Tilføj 2. linje
+                      </button>
+                    )}
+                    {showAddressLine2 && (
+                      <input
+                        type="text"
+                        name="adresse2"
+                        value={formData.adresse2}
+                        onChange={handleChange}
+                        className="addklient-input addklient-input-margin-top"
+                        placeholder="Adresse 2. linje"
+                        disabled={isSaving}
+                      />
+                    )}
+                  </div>
+                  <div className="addklient-form-row">
+                    <div className="addklient-form-section addklient-form-section-half">
+                      <label className="addklient-form-label" htmlFor="postnummer">
+                        Postnummer
+                      </label>
+                      <input
+                        type="text"
+                        id="postnummer"
+                        name="postnummer"
+                        value={formData.postnummer}
+                        onChange={handleChange}
+                        className="addklient-input"
+                        disabled={isSaving}
+                      />
+                    </div>
+                    <div className="addklient-form-section addklient-form-section-half">
+                      <label className="addklient-form-label" htmlFor="by">
+                        By
+                      </label>
+                      <input
+                        type="text"
+                        id="by"
+                        name="by"
+                        value={formData.by}
+                        onChange={handleChange}
+                        className="addklient-input"
+                        disabled={isSaving}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="addklient-section">
+                  <div className="addklient-section-header">
+                    <h4>Yderligere oplysninger</h4>
+                    <p>Administer din kundes oplysninger.</p>
+                  </div>
+                  <div className="addklient-form-grid">
+                    <div className="addklient-field">
+                      <label htmlFor="kundekilde">Kundekilde</label>
+                      <select
+                        id="kundekilde"
+                        name="kundekilde"
+                        value={formData.kundekilde}
+                        onChange={handleChange}
+                        className="addklient-select"
+                        disabled={isSaving}
+                      >
+                        <option value="">Vælg en mulighed</option>
+                        <option value="ind-fra-gaden">Ind fra gaden</option>
+                        <option value="sociale-medier">Sociale medier</option>
+                        <option value="anbefaling">Anbefaling</option>
+                        <option value="annoncer">Annoncer</option>
+                      </select>
+                    </div>
+                    <div className="addklient-field">
+                      <label htmlFor="henvistAf">Henvist af</label>
+                      <div className="addklient-inline-input">
+                        <input
+                          type="text"
+                          id="henvistAf"
+                          name="henvistAf"
+                          value={formData.henvistAf}
+                          onChange={handleChange}
+                          className="addklient-input"
+                          placeholder="Vælg en kunde"
+                          disabled={isSaving}
+                        />
+                        <button type="button" className="addklient-inline-btn">
+                          Tilføj
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="addklient-modal-overlay" onClick={handleCancel}>

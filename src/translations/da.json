@@ -106,11 +106,11 @@
       "clients": "Klienter",
       "services": "Ydelser",
       "forloeb": "Forløb",
-      "invoices": "Fakturaer",
+      "invoices": "Salg",
       "stats": "Statistik",
       "team": "Team",
       "settings": "Indstillinger",
-      "apps": "Apps",
+      "apps": "Integrationer",
       "catalog": "Katalog",
       "logout": "Log ud"
     },

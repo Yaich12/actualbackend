@@ -6,7 +6,6 @@ import { motion } from "framer-motion";
 import {
   AppWindow,
   BadgeDollarSign,
-  BarChart3,
   Calendar,
   FileText,
   Link2,
@@ -55,17 +54,10 @@ export function BookingSidebarDemo({ children }: BookingSidebarDemoProps) {
       ),
     },
     {
-      label: "Fakturaer",
+      label: "Salg",
       href: "/booking/fakturaer",
       icon: (
         <FileText className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />
-      ),
-    },
-    {
-      label: "Statistik",
-      href: "/booking/statistik",
-      icon: (
-        <BarChart3 className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />
       ),
     },
     {
@@ -76,7 +68,7 @@ export function BookingSidebarDemo({ children }: BookingSidebarDemoProps) {
       ),
     },
     {
-      label: "Apps",
+      label: "Integrationer",
       href: "/booking/apps",
       icon: (
         <AppWindow className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />
@@ -167,4 +159,3 @@ const SelmaLogoIcon = () => {
     </Link>
   );
 };
-

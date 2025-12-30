@@ -5,6 +5,7 @@ import { BookingSidebarLayout } from '../../components/ui/BookingSidebarLayout';
 import AppointmentForm from './appointment/appointment';
 import Journal from './Journal/journal';
 import Indlæg from './Journal/indlæg/indlæg';
+import AddKlient from './Klienter/addklient/addklient';
 import { useAuth } from '../../AuthContext';
 import { useLanguage } from '../../LanguageContext';
 import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, where, getDocs, writeBatch, query, limit, onSnapshot } from 'firebase/firestore';
@@ -12,14 +13,20 @@ import { db } from '../../firebase';
 import useAppointments from '../../hooks/useAppointments';
 import { combineDateAndTimeToIso, parseDateString } from '../../utils/appointmentFormat';
 import { useUserClients } from './Klienter/hooks/useUserClients';
+import { useUserServices } from './Ydelser/hooks/useUserServices';
+import Dropdown from './dropdown/dropdown';
 import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Plus,
   RefreshCw,
+  Search,
   Settings,
   SlidersHorizontal,
   Snowflake,
+  UserPlus,
+  X,
 } from 'lucide-react';
 
 const getInitials = (value) => {
@@ -54,6 +61,19 @@ function BookingPage() {
   const [journalEntryDate, setJournalEntryDate] = useState('');
   const [dragState, setDragState] = useState(null); // { mode, appointmentId, dayIndex, startClientX, startClientY, daysRect, columnRect, originalStart, originalEnd, currentStart, currentEnd }
   const [profilePhotoUrl, setProfilePhotoUrl] = useState('');
+  const [calendarAddMode, setCalendarAddMode] = useState(false);
+  const [calendarStep, setCalendarStep] = useState('services');
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [selectedService, setSelectedService] = useState(null);
+  const [additionalServices, setAdditionalServices] = useState([]);
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
+  const [showClientCreate, setShowClientCreate] = useState(false);
+  const [serviceSelectionMode, setServiceSelectionMode] = useState('primary');
+  const [serviceQuery, setServiceQuery] = useState('');
+  const [clientQuery, setClientQuery] = useState('');
+  const [hoverSlot, setHoverSlot] = useState(null);
+  const isDev = process.env.NODE_ENV !== 'production';
   const ownerNameFallback = useMemo(
     () =>
       user?.displayName ||
@@ -83,7 +103,12 @@ function BookingPage() {
   const teamMenuRef = useRef(null);
   const daysContainerRef = React.useRef(null);
   const { appointments = [] } = useAppointments(user?.uid || null);
-  const { clients } = useUserClients();
+  const { clients, loading: clientsLoading, error: clientsError } = useUserClients();
+  const {
+    services,
+    loading: servicesLoading,
+    error: servicesError,
+  } = useUserServices();
   const appointmentFallback = t('booking.calendar.appointment', 'Aftale');
   const programFallback = t('booking.calendar.program', 'Forløb');
   const START_HOUR = 6;
@@ -91,6 +116,8 @@ function BookingPage() {
   const VISIBLE_HOURS = END_HOUR - START_HOUR;
   const HOUR_HEIGHT = 64;
   const TOTAL_MINUTES = VISIBLE_HOURS * 60;
+  const CALENDAR_SLOT_STEP = 10;
+  const DEFAULT_SERVICE_MINUTES = 60;
   const derivedSelectedClient = useMemo(() => {
     if (selectedClientId) {
       const match = clients.find((client) => client.id === selectedClientId);
@@ -158,6 +185,45 @@ function BookingPage() {
     const selected = new Set(selectedTeamMembers);
     return appointments.filter((appointment) => selected.has(getAppointmentOwner(appointment)));
   }, [appointments, selectedTeamMembers, primaryCalendarOwner]);
+
+  const filteredServices = useMemo(() => {
+    const query = serviceQuery.trim().toLowerCase();
+    if (!query) return services;
+    return services.filter((service) => {
+      const name = service.navn?.toLowerCase?.() || '';
+      const duration = service.varighed?.toLowerCase?.() || '';
+      return name.includes(query) || duration.includes(query);
+    });
+  }, [serviceQuery, services]);
+
+  const groupedServices = useMemo(() => {
+    const groups = new Map();
+    filteredServices.forEach((service) => {
+      const key =
+        service.category ||
+        service.kategori ||
+        service.group ||
+        service.groupName ||
+        t('booking.calendar.services.defaultGroup', 'Ydelser');
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(service);
+    });
+    return Array.from(groups.entries()).map(([name, items]) => ({
+      name,
+      items,
+    }));
+  }, [filteredServices, t]);
+
+  const filteredClients = useMemo(() => {
+    const query = clientQuery.trim().toLowerCase();
+    if (!query) return clients;
+    return clients.filter((client) => {
+      const name = client.navn?.toLowerCase?.() || '';
+      const email = client.email?.toLowerCase?.() || '';
+      const phone = client.telefon?.toLowerCase?.() || '';
+      return name.includes(query) || email.includes(query) || phone.includes(query);
+    });
+  }, [clientQuery, clients]);
 
   const selectedLabel = (() => {
     const total = teamMembers.length;
@@ -315,6 +381,15 @@ function BookingPage() {
       }),
     [locale]
   );
+  const slotDayFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+      }),
+    [locale]
+  );
   const toolbarMonthFormatter = useMemo(
     () => new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }),
     [locale]
@@ -403,6 +478,61 @@ function BookingPage() {
     const hours = String(date.getHours()).padStart(2, '0');
     const minutes = String(date.getMinutes()).padStart(2, '0');
     return `${hours}:${minutes}`;
+  };
+
+  const formatDateString = (date) => {
+    if (!date) return '';
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
+
+  const formatCurrency = (value) =>
+    new Intl.NumberFormat(locale, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(typeof value === 'number' && !Number.isNaN(value) ? value : 0);
+
+  const parseDurationToMinutes = (value) => {
+    if (typeof value === 'number' && !Number.isNaN(value)) return value;
+    if (!value || typeof value !== 'string') return null;
+    const text = value.toLowerCase();
+    let total = 0;
+    const hoursMatch = text.match(/(\d+)\s*(t|time|timer)/);
+    const minutesMatch = text.match(/(\d+)\s*(min|minute|minutter)/);
+    if (hoursMatch) total += Number(hoursMatch[1]) * 60;
+    if (minutesMatch) total += Number(minutesMatch[1]);
+    if (total > 0) return total;
+    const numeric = text.match(/(\d+)/);
+    return numeric ? Number(numeric[1]) : null;
+  };
+
+  const buildSlotFromMinutes = (dayDate, ownerName, minutesFromMidnight) => {
+    const startDate = new Date(dayDate);
+    const hours = Math.floor(minutesFromMidnight / 60);
+    const minutes = minutesFromMidnight % 60;
+    startDate.setHours(hours, minutes, 0, 0);
+    const dayKey = formatDateKey(startDate);
+    const topPercent = ((minutesFromMidnight - START_HOUR * 60) / TOTAL_MINUTES) * 100;
+    return {
+      dayKey,
+      ownerName: ownerName || null,
+      startDate,
+      startMinutes: minutesFromMidnight,
+      topPercent,
+      label: formatTime(startDate),
+    };
+  };
+
+  const getSlotFromPointer = (event, dayDate, ownerName) => {
+    const columnRect = event.currentTarget.getBoundingClientRect();
+    const offsetY = Math.min(Math.max(event.clientY - columnRect.top, 0), columnRect.height);
+    const rawMinutes = START_HOUR * 60 + (offsetY / columnRect.height) * TOTAL_MINUTES;
+    const snappedMinutes = Math.round(rawMinutes / CALENDAR_SLOT_STEP) * CALENDAR_SLOT_STEP;
+    const maxStart = END_HOUR * 60 - CALENDAR_SLOT_STEP;
+    const clampedMinutes = Math.min(Math.max(snappedMinutes, START_HOUR * 60), maxStart);
+    return buildSlotFromMinutes(dayDate, ownerName, clampedMinutes);
   };
 
   const appointmentsByDay = useMemo(() => {
@@ -698,18 +828,281 @@ function BookingPage() {
     setNow(today);
   };
 
+  const handleSelectDayFromWeek = (day) => {
+    setCurrentDate(new Date(day));
+    if (currentView === 'week') {
+      setCurrentView('day');
+    }
+  };
+
   const handleRefresh = () => {
     setNow(new Date());
     setCurrentDate((prev) => new Date(prev));
   };
 
+  const resetCalendarAddState = () => {
+    setSelectedSlot(null);
+    setSelectedService(null);
+    setAdditionalServices([]);
+    setSelectedClient(null);
+    setClientPickerOpen(false);
+    setServiceQuery('');
+    setClientQuery('');
+    setHoverSlot(null);
+    setCalendarStep('services');
+    setServiceSelectionMode('primary');
+  };
+
+  const handleStartCalendarAddMode = () => {
+    setEditingAppointment(null);
+    setNextAppointmentTemplate(null);
+    setSelectedAppointment(null);
+    setSelectedClientId(null);
+    setSelectedClientFallback(null);
+    setShowAppointmentForm(false);
+    resetCalendarAddState();
+    setCalendarAddMode(true);
+    if (currentView === 'month') {
+      setCurrentView('week');
+    }
+  };
+
+  const handleCloseCalendarAddMode = () => {
+    setCalendarAddMode(false);
+    resetCalendarAddState();
+  };
+
   const handleOpenAppointmentForm = () => {
+    setCalendarAddMode(false);
+    resetCalendarAddState();
     setEditingAppointment(null);
     setNextAppointmentTemplate(null);
     setSelectedAppointment(null);
     setSelectedClientId(null);
     setSelectedClientFallback(null);
     setShowAppointmentForm(true);
+  };
+
+  useEffect(() => {
+    if (!calendarAddMode) {
+      setHoverSlot(null);
+    }
+  }, [calendarAddMode]);
+
+  useEffect(() => {
+    if (calendarAddMode && currentView === 'month') {
+      setCurrentView('week');
+    }
+  }, [calendarAddMode, currentView]);
+
+  const handleSlotHover = (event, dayDate, ownerName) => {
+    if (!calendarAddMode || dragState) return;
+    const slot = getSlotFromPointer(event, dayDate, ownerName);
+    setHoverSlot((prev) => {
+      if (
+        prev &&
+        prev.dayKey === slot.dayKey &&
+        prev.ownerName === slot.ownerName &&
+        prev.startMinutes === slot.startMinutes
+      ) {
+        return prev;
+      }
+      return slot;
+    });
+  };
+
+  const handleSlotLeave = () => {
+    if (!calendarAddMode) return;
+    setHoverSlot(null);
+  };
+
+  const handleSlotClick = (event, dayDate, ownerName) => {
+    if (!calendarAddMode) return;
+    if (event.target.closest('.time-grid-event')) return;
+    const slot = getSlotFromPointer(event, dayDate, ownerName);
+    setSelectedSlot(slot);
+    setSelectedService(null);
+    setSelectedClient(null);
+    setClientPickerOpen(false);
+    setCalendarStep('services');
+    if (isDev) {
+      console.log('[BookingPage] Selected calendar slot', {
+        date: slot.startDate,
+        owner: slot.ownerName,
+      });
+    }
+  };
+
+  const handleSelectService = (service) => {
+    if (!selectedSlot || !service) return;
+    setClientPickerOpen(false);
+    if (serviceSelectionMode === 'additional' && selectedService) {
+      setAdditionalServices((prev) => {
+        if (prev.some((item) => item.id === service.id)) {
+          return prev;
+        }
+        return [...prev, service];
+      });
+      setCalendarStep('confirm');
+      setServiceSelectionMode('primary');
+      if (isDev) {
+        console.log('[BookingPage] Added extra service', {
+          id: service.id,
+          navn: service.navn,
+        });
+      }
+      return;
+    }
+
+    const durationMinutes =
+      parseDurationToMinutes(service.varighed) || DEFAULT_SERVICE_MINUTES;
+    const endDate = new Date(selectedSlot.startDate);
+    endDate.setMinutes(endDate.getMinutes() + durationMinutes);
+    setSelectedSlot((prev) =>
+      prev
+        ? {
+            ...prev,
+            endDate,
+            durationMinutes,
+            serviceDuration: service.varighed || `${durationMinutes} min`,
+          }
+        : prev
+    );
+    setSelectedService(service);
+    setAdditionalServices([]);
+    setCalendarStep('confirm');
+    setServiceSelectionMode('primary');
+    if (isDev) {
+      console.log('[BookingPage] Selected service', {
+        id: service.id,
+        navn: service.navn,
+        durationMinutes,
+        endTime: formatTime(endDate),
+      });
+    }
+  };
+
+  const handleAddAnotherService = () => {
+    setCalendarStep('services');
+    setServiceSelectionMode('additional');
+  };
+
+  const handleSelectClient = (client) => {
+    setSelectedClient(client);
+    setClientPickerOpen(false);
+    if (isDev && client) {
+      console.log('[BookingPage] Selected client', {
+        id: client.id,
+        navn: client.navn,
+      });
+    }
+  };
+
+  const handleOpenClientCreate = () => {
+    setClientPickerOpen(false);
+    setShowClientCreate(true);
+  };
+
+  const handleClientCreated = (client) => {
+    if (client) {
+      handleSelectClient(client);
+    }
+    setShowClientCreate(false);
+  };
+
+  const handleSaveCalendarAppointment = async () => {
+    if (!selectedSlot || !selectedService) return;
+
+    const startDate = selectedSlot.startDate;
+    const durationMinutes =
+      selectedSlot.durationMinutes ||
+      parseDurationToMinutes(selectedService.varighed) ||
+      DEFAULT_SERVICE_MINUTES;
+    const endDate = selectedSlot.endDate
+      ? new Date(selectedSlot.endDate)
+      : new Date(startDate);
+
+    if (!selectedSlot.endDate) {
+      endDate.setMinutes(endDate.getMinutes() + durationMinutes);
+    }
+
+    const ownerName =
+      selectedSlot.ownerName ||
+      (selectedTeamMembers.length === 1
+        ? selectedTeamMembers[0]
+        : teamMembers[0]?.name || ownerEntry.name);
+
+    const extraServices = additionalServices.map((service) => ({
+      id: service.id,
+      navn: service.navn,
+      varighed: service.varighed,
+      pris: typeof service.pris === 'number' ? service.pris : null,
+      prisInklMoms:
+        typeof service.prisInklMoms === 'number' ? service.prisInklMoms : null,
+      color: service.color || null,
+    }));
+
+    const payload = {
+      title: selectedClient?.navn || selectedService.navn || appointmentFallback,
+      calendarOwner: ownerName,
+      client: selectedClient?.navn || '',
+      clientId: selectedClient?.id || null,
+      clientEmail: selectedClient?.email || '',
+      clientPhone: selectedClient?.telefon || '',
+      service: selectedService.navn || appointmentFallback,
+      serviceId: selectedService.id || null,
+      serviceType: 'service',
+      serviceDuration: selectedService.varighed || `${durationMinutes} min`,
+      servicePrice:
+        typeof selectedService.pris === 'number' ? selectedService.pris : null,
+      servicePriceInclVat:
+        typeof selectedService.prisInklMoms === 'number'
+          ? selectedService.prisInklMoms
+          : typeof selectedService.pris === 'number'
+          ? selectedService.pris
+          : null,
+      additionalServices: extraServices,
+      participants: selectedClient
+        ? [
+            {
+              id: selectedClient.id || null,
+              name: selectedClient.navn || '',
+              email: selectedClient.email || '',
+              phone: selectedClient.telefon || '',
+            },
+          ]
+        : [],
+      notes: '',
+      color: selectedService.color || null,
+      startDate: formatDateString(startDate),
+      startTime: formatTime(startDate),
+      endDate: formatDateString(endDate),
+      endTime: formatTime(endDate),
+      status: 'booked',
+    };
+
+    if (isDev) {
+      console.log('[BookingPage] Saving calendar appointment', {
+        startDate: payload.startDate,
+        startTime: payload.startTime,
+        endTime: payload.endTime,
+        service: payload.service,
+        client: payload.client,
+      });
+    }
+
+    try {
+      await handleCreateAppointment(payload);
+      if (isDev) {
+        console.log('[BookingPage] Calendar appointment saved');
+      }
+    } catch (error) {
+      if (isDev) {
+        console.error('[BookingPage] Failed to save calendar appointment', error);
+      }
+    }
+
+    resetCalendarAddState();
   };
 
   const getWeekNumber = (date) => {
@@ -1106,6 +1499,10 @@ function BookingPage() {
   };
 
   const handleAppointmentClick = (appointment) => {
+    if (calendarAddMode) {
+      setCalendarAddMode(false);
+      resetCalendarAddState();
+    }
     setEditingAppointment(null);
     setNextAppointmentTemplate(null);
     const { startDate } = parseAppointmentDateTimes(appointment);
@@ -1442,7 +1839,7 @@ function BookingPage() {
                 key={formatDateKey(day)}
                 type="button"
                 className={`time-grid-day-header ${isHighlighted ? 'is-selected' : ''} ${isToday ? 'is-today' : ''}`}
-                onClick={() => setCurrentDate(new Date(day))}
+                onClick={() => handleSelectDayFromWeek(day)}
               >
                 <span className="day-name">{labelDayName}</span>
                 <span className="day-date">
@@ -1481,6 +1878,24 @@ function BookingPage() {
                 nowTopPercent !== null;
 
               const groupedEvents = groupDayEvents(dayEvents);
+              const ownerName = selectedTeamMembers[0] || primaryCalendarOwner;
+              const isHoverMatch =
+                calendarAddMode &&
+                hoverSlot &&
+                hoverSlot.dayKey === dayKey &&
+                hoverSlot.ownerName === ownerName;
+              const isPreviewMatch =
+                calendarAddMode &&
+                selectedSlot &&
+                selectedService &&
+                selectedSlot.dayKey === dayKey &&
+                selectedSlot.ownerName === ownerName;
+              const previewStyle = isPreviewMatch
+                ? getEventPosition(
+                    selectedSlot.startDate,
+                    selectedSlot.endDate || selectedSlot.startDate
+                  )
+                : null;
 
               return (
                 <div
@@ -1490,9 +1905,48 @@ function BookingPage() {
                   <div
                     className="time-grid-day-body"
                     style={{ height: `${VISIBLE_HOURS * hourHeight}px` }}
+                    onMouseMove={
+                      calendarAddMode
+                        ? (event) => handleSlotHover(event, day, ownerName)
+                        : undefined
+                    }
+                    onMouseLeave={calendarAddMode ? handleSlotLeave : undefined}
+                    onClick={
+                      calendarAddMode
+                        ? (event) => handleSlotClick(event, day, ownerName)
+                        : undefined
+                    }
                   >
                     {showNowLine && (
                       <div className="time-indicator-line" style={{ top: `${nowTopPercent}%` }} />
+                    )}
+                    {isHoverMatch && (
+                      <div
+                        className="calendar-add-hover-label"
+                        style={{ top: `${hoverSlot.topPercent}%` }}
+                      >
+                        {hoverSlot.label}
+                      </div>
+                    )}
+                    {isPreviewMatch && previewStyle && (
+                      <div
+                        className="time-grid-event time-grid-event-preview"
+                        style={{
+                          ...previewStyle,
+                          ...(selectedService?.color
+                            ? getSoftColorStyle(selectedService.color)
+                            : {}),
+                        }}
+                      >
+                        <div className="time-grid-event-inner">
+                          <span className="time-grid-event-time">
+                            {selectedSlot.label}
+                          </span>
+                          <span className="time-grid-event-title">
+                            {selectedService?.navn || appointmentFallback}
+                          </span>
+                        </div>
+                      </div>
                     )}
                     {groupedEvents.map((group, idx) => {
                       const first = group.events[0];
@@ -1649,7 +2103,7 @@ function BookingPage() {
     return { id: name, name, avatarText: name?.charAt(0) || '?', avatarColor: '#0ea5e9' };
   };
 
-  const renderTeamEvents = ({ memberName, dayKey, nowTopPercent, showNowLine }) => {
+  const renderTeamEvents = ({ memberName, dayKey, dayDate, nowTopPercent, showNowLine }) => {
     const dayEvents = (appointmentsByDay[dayKey] || [])
       .filter((appointment) => getAppointmentOwner(appointment) === memberName)
       .slice()
@@ -1658,11 +2112,66 @@ function BookingPage() {
       );
 
     const groupedEvents = groupDayEvents(dayEvents);
+    const isHoverMatch =
+      calendarAddMode &&
+      hoverSlot &&
+      hoverSlot.dayKey === dayKey &&
+      hoverSlot.ownerName === memberName;
+    const isPreviewMatch =
+      calendarAddMode &&
+      selectedSlot &&
+      selectedService &&
+      selectedSlot.dayKey === dayKey &&
+      selectedSlot.ownerName === memberName;
+    const previewStyle = isPreviewMatch
+      ? getEventPosition(
+          selectedSlot.startDate,
+          selectedSlot.endDate || selectedSlot.startDate
+        )
+      : null;
 
     return (
-      <div className="time-grid-day-body" style={{ height: `${VISIBLE_HOURS * HOUR_HEIGHT}px` }}>
+      <div
+        className="time-grid-day-body"
+        style={{ height: `${VISIBLE_HOURS * HOUR_HEIGHT}px` }}
+        onMouseMove={
+          calendarAddMode
+            ? (event) => handleSlotHover(event, dayDate, memberName)
+            : undefined
+        }
+        onMouseLeave={calendarAddMode ? handleSlotLeave : undefined}
+        onClick={
+          calendarAddMode
+            ? (event) => handleSlotClick(event, dayDate, memberName)
+            : undefined
+        }
+      >
         {showNowLine && nowTopPercent !== null && (
           <div className="time-indicator-line" style={{ top: `${nowTopPercent}%` }} />
+        )}
+        {isHoverMatch && (
+          <div
+            className="calendar-add-hover-label"
+            style={{ top: `${hoverSlot.topPercent}%` }}
+          >
+            {hoverSlot.label}
+          </div>
+        )}
+        {isPreviewMatch && previewStyle && (
+          <div
+            className="time-grid-event time-grid-event-preview"
+            style={{
+              ...previewStyle,
+              ...(selectedService?.color ? getSoftColorStyle(selectedService.color) : {}),
+            }}
+          >
+            <div className="time-grid-event-inner">
+              <span className="time-grid-event-time">{selectedSlot.label}</span>
+              <span className="time-grid-event-title">
+                {selectedService?.navn || appointmentFallback}
+              </span>
+            </div>
+          </div>
         )}
         {groupedEvents.map((group, idx) => {
           const first = group.events[0];
@@ -1763,6 +2272,7 @@ function BookingPage() {
                   {renderTeamEvents({
                     memberName: member.name,
                     dayKey,
+                    dayDate: currentDate,
                     nowTopPercent,
                     showNowLine: isToday,
                   })}
@@ -1808,7 +2318,7 @@ function BookingPage() {
                 className={`time-grid-day-header ${isHighlighted ? 'is-selected' : ''} ${
                   isToday ? 'is-today' : ''
                 }`}
-                onClick={() => setCurrentDate(new Date(day))}
+                onClick={() => handleSelectDayFromWeek(day)}
               >
                 <span className="day-name">{labelDayName}</span>
                 <span className="day-date">
@@ -1843,6 +2353,7 @@ function BookingPage() {
                     {renderTeamEvents({
                       memberName: member.name,
                       dayKey,
+                      dayDate: day,
                       nowTopPercent,
                       showNowLine: isToday,
                     })}
@@ -1861,9 +2372,55 @@ function BookingPage() {
     return renderTeamDayGrid();
   };
 
+  const slotDateLabel = selectedSlot
+    ? slotDayFormatter.format(selectedSlot.startDate)
+    : '';
+  const slotTimeLabel = selectedSlot ? formatTime(selectedSlot.startDate) : '';
+  const slotEndTimeLabel = selectedSlot?.endDate
+    ? formatTime(selectedSlot.endDate)
+    : '';
+  const selectedServiceLabel = selectedService?.navn || appointmentFallback;
+  const selectedServiceDuration =
+    selectedService?.varighed || selectedSlot?.serviceDuration || '';
+  const selectedServicePrice =
+    typeof selectedService?.pris === 'number' ? selectedService.pris : null;
+  const slotOwnerLabel = selectedSlot?.ownerName || ownerEntry.name;
+  const additionalServicesTotal = additionalServices.reduce((sum, service) => {
+    const price = typeof service?.pris === 'number' ? service.pris : 0;
+    return sum + price;
+  }, 0);
+  const totalServicePrice =
+    (typeof selectedServicePrice === 'number' ? selectedServicePrice : 0) +
+    additionalServicesTotal;
+  const hasServicePrice =
+    typeof selectedServicePrice === 'number' || additionalServicesTotal > 0;
+
   return (
     <BookingSidebarLayout>
       <div className="booking-page">
+        {calendarAddMode && (
+          <div className="calendar-add-banner">
+            <div className="calendar-add-banner-title">
+              {t('booking.calendar.addMode.title', 'Vælg en tid, der skal bookes')}
+            </div>
+            <div className="calendar-add-banner-actions">
+              <button
+                type="button"
+                className="calendar-add-banner-btn calendar-add-banner-btn-ghost"
+              >
+                {t('booking.calendar.addMode.available', 'Se tilgængelige tidspunkter')}
+              </button>
+              <button
+                type="button"
+                className="calendar-add-banner-btn"
+                onClick={handleCloseCalendarAddMode}
+              >
+                <X className="calendar-add-banner-icon" />
+                {t('booking.calendar.addMode.close', 'Luk')}
+              </button>
+            </div>
+          </div>
+        )}
         {/* Top Navigation Bar */}
         <div className="booking-topbar booking-topbar-calendar">
           <div className="calendar-toolbar">
@@ -2032,24 +2589,29 @@ function BookingPage() {
                 </button>
               </div>
               {!selectedAppointment && (
-                <button
-                  type="button"
-                  className="toolbar-pill toolbar-primary"
-                  onClick={handleOpenAppointmentForm}
-                >
-                  {t('booking.calendar.add', 'Tilføj')}
-                  <ChevronDown className="toolbar-caret" />
-                </button>
+                <Dropdown
+                  label={t('booking.calendar.add', 'Tilføj')}
+                  onManual={handleOpenAppointmentForm}
+                  onCalendar={handleStartCalendarAddMode}
+                />
               )}
             </div>
           </div>
         </div>
 
-        <div className={`booking-content ${
-          showJournalEntryForm
-            ? 'with-journal-entry'
-            : (showAppointmentForm || derivedSelectedClient ? 'with-appointment-form' : '')
-        }`}>
+        <div
+          className={`booking-content ${
+            showJournalEntryForm
+              ? 'with-journal-entry'
+              : showAppointmentForm || derivedSelectedClient
+              ? 'with-appointment-form'
+              : ''
+          } ${
+            calendarAddMode && selectedSlot && !showAppointmentForm && !derivedSelectedClient
+              ? 'with-calendar-add'
+              : ''
+          }`}
+        >
           {showJournalEntryForm ? (
             <div className="booking-main booking-main-full">
               <Indlæg
@@ -2073,6 +2635,262 @@ function BookingPage() {
                       : renderTimeGrid()}
                 </div>
               </div>
+
+              {calendarAddMode && selectedSlot && !showAppointmentForm && !derivedSelectedClient && (
+                <aside className="calendar-add-sidebar">
+                  <div className="calendar-add-sidebar-header">
+                    <button
+                      type="button"
+                      className="calendar-add-sidebar-close"
+                      onClick={resetCalendarAddState}
+                      aria-label={t('booking.calendar.addMode.closePanel', 'Luk')}
+                    >
+                      <X />
+                    </button>
+                  </div>
+                  <div className="calendar-add-sidebar-content">
+                    <div className="calendar-add-customer">
+                      <button
+                        type="button"
+                        className="calendar-add-customer-btn"
+                        onClick={() => setClientPickerOpen((open) => !open)}
+                      >
+                        <span className="calendar-add-customer-icon">
+                          <UserPlus />
+                        </span>
+                        <span className="calendar-add-customer-text">
+                          <span className="calendar-add-customer-title">
+                            {t('booking.calendar.addCustomer', 'Tilføj kunde')}
+                          </span>
+                          <span className="calendar-add-customer-note">
+                            {t(
+                              'booking.calendar.addCustomerNote',
+                              'Efterlad feltet tomt til drop-in'
+                            )}
+                          </span>
+                        </span>
+                      </button>
+                      {selectedClient && (
+                        <div className="calendar-add-customer-card">
+                          <div className="calendar-add-customer-name">
+                            {selectedClient.navn}
+                          </div>
+                          <div className="calendar-add-customer-meta">
+                            {selectedClient.email || selectedClient.telefon || '—'}
+                          </div>
+                        </div>
+                      )}
+                      {clientPickerOpen && (
+                        <div className="calendar-add-client-picker">
+                          <div className="calendar-add-client-title">Vælg en kunde</div>
+                          <div className="calendar-add-client-search">
+                            <Search className="calendar-add-client-search-icon" />
+                            <input
+                              type="text"
+                              value={clientQuery}
+                              onChange={(event) => setClientQuery(event.target.value)}
+                              placeholder={t(
+                                'booking.calendar.searchClients',
+                                'Søg efter kunde'
+                              )}
+                            />
+                          </div>
+                          <div className="calendar-add-client-list">
+                            <button
+                              type="button"
+                              className="calendar-add-client-item calendar-add-client-create"
+                              onClick={handleOpenClientCreate}
+                            >
+                              <span className="calendar-add-client-create-icon">+</span>
+                              <span className="calendar-add-client-create-text">
+                                <span className="calendar-add-client-name">Tilføj ny kunde</span>
+                                <span className="calendar-add-client-meta">
+                                  Opret en ny kunde
+                                </span>
+                              </span>
+                            </button>
+                            {clientsLoading && (
+                              <div className="calendar-add-muted">
+                                {t('booking.calendar.clients.loading', 'Indlæser kunder...')}
+                              </div>
+                            )}
+                            {clientsError && (
+                              <div className="calendar-add-error">{clientsError}</div>
+                            )}
+                            {!clientsLoading && !clientsError && filteredClients.length === 0 && (
+                              <div className="calendar-add-muted">
+                                {t('booking.calendar.clients.empty', 'Ingen kunder fundet')}
+                              </div>
+                            )}
+                            {filteredClients.map((client) => (
+                              <button
+                                key={client.id}
+                                type="button"
+                                className="calendar-add-client-item"
+                                onClick={() => handleSelectClient(client)}
+                              >
+                                <span className="calendar-add-client-name">{client.navn}</span>
+                                <span className="calendar-add-client-meta">
+                                  {client.email || client.telefon || '—'}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {calendarStep === 'services' ? (
+                      <div className="calendar-add-services">
+                        <div className="calendar-add-services-header">
+                          <h3>{t('booking.calendar.services.title', 'Vælg en tjeneste')}</h3>
+                        </div>
+                        <div className="calendar-add-search">
+                          <Search className="calendar-add-search-icon" />
+                          <input
+                            type="text"
+                            value={serviceQuery}
+                            onChange={(event) => setServiceQuery(event.target.value)}
+                            placeholder={t(
+                              'booking.calendar.services.search',
+                              'Søg efter tjenestenavn'
+                            )}
+                          />
+                        </div>
+                        {servicesLoading && (
+                          <div className="calendar-add-muted">
+                            {t('booking.calendar.services.loading', 'Indlæser ydelser...')}
+                          </div>
+                        )}
+                        {servicesError && (
+                          <div className="calendar-add-error">{servicesError}</div>
+                        )}
+                        {!servicesLoading &&
+                          !servicesError &&
+                          groupedServices.map((group) => (
+                            <div key={group.name} className="calendar-add-service-group">
+                              <div className="calendar-add-service-group-header">
+                                <span>{group.name}</span>
+                                <span className="calendar-add-service-count">
+                                  {group.items.length}
+                                </span>
+                              </div>
+                              <div className="calendar-add-service-list">
+                                {group.items.map((service) => (
+                                  <button
+                                    key={service.id}
+                                    type="button"
+                                    className="calendar-add-service-card"
+                                    onClick={() => handleSelectService(service)}
+                                  >
+                                    <span className="calendar-add-service-info">
+                                      <span className="calendar-add-service-name">
+                                        {service.navn}
+                                      </span>
+                                      <span className="calendar-add-service-meta">
+                                        {service.varighed}
+                                      </span>
+                                    </span>
+                                    <span className="calendar-add-service-price">
+                                      {formatCurrency(service.pris)} kr.
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    ) : (
+                      <div className="calendar-add-confirm">
+                        <div className="calendar-add-confirm-header">
+                          <div className="calendar-add-confirm-day">{slotDateLabel}</div>
+                          <div className="calendar-add-confirm-time">
+                            {slotTimeLabel} •{' '}
+                            {t('booking.calendar.addMode.repeat', 'Gentages ikke')}
+                          </div>
+                        </div>
+                        <div className="calendar-add-confirm-section">
+                          <div className="calendar-add-confirm-title">
+                            {t('booking.calendar.services.section', 'Tjenester')}
+                          </div>
+                          <div className="calendar-add-selected-service">
+                            <span className="calendar-add-service-indicator" />
+                            <div className="calendar-add-selected-info">
+                              <div className="calendar-add-selected-name">
+                                {selectedServiceLabel}
+                              </div>
+                              <div className="calendar-add-selected-meta">
+                                {slotTimeLabel}
+                                {slotEndTimeLabel ? ` - ${slotEndTimeLabel}` : ''} •{' '}
+                                {selectedServiceDuration} • {slotOwnerLabel}
+                              </div>
+                            </div>
+                            <div className="calendar-add-selected-price">
+                              {selectedServicePrice !== null
+                                ? `${formatCurrency(selectedServicePrice)} kr.`
+                                : '—'}
+                            </div>
+                          </div>
+                          {additionalServices.map((service) => (
+                            <div
+                              key={service.id}
+                              className="calendar-add-selected-service calendar-add-selected-service-extra"
+                            >
+                              <span className="calendar-add-service-indicator" />
+                              <div className="calendar-add-selected-info">
+                                <div className="calendar-add-selected-name">
+                                  {service.navn}
+                                </div>
+                                <div className="calendar-add-selected-meta">
+                                  {service.varighed || '—'} • {slotOwnerLabel}
+                                </div>
+                              </div>
+                              <div className="calendar-add-selected-price">
+                                {typeof service.pris === 'number'
+                                  ? `${formatCurrency(service.pris)} kr.`
+                                  : '—'}
+                              </div>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            className="calendar-add-secondary-btn"
+                            onClick={handleAddAnotherService}
+                          >
+                            <Plus className="calendar-add-secondary-icon" />
+                            {t('booking.calendar.addService', 'Tilføj tjeneste')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {calendarStep === 'confirm' && (
+                    <div className="calendar-add-sidebar-footer">
+                      <div className="calendar-add-total">
+                        <span>{t('booking.calendar.total', 'I alt')}</span>
+                        <span>
+                          {hasServicePrice
+                            ? `${formatCurrency(totalServicePrice)} kr.`
+                            : '—'}
+                        </span>
+                      </div>
+                      <div className="calendar-add-footer-actions">
+                        <button type="button" className="calendar-add-secondary-btn">
+                          {t('booking.calendar.payment', 'Betaling')}
+                        </button>
+                        <button
+                          type="button"
+                          className="calendar-add-primary-btn"
+                          onClick={handleSaveCalendarAppointment}
+                          disabled={!selectedService}
+                        >
+                          {t('booking.calendar.save', 'Gem')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </aside>
+              )}
 
               {/* Journal or Appointment Form */}
               {derivedSelectedClient ? (
@@ -2114,6 +2932,15 @@ function BookingPage() {
             </>
           )}
         </div>
+
+        {showClientCreate && (
+          <AddKlient
+            isOpen={showClientCreate}
+            onClose={() => setShowClientCreate(false)}
+            onSave={handleClientCreated}
+            mode="create"
+          />
+        )}
       </div>
     </BookingSidebarLayout>
   );
