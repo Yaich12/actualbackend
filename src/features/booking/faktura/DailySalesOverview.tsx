@@ -29,11 +29,11 @@ const weekdayLabels = [
   "onsdag",
   "torsdag",
   "fredag",
-  "l\u00f8rdag",
-  "s\u00f8ndag",
+  "lørdag",
+  "søndag",
 ];
 
-const weekdayShortLabels = ["ma", "ti", "on", "to", "fr", "l\u00f8", "s\u00f8"];
+const weekdayShortLabels = ["ma", "ti", "on", "to", "fr", "lø", "sø"];
 
 const monthShortLabels = [
   "jan",
@@ -76,7 +76,7 @@ const formatDisplayDate = (value: string) => {
 const buildTransactionRows = (sales: any[]) => {
   const summary = {
     services: { label: "Tjenester", count: 0, total: 0 },
-    addons: { label: "Till\u00e6gsydelser", count: 0, total: 0 },
+    addons: { label: "Tillægsydelser", count: 0, total: 0 },
     products: { label: "Produkter", count: 0, total: 0 },
     shipping: { label: "Forsendelse", count: 0, total: 0 },
     giftcards: { label: "Gavekort", count: 0, total: 0 },
@@ -329,13 +329,13 @@ export default function DailySalesOverview() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Daglige salg</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Se, filtrer og eksport\u00e9r dagens transaktioner og
+            Se, filtrer og eksportér dagens transaktioner og
             kontanttransaktioner.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <button type="button" className="toolbar-pill">
-            Eksport\u00e9r
+            Eksportér
             <ChevronDown className="toolbar-caret" />
           </button>
           <button
@@ -343,7 +343,7 @@ export default function DailySalesOverview() {
             className="toolbar-pill toolbar-primary"
             onClick={() => setDrawerOpen(true)}
           >
-            Tilf\u00f8j nu
+            Tilføj nu
           </button>
         </div>
       </div>
@@ -390,7 +390,7 @@ export default function DailySalesOverview() {
                     type="button"
                     onClick={handlePrevMonth}
                     className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50"
-                    aria-label="Forrige m\u00e5ned"
+                    aria-label="Forrige måned"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
@@ -401,7 +401,7 @@ export default function DailySalesOverview() {
                     type="button"
                     onClick={handleNextMonth}
                     className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50"
-                    aria-label="N\u00e6ste m\u00e5ned"
+                    aria-label="Næste måned"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </button>
@@ -534,11 +534,6 @@ export default function DailySalesOverview() {
                       <td className="py-2 text-right">
                         {formatCurrency(paymentData.totalReceived)} kr.
                       </td>
-                      <td className="py-2 text-right">0,00 kr.</td>
-                    </tr>
-                    <tr className="border-t border-slate-200 font-semibold text-slate-900">
-                      <td className="py-2 pr-4">Heraf drikkepenge</td>
-                      <td className="py-2 text-right">0,00 kr.</td>
                       <td className="py-2 text-right">0,00 kr.</td>
                     </tr>
                   </tbody>

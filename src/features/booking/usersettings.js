@@ -15,23 +15,35 @@ const NIGHT_START_HOUR = 18; // 18:00
 const NIGHT_END_HOUR = 5;    // 05:00
 
 const CATEGORY_OPTIONS = ['Physiotherapist', 'Osteopath', 'Chiropractor'];
+const CURRENCY_OPTIONS = [
+  { value: 'DKK', label: 'DKK' },
+  { value: 'EUR', label: 'EURO' },
+  { value: 'USD', label: 'USD' },
+  { value: 'NOK', label: 'NOK' },
+  { value: 'SEK', label: 'SEK' },
+  { value: 'AED', label: 'AED' },
+];
 
 function UserSettings() {
   const { user, updateUserProfile } = useAuth();
   const navigate = useNavigate();
   const { language, setLanguage, languageOptions, t } = useLanguage();
-  const [activeSection, setActiveSection] = useState('profile'); // profile | account | appearance | language
+  const [activeSection, setActiveSection] = useState('profile'); // profile | account | appearance | language | ai
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [clinicName, setClinicName] = useState('');
   const [website, setWebsite] = useState('');
   const [category, setCategory] = useState('');
   const [address, setAddress] = useState('');
+  const [currency, setCurrency] = useState('');
   const [photoURL, setPhotoURL] = useState('');
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState('');
   const [removeAvatar, setRemoveAvatar] = useState(false);
   const [colorMode, setColorMode] = useState('system');
+  const [audioRetention, setAudioRetention] = useState('30d');
+  const [transcriptRetention, setTranscriptRetention] = useState('30d');
+  const [agentCommsRetention, setAgentCommsRetention] = useState('30d');
   const [isSaving, setIsSaving] = useState(false);
   const [isAvatarUploading, setIsAvatarUploading] = useState(false);
 
@@ -80,6 +92,11 @@ function UserSettings() {
             '';
           setCategory(loadedCategory || '');
           setAddress(data.address || '');
+          const loadedCurrency =
+            (typeof data.currency === 'string' && data.currency.trim()) ||
+            (typeof data.settings?.currency === 'string' && data.settings.currency.trim()) ||
+            '';
+          setCurrency(loadedCurrency);
           if (data.themeMode === 'light' || data.themeMode === 'dark' || data.themeMode === 'system') {
             setColorMode(data.themeMode);
             applyTheme(data.themeMode);
@@ -96,6 +113,7 @@ function UserSettings() {
           setRemoveAvatar(false);
           setCategory('');
           setAddress('');
+          setCurrency('');
         }
       } catch (error) {
         console.error('[UserSettings] Failed to load profile', error);
@@ -104,6 +122,48 @@ function UserSettings() {
 
     loadProfile();
   }, [user]);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setAudioRetention('30d');
+      setTranscriptRetention('30d');
+      setAgentCommsRetention('30d');
+      return;
+    }
+
+    const loadAiSettings = async () => {
+      try {
+        const settingsRef = doc(db, 'users', user.uid, 'settings', 'aiSettings');
+        const snap = await getDoc(settingsRef);
+        if (snap.exists()) {
+          const data = snap.data() || {};
+          setAudioRetention(data.audioRetention || '30d');
+          setTranscriptRetention(data.transcriptRetention || '30d');
+          setAgentCommsRetention(data.agentCommsRetention || '30d');
+          return;
+        }
+        setAudioRetention('30d');
+        setTranscriptRetention('30d');
+        setAgentCommsRetention('30d');
+      } catch (error) {
+        console.error('[UserSettings] Failed to load AI settings', error);
+      }
+    };
+
+    loadAiSettings();
+  }, [user?.uid]);
+
+  const handleSaveAiSettings = async () => {
+    if (!user?.uid) return;
+    const settingsRef = doc(db, 'users', user.uid, 'settings', 'aiSettings');
+    const payload = {
+      audioRetention: audioRetention || '30d',
+      transcriptRetention: transcriptRetention || '30d',
+      agentCommsRetention: agentCommsRetention || '30d',
+      updatedAt: serverTimestamp(),
+    };
+    await setDoc(settingsRef, payload, { merge: true });
+  };
 
   useEffect(() => {
     applyTheme(colorMode);
@@ -168,21 +228,27 @@ function UserSettings() {
         console.error('[UserSettings] Failed to sync auth profile helper', error);
       }
 
-      await setDoc(
-        ref,
-        {
-          themeMode: colorMode,
-          displayName: fullName,
-          photoURL: resolvedPhotoURL || null,
-          jobTitle: jobTitleForSave,
-          clinicName,
-          website,
-          categories: category ? [category] : [],
-          address,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
+      const updatePayload = {
+        themeMode: colorMode,
+        displayName: fullName,
+        photoURL: resolvedPhotoURL || null,
+        jobTitle: jobTitleForSave,
+        clinicName,
+        website,
+        categories: category ? [category] : [],
+        address,
+        updatedAt: serverTimestamp(),
+      };
+
+      if (currency) {
+        updatePayload.currency = currency;
+      }
+
+      await setDoc(ref, updatePayload, { merge: true });
+
+      if (activeSection === 'ai') {
+        await handleSaveAiSettings();
+      }
     } catch (error) {
       console.error('[UserSettings] Failed to save profile', error);
     } finally {
@@ -210,31 +276,6 @@ function UserSettings() {
           <div className="usersettings-main">
           <div className="usersettings-page">
             <div className="usersettings-card">
-              <div className="usersettings-header">
-                <div className="usersettings-header-title">
-                  {t('settings.title', 'Indstillinger')}
-                </div>
-                <div className="usersettings-top-actions">
-                  <button
-                    type="button"
-                    className="usersettings-top-btn ghost"
-                    onClick={() => navigate('/booking')}
-                  >
-                    {t('settings.close', 'Luk')}
-                  </button>
-                  <button
-                    type="button"
-                    className="usersettings-top-btn primary"
-                    onClick={handleSaveProfile}
-                    disabled={isSaving || isAvatarUploading}
-                    aria-busy={isSaving || isAvatarUploading}
-                  >
-                    {isSaving || isAvatarUploading
-                      ? t('settings.saving', 'Gemmer…')
-                      : t('settings.save', 'Gem')}
-                  </button>
-                </div>
-              </div>
               <div className="usersettings-layout">
                 <aside className="usersettings-nav">
                   <button
@@ -264,6 +305,13 @@ function UserSettings() {
                     onClick={() => setActiveSection('language')}
                   >
                     {t('settings.sections.language', 'Sprog')}
+                  </button>
+                  <button
+                    type="button"
+                    className={`usersettings-nav-item ${activeSection === 'ai' ? 'active' : ''}`}
+                    onClick={() => setActiveSection('ai')}
+                  >
+                    {t('settings.sections.ai', 'AI indstillinger')}
                   </button>
                 </aside>
 
@@ -483,9 +531,130 @@ function UserSettings() {
                           ))}
                         </select>
                       </div>
+                      <div className="usersettings-section">
+                        <label className="usersettings-label">
+                          {t('settings.currency.label', 'Valuta')}
+                        </label>
+                        <select
+                          className="usersettings-input"
+                          value={currency}
+                          onChange={(e) => setCurrency(e.target.value)}
+                        >
+                          <option value="">
+                            {t('settings.currency.placeholder', 'Vælg valuta')}
+                          </option>
+                          {CURRENCY_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
+                  )}
+
+                  {activeSection === 'ai' && (
+                    <>
+                      <div className="usersettings-header">
+                        <div className="usersettings-title">
+                          {t('settings.ai.title', 'AI indstillinger')}
+                        </div>
+                      </div>
+
+                      <div className="usersettings-section">
+                        <label className="usersettings-label">
+                          {t('settings.ai.audio.title', 'Lydoptagelse')}
+                        </label>
+                        <p className="usersettings-subtitle">
+                          {t(
+                            'settings.ai.audio.description',
+                            'Selve lyden som optaget af mikrofonen. Lydfilen kan være hjælpsom, hvis vi efterfølgende skal ind og høre efter, om der er bestemte ord, udtaler eller dialekter vi misforstår.'
+                          )}
+                        </p>
+                        <select
+                          className="usersettings-input"
+                          value={audioRetention}
+                          onChange={(e) => setAudioRetention(e.target.value)}
+                        >
+                          <option value="immediate">
+                            {t('settings.ai.retention.immediate', 'Slet med det samme')}
+                          </option>
+                          <option value="30d">
+                            {t('settings.ai.retention.30d', 'Gem 30 dage')}
+                          </option>
+                        </select>
+                      </div>
+
+                      <div className="usersettings-section">
+                        <label className="usersettings-label">
+                          {t('settings.ai.transcript.title', 'Transkription')}
+                        </label>
+                        <p className="usersettings-subtitle">
+                          {t(
+                            'settings.ai.transcript.description',
+                            'Tekstudgaven af hvad systemet har "hørt". Vi har brug for transkriptionen, hvis vi skal hjælpe dig med "redningsforsøg", hvis en optagelse afbrydes, eller hvis der opstår andre tekniske problemer.'
+                          )}
+                        </p>
+                        <select
+                          className="usersettings-input"
+                          value={transcriptRetention}
+                          onChange={(e) => setTranscriptRetention(e.target.value)}
+                        >
+                          <option value="immediate">
+                            {t('settings.ai.retention.immediate', 'Slet med det samme')}
+                          </option>
+                          <option value="30d">
+                            {t('settings.ai.retention.30d', 'Gem 30 dage')}
+                          </option>
+                        </select>
+                      </div>
+
+                      <div className="usersettings-section">
+                        <label className="usersettings-label">
+                          {t('settings.ai.agentComms.title', 'AI-genereret kommunikation')}
+                        </label>
+                        <p className="usersettings-subtitle">
+                          {t(
+                            'settings.ai.agentComms.description',
+                            'Tekst og svar der bliver genereret i dialogen med vores AI-agenter (fx forslag til journalnotat, opsummeringer og anbefalinger). Gemning kan være nyttig, hvis du vil kunne genfinde tidligere samtaler, dokumentere beslutningsgrundlag eller fortsætte et igangværende forløb.'
+                          )}
+                        </p>
+                        <select
+                          className="usersettings-input"
+                          value={agentCommsRetention}
+                          onChange={(e) => setAgentCommsRetention(e.target.value)}
+                        >
+                          <option value="immediate">
+                            {t('settings.ai.retention.immediate', 'Slet med det samme')}
+                          </option>
+                          <option value="30d">
+                            {t('settings.ai.retention.30d', 'Gem 30 dage')}
+                          </option>
+                        </select>
+                      </div>
                     </>
                   )}
                 </main>
+              </div>
+              <div className="usersettings-actions">
+                <button
+                  type="button"
+                  className="usersettings-top-btn ghost"
+                  onClick={() => navigate('/booking')}
+                >
+                  {t('settings.close', 'Luk')}
+                </button>
+                <button
+                  type="button"
+                  className="usersettings-top-btn primary"
+                  onClick={handleSaveProfile}
+                  disabled={isSaving || isAvatarUploading}
+                  aria-busy={isSaving || isAvatarUploading}
+                >
+                  {isSaving || isAvatarUploading
+                    ? t('settings.saving', 'Gemmer…')
+                    : t('settings.save', 'Gem')}
+                </button>
               </div>
             </div>
           </div>

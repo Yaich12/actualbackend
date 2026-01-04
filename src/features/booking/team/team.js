@@ -62,6 +62,22 @@ const colorOptions = [
   '#67e8f9',
 ];
 
+const resolveTimestamp = (value) => {
+  if (!value) return null;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  if (typeof value.toDate === 'function') {
+    return value.toDate().getTime();
+  }
+  if (typeof value.seconds === 'number') {
+    return value.seconds * 1000;
+  }
+  return null;
+};
+
 const mapDocToMember = (docSnap) => {
   const data = docSnap.data() || {};
   const name =
@@ -72,6 +88,7 @@ const mapDocToMember = (docSnap) => {
     (typeof data.avatarText === 'string' && data.avatarText.trim()) ||
     name.charAt(0).toUpperCase() ||
     '?';
+  const createdAtMs = resolveTimestamp(data.createdAt);
 
   return {
     id: docSnap.id,
@@ -90,6 +107,7 @@ const mapDocToMember = (docSnap) => {
     isOwner: data.isOwner === true,
     memberUid: data.memberUid || null,
     role: data.role || '',
+    createdAtMs,
   };
 };
 
@@ -274,7 +292,7 @@ function TeamPage() {
   const [membersLoading, setMembersLoading] = useState(true);
   const [membersError, setMembersError] = useState('');
   const [search, setSearch] = useState('');
-  const [sortMode, setSortMode] = useState('name');
+  const [sortMode, setSortMode] = useState('custom');
 
   const [formMode, setFormMode] = useState(null); // null | 'create' | 'edit'
   const [editingMember, setEditingMember] = useState(null);
@@ -390,7 +408,32 @@ function TeamPage() {
     const base = term
       ? members.filter((m) => (m.name || '').toLowerCase().includes(term) || (m.email || '').toLowerCase().includes(term))
       : members.slice();
-    if (sortMode === 'name') return base.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    if (sortMode === 'newest') {
+      return base
+        .map((member, index) => ({ member, index }))
+        .sort((a, b) => {
+          const ownerDiff = Number(a.member.isOwner) - Number(b.member.isOwner);
+          if (ownerDiff !== 0) return ownerDiff;
+          const aTime = a.member.createdAtMs ?? Number.NEGATIVE_INFINITY;
+          const bTime = b.member.createdAtMs ?? Number.NEGATIVE_INFINITY;
+          if (aTime !== bTime) return bTime - aTime;
+          return a.index - b.index;
+        })
+        .map(({ member }) => member);
+    }
+    if (sortMode === 'ownerTop') {
+      return base
+        .map((member, index) => ({ member, index }))
+        .sort((a, b) => {
+          const ownerDiff = Number(b.member.isOwner) - Number(a.member.isOwner);
+          if (ownerDiff !== 0) return ownerDiff;
+          const aTime = a.member.createdAtMs ?? Number.POSITIVE_INFINITY;
+          const bTime = b.member.createdAtMs ?? Number.POSITIVE_INFINITY;
+          if (aTime !== bTime) return aTime - bTime;
+          return a.index - b.index;
+        })
+        .map(({ member }) => member);
+    }
     return base;
   }, [members, search, sortMode]);
 
@@ -510,7 +553,9 @@ function TeamPage() {
           </div>
           <div className="team-controls-right">
             <select className="team-select" value={sortMode} onChange={(e) => setSortMode(e.target.value)}>
-              <option value="name">Tilpasset ordre</option>
+              <option value="custom">Tilpasset ordre</option>
+              <option value="newest">Nyeste tilføjet</option>
+              <option value="ownerTop">OG øverst</option>
             </select>
           </div>
         </div>

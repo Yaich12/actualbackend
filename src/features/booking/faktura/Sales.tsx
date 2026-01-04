@@ -77,14 +77,14 @@ const monthLongNames = [
   "december",
 ];
 
-const weekdayShortLabels = ["ma", "ti", "on", "to", "fr", "l\u00f8", "s\u00f8"];
+const weekdayShortLabels = ["ma", "ti", "on", "to", "fr", "lø", "sø"];
 
 const defaultStatusFilter = "Alle statuser";
-const defaultItemFilter = "V\u00e6lg artikeltype";
+const defaultItemFilter = "Vælg artikeltype";
 
 const statusOptions = [
   defaultStatusFilter,
-  "Gennemf\u00f8rt",
+  "Gennemført",
   "Afventer",
   "Annulleret",
   "Refunderet",
@@ -99,37 +99,37 @@ const itemTypeOptions = [
 ];
 
 const sortOptions = [
-  { id: "saleNumberDesc", label: "Udsalg # (\u00c5-A)" },
-  { id: "saleNumberAsc", label: "Udsalg # (A-\u00c5)" },
-  { id: "customerDesc", label: "Kunde (\u00c5-A)" },
-  { id: "customerAsc", label: "Kunde (A-\u00c5)" },
-  { id: "dateDesc", label: "Salgsdato (nyeste f\u00f8rst)" },
-  { id: "dateAsc", label: "Salgsdato (\u00e6ldste f\u00f8rst)" },
-  { id: "locationDesc", label: "Lokation (\u00c5-A)" },
-  { id: "locationAsc", label: "Lokation (A-\u00c5)" },
-  { id: "tipsDesc", label: "Drikkepenge (h\u00f8jeste f\u00f8rst)" },
-  { id: "tipsAsc", label: "Drikkepenge (laveste f\u00f8rst)" },
-  { id: "totalDesc", label: "Brutto i alt (h\u00f8jeste f\u00f8rst)" },
-  { id: "totalAsc", label: "Brutto i alt (laveste f\u00f8rst)" },
+  { id: "saleNumberDesc", label: "Udsalg # (Å-A)" },
+  { id: "saleNumberAsc", label: "Udsalg # (A-Å)" },
+  { id: "customerDesc", label: "Kunde (Å-A)" },
+  { id: "customerAsc", label: "Kunde (A-Å)" },
+  { id: "dateDesc", label: "Salgsdato (nyeste først)" },
+  { id: "dateAsc", label: "Salgsdato (ældste først)" },
+  { id: "locationDesc", label: "Lokation (Å-A)" },
+  { id: "locationAsc", label: "Lokation (A-Å)" },
+  { id: "tipsDesc", label: "Drikkepenge (højeste først)" },
+  { id: "tipsAsc", label: "Drikkepenge (laveste først)" },
+  { id: "totalDesc", label: "Brutto i alt (højeste først)" },
+  { id: "totalAsc", label: "Brutto i alt (laveste først)" },
 ];
 
 const presetOptions = [
   { id: "custom", label: "Tilpasset" },
   { id: "today", label: "I dag" },
-  { id: "yesterday", label: "I g\u00e5r" },
+  { id: "yesterday", label: "I går" },
   { id: "last7", label: "Seneste 7 dage" },
   { id: "last30", label: "Seneste 30 dage" },
   { id: "last90", label: "Seneste 90 dage" },
-  { id: "lastMonth", label: "Sidste m\u00e5ned" },
-  { id: "lastYear", label: "Sidste \u00e5r" },
+  { id: "lastMonth", label: "Sidste måned" },
+  { id: "lastYear", label: "Sidste år" },
   { id: "weekToDate", label: "Ugen til dato" },
-  { id: "monthToDate", label: "M\u00e5ned til dato" },
+  { id: "monthToDate", label: "Måned til dato" },
   { id: "quarterToDate", label: "Kvartal til dato" },
-  { id: "yearToDate", label: "\u00c5ret til dato" },
+  { id: "yearToDate", label: "Året til dato" },
   { id: "tomorrow", label: "I morgen" },
-  { id: "next7", label: "N\u00e6ste 7 dage" },
-  { id: "nextMonth", label: "N\u00e6ste m\u00e5ned" },
-  { id: "next30", label: "N\u00e6ste 30 dage" },
+  { id: "next7", label: "Næste 7 dage" },
+  { id: "nextMonth", label: "Næste måned" },
+  { id: "next30", label: "Næste 30 dage" },
   { id: "sinceStart", label: "Siden start" },
 ];
 
@@ -188,7 +188,7 @@ const formatRangeLabel = (range: DateRange) => {
   };
   if (startKey === today && endKey === today) return "I dag";
   if (startKey === endKey) return format(range.start);
-  return `${format(range.start)}\u2013${format(range.end)}`;
+  return `${format(range.start)}–${format(range.end)}`;
 };
 
 const getCalendarDays = (monthDate: Date) => {
@@ -228,9 +228,9 @@ const parseAmount = (value: string) => {
 };
 
 const getSaleStatusLabel = (status: any) => {
-  if (!status) return "Gennemf\u00f8rt";
+  if (!status) return "Gennemført";
   const normalized = String(status).toLowerCase();
-  if (normalized === "completed") return "Gennemf\u00f8rt";
+  if (normalized === "completed") return "Gennemført";
   if (normalized === "pending") return "Afventer";
   if (normalized === "cancelled") return "Annulleret";
   if (normalized === "refunded") return "Refunderet";
@@ -636,9 +636,9 @@ export default function Sales() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Salg</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Vis, filtrer og eksport\u00e9r din salgshistorik. {" "}
+            Vis, filtrer og eksportér din salgshistorik. {" "}
             <a href="#" className="text-indigo-500">
-              L\u00e6s mere
+              Læs mere
             </a>
           </p>
         </div>
@@ -652,7 +652,7 @@ export default function Sales() {
             className="toolbar-pill toolbar-primary"
             onClick={() => setDrawerOpen(true)}
           >
-            Tilf\u00f8j nu
+            Tilføj nu
           </button>
         </div>
       </div>
@@ -680,7 +680,7 @@ export default function Sales() {
                 <Search className="h-4 w-4 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="S\u00f8g efter salg eller kunde"
+                  placeholder="Søg efter salg eller kunde"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   className="w-48 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
@@ -772,7 +772,7 @@ export default function Sales() {
                               type="button"
                               onClick={handlePrevMonth}
                               className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50"
-                              aria-label="Forrige m\u00e5ned"
+                              aria-label="Forrige måned"
                             >
                               <ChevronLeft className="h-4 w-4" />
                             </button>
@@ -833,7 +833,7 @@ export default function Sales() {
                               type="button"
                               onClick={handleNextMonth}
                               className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50"
-                              aria-label="N\u00e6ste m\u00e5ned"
+                              aria-label="Næste måned"
                             >
                               <ChevronRight className="h-4 w-4" />
                             </button>
@@ -1013,7 +1013,7 @@ export default function Sales() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm font-semibold text-slate-700">Fra-bel\u00f8b</p>
+                    <p className="text-sm font-semibold text-slate-700">Fra-beløb</p>
                     <div className="mt-2 flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700">
                       <span className="text-slate-400">kr</span>
                       <input
@@ -1028,7 +1028,7 @@ export default function Sales() {
                     </div>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-700">Til-bel\u00f8b</p>
+                    <p className="text-sm font-semibold text-slate-700">Til-beløb</p>
                     <div className="mt-2 flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700">
                       <span className="text-slate-400">kr</span>
                       <input
@@ -1169,15 +1169,15 @@ export default function Sales() {
                       colSpan={6}
                       className="px-4 py-8 text-center text-xs text-slate-400"
                     >
-                      Ingen gennemf\u00f8rte salg endnu.
+                      Ingen gennemførte salg endnu.
                     </td>
                   </tr>
                 )}
                 {!loading &&
                   !error &&
                   sortedSales.map((sale: any) => {
-                    const saleNumber = getSaleNumber(sale) || "\u2014";
-                    const customer = sale.customerName || sale.customerEmail || "\u2014";
+                    const saleNumber = getSaleNumber(sale) || "—";
+                    const customer = sale.customerName || sale.customerEmail || "—";
                     const saleDate = formatDateTime(sale.completedAtDate || null);
                     const tips = sale.tips || 0;
                     const total = sale.totals?.total ?? 0;
@@ -1189,7 +1189,7 @@ export default function Sales() {
                         <td className="px-4 py-3 text-slate-700">{customer}</td>
                         <td className="px-4 py-3">
                           <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                            Gennemf\u00f8rt
+                            Gennemført
                           </span>
                         </td>
                         <td className="px-4 py-3 text-slate-700">{saleDate}</td>

@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { useLanguage } from '../../../LanguageContext';
 import './dropdown.css';
 
-function Dropdown({ label = 'Tilføj', onManual, onCalendar, disabled = false }) {
+function Dropdown({ label = '', onManual, onCalendar, disabled = false }) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
+  const resolvedLabel = label || t('booking.dropdown.add', 'Tilføj');
 
   useEffect(() => {
     if (!open) return;
@@ -33,7 +36,7 @@ function Dropdown({ label = 'Tilføj', onManual, onCalendar, disabled = false })
         onClick={() => setOpen((prev) => !prev)}
         disabled={disabled}
       >
-        {label}
+        {resolvedLabel}
         <ChevronDown className="toolbar-caret" />
       </button>
       {open && (
@@ -43,14 +46,14 @@ function Dropdown({ label = 'Tilføj', onManual, onCalendar, disabled = false })
             className="booking-add-dropdown-item"
             onClick={() => handleSelect('calendar')}
           >
-            I kalenderen
+            {t('booking.dropdown.calendar', 'I kalenderen')}
           </button>
           <button
             type="button"
             className="booking-add-dropdown-item"
             onClick={() => handleSelect('manual')}
           >
-            Manuelt
+            {t('booking.dropdown.manual', 'Manuelt')}
           </button>
         </div>
       )}

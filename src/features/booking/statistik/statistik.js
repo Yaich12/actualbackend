@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayout';
 import { useAuth } from '../../../AuthContext';
+import { useLanguage } from '../../../LanguageContext';
 import useAppointments from '../../../hooks/useAppointments';
 import { useUserClients } from '../Klienter/hooks/useUserClients';
 import { BarChart3, CalendarDays, Users, Activity, AlertTriangle } from 'lucide-react';
 
 function StatistikPage() {
   const { user } = useAuth();
+  const { t, locale } = useLanguage();
   const { appointments = [], loading, error } = useAppointments(user?.uid || null);
   const { clients = [] } = useUserClients();
   const [period, setPeriod] = useState('week'); // 'today' | 'week' | 'month' | 'year' | 'all'
@@ -154,7 +156,7 @@ function StatistikPage() {
 
     const serviceCount = {};
     filtered.forEach((appt) => {
-      const key = appt.service || 'Andet';
+      const key = appt.service || t('booking.stats.otherService', 'Andet');
       serviceCount[key] = (serviceCount[key] || 0) + 1;
     });
 
@@ -172,20 +174,21 @@ function StatistikPage() {
       avgHoursPerActiveDay: avgHours,
       topServices: topServicesArr,
     };
-  }, [appointments, period]);
+  }, [appointments, period, t]);
 
   const totalClients = clients?.length || 0;
 
   const formatCurrency = (amount) =>
-    new Intl.NumberFormat('da-DK', {
+    new Intl.NumberFormat(locale, {
       style: 'currency',
       currency: 'DKK',
       maximumFractionDigits: 0,
     }).format(amount);
 
-  const formatPercent = (value) => `${value.toLocaleString('da-DK', { maximumFractionDigits: 1 })}%`;
+  const formatPercent = (value) => `${value.toLocaleString(locale, { maximumFractionDigits: 1 })}%`;
 
-  const formatHours = (hours) => `${hours.toLocaleString('da-DK', { maximumFractionDigits: 1 })} t`;
+  const formatHours = (hours) =>
+    `${hours.toLocaleString(locale, { maximumFractionDigits: 1 })} ${t('booking.stats.hoursShort', 't')}`;
 
   return (
     <BookingSidebarLayout>
@@ -194,20 +197,25 @@ function StatistikPage() {
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-slate-700" />
-              <h1 className="text-lg font-semibold text-slate-900">Statistik</h1>
+              <h1 className="text-lg font-semibold text-slate-900">
+                {t('booking.stats.title', 'Statistik')}
+              </h1>
             </div>
             <p className="text-xs text-slate-500">
-              Overblik over aftaler og omsætning baseret på dine rigtige booking-data.
+              {t(
+                'booking.stats.subtitle',
+                'Overblik over aftaler og omsætning baseret på dine rigtige booking-data.'
+              )}
             </p>
           </div>
 
           <div className="flex items-center gap-2 text-xs">
             {[
-              { key: 'today', label: 'I dag' },
-              { key: 'week', label: 'Denne uge' },
-              { key: 'month', label: 'Denne måned' },
-              { key: 'year', label: 'Dette år' },
-              { key: 'all', label: 'Alt' },
+              { key: 'today', label: t('booking.stats.period.today', 'I dag') },
+              { key: 'week', label: t('booking.stats.period.week', 'Denne uge') },
+              { key: 'month', label: t('booking.stats.period.month', 'Denne måned') },
+              { key: 'year', label: t('booking.stats.period.year', 'Dette år') },
+              { key: 'all', label: t('booking.stats.period.all', 'Alt') },
             ].map((opt) => (
               <button
                 key={opt.key}
@@ -231,42 +239,58 @@ function StatistikPage() {
             <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
               <AlertTriangle className="h-4 w-4 flex-shrink-0" />
               <span>
-                Kan ikke hente statistik lige nu. Sørg for at du er logget ind, og at der findes aftaler i Firestore.
+                {t(
+                  'booking.stats.error',
+                  'Kan ikke hente statistik lige nu. Sørg for at du er logget ind, og at der findes aftaler i Firestore.'
+                )}
               </span>
             </div>
           )}
 
-          {loading && <div className="text-xs text-slate-500 mb-4">Indlæser data fra klinikken…</div>}
+          {loading && (
+            <div className="text-xs text-slate-500 mb-4">
+              {t('booking.stats.loading', 'Indlæser data fra klinikken…')}
+            </div>
+          )}
 
           {!loading && inPeriod.length === 0 && (
             <div className="text-xs text-slate-500 mb-4">
-              Ingen aftaler i den valgte periode. Skift periode eller opret nye aftaler.
+              {t(
+                'booking.stats.empty',
+                'Ingen aftaler i den valgte periode. Skift periode eller opret nye aftaler.'
+              )}
             </div>
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
             <StatCard
-              title="Omsætning"
-              subtitle="Valgt periode"
+              title={t('booking.stats.cards.revenue.title', 'Omsætning')}
+              subtitle={t('booking.stats.cards.revenue.subtitle', 'Valgt periode')}
               icon={<CalendarDays className="h-5 w-5" />}
               value={formatCurrency(totalRevenue)}
             />
             <StatCard
-              title="Aftaler"
-              subtitle="Bookede i perioden"
+              title={t('booking.stats.cards.appointments.title', 'Aftaler')}
+              subtitle={t('booking.stats.cards.appointments.subtitle', 'Bookede i perioden')}
               icon={<Activity className="h-5 w-5" />}
               value={totalAppointments}
             />
             <StatCard
-              title="Unikke klienter"
-              subtitle="I perioden"
+              title={t('booking.stats.cards.clients.title', 'Unikke klienter')}
+              subtitle={t('booking.stats.cards.clients.subtitle', 'I perioden')}
               icon={<Users className="h-5 w-5" />}
               value={uniqueClientsInPeriod}
-              extra={totalClients ? `${totalClients} klienter i alt` : ''}
+              extra={
+                totalClients
+                  ? t('booking.stats.cards.clients.extra', '{count} klienter i alt', {
+                      count: totalClients,
+                    })
+                  : ''
+              }
             />
             <StatCard
-              title="Afbud / no-show"
-              subtitle="Andel af aftaler"
+              title={t('booking.stats.cards.cancel.title', 'Afbud / no-show')}
+              subtitle={t('booking.stats.cards.cancel.subtitle', 'Andel af aftaler')}
               icon={<AlertTriangle className="h-5 w-5" />}
               value={formatPercent(cancelRate)}
             />
@@ -274,18 +298,32 @@ function StatistikPage() {
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <h2 className="text-sm font-semibold text-slate-900 mb-1">Gennemsnitlig klinik-belastning</h2>
+              <h2 className="text-sm font-semibold text-slate-900 mb-1">
+                {t('booking.stats.load.title', 'Gennemsnitlig klinik-belastning')}
+              </h2>
               <p className="text-xs text-slate-500 mb-4">
-                Hvor mange timer du i gennemsnit er booket de dage, hvor du faktisk har aftaler.
+                {t(
+                  'booking.stats.load.subtitle',
+                  'Hvor mange timer du i gennemsnit er booket de dage, hvor du faktisk har aftaler.'
+                )}
               </p>
               <div className="text-2xl font-semibold text-slate-900">{formatHours(avgHoursPerActiveDay)}</div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <h2 className="text-sm font-semibold text-slate-900 mb-1">Mest bookede ydelser</h2>
-              <p className="text-xs text-slate-500 mb-4">Dine 5 mest anvendte ydelser i den valgte periode.</p>
+              <h2 className="text-sm font-semibold text-slate-900 mb-1">
+                {t('booking.stats.topServices.title', 'Mest bookede ydelser')}
+              </h2>
+              <p className="text-xs text-slate-500 mb-4">
+                {t(
+                  'booking.stats.topServices.subtitle',
+                  'Dine 5 mest anvendte ydelser i den valgte periode.'
+                )}
+              </p>
               {topServices.length === 0 ? (
-                <p className="text-xs text-slate-500">Ingen data i perioden.</p>
+                <p className="text-xs text-slate-500">
+                  {t('booking.stats.topServices.empty', 'Ingen data i perioden.')}
+                </p>
               ) : (
                 <ul className="space-y-2 text-xs">
                   {topServices.map((service) => (
@@ -294,7 +332,10 @@ function StatistikPage() {
                       className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2"
                     >
                       <span className="text-slate-700">{service.name}</span>
-                      <span className="font-medium text-slate-900">{service.count}×</span>
+                      <span className="font-medium text-slate-900">
+                        {service.count}
+                        {t('booking.stats.countSuffix', '×')}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -326,4 +367,3 @@ function StatCard({ title, subtitle, icon, value, extra }) {
 }
 
 export default StatistikPage;
-

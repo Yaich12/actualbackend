@@ -31,7 +31,11 @@
         "title": "Velg alternativet som passer best for bedriften din",
         "subtitle": "Du kan endre dette senere",
         "hint": "{count}/{max} valgt",
-        "options": ["Fysioterapeut", "Osteopat", "Kiropraktor"]
+        "options": [
+          "Fysioterapeut",
+          "Osteopat",
+          "Kiropraktor"
+        ]
       },
       "accountType": {
         "title": "Velg kontotype",
@@ -41,7 +45,11 @@
       },
       "teamSize": {
         "title": "Hvor mange ansatte har du",
-        "options": ["2-5 personer", "6-10 personer", "11+ personer"]
+        "options": [
+          "2-5 personer",
+          "6-10 personer",
+          "11+ personer"
+        ]
       },
       "serviceModel": {
         "title": "Hvor tilbyr du tjenestene dine?",
@@ -98,6 +106,10 @@
       "title": "Bedriften din er opprettet!",
       "subtitle": "Få 14 dagers gratis bruk av Selma for bedrifter",
       "button": "Ferdig"
+    },
+    "currency": {
+      "label": "Valuta",
+      "subtitle": "Du kan endre valuta senere i innstillinger."
     }
   },
   "booking": {
@@ -148,7 +160,445 @@
       "memberFallback": "Ansatt",
       "you": "Du",
       "notLoggedIn": "Ikke logget inn",
-      "loginToContinue": "Logg inn for å fortsette"
+      "loginToContinue": "Logg inn for å fortsette",
+      "addCustomer": "Legg til kunde",
+      "addCustomerNote": "La feltet stå tomt for drop-in",
+      "addMode": {
+        "available": "Se tilgjengelige tider",
+        "close": "Lukk",
+        "closePanel": "Lukk",
+        "repeat": "Gjentas ikke",
+        "title": "Velg en tid som skal bookes"
+      },
+      "addService": "Legg til tjeneste",
+      "clients": {
+        "empty": "Ingen kunder funnet",
+        "loading": "Laster kunder..."
+      },
+      "payment": "Betaling",
+      "save": "Lagre",
+      "searchClients": "Søk etter kunde",
+      "services": {
+        "defaultGroup": "Tjenester",
+        "loading": "Laster tjenester...",
+        "search": "Søk etter tjenestenavn",
+        "section": "Tjenester",
+        "title": "Velg en tjeneste"
+      },
+      "total": "Totalt",
+      "confirmDeleteProgram": "Dette er en del av et program.\n\nOK: Slett hele kundens program.\nAvbryt: Slett kun denne datoen.",
+      "unknownClient": "Ukjent kunde",
+      "status": {
+        "active": "Aktiv"
+      },
+      "selectClient": "Velg en kunde",
+      "addNewClient": "Legg til ny kunde",
+      "createNewClient": "Opprett en ny kunde"
+    },
+    "dropdown": {
+      "add": "Legg til",
+      "calendar": "I kalenderen",
+      "manual": "Manuelt"
+    },
+    "stats": {
+      "title": "Statistikk",
+      "subtitle": "Oversikt over avtaler og omsetning basert på dine faktiske bookingdata.",
+      "period": {
+        "today": "I dag",
+        "week": "Denne uken",
+        "month": "Denne måneden",
+        "year": "Dette året",
+        "all": "Alle"
+      },
+      "error": "Kan ikke hente statistikk akkurat nå. Sørg for at du er logget inn og at det finnes avtaler i Firestore.",
+      "loading": "Laster klinikkdata…",
+      "empty": "Ingen avtaler i valgt periode. Bytt periode eller opprett nye avtaler.",
+      "cards": {
+        "revenue": {
+          "title": "Omsetning",
+          "subtitle": "Valgt periode"
+        },
+        "appointments": {
+          "title": "Avtaler",
+          "subtitle": "Booket i perioden"
+        },
+        "clients": {
+          "title": "Unike kunder",
+          "subtitle": "I perioden",
+          "extra": "{count} kunder totalt"
+        },
+        "cancel": {
+          "title": "Avbestillinger / no-show",
+          "subtitle": "Andel av avtaler"
+        }
+      },
+      "load": {
+        "title": "Gjennomsnittlig klinikkbelastning",
+        "subtitle": "Hvor mange timer du i snitt er booket de dagene du faktisk har avtaler."
+      },
+      "topServices": {
+        "title": "Mest bookede tjenester",
+        "subtitle": "Dine 5 mest brukte tjenester i valgt periode.",
+        "empty": "Ingen data i perioden."
+      },
+      "countSuffix": "×",
+      "otherService": "Annet",
+      "hoursShort": "t"
+    },
+    "services": {
+      "title": "Tjenester",
+      "actions": {
+        "create": "Opprett ny",
+        "createFull": "Opprett ny tjeneste"
+      },
+      "search": {
+        "placeholder": "Søk"
+      },
+      "loading": "Laster tjenester...",
+      "price": {
+        "currency": "DKK",
+        "inclVat": "inkl. mva"
+      },
+      "list": {
+        "title": "Dine tjenester"
+      },
+      "empty": "Du har ingen tjenester ennå. Opprett din første tjeneste.",
+      "selector": {
+        "placeholder": "Ingen tjeneste valgt",
+        "loading": "Laster tjenester…",
+        "empty": "Du har ingen tjenester eller forløp ennå.",
+        "label": "Velg behandling",
+        "groups": {
+          "services": "Tjenester",
+          "programs": "Forløp"
+        },
+        "tags": {
+          "service": "Tjeneste",
+          "program": "Forløp"
+        }
+      },
+      "duration": {
+        "15m": "15 minutter",
+        "30m": "30 minutter",
+        "45m": "45 minutter",
+        "60m": "1 time",
+        "90m": "1 time 30 minutter",
+        "120m": "2 timer"
+      },
+      "colors": {
+        "amber": "Rav",
+        "teal": "Turkis",
+        "softBlue": "Myk blå",
+        "violet": "Fiolett",
+        "red": "Rød",
+        "pink": "Rosa"
+      },
+      "addNew": {
+        "title": {
+          "edit": "Rediger tjeneste",
+          "create": "Opprett ny tjeneste"
+        },
+        "actions": {
+          "close": "Lukk",
+          "delete": "Slett tjeneste",
+          "cancel": "Avbryt",
+          "saving": "Lagrer...",
+          "next": "Neste"
+        },
+        "fields": {
+          "name": {
+            "label": "Navn",
+            "placeholder": "Oppgi navn på tjenesten"
+          },
+          "description": {
+            "label": "Beskrivelse",
+            "placeholder": "Legg til en beskrivelse (valgfritt)"
+          },
+          "duration": {
+            "label": "Varighet"
+          },
+          "color": {
+            "label": "Farge",
+            "hint": "Velg farge for visning i kalenderen."
+          },
+          "price": {
+            "label": "Pris",
+            "placeholder": "0,00"
+          },
+          "vat": {
+            "label": "MVA"
+          }
+        },
+        "errors": {
+          "notLoggedIn": "Du må være logget inn for å lagre en tjeneste.",
+          "saveFailed": "Kunne ikke lagre tjenesten. Prøv igjen.",
+          "deleteFailed": "Kunne ikke slette tjenesten. Prøv igjen."
+        },
+        "confirmDelete": "Er du sikker på at du vil slette denne tjenesten? Dette kan ikke angres."
+      }
+    },
+    "programs": {
+      "defaultName": "Forløp",
+      "sessionsCount": "{count} økter",
+      "weeksCount": "{count} uker",
+      "loadError": "Kunne ikke hente forløp",
+      "create": {
+        "title": "Opprett nytt forløp",
+        "subtitle": "Design et strukturert behandlingsforløp - f.eks. artroseforløp, GLAD-gruppe eller postoperativ rehabilitering.",
+        "alertSaved": "Forløp opprettet (koble til Firestore senere).",
+        "fields": {
+          "name": {
+            "label": "Forløpsnavn",
+            "placeholder": "f.eks. GLAD kne, hofteartrose-forløp, rygggruppe, osv."
+          },
+          "condition": {
+            "label": "Primær problemstilling"
+          },
+          "format": {
+            "label": "Format"
+          },
+          "setting": {
+            "label": "Sted"
+          },
+          "maxParticipants": {
+            "label": "Maks antall deltakere"
+          },
+          "durationWeeks": {
+            "label": "Varighet (uker)"
+          },
+          "sessionsPerWeek": {
+            "label": "Økter per uke"
+          },
+          "sessionLength": {
+            "label": "Varighet per økt (min)"
+          },
+          "goals": {
+            "label": "Kliniske og funksjonelle mål",
+            "placeholder": "f.eks. redusere smerte, øke gangdistanse, forbedre STS, øke mestringstro for trening osv."
+          },
+          "content": {
+            "label": "Hva inneholder forløpet typisk?",
+            "education": "Pasientopplæring / smerteforklaring",
+            "strength": "Styrketrening (store muskelgrupper)",
+            "neuromuscular": "Nevromuskulær trening / balanse",
+            "homeProgram": "Hjemmeprogram med progresjon",
+            "outcomes": "Outcome-mål (f.eks. KOOS, HOOS, NRS, STS)"
+          },
+          "notes": {
+            "label": "Interne notater (valgfritt)",
+            "placeholder": "Praktiske detaljer, kontraindikasjoner, utstyrskrav osv."
+          }
+        }
+      },
+      "options": {
+        "condition": {
+          "kneeOa": "Kneartrose",
+          "hipOa": "Hofteartrose",
+          "glad": "GLAD-forløp",
+          "acl": "Postoperativ ACL",
+          "shoulder": "Skulder / impingement",
+          "lowBack": "Uspesifikke korsryggsmerter",
+          "other": "Annet / blandet MSK"
+        },
+        "format": {
+          "individual": "Individuell",
+          "smallGroup": "Liten gruppe (2–4)",
+          "group": "Gruppe (5–12)",
+          "individualShort": "Individuell",
+          "smallGroupShort": "Liten gruppe",
+          "groupShort": "Gruppe"
+        },
+        "setting": {
+          "clinic": "Klinikk / treningssal",
+          "gym": "Treningssenter",
+          "online": "Online / hybrid",
+          "home": "Hjemmebasert",
+          "clinicShort": "Klinikk",
+          "gymShort": "Treningssenter",
+          "onlineShort": "Online",
+          "homeShort": "Hjemme"
+        }
+      },
+      "summary": {
+        "title": "Oversikt",
+        "newProgram": "Nytt forløp",
+        "sessions": "{weeks} uker · {sessions} økter/uke · ca. {total} økter totalt",
+        "empty": "Angi uker og økter/uke for å se totalen.",
+        "format": "Format",
+        "formatSmall": "Liten gruppe",
+        "formatGroup": "Gruppe",
+        "setting": "Sted",
+        "settingClinic": "Klinikk",
+        "settingGym": "Treningssenter",
+        "settingOnline": "Online",
+        "settingHome": "Hjemme",
+        "maxParticipants": "Maks deltakere"
+      },
+      "financial": {
+        "title": "Økonomi",
+        "sessionPrice": "Pris per økt ({currency})",
+        "packagePrice": "Pakkepris for hele forløpet ({currency})",
+        "hint": "Du kan fylle inn begge feltene og velge i faktureringen hva du bruker i praksis.",
+        "estimate": "Estimert omsetning per deltaker ved øktpris:"
+      },
+      "actions": {
+        "saving": "Lagrer...",
+        "save": "Lagre forløp",
+        "create": "Opprett forløp"
+      },
+      "errors": {
+        "loadFailed": "Kunne ikke hente forløp.",
+        "notLoggedIn": "Logg inn for å lagre forløp.",
+        "saveFailed": "Kunne ikke lagre forløpet. Prøv igjen."
+      },
+      "list": {
+        "title": "Forløp",
+        "subtitle": "Oversikt over dine lagrede forløp. Opprett nye med Opprett forløp.",
+        "searchPlaceholder": "Søk forløp eller diagnose",
+        "loading": "Laster forløp...",
+        "empty": "Ingen forløp ennå. Klikk Opprett forløp for å komme i gang.",
+        "untitled": "Uten navn",
+        "sessionsMeta": "{weeks} uker · {sessions}/uke · {total} økter",
+        "sessionLength": "Varighet per økt: {count} min",
+        "pricePerSession": "Pris per økt:",
+        "packagePrice": "Pakkepris:",
+        "maxParticipants": "Maks deltakere: {count}",
+        "goals": "Mål: {goals}"
+      }
+    },
+    "overview": {
+      "currencySuffix": "kr.",
+      "status": {
+        "booked": "Booket",
+        "confirmed": "Bekreftet",
+        "arrived": "Ankommet",
+        "started": "Startet",
+        "completed": "Gjennomført",
+        "cancelled": "Avlyst",
+        "pending": "Avventer",
+        "noshow": "Uteblivelse"
+      },
+      "title": "Klinikkoversikt",
+      "subtitle": "En rask oversikt over dagens drift og de siste resultatene.",
+      "period": {
+        "last7": "Siste 7 dager"
+      },
+      "sales": {
+        "title": "Siste salg",
+        "range": "Siste {count} dager",
+        "option7": "Siste 7 dager",
+        "option30": "Siste 30 dager",
+        "appointments": "Avtaler",
+        "appointmentValue": "Avtaleverdi"
+      },
+      "actions": {
+        "more": "Flere alternativer"
+      },
+      "dropdown": {
+        "period": "Periode"
+      },
+      "legend": {
+        "sales": "Salg",
+        "appointments": "Avtaler",
+        "confirmed": "Bekreftet",
+        "cancelled": "Avlysning"
+      },
+      "upcoming": {
+        "title": "Kommende avtaler",
+        "range": "Neste {count} dager",
+        "option7": "Neste 7 dager",
+        "option30": "Neste 30 dager",
+        "confirmed": "Bekreftede avtaler",
+        "cancelled": "Avlyste avtaler",
+        "bookedCount": "{count} booket"
+      },
+      "activity": {
+        "title": "Avtaleaktivitet",
+        "loadingTitle": "Laster avtaler...",
+        "loadingSubtitle": "Vi oppdaterer historikken nå",
+        "errorTitle": "Kunne ikke hente avtaler",
+        "errorSubtitle": "Prøv igjen om litt",
+        "emptyTitle": "Ingen tidligere avtaler",
+        "emptySubtitle": "Historikk vises her når du har avsluttede avtaler",
+        "unknownClient": "Ukjent kunde",
+        "defaultService": "Avtale",
+        "withStaff": "med {name}"
+      },
+      "today": {
+        "title": "Neste avtaler i dag",
+        "loadingTitle": "Laster avtaler...",
+        "loadingSubtitle": "Vi oppdaterer dagens plan",
+        "errorTitle": "Kunne ikke hente avtaler",
+        "errorSubtitle": "Prøv igjen om litt",
+        "emptyTitle": "Ingen avtaler i dag",
+        "emptySubtitle": "Gå til {calendar} for å legge til avtaler",
+        "calendarLink": "kalender"
+      },
+      "topServices": {
+        "title": "Toptjenester",
+        "columns": {
+          "service": "Tjeneste"
+        }
+      },
+      "columns": {
+        "thisMonth": "Denne måneden",
+        "lastMonth": "Forrige måned"
+      },
+      "table": {
+        "loading": "Laster data...",
+        "error": "Kunne ikke hente data.",
+        "empty": "Ingen data ennå."
+      },
+      "topStaff": {
+        "title": "Toppmedarbeider",
+        "columns": {
+          "staff": "Medarbeider"
+        }
+      },
+      "footer": {
+        "revenueToday": "Omsetning i dag",
+        "newClients": "Nye kunder"
+      },
+      "sharedAccount": "felles konto"
+    },
+    "clients": {
+      "title": "Kundeoversikt",
+      "actions": {
+        "add": "Legg til kunde",
+        "edit": "Endre kundeopplysninger",
+        "addProgram": "Legg til programopplysninger"
+      },
+      "sort": {
+        "label": "Sorter",
+        "newest": "Nyeste",
+        "oldest": "Eldste",
+        "alphabetical": "Alfabetisk"
+      },
+      "search": {
+        "placeholder": "Søk"
+      },
+      "loading": "Laster kunder...",
+      "columns": {
+        "name": "Navn",
+        "status": "Status",
+        "email": "E-post",
+        "phone": "Telefon",
+        "cpr": "CPR",
+        "address": "Adresse",
+        "city": "By",
+        "postalCode": "Postnummer",
+        "country": "Land"
+      }
+    },
+    "invoices": {
+      "sidebar": {
+        "dailyOverview": "Daglig salgsoversikt",
+        "appointments": "Avtaler",
+        "sales": "Salg",
+        "payments": "Betalinger",
+        "title": "Fakturaer",
+        "subtitle": "Salg"
+      }
     }
   },
   "settings": {
@@ -193,6 +643,10 @@
     "language": {
       "title": "Språk",
       "label": "Foretrukket språk"
+    },
+    "currency": {
+      "label": "Valuta",
+      "placeholder": "Velg valuta"
     }
   }
 }

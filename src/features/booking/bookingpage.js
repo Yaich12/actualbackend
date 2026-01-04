@@ -12,6 +12,7 @@ import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, where, 
 import { db } from '../../firebase';
 import useAppointments from '../../hooks/useAppointments';
 import { combineDateAndTimeToIso, parseDateString } from '../../utils/appointmentFormat';
+import { formatServiceDuration } from '../../utils/serviceLabels';
 import { useUserClients } from './Klienter/hooks/useUserClients';
 import { useUserServices } from './Ydelser/hooks/useUserServices';
 import Dropdown from './dropdown/dropdown';
@@ -1466,7 +1467,10 @@ function BookingPage() {
 
       const deleteAll = isForloeb
         ? window.confirm(
-            'Dette er en del af et forløb.\n\nOK: Slet hele klientens forløb.\nAnnuller: Slet kun denne dato.'
+            t(
+              'booking.calendar.confirmDeleteProgram',
+              'Dette er en del af et forløb.\n\nOK: Slet hele klientens forløb.\nAnnuller: Slet kun denne dato.'
+            )
           )
         : false;
 
@@ -1514,10 +1518,10 @@ function BookingPage() {
       appointment.client || appointment.clientEmail || appointment.clientPhone
         ? {
             id: appointment.clientId || 'legacy-client',
-            navn: appointment.client || 'Ukendt klient',
+            navn: appointment.client || t('booking.calendar.unknownClient', 'Ukendt klient'),
             email: appointment.clientEmail || '',
             telefon: appointment.clientPhone || '',
-            status: 'Aktiv',
+            status: t('booking.calendar.status.active', 'Aktiv'),
             adresse: '',
             by: '',
             postnummer: '',
@@ -2382,6 +2386,8 @@ function BookingPage() {
   const selectedServiceLabel = selectedService?.navn || appointmentFallback;
   const selectedServiceDuration =
     selectedService?.varighed || selectedSlot?.serviceDuration || '';
+  const selectedServiceDurationLabel =
+    formatServiceDuration(selectedServiceDuration, t) || selectedServiceDuration;
   const selectedServicePrice =
     typeof selectedService?.pris === 'number' ? selectedService.pris : null;
   const slotOwnerLabel = selectedSlot?.ownerName || ownerEntry.name;
@@ -2682,7 +2688,9 @@ function BookingPage() {
                       )}
                       {clientPickerOpen && (
                         <div className="calendar-add-client-picker">
-                          <div className="calendar-add-client-title">Vælg en kunde</div>
+                          <div className="calendar-add-client-title">
+                            {t('booking.calendar.selectClient', 'Vælg en kunde')}
+                          </div>
                           <div className="calendar-add-client-search">
                             <Search className="calendar-add-client-search-icon" />
                             <input
@@ -2703,9 +2711,11 @@ function BookingPage() {
                             >
                               <span className="calendar-add-client-create-icon">+</span>
                               <span className="calendar-add-client-create-text">
-                                <span className="calendar-add-client-name">Tilføj ny kunde</span>
+                                <span className="calendar-add-client-name">
+                                  {t('booking.calendar.addNewClient', 'Tilføj ny kunde')}
+                                </span>
                                 <span className="calendar-add-client-meta">
-                                  Opret en ny kunde
+                                  {t('booking.calendar.createNewClient', 'Opret en ny kunde')}
                                 </span>
                               </span>
                             </button>
@@ -2788,7 +2798,8 @@ function BookingPage() {
                                         {service.navn}
                                       </span>
                                       <span className="calendar-add-service-meta">
-                                        {service.varighed}
+                                        {formatServiceDuration(service.varighed, t) ||
+                                          service.varighed}
                                       </span>
                                     </span>
                                     <span className="calendar-add-service-price">
@@ -2822,7 +2833,7 @@ function BookingPage() {
                               <div className="calendar-add-selected-meta">
                                 {slotTimeLabel}
                                 {slotEndTimeLabel ? ` - ${slotEndTimeLabel}` : ''} •{' '}
-                                {selectedServiceDuration} • {slotOwnerLabel}
+                                {selectedServiceDurationLabel} • {slotOwnerLabel}
                               </div>
                             </div>
                             <div className="calendar-add-selected-price">
@@ -2842,7 +2853,10 @@ function BookingPage() {
                                   {service.navn}
                                 </div>
                                 <div className="calendar-add-selected-meta">
-                                  {service.varighed || '—'} • {slotOwnerLabel}
+                                  {formatServiceDuration(service.varighed, t) ||
+                                    service.varighed ||
+                                    '—'}{' '}
+                                  • {slotOwnerLabel}
                                 </div>
                               </div>
                               <div className="calendar-add-selected-price">

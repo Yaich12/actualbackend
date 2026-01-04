@@ -18,10 +18,10 @@ import AppointmentDetailDrawer from "./AppointmentDetailDrawer";
 
 const statusLabels: Record<string, string> = {
   booked: "Booket",
-  confirmed: "Bekr\u00e6ftet",
+  confirmed: "Bekræftet",
   arrived: "Ankommet",
   started: "Begyndt",
-  completed: "Gennemf\u00f8rt",
+  completed: "Gennemført",
   cancelled: "Aflyst",
   pending: "Afventer",
   noshow: "Udeblivelse",
@@ -30,10 +30,10 @@ const statusLabels: Record<string, string> = {
 };
 
 const statusClasses = (status: string) => {
-  if (status === "Booket" || status === "Bekr\u00e6ftet" || status === "Ankommet" || status === "Begyndt") {
+  if (status === "Booket" || status === "Bekræftet" || status === "Ankommet" || status === "Begyndt") {
     return "bg-blue-50 text-blue-600";
   }
-  if (status === "Gennemf\u00f8rt") {
+  if (status === "Gennemført") {
     return "bg-slate-100 text-slate-600";
   }
   if (status === "Aflyst") {
@@ -51,10 +51,10 @@ const defaultStatusFilter = "Alle statuser";
 const statusOptions = [
   { id: "all", label: defaultStatusFilter },
   { id: "booked", label: "Booket" },
-  { id: "confirmed", label: "Bekr\u00e6ftet" },
+  { id: "confirmed", label: "Bekræftet" },
   { id: "arrived", label: "Ankommet" },
   { id: "started", label: "Begyndt" },
-  { id: "completed", label: "Gennemf\u00f8rt" },
+  { id: "completed", label: "Gennemført" },
   { id: "cancelled", label: "Aflyst" },
   { id: "noshow", label: "Udeblivelse" },
 ];
@@ -62,37 +62,37 @@ const statusOptions = [
 const sortOptions: SortOption[] = [
   {
     id: "createdAtAsc",
-    label: "Oprettelsesdato (\u00e6ldste f\u00f8rst)",
+    label: "Oprettelsesdato (ældste først)",
     field: "createdAt",
     direction: "asc",
   },
   {
     id: "createdAtDesc",
-    label: "Oprettelsesdato (nyeste f\u00f8rst)",
+    label: "Oprettelsesdato (nyeste først)",
     field: "createdAt",
     direction: "desc",
   },
   {
     id: "scheduledAtAsc",
-    label: "Planlagt dato (\u00e6ldste f\u00f8rst)",
+    label: "Planlagt dato (ældste først)",
     field: "scheduledAt",
     direction: "asc",
   },
   {
     id: "scheduledAtDesc",
-    label: "Planlagt dato (nyeste f\u00f8rst)",
+    label: "Planlagt dato (nyeste først)",
     field: "scheduledAt",
     direction: "desc",
   },
   {
     id: "durationAsc",
-    label: "Varighed (korteste f\u00f8rst)",
+    label: "Varighed (korteste først)",
     field: "duration",
     direction: "asc",
   },
   {
     id: "durationDesc",
-    label: "Varighed (l\u00e6ngste f\u00f8rst)",
+    label: "Varighed (længste først)",
     field: "duration",
     direction: "desc",
   },
@@ -402,7 +402,7 @@ export default function Appointments() {
       if (name) names.add(name);
     });
     if (names.size === 0) {
-      return ["geg ded", "f\u00e6lles konto", "Wendy Smith (Demo)"];
+      return ["geg ded", "fælles konto", "Wendy Smith (Demo)"];
     }
     return Array.from(names).sort((a, b) => a.localeCompare(b, "da-DK"));
   }, [appointments]);
@@ -702,7 +702,7 @@ export default function Appointments() {
         if (normalized < rangeStart || normalized > rangeEnd) return false;
       }
       if (appliedFilters.employee !== defaultEmployeeFilter) {
-        const staffName = appointment.calendarOwner || "f\u00e6lles konto";
+        const staffName = appointment.calendarOwner || "fælles konto";
         if (staffName !== appliedFilters.employee) return false;
       }
       if (appliedFilters.status !== defaultStatusFilter) {
@@ -747,7 +747,7 @@ export default function Appointments() {
 
   const selectedSortLabel =
     sortOptions.find((option) => option.id === selectedSortId)?.label ||
-    "Planlagt dato (nyeste f\u00f8rst)";
+    "Planlagt dato (nyeste først)";
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -755,11 +755,11 @@ export default function Appointments() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Aftaler</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Se, filtrer og eksport\u00e9r aftaler, der er booket af dine kunder.
+            Se, filtrer og eksportér aftaler, der er booket af dine kunder.
           </p>
         </div>
         <button type="button" className="toolbar-pill">
-          Eksport\u00e9r
+          Eksportér
           <ChevronDown className="toolbar-caret" />
         </button>
       </div>
@@ -772,7 +772,7 @@ export default function Appointments() {
                 <Search className="h-4 w-4 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="S\u00f8g efter reference eller kunde"
+                  placeholder="Søg efter reference eller kunde"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   className="w-48 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
@@ -864,7 +864,7 @@ export default function Appointments() {
                             type="button"
                             onClick={handlePrevMonth}
                             className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50"
-                            aria-label="Forrige m\u00e5ned"
+                            aria-label="Forrige måned"
                           >
                             <ChevronLeft className="h-4 w-4" />
                           </button>
@@ -925,7 +925,7 @@ export default function Appointments() {
                             type="button"
                             onClick={handleNextMonth}
                             className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50"
-                            aria-label="N\u00e6ste m\u00e5ned"
+                            aria-label="Næste måned"
                           >
                             <ChevronRight className="h-4 w-4" />
                           </button>
@@ -1294,7 +1294,7 @@ export default function Appointments() {
                       colSpan={10}
                       className="px-4 py-8 text-center text-xs text-slate-400"
                     >
-                      Ingen aftaler matcher din s\u00f8gning.
+                      Ingen aftaler matcher din søgning.
                     </td>
                   </tr>
                 )}
@@ -1308,12 +1308,12 @@ export default function Appointments() {
                       ? String(refRaw).startsWith("#")
                         ? String(refRaw)
                         : `#${refRaw}`
-                      : "\u2014";
+                      : "—";
                     const customerName =
                       appointment.client || appointment.clientEmail || "Ind fra gaden";
                     const serviceName =
-                      appointment.service || service?.navn || appointment.title || "\u2014";
-                    const createdBy = appointment.calendarOwner || "f\u00e6lles konto";
+                      appointment.service || service?.navn || appointment.title || "—";
+                    const createdBy = appointment.calendarOwner || "fælles konto";
                     const createdAtSource = resolveDateValue(appointment.createdAt);
                     const createdAt = createdAtSource
                       ? formatDateTimeFromDate(createdAtSource)
@@ -1323,8 +1323,8 @@ export default function Appointments() {
                       appointment.startTime
                     );
                     const duration =
-                      appointment.serviceDuration || service?.varighed || "\u2014";
-                    const staff = appointment.calendarOwner || "f\u00e6lles konto";
+                      appointment.serviceDuration || service?.varighed || "—";
+                    const staff = appointment.calendarOwner || "fælles konto";
                     const price =
                       typeof appointment.servicePrice === "number"
                         ? appointment.servicePrice

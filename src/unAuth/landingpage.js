@@ -7,6 +7,7 @@ import Footer from './components/footer';
 import Preview from './components/preview';
 import ScrollSection from './components/scroll';
 import Manifesto from './components/Manifesto';
+import Pricing from '../pricing/pricing';
 
 const LandingDivider = () => (
   <div className="landing-divider" aria-label="Divider: from physios to physios">
@@ -15,6 +16,8 @@ const LandingDivider = () => (
 );
 
 function LandingPage() {
+  const showManifesto = false;
+
   return (
     <div className="landing-page">
       <Navbar />
@@ -30,12 +33,22 @@ function LandingPage() {
         <section className="landing-section landing-section-full" id="parallax-demo">
           <ScrollSection />
         </section>
-        <section className="landing-section landing-section-full landing-section-demo" id="demo">
+        <section
+          className="landing-section landing-section-full landing-section-demo landing-section-hidden"
+          id="demo"
+        >
           <Demo />
         </section>
-        <LandingDivider />
-        <section className="landing-section landing-section-full" id="manifesto">
-          <Manifesto />
+        {showManifesto && (
+          <>
+            <LandingDivider />
+            <section className="landing-section landing-section-full" id="manifesto">
+              <Manifesto />
+            </section>
+          </>
+        )}
+        <section className="landing-section landing-section-full" id="pricing">
+          <Pricing />
         </section>
       </main>
       <Footer />

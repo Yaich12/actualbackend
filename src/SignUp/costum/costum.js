@@ -66,6 +66,15 @@ const DEFAULT_HEARD_FROM_OPTIONS = [
   'Andet',
 ];
 
+const CURRENCY_OPTIONS = [
+  { value: 'DKK', label: 'DKK' },
+  { value: 'EUR', label: 'EURO' },
+  { value: 'USD', label: 'USD' },
+  { value: 'NOK', label: 'NOK' },
+  { value: 'SEK', label: 'SEK' },
+  { value: 'AED', label: 'AED' },
+];
+
 const MAX_CATEGORIES = 1;
 
 const FormLabel = ({ children }) => (
@@ -95,6 +104,7 @@ function OnboardingSlides() {
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
   const [formData, setFormData] = useState({
     language: language || 'da',
+    currency: '',
     businessName: '',
     website: '',
     categories: [],
@@ -268,7 +278,7 @@ function OnboardingSlides() {
   const isStepComplete = (step) => {
     switch (step) {
       case 'language':
-        return Boolean(formData.language);
+        return Boolean(formData.language && formData.currency);
       case 'business':
         return formData.businessName.trim().length > 1;
       case 'categories':
@@ -309,6 +319,7 @@ function OnboardingSlides() {
       update.categories = formData.categories;
       update.jobTitle = formData.categories[0];
     }
+    if (formData.currency) update.currency = formData.currency;
     if (formData.accountType) update.accountType = formData.accountType;
     if (formData.teamSize) update.teamSize = formData.teamSize;
     if (formData.serviceModel) update.serviceModel = formData.serviceModel;
@@ -410,6 +421,21 @@ function OnboardingSlides() {
               setFormData((prev) => ({ ...prev, language: option.code }));
               void setLanguage(option.code);
             }}
+            size="lg"
+          />
+        ))}
+      </div>
+      <FormLabel>{t('onboarding.currency.label', 'Valuta')}</FormLabel>
+      <p className="onboarding-subtitle">
+        {t('onboarding.currency.subtitle', 'Du kan ændre valuta senere i indstillinger.')}
+      </p>
+      <div className="onboarding-grid two-cols">
+        {CURRENCY_OPTIONS.map((option) => (
+          <OptionCard
+            key={option.value}
+            label={option.label}
+            selected={formData.currency === option.value}
+            onClick={() => setFormData((prev) => ({ ...prev, currency: option.value }))}
             size="lg"
           />
         ))}

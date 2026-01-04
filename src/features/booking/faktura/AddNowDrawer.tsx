@@ -22,6 +22,7 @@ import { useAuth } from "../../../AuthContext";
 import useAppointments from "../../../hooks/useAppointments";
 import { useUserServices } from "../Ydelser/hooks/useUserServices";
 import { useUserClients } from "../Klienter/hooks/useUserClients";
+import { useUserProducts } from "../Product/hooks/useUserProducts";
 import { db } from "../../../firebase";
 
 const tabs = [
@@ -45,6 +46,20 @@ type LineItem = {
   referenceId?: string;
 };
 
+type ProductItem = {
+  id: string;
+  name: string;
+  price: number;
+  currency?: string;
+  amount?: number | null;
+  unit?: string;
+  shortDescription?: string;
+  description?: string;
+  brand?: string;
+  category?: string;
+  sku?: string;
+};
+
 type SelectedCustomer = {
   id?: string | null;
   name: string;
@@ -65,27 +80,6 @@ type AddNowDrawerProps = {
   initialAppointmentId?: string | null;
   initialStep?: DrawerStep;
 };
-
-const productOptions = [
-  {
-    id: "product-1",
-    name: "Smooth Keratin Shampoo",
-    price: 199,
-    description: "250 ml",
-  },
-  {
-    id: "product-2",
-    name: "Volume Mousse",
-    price: 149,
-    description: "200 ml",
-  },
-  {
-    id: "product-3",
-    name: "Argan H\u00e5rolie",
-    price: 179,
-    description: "100 ml",
-  },
-];
 
 const paymentMethods: PaymentMethod[] = [
   { id: "kontanter", label: "Kontanter", group: "core", icon: Banknote },
@@ -146,11 +140,11 @@ const getAppointmentTimeRange = (appointment: any) => {
   const startTime = appointment?.startTime || "";
   const endTime = appointment?.endTime || "";
   if (!startTime) return "";
-  if (endTime) return `${startTime} \u2013 ${endTime}`;
+  if (endTime) return `${startTime} – ${endTime}`;
   const [hours, minutes] = startTime.split(":").map((part: string) => Number(part));
   if (Number.isNaN(hours) || Number.isNaN(minutes)) return startTime;
   const nextHour = (hours + 1) % 24;
-  return `${startTime} \u2013 ${String(nextHour).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+  return `${startTime} – ${String(nextHour).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 };
 
 const formatDateTime = (date: Date | null) => {
@@ -180,6 +174,7 @@ export default function AddNowDrawer({
   );
   const { services, loading: servicesLoading } = useUserServices();
   const { clients, loading: clientsLoading } = useUserClients();
+  const { products, loading: productsLoading, error: productsError } = useUserProducts();
 
   const [activeTab, setActiveTab] = useState<DrawerTab>("appointments");
   const [searchTerm, setSearchTerm] = useState("");
@@ -248,13 +243,20 @@ export default function AddNowDrawer({
   }, [services, normalizedSearch]);
 
   const filteredProducts = useMemo(() => {
-    if (!normalizedSearch) return productOptions;
-    return productOptions.filter((product) =>
-      [product.name, product.description]
+    if (!normalizedSearch) return products;
+    return products.filter((product) =>
+      [
+        product.name,
+        product.sku,
+        product.brand,
+        product.category,
+        product.shortDescription,
+        product.description,
+      ]
         .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(normalizedSearch))
+        .some((value) => String(value).toLowerCase().includes(normalizedSearch))
     );
-  }, [normalizedSearch]);
+  }, [normalizedSearch, products]);
 
   const filteredClients = useMemo(() => {
     const queryText = clientSearch.trim().toLowerCase();
@@ -275,7 +277,7 @@ export default function AddNowDrawer({
       typeof selectedAppointment.servicePrice === "number"
         ? selectedAppointment.servicePrice
         : service?.pris || 0;
-    const owner = selectedAppointment.calendarOwner || "f\u00e6lles konto";
+    const owner = selectedAppointment.calendarOwner || "fælles konto";
 
     return [
       {
@@ -364,7 +366,7 @@ export default function AddNowDrawer({
         name: service.navn,
         duration: service.varighed || "1 time",
         price: service.pris || 0,
-        owner: "f\u00e6lles konto",
+        owner: "fælles konto",
         color: service.color || "#93c5fd",
         source: "service",
         referenceId: service.id,
@@ -372,13 +374,26 @@ export default function AddNowDrawer({
     ]);
   };
 
-  const handleAddProduct = (product: (typeof productOptions)[number]) => {
+  const getProductMeta = (product: ProductItem) => {
+    const amountValue =
+      product.amount !== null && product.amount !== undefined ? product.amount : null;
+    if (amountValue !== null) {
+      return `${amountValue} ${product.unit || ""}`.trim();
+    }
+    if (product.shortDescription) return product.shortDescription;
+    if (product.description) return product.description;
+    if (product.brand) return product.brand;
+    return "";
+  };
+
+  const handleAddProduct = (product: ProductItem) => {
+    const meta = getProductMeta(product);
     setExtraItems((prev) => [
       ...prev,
       {
         id: `product-${product.id}-${Date.now()}`,
-        name: product.name,
-        duration: product.description,
+        name: product.name || "Produkt",
+        duration: meta,
         price: product.price || 0,
         owner: "Butik",
         color: "#94a3b8",
@@ -464,7 +479,7 @@ export default function AddNowDrawer({
       setStep("success");
     } catch (err) {
       console.error("[AddNowDrawer] Failed to complete payment", err);
-      setPaymentError("Kunne ikke gennemf\u00f8re betalingen. Pr\u00f8v igen.");
+      setPaymentError("Kunne ikke gennemføre betalingen. Prøv igen.");
     } finally {
       setPaymentSaving(false);
     }
@@ -486,9 +501,9 @@ export default function AddNowDrawer({
   ) : null;
 
   const headerTitle =
-    step === "payment" ? "V\u00e6lg betaling" : step === "success" ? "Salg" : "L\u00e6g i kurv";
+    step === "payment" ? "Vælg betaling" : step === "success" ? "Salg" : "Læg i kurv";
   const headerSubtitle =
-    step === "success" ? "Gennemf\u00f8rt" : "Kurv \u203a Drikkepenge \u203a Betaling";
+    step === "success" ? "Gennemført" : "Kurv › Betaling";
 
   return (
     <div
@@ -551,7 +566,7 @@ export default function AddNowDrawer({
                   <div className="flex items-center justify-between">
                     <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white">
                       <CircleCheck className="h-4 w-4" />
-                      Gennemf\u00f8rt
+                      Gennemført
                     </span>
                     <div className="flex items-center gap-2">
                       <button
@@ -579,7 +594,7 @@ export default function AddNowDrawer({
                           year: "numeric",
                         })}`
                       : ""}
-                    {selectedAppointment?.location ? ` \u00b7 ${selectedAppointment.location}` : ""}
+                    {selectedAppointment?.location ? ` · ${selectedAppointment.location}` : ""}
                   </p>
 
                   <div className="mt-6 space-y-4">
@@ -620,8 +635,8 @@ export default function AddNowDrawer({
                               </p>
                               <p className="text-xs text-slate-500">
                                 {getAppointmentTimeRange(selectedAppointment) || ""}
-                                {item.duration ? ` \u2022 ${item.duration}` : ""}
-                                {item.owner ? ` \u2022 ${item.owner}` : ""}
+                                {item.duration ? ` • ${item.duration}` : ""}
+                                {item.owner ? ` • ${item.owner}` : ""}
                               </p>
                             </div>
                             <p className="text-sm font-semibold text-slate-900">
@@ -663,7 +678,7 @@ export default function AddNowDrawer({
                   {step === "payment" ? (
                     <div className="flex h-full flex-col overflow-auto px-6 py-6">
                       <div>
-                        <h3 className="text-lg font-semibold text-slate-900">V\u00e6lg betaling</h3>
+                        <h3 className="text-lg font-semibold text-slate-900">Vælg betaling</h3>
                         <p className="mt-1 text-sm text-slate-500">Betalingsmetoder</p>
                       </div>
 
@@ -725,7 +740,7 @@ export default function AddNowDrawer({
                           <Search className="h-4 w-4 text-slate-400" />
                           <input
                             type="text"
-                            placeholder="S\u00f8g"
+                            placeholder="Søg"
                             value={searchTerm}
                             onChange={(event) => setSearchTerm(event.target.value)}
                             className="w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
@@ -789,7 +804,7 @@ export default function AddNowDrawer({
 
                             {!appointmentsLoading && filteredAppointments.length === 0 && (
                               <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
-                                Ingen aftaler matcher din s\u00f8gning.
+                                Ingen aftaler matcher din søgning.
                               </div>
                             )}
 
@@ -801,7 +816,7 @@ export default function AddNowDrawer({
                                 const timeRange = getAppointmentTimeRange(appointment);
                                 const duration =
                                   appointment.serviceDuration || service?.varighed || "1t";
-                                const owner = appointment.calendarOwner || "f\u00e6lles konto";
+                                const owner = appointment.calendarOwner || "fælles konto";
                                 const serviceName = service?.navn || appointment.service || "";
                                 const price =
                                   typeof appointment.servicePrice === "number"
@@ -833,8 +848,8 @@ export default function AddNowDrawer({
                                       </p>
                                     </div>
                                     <p className="mt-3 text-xs text-slate-500">
-                                      {duration} \u2022 {owner}
-                                      {serviceName ? ` \u2022 ${serviceName}` : ""}
+                                      {duration} • {owner}
+                                      {serviceName ? ` • ${serviceName}` : ""}
                                     </p>
                                   </button>
                                 );
@@ -853,7 +868,7 @@ export default function AddNowDrawer({
 
                             {!servicesLoading && filteredServices.length === 0 && (
                               <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
-                                Ingen ydelser matcher din s\u00f8gning.
+                                Ingen ydelser matcher din søgning.
                               </div>
                             )}
 
@@ -871,7 +886,7 @@ export default function AddNowDrawer({
                                       {service.navn}
                                     </p>
                                     <p className="mt-1 text-xs text-slate-500">
-                                      {service.varighed || "1 time"} \u2022 {formatCurrency(service.pris)} kr.
+                                      {service.varighed || "1 time"} • {formatCurrency(service.pris)} kr.
                                     </p>
                                   </div>
                                   <div className="flex items-center gap-3">
@@ -890,8 +905,29 @@ export default function AddNowDrawer({
 
                         {activeTab === "products" && (
                           <div className="space-y-3">
+                            {productsLoading && (
+                              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
+                                Henter produkter...
+                              </div>
+                            )}
+
+                            {!productsLoading && productsError && (
+                              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
+                                Kan ikke hente produkter lige nu.
+                              </div>
+                            )}
+
+                            {!productsLoading &&
+                              !productsError &&
+                              filteredProducts.length === 0 && (
+                                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
+                                  Ingen produkter matcher din søgning.
+                                </div>
+                              )}
+
                             {filteredProducts.map((product) => {
                               const count = productCounts[product.id] || 0;
+                              const meta = getProductMeta(product);
                               return (
                                 <button
                                   key={product.id}
@@ -901,10 +937,10 @@ export default function AddNowDrawer({
                                 >
                                   <div>
                                     <p className="text-sm font-semibold text-slate-900">
-                                      {product.name}
+                                      {product.name || "Produkt"}
                                     </p>
                                     <p className="mt-1 text-xs text-slate-500">
-                                      {product.description} \u2022 {formatCurrency(product.price)} kr.
+                                      {meta || "—"} • {formatCurrency(product.price)} kr.
                                     </p>
                                   </div>
                                   <div className="flex items-center gap-3">
@@ -931,7 +967,7 @@ export default function AddNowDrawer({
                       {step === "payment" ? (
                         <div className="flex items-center justify-between gap-4">
                           <div>
-                            <p className="text-sm font-semibold text-slate-900">Tilf\u00f8j kunde</p>
+                            <p className="text-sm font-semibold text-slate-900">Tilføj kunde</p>
                             <p className="text-xs text-slate-500">
                               Efterlad feltet tomt til drop-in-kunder
                             </p>
@@ -980,7 +1016,7 @@ export default function AddNowDrawer({
                           onClick={() => setShowClientPicker(true)}
                           className="flex w-full items-center justify-center rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600"
                         >
-                          Tilf\u00f8j kunde
+                          Tilføj kunde
                         </button>
                       )}
                     </div>
@@ -991,7 +1027,7 @@ export default function AddNowDrawer({
                           <Search className="h-3 w-3 text-slate-400" />
                           <input
                             type="text"
-                            placeholder="S\u00f8g efter kunde"
+                            placeholder="Søg efter kunde"
                             value={clientSearch}
                             onChange={(event) => setClientSearch(event.target.value)}
                             className="w-full bg-transparent text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none"
@@ -1006,7 +1042,7 @@ export default function AddNowDrawer({
                           )}
                           {!clientsLoading && filteredClients.length === 0 && (
                             <p className="py-4 text-center text-xs text-slate-400">
-                              Ingen kunder matcher din s\u00f8gning.
+                              Ingen kunder matcher din søgning.
                             </p>
                           )}
                           {!clientsLoading &&
@@ -1022,7 +1058,7 @@ export default function AddNowDrawer({
                                 </span>
                                 <span>
                                   {client.email || "Ingen e-mail"}
-                                  {client.telefon ? ` \u00b7 ${client.telefon}` : ""}
+                                  {client.telefon ? ` · ${client.telefon}` : ""}
                                 </span>
                               </button>
                             ))}
@@ -1034,12 +1070,12 @@ export default function AddNowDrawer({
                   <div className="flex-1 overflow-auto px-6 py-4">
                     {lineItems.length === 0 ? (
                       <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
-                        V\u00e6lg en aftale eller ydelse for at komme i gang.
+                        Vælg en aftale eller ydelse for at komme i gang.
                       </div>
                     ) : (
                       <div className="space-y-4">
                         {lineItems.map((item) => {
-                          const meta = [item.duration, item.owner].filter(Boolean).join(" \u2022 ");
+                          const meta = [item.duration, item.owner].filter(Boolean).join(" • ");
                           return (
                             <div
                               key={item.id}
@@ -1064,7 +1100,7 @@ export default function AddNowDrawer({
                                     onClick={() => handleRemoveItem(item.id)}
                                     className="text-xs text-slate-400 hover:text-slate-600"
                                   >
-                                    \u00d7
+                                    ×
                                   </button>
                                 )}
                               </div>
@@ -1094,7 +1130,7 @@ export default function AddNowDrawer({
                     {step === "payment" && paymentRow}
                     {step === "payment" && selectedPaymentMethod && (
                       <p className="mt-3 text-sm font-semibold text-slate-700">
-                        Fuld betaling tilf\u00f8jet
+                        Fuld betaling tilføjet
                       </p>
                     )}
 
@@ -1135,7 +1171,7 @@ export default function AddNowDrawer({
                               : "bg-slate-900 text-white"
                           )}
                         >
-                          Forts\u00e6t til betaling
+                          Fortsæt til betaling
                         </button>
                       )}
                     </div>

@@ -49,8 +49,8 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
   const userName =
     user?.displayName || user?.email || t("booking.topbar.defaultUser", "Selma bruger");
   const clinicDisplayName =
-    clinicName || t("booking.topbar.clinicSettings", "Klinikindstillinger");
-  const clinicOverviewLabel = `S+ ${clinicDisplayName}`.trim();
+    clinicName || t("booking.topbar.clinicSettings", "Klinik overblik");
+  const clinicOverviewLabel = clinicDisplayName;
   const userInitials = getInitials(user?.displayName || user?.email);
   const currentLanguageLabel = useMemo(() => {
     const match = languageOptions.find((option) => option.code === language);
@@ -58,7 +58,8 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
   }, [language, languageOptions]);
   const isCatalogRoute =
     location.pathname.startsWith("/booking/ydelser") ||
-    location.pathname.startsWith("/booking/forloeb");
+    location.pathname.startsWith("/booking/forloeb") ||
+    location.pathname.startsWith("/booking/produkt");
 
   useEffect(() => {
     if (!user?.uid) {
@@ -156,6 +157,7 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
   const catalogLinks = [
     { label: t("booking.sidebar.services", "Ydelser"), href: "/booking/ydelser" },
     { label: t("booking.sidebar.forloeb", "Forløb"), href: "/booking/forloeb" },
+    { label: t("booking.sidebar.product", "Produkt"), href: "/booking/produkt" },
   ];
   return (
     <div className="booking-shell">
@@ -277,7 +279,9 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
                 <div className="mt-6 flex flex-col gap-1">
                   {links.map((link) => {
                     const isActive =
-                      link.href === "/booking/ydelser"
+                      link.href === "/booking"
+                        ? location.pathname === "/booking"
+                        : link.href === "/booking/ydelser"
                         ? isCatalogRoute
                         : location.pathname === link.href ||
                           location.pathname.startsWith(`${link.href}/`);

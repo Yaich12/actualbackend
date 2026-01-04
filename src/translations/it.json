@@ -31,7 +31,11 @@
         "title": "Scegli l'opzione più adatta alla tua attività",
         "subtitle": "Puoi modificarlo in seguito",
         "hint": "{count}/{max} selezionati",
-        "options": ["Fisioterapista", "Osteopata", "Chiropratico"]
+        "options": [
+          "Fisioterapista",
+          "Osteopata",
+          "Chiropratico"
+        ]
       },
       "accountType": {
         "title": "Scegli il tipo di account",
@@ -41,7 +45,11 @@
       },
       "teamSize": {
         "title": "Quanti dipendenti hai",
-        "options": ["2-5 persone", "6-10 persone", "11+ persone"]
+        "options": [
+          "2-5 persone",
+          "6-10 persone",
+          "11+ persone"
+        ]
       },
       "serviceModel": {
         "title": "Dove offri i tuoi servizi?",
@@ -98,6 +106,10 @@
       "title": "La tua attività è pronta!",
       "subtitle": "Ottieni 14 giorni gratuiti di Selma per le aziende",
       "button": "Fine"
+    },
+    "currency": {
+      "label": "Valuta",
+      "subtitle": "Puoi cambiare la valuta più tardi nelle impostazioni."
     }
   },
   "booking": {
@@ -148,7 +160,445 @@
       "memberFallback": "Dipendente",
       "you": "Tu",
       "notLoggedIn": "Non connesso",
-      "loginToContinue": "Accedi per continuare"
+      "loginToContinue": "Accedi per continuare",
+      "addCustomer": "Aggiungi cliente",
+      "addCustomerNote": "Lascia vuoto per accesso senza appuntamento",
+      "addMode": {
+        "available": "Vedi orari disponibili",
+        "close": "Chiudi",
+        "closePanel": "Chiudi",
+        "repeat": "Non si ripete",
+        "title": "Seleziona un orario da prenotare"
+      },
+      "addService": "Aggiungi servizio",
+      "clients": {
+        "empty": "Nessun cliente trovato",
+        "loading": "Caricamento clienti..."
+      },
+      "payment": "Pagamento",
+      "save": "Salva",
+      "searchClients": "Cerca cliente",
+      "services": {
+        "defaultGroup": "Servizi",
+        "loading": "Caricamento servizi...",
+        "search": "Cerca nome del servizio",
+        "section": "Servizi",
+        "title": "Scegli un servizio"
+      },
+      "total": "Totale",
+      "confirmDeleteProgram": "Questo fa parte di un programma.\n\nOK: Elimina l'intero programma del cliente.\nAnnulla: Elimina solo questa data.",
+      "unknownClient": "Cliente sconosciuto",
+      "status": {
+        "active": "Attivo"
+      },
+      "selectClient": "Seleziona un cliente",
+      "addNewClient": "Aggiungi nuovo cliente",
+      "createNewClient": "Crea un nuovo cliente"
+    },
+    "dropdown": {
+      "add": "Aggiungi",
+      "calendar": "Nel calendario",
+      "manual": "Manuale"
+    },
+    "stats": {
+      "title": "Statistiche",
+      "subtitle": "Panoramica di appuntamenti e ricavi basata sui tuoi dati reali.",
+      "period": {
+        "today": "Oggi",
+        "week": "Questa settimana",
+        "month": "Questo mese",
+        "year": "Quest'anno",
+        "all": "Tutto"
+      },
+      "error": "Impossibile caricare le statistiche al momento. Assicurati di aver effettuato l'accesso e che esistano appuntamenti in Firestore.",
+      "loading": "Caricamento dati della clinica…",
+      "empty": "Nessun appuntamento nel periodo selezionato. Cambia periodo o crea nuovi appuntamenti.",
+      "cards": {
+        "revenue": {
+          "title": "Ricavi",
+          "subtitle": "Periodo selezionato"
+        },
+        "appointments": {
+          "title": "Appuntamenti",
+          "subtitle": "Prenotati nel periodo"
+        },
+        "clients": {
+          "title": "Clienti unici",
+          "subtitle": "Nel periodo",
+          "extra": "{count} clienti totali"
+        },
+        "cancel": {
+          "title": "Cancellazioni / no-show",
+          "subtitle": "Quota degli appuntamenti"
+        }
+      },
+      "load": {
+        "title": "Carico medio della clinica",
+        "subtitle": "Quante ore in media sei prenotato nei giorni in cui hai appuntamenti."
+      },
+      "topServices": {
+        "title": "Servizi più prenotati",
+        "subtitle": "I tuoi 5 servizi più usati nel periodo selezionato.",
+        "empty": "Nessun dato nel periodo."
+      },
+      "countSuffix": "×",
+      "otherService": "Altro",
+      "hoursShort": "h"
+    },
+    "services": {
+      "title": "Servizi",
+      "actions": {
+        "create": "Crea nuovo",
+        "createFull": "Crea un nuovo servizio"
+      },
+      "search": {
+        "placeholder": "Cerca"
+      },
+      "loading": "Caricamento servizi...",
+      "price": {
+        "currency": "DKK",
+        "inclVat": "IVA incl."
+      },
+      "list": {
+        "title": "I tuoi servizi"
+      },
+      "empty": "Non hai ancora servizi. Crea il tuo primo servizio.",
+      "selector": {
+        "placeholder": "Nessun servizio selezionato",
+        "loading": "Caricamento servizi…",
+        "empty": "Non hai ancora servizi o programmi.",
+        "label": "Seleziona trattamento",
+        "groups": {
+          "services": "Servizi",
+          "programs": "Programmi"
+        },
+        "tags": {
+          "service": "Servizio",
+          "program": "Programma"
+        }
+      },
+      "duration": {
+        "15m": "15 minuti",
+        "30m": "30 minuti",
+        "45m": "45 minuti",
+        "60m": "1 ora",
+        "90m": "1 ora e 30 minuti",
+        "120m": "2 ore"
+      },
+      "colors": {
+        "amber": "Ambra",
+        "teal": "Turchese",
+        "softBlue": "Blu tenue",
+        "violet": "Viola",
+        "red": "Rosso",
+        "pink": "Rosa"
+      },
+      "addNew": {
+        "title": {
+          "edit": "Modifica servizio",
+          "create": "Crea nuovo servizio"
+        },
+        "actions": {
+          "close": "Chiudi",
+          "delete": "Elimina servizio",
+          "cancel": "Annulla",
+          "saving": "Salvataggio…",
+          "next": "Avanti"
+        },
+        "fields": {
+          "name": {
+            "label": "Nome",
+            "placeholder": "Inserisci il nome del servizio"
+          },
+          "description": {
+            "label": "Descrizione",
+            "placeholder": "Aggiungi una descrizione (facoltativo)"
+          },
+          "duration": {
+            "label": "Durata"
+          },
+          "color": {
+            "label": "Colore",
+            "hint": "Scegli un colore per la visualizzazione nel calendario."
+          },
+          "price": {
+            "label": "Prezzo",
+            "placeholder": "0,00"
+          },
+          "vat": {
+            "label": "IVA"
+          }
+        },
+        "errors": {
+          "notLoggedIn": "Devi effettuare l'accesso per salvare un servizio.",
+          "saveFailed": "Impossibile salvare il servizio. Riprova.",
+          "deleteFailed": "Impossibile eliminare il servizio. Riprova."
+        },
+        "confirmDelete": "Sei sicuro di voler eliminare questo servizio? Questa azione non può essere annullata."
+      }
+    },
+    "programs": {
+      "defaultName": "Programma",
+      "sessionsCount": "{count} sessioni",
+      "weeksCount": "{count} settimane",
+      "loadError": "Impossibile caricare i programmi",
+      "create": {
+        "title": "Crea nuovo programma",
+        "subtitle": "Progetta un programma di trattamento strutturato - ad es. artrosi, gruppo GLAD o riabilitazione post-operatoria.",
+        "alertSaved": "Programma creato (collegalo a Firestore più tardi).",
+        "fields": {
+          "name": {
+            "label": "Nome del programma",
+            "placeholder": "es. GLAD ginocchio, programma artrosi anca, gruppo schiena, ecc."
+          },
+          "condition": {
+            "label": "Condizione principale"
+          },
+          "format": {
+            "label": "Formato"
+          },
+          "setting": {
+            "label": "Luogo"
+          },
+          "maxParticipants": {
+            "label": "Numero massimo di partecipanti"
+          },
+          "durationWeeks": {
+            "label": "Durata (settimane)"
+          },
+          "sessionsPerWeek": {
+            "label": "Sessioni per settimana"
+          },
+          "sessionLength": {
+            "label": "Durata della sessione (min)"
+          },
+          "goals": {
+            "label": "Obiettivi clinici e funzionali",
+            "placeholder": "es. ridurre il dolore, aumentare la distanza di cammino, migliorare STS, aumentare l'autoefficacia, ecc."
+          },
+          "content": {
+            "label": "Cosa include di solito il programma?",
+            "education": "Educazione del paziente / spiegazione del dolore",
+            "strength": "Allenamento di forza (grandi gruppi muscolari)",
+            "neuromuscular": "Allenamento neuromuscolare / equilibrio",
+            "homeProgram": "Programma a casa con progressione",
+            "outcomes": "Misure di outcome (es. KOOS, HOOS, NRS, STS)"
+          },
+          "notes": {
+            "label": "Note interne (opzionale)",
+            "placeholder": "Dettagli pratici, controindicazioni, requisiti di attrezzatura, ecc."
+          }
+        }
+      },
+      "options": {
+        "condition": {
+          "kneeOa": "Artrosi del ginocchio",
+          "hipOa": "Artrosi dell'anca",
+          "glad": "Programma GLAD",
+          "acl": "ACL post-operatorio",
+          "shoulder": "Spalla / impingement",
+          "lowBack": "Mal di schiena non specifico",
+          "other": "Altro / MSK misto"
+        },
+        "format": {
+          "individual": "Individuale",
+          "smallGroup": "Piccolo gruppo (2–4)",
+          "group": "Gruppo (5–12)",
+          "individualShort": "Individuale",
+          "smallGroupShort": "Piccolo gruppo",
+          "groupShort": "Gruppo"
+        },
+        "setting": {
+          "clinic": "Clinica / sala",
+          "gym": "Palestra",
+          "online": "Online / ibrido",
+          "home": "A domicilio",
+          "clinicShort": "Clinica",
+          "gymShort": "Palestra",
+          "onlineShort": "Online",
+          "homeShort": "Casa"
+        }
+      },
+      "summary": {
+        "title": "Panoramica",
+        "newProgram": "Nuovo programma",
+        "sessions": "{weeks} settimane · {sessions} sessioni/settimana · circa {total} sessioni totali",
+        "empty": "Imposta settimane e sessioni/settimana per vedere il totale.",
+        "format": "Formato",
+        "formatSmall": "Piccolo gruppo",
+        "formatGroup": "Gruppo",
+        "setting": "Luogo",
+        "settingClinic": "Clinica",
+        "settingGym": "Palestra",
+        "settingOnline": "Online",
+        "settingHome": "Casa",
+        "maxParticipants": "Max partecipanti"
+      },
+      "financial": {
+        "title": "Finanze",
+        "sessionPrice": "Prezzo per sessione ({currency})",
+        "packagePrice": "Prezzo pacchetto per l'intero programma ({currency})",
+        "hint": "Puoi compilare entrambi i campi e scegliere nella fatturazione quello che usi in pratica.",
+        "estimate": "Ricavo stimato per partecipante al prezzo per sessione:"
+      },
+      "actions": {
+        "saving": "Salvataggio...",
+        "save": "Salva programma",
+        "create": "Crea programma"
+      },
+      "errors": {
+        "loadFailed": "Impossibile caricare i programmi.",
+        "notLoggedIn": "Accedi per salvare i programmi.",
+        "saveFailed": "Impossibile salvare il programma. Riprova."
+      },
+      "list": {
+        "title": "Programmi",
+        "subtitle": "Panoramica dei programmi salvati. Creane di nuovi con Crea programma.",
+        "searchPlaceholder": "Cerca programmi o diagnosi",
+        "loading": "Caricamento programmi...",
+        "empty": "Nessun programma ancora. Clicca Crea programma per iniziare.",
+        "untitled": "Senza titolo",
+        "sessionsMeta": "{weeks} settimane · {sessions}/settimana · {total} sessioni",
+        "sessionLength": "Durata della sessione: {count} min",
+        "pricePerSession": "Prezzo per sessione:",
+        "packagePrice": "Prezzo pacchetto:",
+        "maxParticipants": "Max partecipanti: {count}",
+        "goals": "Obiettivi: {goals}"
+      }
+    },
+    "overview": {
+      "currencySuffix": "DKK",
+      "status": {
+        "booked": "Prenotato",
+        "confirmed": "Confermato",
+        "arrived": "Arrivato",
+        "started": "Iniziato",
+        "completed": "Completato",
+        "cancelled": "Annullato",
+        "pending": "In sospeso",
+        "noshow": "Assente"
+      },
+      "title": "Panoramica della clinica",
+      "subtitle": "Una rapida panoramica delle attività di oggi e dei risultati recenti.",
+      "period": {
+        "last7": "Ultimi 7 giorni"
+      },
+      "sales": {
+        "title": "Vendite recenti",
+        "range": "Ultimi {count} giorni",
+        "option7": "Ultimi 7 giorni",
+        "option30": "Ultimi 30 giorni",
+        "appointments": "Appuntamenti",
+        "appointmentValue": "Valore dell'appuntamento"
+      },
+      "actions": {
+        "more": "Altre opzioni"
+      },
+      "dropdown": {
+        "period": "Periodo"
+      },
+      "legend": {
+        "sales": "Vendite",
+        "appointments": "Appuntamenti",
+        "confirmed": "Confermato",
+        "cancelled": "Annullamento"
+      },
+      "upcoming": {
+        "title": "Appuntamenti imminenti",
+        "range": "Prossimi {count} giorni",
+        "option7": "Prossimi 7 giorni",
+        "option30": "Prossimi 30 giorni",
+        "confirmed": "Appuntamenti confermati",
+        "cancelled": "Appuntamenti annullati",
+        "bookedCount": "{count} prenotati"
+      },
+      "activity": {
+        "title": "Attività degli appuntamenti",
+        "loadingTitle": "Caricamento appuntamenti...",
+        "loadingSubtitle": "Stiamo aggiornando la cronologia",
+        "errorTitle": "Impossibile caricare gli appuntamenti",
+        "errorSubtitle": "Riprova più tardi",
+        "emptyTitle": "Nessun appuntamento precedente",
+        "emptySubtitle": "La cronologia apparirà qui quando avrai appuntamenti completati",
+        "unknownClient": "Cliente sconosciuto",
+        "defaultService": "Appuntamento",
+        "withStaff": "con {name}"
+      },
+      "today": {
+        "title": "Prossimi appuntamenti oggi",
+        "loadingTitle": "Caricamento appuntamenti...",
+        "loadingSubtitle": "Stiamo aggiornando il piano di oggi",
+        "errorTitle": "Impossibile caricare gli appuntamenti",
+        "errorSubtitle": "Riprova più tardi",
+        "emptyTitle": "Nessun appuntamento oggi",
+        "emptySubtitle": "Vai alla tua {calendar} per aggiungere appuntamenti",
+        "calendarLink": "calendario"
+      },
+      "topServices": {
+        "title": "Servizi principali",
+        "columns": {
+          "service": "Servizio"
+        }
+      },
+      "columns": {
+        "thisMonth": "Questo mese",
+        "lastMonth": "Mese scorso"
+      },
+      "table": {
+        "loading": "Caricamento dati...",
+        "error": "Impossibile caricare i dati.",
+        "empty": "Nessun dato ancora."
+      },
+      "topStaff": {
+        "title": "Miglior collaboratore",
+        "columns": {
+          "staff": "Collaboratore"
+        }
+      },
+      "footer": {
+        "revenueToday": "Ricavi oggi",
+        "newClients": "Nuovi clienti"
+      },
+      "sharedAccount": "conto condiviso"
+    },
+    "clients": {
+      "title": "Panoramica clienti",
+      "actions": {
+        "add": "Aggiungi cliente",
+        "edit": "Modifica dati cliente",
+        "addProgram": "Aggiungi dati programma"
+      },
+      "sort": {
+        "label": "Ordina",
+        "newest": "Più recenti",
+        "oldest": "Più vecchi",
+        "alphabetical": "Alfabetico"
+      },
+      "search": {
+        "placeholder": "Cerca"
+      },
+      "loading": "Caricamento clienti...",
+      "columns": {
+        "name": "Nome",
+        "status": "Stato",
+        "email": "Email",
+        "phone": "Telefono",
+        "cpr": "CPR",
+        "address": "Indirizzo",
+        "city": "Città",
+        "postalCode": "CAP",
+        "country": "Paese"
+      }
+    },
+    "invoices": {
+      "sidebar": {
+        "dailyOverview": "Panoramica vendite giornaliere",
+        "appointments": "Appuntamenti",
+        "sales": "Vendite",
+        "payments": "Pagamenti",
+        "title": "Fatture",
+        "subtitle": "Vendite"
+      }
     }
   },
   "settings": {
@@ -193,6 +643,10 @@
     "language": {
       "title": "Lingua",
       "label": "Lingua preferita"
+    },
+    "currency": {
+      "label": "Valuta",
+      "placeholder": "Scegli valuta"
     }
   }
 }

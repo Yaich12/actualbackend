@@ -2,10 +2,10 @@ import { MoveUpRight } from "lucide-react"
 
 function Stats() {
   const stats = [
-    { label: "EU Average", value: "13%", flag: "🇪🇺", note: "Stigende trend" },
-    { label: "Danmark", value: "7.4%", flag: "🇩🇰", note: "Stort potentiale" },
-    { label: "Norge", value: "3.9%", flag: "🇳🇴", note: "Uudnyttet marked" },
-    { label: "Sverige", value: "8.5%", flag: "🇸🇪", note: "I vækst" },
+    { label: "EU Average", value: "13%", flag: "🇪🇺", note: "Rising trend" },
+    { label: "Denmark", value: "7.4%", flag: "🇩🇰", note: "High potential" },
+    { label: "Norway", value: "3.9%", flag: "🇳🇴", note: "Untapped market" },
+    { label: "Sweden", value: "8.5%", flag: "🇸🇪", note: "Growing" },
   ]
 
   return (
@@ -15,18 +15,17 @@ function Stats() {
           <div className="flex flex-col items-start gap-4">
             <div className="flex flex-col gap-2">
               <h2 className="text-left text-2xl font-semibold tracking-tight md:text-3xl lg:text-5xl">
-                Friheden er tættere på, end du tror.
+                Freedom is closer than you think.
               </h2>
               <p className="text-left text-base leading-relaxed text-slate-600 md:text-lg">
-                I dag arbejder kun en lille procentdel af nordiske behandlere som selvstændige. Hvorfor? Fordi
-                administrationen har været en bremseklods. Vi har bygget Selma+ for at fjerne den barriere, så du kan
-                fokusere på det, du er bedst til.
+                Today only a small percentage of Nordic clinicians work independently. Why? Because administration has
+                been a roadblock. We built Selma+ to remove that barrier, so you can focus on what you do best.
               </p>
               <a
                 href="/signup"
                 className="mt-4 inline-flex items-center text-sm font-semibold text-blue-600 transition hover:text-blue-700"
               >
-                Bliv en del af fremtiden →
+                Be part of the future →
               </a>
             </div>
           </div>

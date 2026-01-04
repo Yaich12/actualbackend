@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@corti/sdk": "^0.7.0",
+    "@number-flow/react": "^0.4.4",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-icons": "^1.3.2",
@@ -44,11 +45,11 @@
     "ws": "^8.18.3"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "dev": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject",
+    "start": "./node_modules/.bin/react-scripts start",
+    "dev": "./node_modules/.bin/react-scripts start",
+    "build": "./node_modules/.bin/react-scripts build",
+    "test": "./node_modules/.bin/react-scripts test",
+    "eject": "./node_modules/.bin/react-scripts eject",
     "server": "node server.js",
     "emulators": "firebase emulators:start"
   },

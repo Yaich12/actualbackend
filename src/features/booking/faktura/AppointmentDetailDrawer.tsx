@@ -21,7 +21,7 @@ type AppointmentDetailDrawerProps = {
 
 const statusLabels: Record<string, string> = {
   booked: "Booket",
-  completed: "Gennemf\u00f8rt",
+  completed: "Gennemført",
   cancelled: "Aflyst",
   pending: "Afventer",
 };
@@ -41,7 +41,7 @@ const monthNames = [
   "dec.",
 ];
 
-const dayNames = ["s\u00f8n.", "man.", "tir.", "ons.", "tor.", "fre.", "l\u00f8r."];
+const dayNames = ["søn.", "man.", "tir.", "ons.", "tor.", "fre.", "lør."];
 
 const formatDateShort = (dateStr?: string) => {
   if (!dateStr) return "";
@@ -104,11 +104,11 @@ const getTimeRange = (appointment: any) => {
   const startTime = appointment?.startTime || "";
   const endTime = appointment?.endTime || "";
   if (!startTime) return "";
-  if (endTime) return `${startTime} \u2013 ${endTime}`;
+  if (endTime) return `${startTime} – ${endTime}`;
   const [hours, minutes] = startTime.split(":").map((part: string) => Number(part));
   if (Number.isNaN(hours) || Number.isNaN(minutes)) return startTime;
   const nextHour = (hours + 1) % 24;
-  return `${startTime} \u2013 ${String(nextHour).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+  return `${startTime} – ${String(nextHour).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 };
 
 const getDurationLabel = (appointment: any, service: any) => {
@@ -198,7 +198,7 @@ export default function AppointmentDetailDrawer({
   const appointmentEmail = appointment?.clientEmail || "";
   const serviceName = service?.navn || appointment?.service || appointment?.title || "";
   const durationLabel = getDurationLabel(appointment, service);
-  const ownerLabel = appointment?.calendarOwner || "f\u00e6lles konto";
+  const ownerLabel = appointment?.calendarOwner || "fælles konto";
   const priceLabel = formatCurrency(
     typeof appointment?.servicePrice === "number"
       ? appointment.servicePrice
@@ -241,7 +241,7 @@ export default function AppointmentDetailDrawer({
           <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
             <div>
               <p className="text-xs text-slate-400">
-                Aftale{refLabel ? ` \u00b7 ${refLabel}` : ""}
+                Aftale{refLabel ? ` · ${refLabel}` : ""}
               </p>
               <h2 className="mt-1 text-lg font-semibold text-slate-900">Aftaledetaljer</h2>
             </div>
@@ -310,15 +310,15 @@ export default function AppointmentDetailDrawer({
                     <div className="space-y-4 text-sm text-slate-600">
                       <div className="flex items-center gap-3">
                         <UserRound className="h-4 w-4 text-slate-400" />
-                        <span>Tilf\u00f8j stedord</span>
+                        <span>Tilføj stedord</span>
                       </div>
                       <div className="flex items-center gap-3">
                         <CalendarDays className="h-4 w-4 text-slate-400" />
-                        <span>Tilf\u00f8j f\u00f8dselsdato</span>
+                        <span>Tilføj fødselsdato</span>
                       </div>
                       <div className="flex items-center gap-3">
                         <MapPin className="h-4 w-4 text-slate-400" />
-                        <span>{appointment?.location || "Tilf\u00f8j sted"}</span>
+                        <span>{appointment?.location || "Tilføj sted"}</span>
                       </div>
                       <div className="flex items-center gap-3">
                         <UserRoundPlus className="h-4 w-4 text-slate-400" />
@@ -336,7 +336,7 @@ export default function AppointmentDetailDrawer({
                       <div>
                         <p className="text-sm font-semibold">{headerDate || "fre. 19 dec."}</p>
                         <p className="mt-1 text-xs text-white/80">
-                          {headerTime || "13:00"} \u00b7 Gentages ikke
+                          {headerTime || "13:00"} · Gentages ikke
                         </p>
                       </div>
                       <button
@@ -362,8 +362,8 @@ export default function AppointmentDetailDrawer({
                           </p>
                           <p className="text-xs text-slate-500">
                             {timeRange || "13:00"}
-                            {durationLabel ? ` \u2022 ${durationLabel}` : ""}
-                            {ownerLabel ? ` \u2022 ${ownerLabel}` : ""}
+                            {durationLabel ? ` • ${durationLabel}` : ""}
+                            {ownerLabel ? ` • ${ownerLabel}` : ""}
                           </p>
                         </div>
                         <p className="text-sm font-semibold text-slate-900">
@@ -378,7 +378,7 @@ export default function AppointmentDetailDrawer({
                         <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200">
                           +
                         </span>
-                        Tilf\u00f8j tjeneste
+                        Tilføj tjeneste
                       </button>
                     </div>
                   </div>

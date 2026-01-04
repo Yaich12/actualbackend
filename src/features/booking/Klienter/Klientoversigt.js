@@ -4,11 +4,13 @@ import './klientoversigt.css';
 import AddKlient from './addklient/addklient';
 import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayout';
 import { useAuth } from '../../../AuthContext';
+import { useLanguage } from '../../../LanguageContext';
 import { useUserClients } from './hooks/useUserClients';
 import { ChevronDown } from 'lucide-react';
 
 function Klientoversigt() {
   const { user } = useAuth();
+  const { t, locale } = useLanguage();
   const {
     clients,
     loading: isLoadingClients,
@@ -56,7 +58,7 @@ function Klientoversigt() {
       if (sortOption === 'alphabetical') {
         const nameA = (a.navn || '').toLowerCase();
         const nameB = (b.navn || '').toLowerCase();
-        return nameA.localeCompare(nameB, 'da');
+        return nameA.localeCompare(nameB, locale);
       } else if (sortOption === 'newest') {
         const dateA = a.createdAt?.toDate?.() || a.createdAt || new Date(0);
         const dateB = b.createdAt?.toDate?.() || b.createdAt || new Date(0);
@@ -97,10 +99,14 @@ function Klientoversigt() {
 
   const getSortLabel = () => {
     switch (sortOption) {
-      case 'newest': return 'Nyeste';
-      case 'oldest': return 'Ældste';
-      case 'alphabetical': return 'Alfabetisk';
-      default: return 'Sortér';
+      case 'newest':
+        return t('booking.clients.sort.newest', 'Nyeste');
+      case 'oldest':
+        return t('booking.clients.sort.oldest', 'Ældste');
+      case 'alphabetical':
+        return t('booking.clients.sort.alphabetical', 'Alfabetisk');
+      default:
+        return t('booking.clients.sort.label', 'Sortér');
     }
   };
 
@@ -138,14 +144,17 @@ function Klientoversigt() {
   const userIdentity = useMemo(() => {
     if (!user) {
       return {
-        name: 'Ikke logget ind',
-        email: 'Log ind for at fortsætte',
+        name: t('booking.calendar.notLoggedIn', 'Ikke logget ind'),
+        email: t('booking.calendar.loginToContinue', 'Log ind for at fortsætte'),
         initials: '?',
         photoURL: null,
       };
     }
 
-    const name = user.displayName || user.email || 'Selma bruger';
+    const name =
+      user.displayName ||
+      user.email ||
+      t('booking.topbar.defaultUser', 'Selma bruger');
     const email = user.email || '—';
     const initialsSource = (user.displayName || user.email || '?').trim();
     const initials = initialsSource
@@ -173,7 +182,9 @@ function Klientoversigt() {
           <div className="klientoversigt-header">
             <div className="header-left">
               <div className="header-title">
-                <h2 className="page-title">Klientoversigt</h2>
+                <h2 className="page-title">
+                  {t('booking.clients.title', 'Klientoversigt')}
+                </h2>
               </div>
             </div>
             <div className="header-right">
@@ -182,7 +193,7 @@ function Klientoversigt() {
                 className="toolbar-pill toolbar-primary"
                 onClick={openCreateClient}
               >
-                Tilføj klient
+                {t('booking.clients.actions.add', 'Tilføj klient')}
                 <ChevronDown className="toolbar-caret" />
               </button>
             </div>
@@ -195,7 +206,7 @@ function Klientoversigt() {
                 className="edit-columns-btn"
                 onClick={() => setShowSortDropdown(!showSortDropdown)}
               >
-                Sortér: {getSortLabel()}
+                {t('booking.clients.sort.label', 'Sortér')}: {getSortLabel()}
                 <span className="dropdown-arrow">{showSortDropdown ? '▲' : '▼'}</span>
               </button>
               {showSortDropdown && (
@@ -204,19 +215,19 @@ function Klientoversigt() {
                     className={`sort-dropdown-item ${sortOption === 'newest' ? 'active' : ''}`}
                     onClick={() => handleSortOptionSelect('newest')}
                   >
-                    Nyeste
+                    {t('booking.clients.sort.newest', 'Nyeste')}
                   </button>
                   <button 
                     className={`sort-dropdown-item ${sortOption === 'oldest' ? 'active' : ''}`}
                     onClick={() => handleSortOptionSelect('oldest')}
                   >
-                    Ældste
+                    {t('booking.clients.sort.oldest', 'Ældste')}
                   </button>
                   <button 
                     className={`sort-dropdown-item ${sortOption === 'alphabetical' ? 'active' : ''}`}
                     onClick={() => handleSortOptionSelect('alphabetical')}
                   >
-                    Alfabetisk
+                    {t('booking.clients.sort.alphabetical', 'Alfabetisk')}
                   </button>
                 </div>
               )}
@@ -225,7 +236,7 @@ function Klientoversigt() {
               <span className="search-icon-small">🔍</span>
               <input 
                 type="text" 
-                placeholder="Søg" 
+                placeholder={t('booking.clients.search.placeholder', 'Søg')}
                 className="search-input-large"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -242,7 +253,7 @@ function Klientoversigt() {
             >
               {clientsLoadError
                 ? clientsLoadError
-                : 'Henter klienter...'}
+                : t('booking.clients.loading', 'Henter klienter...')}
             </div>
           )}
 
@@ -258,7 +269,7 @@ function Klientoversigt() {
                     className="sortable" 
                     onClick={() => handleSort('navn')}
                   >
-                    Navn
+                    {t('booking.clients.columns.name', 'Navn')}
                     {sortColumn === 'navn' && (
                       <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
@@ -267,7 +278,7 @@ function Klientoversigt() {
                     className="sortable" 
                     onClick={() => handleSort('status')}
                   >
-                    Status
+                    {t('booking.clients.columns.status', 'Status')}
                     {sortColumn === 'status' && (
                       <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
@@ -276,7 +287,7 @@ function Klientoversigt() {
                     className="sortable" 
                     onClick={() => handleSort('email')}
                   >
-                    E-mail
+                    {t('booking.clients.columns.email', 'E-mail')}
                     {sortColumn === 'email' && (
                       <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
@@ -285,7 +296,7 @@ function Klientoversigt() {
                     className="sortable" 
                     onClick={() => handleSort('telefon')}
                   >
-                    Telefon
+                    {t('booking.clients.columns.phone', 'Telefon')}
                     {sortColumn === 'telefon' && (
                       <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
@@ -294,7 +305,7 @@ function Klientoversigt() {
                     className="sortable" 
                     onClick={() => handleSort('cpr')}
                   >
-                    CPR
+                    {t('booking.clients.columns.cpr', 'CPR')}
                     {sortColumn === 'cpr' && (
                       <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
@@ -303,7 +314,7 @@ function Klientoversigt() {
                     className="sortable" 
                     onClick={() => handleSort('adresse')}
                   >
-                    Adresse
+                    {t('booking.clients.columns.address', 'Adresse')}
                     {sortColumn === 'adresse' && (
                       <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
@@ -312,7 +323,7 @@ function Klientoversigt() {
                     className="sortable" 
                     onClick={() => handleSort('by')}
                   >
-                    By
+                    {t('booking.clients.columns.city', 'By')}
                     {sortColumn === 'by' && (
                       <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
@@ -321,7 +332,7 @@ function Klientoversigt() {
                     className="sortable" 
                     onClick={() => handleSort('postnummer')}
                   >
-                    Postnummer
+                    {t('booking.clients.columns.postalCode', 'Postnummer')}
                     {sortColumn === 'postnummer' && (
                       <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
@@ -330,7 +341,7 @@ function Klientoversigt() {
                     className="sortable" 
                     onClick={() => handleSort('land')}
                   >
-                    Land
+                    {t('booking.clients.columns.country', 'Land')}
                     {sortColumn === 'land' && (
                       <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
@@ -396,13 +407,13 @@ function Klientoversigt() {
                 className="client-menu-item"
                 onClick={() => handleEditClientInfo(client)}
               >
-                Ændre klientoplysninger
+                {t('booking.clients.actions.edit', 'Ændre klientoplysninger')}
               </button>
               <button
                 className="client-menu-item"
                 onClick={() => handleAddForloebInfo(client)}
               >
-                Tilføj forløbsoplysninger
+                {t('booking.clients.actions.addProgram', 'Tilføj forløbsoplysninger')}
               </button>
             </div>
           </>

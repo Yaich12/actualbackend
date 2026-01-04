@@ -11,6 +11,7 @@ import BookingPage from './features/booking/bookingpage';
 import Klientoversigt from './features/booking/Klienter/Klientoversigt';
 import Ydelser from './features/booking/Ydelser/ydelser';
 import Forloeb from './features/booking/forløb/forløb';
+import Product from './features/booking/Product/product';
 import JournalPage from './features/booking/Journal/JournalPage';
 import FakturaerPage from './features/booking/faktura/faktura';
 import Overview from './features/booking/overview/Overview';
@@ -77,6 +78,7 @@ function App() {
           <Route path="/booking/klienter" element={<Klientoversigt />} />
           <Route path="/booking/ydelser" element={<Ydelser />} />
           <Route path="/booking/forloeb" element={<Forloeb />} />
+          <Route path="/booking/produkt" element={<Product />} />
           <Route path="/booking/fakturaer/*" element={<FakturaerPage />} />
           <Route path="/booking/team" element={<TeamPage />} />
           <Route path="/booking/settings" element={<UserSettings />} />

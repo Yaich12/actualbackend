@@ -2,11 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import '../bookingpage.css';
 import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayout';
 import { useAuth } from '../../../AuthContext';
+import { useLanguage } from '../../../LanguageContext';
 import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import { ChevronDown } from 'lucide-react';
 
 function ForlobCreate({ onSave, isSaving = false }) {
+  const { t, locale } = useLanguage();
   const [form, setForm] = useState({
     name: '',
     condition: 'knee_oa',
@@ -50,18 +52,48 @@ function ForlobCreate({ onSave, isSaving = false }) {
       return;
     }
     console.log('Forløb klar til gemning:', payload);
-    alert('Forløb oprettet (hook det op til Firestore senere).');
+    alert(
+      t(
+        'booking.programs.create.alertSaved',
+        'Forløb oprettet (hook det op til Firestore senere).'
+      )
+    );
   };
+
+  const conditionOptions = [
+    { value: 'knee_oa', label: t('booking.programs.options.condition.kneeOa', 'Knæartrose') },
+    { value: 'hip_oa', label: t('booking.programs.options.condition.hipOa', 'Hofteartrose') },
+    { value: 'glad', label: t('booking.programs.options.condition.glad', 'GLAD-forløb') },
+    { value: 'acl', label: t('booking.programs.options.condition.acl', 'Postoperativ ACL') },
+    { value: 'shoulder', label: t('booking.programs.options.condition.shoulder', 'Skulder / impingement') },
+    { value: 'low_back', label: t('booking.programs.options.condition.lowBack', 'Uspecifik lændesmerte') },
+    { value: 'other', label: t('booking.programs.options.condition.other', 'Andet / blandet MSK') },
+  ];
+  const formatLabels = {
+    individual: t('booking.programs.options.format.individual', 'Individuel'),
+    small_group: t('booking.programs.options.format.smallGroup', 'Lille hold (2–4)'),
+    group: t('booking.programs.options.format.group', 'Hold (5–12)'),
+  };
+  const settingLabels = {
+    clinic: t('booking.programs.options.setting.clinic', 'Klinik / træningssal'),
+    gym: t('booking.programs.options.setting.gym', 'Fitnesscenter'),
+    online: t('booking.programs.options.setting.online', 'Online / hybrid'),
+    home: t('booking.programs.options.setting.home', 'Hjemmebaseret'),
+  };
+  const currencyLabel = t('booking.services.price.currency', 'DKK');
 
   return (
     <div className="flex h-full flex-col gap-4 rounded-2xl bg-slate-50/60 p-4 md:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold tracking-tight text-slate-900 md:text-xl">
-            Opret nyt forløb
+            {t('booking.programs.create.title', 'Opret nyt forløb')}
           </h1>
           <p className="text-xs text-slate-500 md:text-sm">
-            Design et struktureret behandlingsforløb – f.eks. artroseforløb, GLAD-hold eller postoperativ genoptræning.
+            {t(
+              'booking.programs.create.subtitle',
+              'Design et struktureret behandlingsforløb – f.eks. artroseforløb, GLAD-hold eller postoperativ genoptræning.'
+            )}
           </p>
         </div>
       </div>
@@ -73,61 +105,72 @@ function ForlobCreate({ onSave, isSaving = false }) {
         <div className="space-y-4 md:col-span-2">
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700">Forløbsnavn</label>
+              <label className="text-xs font-medium text-slate-700">
+                {t('booking.programs.create.fields.name.label', 'Forløbsnavn')}
+              </label>
               <input
                 type="text"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                placeholder="GLAD knæ, Hofteartrose-forløb, Lændehold, osv."
+                placeholder={t(
+                  'booking.programs.create.fields.name.placeholder',
+                  'GLAD knæ, Hofteartrose-forløb, Lændehold, osv.'
+                )}
                 value={form.name}
                 onChange={handleChange('name')}
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700">Primær problemstilling</label>
+              <label className="text-xs font-medium text-slate-700">
+                {t('booking.programs.create.fields.condition.label', 'Primær problemstilling')}
+              </label>
               <select
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 value={form.condition}
                 onChange={handleChange('condition')}
               >
-                <option value="knee_oa">Knæartrose</option>
-                <option value="hip_oa">Hofteartrose</option>
-                <option value="glad">GLAD-forløb</option>
-                <option value="acl">Postoperativ ACL</option>
-                <option value="shoulder">Skulder / impingement</option>
-                <option value="low_back">Uspecifik lændesmerte</option>
-                <option value="other">Andet / blandet MSK</option>
+                {conditionOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700">Format</label>
+              <label className="text-xs font-medium text-slate-700">
+                {t('booking.programs.create.fields.format.label', 'Format')}
+              </label>
               <select
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 value={form.format}
                 onChange={handleChange('format')}
               >
-                <option value="individual">Individuel</option>
-                <option value="small_group">Lille hold (2–4)</option>
-                <option value="group">Hold (5–12)</option>
+                <option value="individual">{formatLabels.individual}</option>
+                <option value="small_group">{formatLabels.small_group}</option>
+                <option value="group">{formatLabels.group}</option>
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700">Setting</label>
+              <label className="text-xs font-medium text-slate-700">
+                {t('booking.programs.create.fields.setting.label', 'Setting')}
+              </label>
               <select
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 value={form.setting}
                 onChange={handleChange('setting')}
               >
-                <option value="clinic">Klinik / træningssal</option>
-                <option value="gym">Fitnesscenter</option>
-                <option value="online">Online / hybrid</option>
-                <option value="home">Hjemmebaseret</option>
+                <option value="clinic">{settingLabels.clinic}</option>
+                <option value="gym">{settingLabels.gym}</option>
+                <option value="online">{settingLabels.online}</option>
+                <option value="home">{settingLabels.home}</option>
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700">Max antal deltagere</label>
+              <label className="text-xs font-medium text-slate-700">
+                {t('booking.programs.create.fields.maxParticipants.label', 'Max antal deltagere')}
+              </label>
               <input
                 type="number"
                 min="1"
@@ -140,7 +183,9 @@ function ForlobCreate({ onSave, isSaving = false }) {
 
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700">Varighed (uger)</label>
+              <label className="text-xs font-medium text-slate-700">
+                {t('booking.programs.create.fields.durationWeeks.label', 'Varighed (uger)')}
+              </label>
               <input
                 type="number"
                 min="1"
@@ -150,7 +195,9 @@ function ForlobCreate({ onSave, isSaving = false }) {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700">Sessioner pr. uge</label>
+              <label className="text-xs font-medium text-slate-700">
+                {t('booking.programs.create.fields.sessionsPerWeek.label', 'Sessioner pr. uge')}
+              </label>
               <input
                 type="number"
                 min="1"
@@ -160,7 +207,9 @@ function ForlobCreate({ onSave, isSaving = false }) {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700">Varighed pr. session (min)</label>
+              <label className="text-xs font-medium text-slate-700">
+                {t('booking.programs.create.fields.sessionLength.label', 'Varighed pr. session (min)')}
+              </label>
               <input
                 type="number"
                 min="20"
@@ -172,18 +221,25 @@ function ForlobCreate({ onSave, isSaving = false }) {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-700">Kliniske & funktionelle mål</label>
+            <label className="text-xs font-medium text-slate-700">
+              {t('booking.programs.create.fields.goals.label', 'Kliniske & funktionelle mål')}
+            </label>
             <textarea
               rows={4}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="F.eks. reducere smerte, øge gangdistance, forbedre STS, øge selv-efficacy ift. træning osv."
+              placeholder={t(
+                'booking.programs.create.fields.goals.placeholder',
+                'F.eks. reducere smerte, øge gangdistance, forbedre STS, øge selv-efficacy ift. træning osv.'
+              )}
               value={form.goals}
               onChange={handleChange('goals')}
             />
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-medium text-slate-700">Hvad indeholder forløbet typisk?</p>
+            <p className="text-xs font-medium text-slate-700">
+              {t('booking.programs.create.fields.content.label', 'Hvad indeholder forløbet typisk?')}
+            </p>
             <div className="grid gap-2 md:grid-cols-2">
               <label className="flex items-center gap-2 text-xs text-slate-700">
                 <input
@@ -192,7 +248,7 @@ function ForlobCreate({ onSave, isSaving = false }) {
                   onChange={handleChange('contentEducation')}
                   className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
-                Patientuddannelse / smerteforklaring
+                {t('booking.programs.create.fields.content.education', 'Patientuddannelse / smerteforklaring')}
               </label>
               <label className="flex items-center gap-2 text-xs text-slate-700">
                 <input
@@ -201,7 +257,7 @@ function ForlobCreate({ onSave, isSaving = false }) {
                   onChange={handleChange('contentStrength')}
                   className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
-                Styrketræning (store muskelgrupper)
+                {t('booking.programs.create.fields.content.strength', 'Styrketræning (store muskelgrupper)')}
               </label>
               <label className="flex items-center gap-2 text-xs text-slate-700">
                 <input
@@ -210,7 +266,7 @@ function ForlobCreate({ onSave, isSaving = false }) {
                   onChange={handleChange('contentNeuromuscular')}
                   className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
-                Neuromuskulær træning / balance
+                {t('booking.programs.create.fields.content.neuromuscular', 'Neuromuskulær træning / balance')}
               </label>
               <label className="flex items-center gap-2 text-xs text-slate-700">
                 <input
@@ -219,7 +275,7 @@ function ForlobCreate({ onSave, isSaving = false }) {
                   onChange={handleChange('contentHomeProgram')}
                   className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
-                Hjemmeprogram med progression
+                {t('booking.programs.create.fields.content.homeProgram', 'Hjemmeprogram med progression')}
               </label>
               <label className="flex items-center gap-2 text-xs text-slate-700">
                 <input
@@ -228,17 +284,22 @@ function ForlobCreate({ onSave, isSaving = false }) {
                   onChange={handleChange('contentOutcomeMeasures')}
                   className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
-                Outcome-mål (f.eks. KOOS, HOOS, NRS, STS)
+                {t('booking.programs.create.fields.content.outcomes', 'Outcome-mål (f.eks. KOOS, HOOS, NRS, STS)')}
               </label>
             </div>
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-700">Interne noter (valgfrit)</label>
+            <label className="text-xs font-medium text-slate-700">
+              {t('booking.programs.create.fields.notes.label', 'Interne noter (valgfrit)')}
+            </label>
             <textarea
               rows={3}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="Praktiske detaljer, kontraindikationer, krav til udstyr osv."
+              placeholder={t(
+                'booking.programs.create.fields.notes.placeholder',
+                'Praktiske detaljer, kontraindikationer, krav til udstyr osv.'
+              )}
               value={form.notes}
               onChange={handleChange('notes')}
             />
@@ -247,38 +308,60 @@ function ForlobCreate({ onSave, isSaving = false }) {
 
         <div className="flex flex-col gap-4 md:col-span-1">
           <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-xs text-slate-700">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Overblik</p>
-            <p className="mt-2 text-sm font-medium text-slate-900">{form.name || 'Nyt forløb'}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              {t('booking.programs.summary.title', 'Overblik')}
+            </p>
+            <p className="mt-2 text-sm font-medium text-slate-900">
+              {form.name || t('booking.programs.summary.newProgram', 'Nyt forløb')}
+            </p>
             <p className="mt-1 text-[11px] text-slate-500">
               {totalSessions > 0
-                ? `${form.weeks} uger · ${form.sessionsPerWeek} sessioner/uge · ca. ${totalSessions} sessioner i alt`
-                : 'Angiv uger og sessioner/uge for at se totalen.'}
+                ? t(
+                    'booking.programs.summary.sessions',
+                    '{weeks} uger · {sessions} sessioner/uge · ca. {total} sessioner i alt',
+                    { weeks: form.weeks, sessions: form.sessionsPerWeek, total: totalSessions }
+                  )
+                : t(
+                    'booking.programs.summary.empty',
+                    'Angiv uger og sessioner/uge for at se totalen.'
+                  )}
             </p>
             <p className="mt-2 text-[11px] text-slate-500">
-              Format:{' '}
+              {t('booking.programs.summary.format', 'Format')}:{' '}
               <span className="font-medium">
-                {form.format === 'individual' ? 'Individuel' : form.format === 'small_group' ? 'Lille hold' : 'Hold'}
+                {form.format === 'individual'
+                  ? formatLabels.individual
+                  : form.format === 'small_group'
+                  ? t('booking.programs.summary.formatSmall', 'Lille hold')
+                  : t('booking.programs.summary.formatGroup', 'Hold')}
               </span>{' '}
-              · Setting:{' '}
+              · {t('booking.programs.summary.setting', 'Setting')}:{' '}
               <span className="font-medium">
                 {form.setting === 'clinic'
-                  ? 'Klinik'
+                  ? t('booking.programs.summary.settingClinic', 'Klinik')
                   : form.setting === 'gym'
-                  ? 'Fitness'
+                  ? t('booking.programs.summary.settingGym', 'Fitness')
                   : form.setting === 'online'
-                  ? 'Online'
-                  : 'Hjemme'}
+                  ? t('booking.programs.summary.settingOnline', 'Online')
+                  : t('booking.programs.summary.settingHome', 'Hjemme')}
               </span>
             </p>
             <p className="mt-2 text-[11px] text-slate-500">
-              Max deltagere: <span className="font-medium">{form.maxParticipants}</span>
+              {t('booking.programs.summary.maxParticipants', 'Max deltagere')}:{' '}
+              <span className="font-medium">{form.maxParticipants}</span>
             </p>
           </div>
 
           <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-xs text-slate-700">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Økonomi</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              {t('booking.programs.financial.title', 'Økonomi')}
+            </p>
             <div className="space-y-1">
-              <label className="text-[11px] font-medium text-slate-700">Pris pr. session (DKK)</label>
+              <label className="text-[11px] font-medium text-slate-700">
+                {t('booking.programs.financial.sessionPrice', 'Pris pr. session ({currency})', {
+                  currency: currencyLabel,
+                })}
+              </label>
               <input
                 type="number"
                 min="0"
@@ -288,7 +371,13 @@ function ForlobCreate({ onSave, isSaving = false }) {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[11px] font-medium text-slate-700">Pakkepris for hele forløbet (DKK)</label>
+              <label className="text-[11px] font-medium text-slate-700">
+                {t(
+                  'booking.programs.financial.packagePrice',
+                  'Pakkepris for hele forløbet ({currency})',
+                  { currency: currencyLabel }
+                )}
+              </label>
               <input
                 type="number"
                 min="0"
@@ -297,14 +386,23 @@ function ForlobCreate({ onSave, isSaving = false }) {
                 onChange={handleChange('packagePrice')}
               />
               <p className="text-[11px] text-slate-500">
-                Du kan udfylde begge felter og vælge i faktureringen, hvad du bruger i praksis.
+                {t(
+                  'booking.programs.financial.hint',
+                  'Du kan udfylde begge felter og vælge i faktureringen, hvad du bruger i praksis.'
+                )}
               </p>
             </div>
             {totalSessions > 0 && form.pricePerSession && (
               <p className="mt-1 text-[11px] text-slate-600">
-                Estimeret omsætning pr. deltager ved sessionpris:{' '}
+                {t(
+                  'booking.programs.financial.estimate',
+                  'Estimeret omsætning pr. deltager ved sessionpris:'
+                )}{' '}
                 <span className="font-semibold">
-                  DKK {(totalSessions * (Number(form.pricePerSession) || 0)).toLocaleString('da-DK', { minimumFractionDigits: 2 })}
+                  {currencyLabel}{' '}
+                  {(totalSessions * (Number(form.pricePerSession) || 0)).toLocaleString(locale, {
+                    minimumFractionDigits: 2,
+                  })}
                 </span>
               </p>
             )}
@@ -315,7 +413,9 @@ function ForlobCreate({ onSave, isSaving = false }) {
             className="mt-auto inline-flex items-center justify-center rounded-full bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700"
             disabled={isSaving}
           >
-            {isSaving ? 'Gemmer...' : 'Gem forløb'}
+            {isSaving
+              ? t('booking.programs.actions.saving', 'Gemmer...')
+              : t('booking.programs.actions.save', 'Gem forløb')}
           </button>
         </div>
       </form>
@@ -325,6 +425,7 @@ function ForlobCreate({ onSave, isSaving = false }) {
 
 function Forloeb() {
   const { user } = useAuth();
+  const { t, locale } = useLanguage();
   const [isSaving, setIsSaving] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [forloebList, setForloebList] = useState([]);
@@ -359,7 +460,7 @@ function Forloeb() {
       },
       (err) => {
         console.error('[Forløb] load error', err);
-        setLoadError('Kunne ikke hente forløb.');
+        setLoadError(t('booking.programs.errors.loadFailed', 'Kunne ikke hente forløb.'));
         setLoading(false);
       }
     );
@@ -379,33 +480,36 @@ function Forloeb() {
   const conditionLabel = (value) => {
     switch (value) {
       case 'knee_oa':
-        return 'Knæartrose';
+        return t('booking.programs.options.condition.kneeOa', 'Knæartrose');
       case 'hip_oa':
-        return 'Hofteartrose';
+        return t('booking.programs.options.condition.hipOa', 'Hofteartrose');
       case 'glad':
-        return 'GLAD-forløb';
+        return t('booking.programs.options.condition.glad', 'GLAD-forløb');
       case 'acl':
-        return 'Postoperativ ACL';
+        return t('booking.programs.options.condition.acl', 'Postoperativ ACL');
       case 'shoulder':
-        return 'Skulder / impingement';
+        return t('booking.programs.options.condition.shoulder', 'Skulder / impingement');
       case 'low_back':
-        return 'Uspecifik lændesmerte';
+        return t('booking.programs.options.condition.lowBack', 'Uspecifik lændesmerte');
       default:
-        return 'Andet';
+        return t('booking.programs.options.condition.other', 'Andet');
     }
   };
 
   const userIdentity = useMemo(() => {
     if (!user) {
       return {
-        name: 'Ikke logget ind',
-        email: 'Log ind for at fortsætte',
+        name: t('booking.calendar.notLoggedIn', 'Ikke logget ind'),
+        email: t('booking.calendar.loginToContinue', 'Log ind for at fortsætte'),
         initials: '?',
         photoURL: null,
       };
     }
 
-    const name = user.displayName || user.email || 'Selma bruger';
+    const name =
+      user.displayName ||
+      user.email ||
+      t('booking.topbar.defaultUser', 'Selma bruger');
     const email = user.email || '—';
     const initialsSource = (user.displayName || user.email || '?').trim();
     const initials = initialsSource
@@ -431,9 +535,14 @@ function Forloeb() {
           <div className="flex h-full flex-col gap-4 rounded-2xl bg-slate-50/60 p-4 md:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h1 className="text-lg font-semibold tracking-tight text-slate-900 md:text-xl">Forløb</h1>
+                <h1 className="text-lg font-semibold tracking-tight text-slate-900 md:text-xl">
+                  {t('booking.programs.list.title', 'Forløb')}
+                </h1>
                 <p className="text-xs text-slate-500 md:text-sm">
-                  Overblik over dine gemte forløb. Opret nye med “Opret forløb”.
+                  {t(
+                    'booking.programs.list.subtitle',
+                    'Overblik over dine gemte forløb. Opret nye med “Opret forløb”.'
+                  )}
                 </p>
               </div>
               <button
@@ -441,7 +550,7 @@ function Forloeb() {
                 onClick={() => setShowCreateModal(true)}
                 className="toolbar-pill toolbar-primary"
               >
-                Opret forløb
+                {t('booking.programs.actions.create', 'Opret forløb')}
                 <ChevronDown className="toolbar-caret" />
               </button>
             </div>
@@ -450,7 +559,7 @@ function Forloeb() {
               <div className="relative min-w-[220px]">
                 <input
                   type="text"
-                  placeholder="Søg forløb eller diagnose"
+                  placeholder={t('booking.programs.list.searchPlaceholder', 'Søg forløb eller diagnose')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-3 pr-3 text-sm text-slate-800 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -461,11 +570,14 @@ function Forloeb() {
             <div className="flex-1 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
               {loading || loadError ? (
                 <div className="p-6 text-sm text-slate-600">
-                  {loadError || 'Henter forløb...'}
+                  {loadError || t('booking.programs.list.loading', 'Henter forløb...')}
                 </div>
               ) : filteredForloeb.length === 0 ? (
                 <div className="p-6 text-sm text-slate-600">
-                  Ingen forløb endnu. Klik “Opret forløb” for at komme i gang.
+                  {t(
+                    'booking.programs.list.empty',
+                    'Ingen forløb endnu. Klik “Opret forløb” for at komme i gang.'
+                  )}
                 </div>
               ) : (
                 <div className="p-4 grid gap-3 md:grid-cols-2">
@@ -477,53 +589,77 @@ function Forloeb() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-slate-900">
-                            {item.name || 'Uden navn'}
+                            {item.name || t('booking.programs.list.untitled', 'Uden navn')}
                           </p>
                           <p className="text-[11px] text-slate-500">
-                            {conditionLabel(item.condition)} · {item.format === 'individual'
-                              ? 'Individuel'
+                            {conditionLabel(item.condition)} ·{' '}
+                            {item.format === 'individual'
+                              ? t('booking.programs.options.format.individualShort', 'Individuel')
                               : item.format === 'small_group'
-                              ? 'Lille hold'
-                              : 'Hold'} · {item.setting === 'clinic'
-                              ? 'Klinik'
+                              ? t('booking.programs.options.format.smallGroupShort', 'Lille hold')
+                              : t('booking.programs.options.format.groupShort', 'Hold')}{' '}
+                            ·{' '}
+                            {item.setting === 'clinic'
+                              ? t('booking.programs.options.setting.clinicShort', 'Klinik')
                               : item.setting === 'gym'
-                              ? 'Fitness'
+                              ? t('booking.programs.options.setting.gymShort', 'Fitness')
                               : item.setting === 'online'
-                              ? 'Online'
-                              : 'Hjemme'}
+                              ? t('booking.programs.options.setting.onlineShort', 'Online')
+                              : t('booking.programs.options.setting.homeShort', 'Hjemme')}
                           </p>
                         </div>
                         <div className="text-right text-[11px] text-slate-500">
-                          {item.createdAt ? new Date(item.createdAt).toLocaleDateString('da-DK') : ''}
+                          {item.createdAt
+                            ? new Date(item.createdAt).toLocaleDateString(locale)
+                            : ''}
                         </div>
                       </div>
                       <div className="mt-3 grid gap-2 text-[12px] text-slate-700 md:grid-cols-2">
                         <span>
-                          {item.weeks || '?'} uger · {item.sessionsPerWeek || '?'}/uge ·{' '}
-                          {item.totalSessions || '?'} sessioner
+                          {t(
+                            'booking.programs.list.sessionsMeta',
+                            '{weeks} uger · {sessions}/uge · {total} sessioner',
+                            {
+                              weeks: item.weeks || '?',
+                              sessions: item.sessionsPerWeek || '?',
+                              total: item.totalSessions || '?',
+                            }
+                          )}
                         </span>
-                        <span>Varighed pr. session: {item.sessionLength || '?'} min</span>
                         <span>
-                          Pris pr. session:{' '}
+                          {t(
+                            'booking.programs.list.sessionLength',
+                            'Varighed pr. session: {count} min',
+                            { count: item.sessionLength || '?' }
+                          )}
+                        </span>
+                        <span>
+                          {t('booking.programs.list.pricePerSession', 'Pris pr. session:')}{' '}
                           {item.pricePerSession
-                            ? `DKK ${Number(item.pricePerSession).toLocaleString('da-DK', {
+                            ? `${t('booking.services.price.currency', 'DKK')} ${Number(item.pricePerSession).toLocaleString(locale, {
                                 minimumFractionDigits: 2,
                               })}`
                             : '—'}
                         </span>
                         <span>
-                          Pakkepris:{' '}
+                          {t('booking.programs.list.packagePrice', 'Pakkepris:')}{' '}
                           {item.packagePrice
-                            ? `DKK ${Number(item.packagePrice).toLocaleString('da-DK', {
+                            ? `${t('booking.services.price.currency', 'DKK')} ${Number(item.packagePrice).toLocaleString(locale, {
                                 minimumFractionDigits: 2,
                               })}`
                             : '—'}
                         </span>
-                        <span>Maks deltagere: {item.maxParticipants || '—'}</span>
+                        <span>
+                          {t(
+                            'booking.programs.list.maxParticipants',
+                            'Maks deltagere: {count}',
+                            { count: item.maxParticipants || '—' }
+                          )}
+                        </span>
                       </div>
                       {item.goals && (
                         <p className="mt-2 text-[12px] text-slate-600 line-clamp-2">
-                          Mål: {item.goals}
+                          {t('booking.programs.list.goals', 'Mål: {goals}', { goals: item.goals })}
                         </p>
                       )}
                     </div>
@@ -555,7 +691,9 @@ function Forloeb() {
                 }}
               >
                 <div style={{ padding: '12px 14px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span className="text-sm font-semibold text-slate-900">Opret forløb</span>
+                  <span className="text-sm font-semibold text-slate-900">
+                    {t('booking.programs.actions.create', 'Opret forløb')}
+                  </span>
                   <button
                     onClick={() => setShowCreateModal(false)}
                     style={{
@@ -574,7 +712,7 @@ function Forloeb() {
                     isSaving={isSaving}
                     onSave={async (payload) => {
                       if (!user?.uid) {
-                        alert('Log ind for at gemme forløb.');
+                        alert(t('booking.programs.errors.notLoggedIn', 'Log ind for at gemme forløb.'));
                         return;
                       }
                       setIsSaving(true);
@@ -590,7 +728,9 @@ function Forloeb() {
                         setShowCreateModal(false);
                       } catch (err) {
                         console.error('[Forløb] Kunne ikke gemme forløb', err);
-                        alert('Kunne ikke gemme forløb. Prøv igen.');
+                        alert(
+                          t('booking.programs.errors.saveFailed', 'Kunne ikke gemme forløb. Prøv igen.')
+                        );
                       } finally {
                         setIsSaving(false);
                       }

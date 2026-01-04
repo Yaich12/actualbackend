@@ -3,6 +3,8 @@ import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc } from '
 import './addnew.css';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
+import { useLanguage } from '../../../../LanguageContext';
+import { getServiceDurationOptions } from '../../../../utils/serviceLabels';
 
 const DEFAULT_FORM_VALUES = {
   name: '',
@@ -14,22 +16,13 @@ const DEFAULT_FORM_VALUES = {
   color: '#3B82F6',
 };
 
-const durationOptions = [
-  '15 minutter',
-  '30 minutter',
-  '45 minutter',
-  '1 time',
-  '1 time 30 minutter',
-  '2 timer',
-];
-
-const colorOptions = [
-  { value: '#F59E0B', label: 'Rav / Amber' },
-  { value: '#06B6D4', label: 'Turkis / Teal' },
-  { value: '#3B82F6', label: 'Blød blå' },
-  { value: '#8B5CF6', label: 'Violet' },
-  { value: '#EF4444', label: 'Rød' },
-  { value: '#EC4899', label: 'Lyserød' },
+const COLOR_OPTIONS = [
+  { value: '#F59E0B', key: 'booking.services.colors.amber', fallback: 'Rav / Amber' },
+  { value: '#06B6D4', key: 'booking.services.colors.teal', fallback: 'Turkis / Teal' },
+  { value: '#3B82F6', key: 'booking.services.colors.softBlue', fallback: 'Blød blå' },
+  { value: '#8B5CF6', key: 'booking.services.colors.violet', fallback: 'Violet' },
+  { value: '#EF4444', key: 'booking.services.colors.red', fallback: 'Rød' },
+  { value: '#EC4899', key: 'booking.services.colors.pink', fallback: 'Lyserød' },
 ];
 
 const sanitizeIdentifier = (value) =>
@@ -74,6 +67,12 @@ function AddNewServiceModal({
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const { user } = useAuth();
+  const { t } = useLanguage();
+  const durationOptions = getServiceDurationOptions(t);
+  const colorOptions = COLOR_OPTIONS.map((option) => ({
+    ...option,
+    label: t(option.key, option.fallback),
+  }));
 
   useEffect(() => {
     if (!isOpen) return;
@@ -140,7 +139,9 @@ function AddNewServiceModal({
     }
 
     if (!user) {
-      setSaveError('Du skal være logget ind for at gemme en ydelse.');
+      setSaveError(
+        t('booking.services.addNew.errors.notLoggedIn', 'Du skal være logget ind for at gemme en ydelse.')
+      );
       return;
     }
 
@@ -211,7 +212,9 @@ function AddNewServiceModal({
       onClose();
     } catch (error) {
       console.error('Failed to save service:', error);
-      setSaveError('Kunne ikke gemme ydelsen. Prøv igen.');
+      setSaveError(
+        t('booking.services.addNew.errors.saveFailed', 'Kunne ikke gemme ydelsen. Prøv igen.')
+      );
     } finally {
       setIsSaving(false);
     }
@@ -220,7 +223,10 @@ function AddNewServiceModal({
   const handleDelete = async () => {
     if (!user?.uid || !serviceId) return;
     const confirmed = window.confirm(
-      'Er du sikker på, at du vil slette denne ydelse? Dette kan ikke fortrydes.'
+      t(
+        'booking.services.addNew.confirmDelete',
+        'Er du sikker på, at du vil slette denne ydelse? Dette kan ikke fortrydes.'
+      )
     );
     if (!confirmed) return;
 
@@ -233,7 +239,9 @@ function AddNewServiceModal({
       onClose?.();
     } catch (error) {
       console.error('Failed to delete service:', error);
-      setSaveError('Kunne ikke slette ydelsen. Prøv igen.');
+      setSaveError(
+        t('booking.services.addNew.errors.deleteFailed', 'Kunne ikke slette ydelsen. Prøv igen.')
+      );
     }
   };
 
@@ -241,74 +249,98 @@ function AddNewServiceModal({
     <div className="addnew-modal-overlay" onClick={onClose}>
       <div className="addnew-modal" onClick={(event) => event.stopPropagation()}>
         <div className="addnew-modal-header">
-          <h2>{mode === 'edit' ? 'Rediger ydelse' : 'Opret ny ydelse'}</h2>
-          <button type="button" className="addnew-close-btn" onClick={onClose} aria-label="Luk">
+          <h2>
+            {mode === 'edit'
+              ? t('booking.services.addNew.title.edit', 'Rediger ydelse')
+              : t('booking.services.addNew.title.create', 'Opret ny ydelse')}
+          </h2>
+          <button
+            type="button"
+            className="addnew-close-btn"
+            onClick={onClose}
+            aria-label={t('booking.services.addNew.actions.close', 'Luk')}
+          >
             ×
           </button>
         </div>
 
         <form className="addnew-form" onSubmit={handleSubmit}>
           <div className="addnew-field-group">
-            <label htmlFor="service-name">Navn</label>
+            <label htmlFor="service-name">
+              {t('booking.services.addNew.fields.name.label', 'Navn')}
+            </label>
             <input
               id="service-name"
               type="text"
               value={formValues.name}
               onChange={handleChange('name')}
-              placeholder="Angiv navn på ydelsen"
+              placeholder={t(
+                'booking.services.addNew.fields.name.placeholder',
+                'Angiv navn på ydelsen'
+              )}
             />
           </div>
 
           <div className="addnew-field-group">
-            <label htmlFor="service-description">Beskrivelse</label>
+            <label htmlFor="service-description">
+              {t('booking.services.addNew.fields.description.label', 'Beskrivelse')}
+            </label>
             <textarea
               id="service-description"
               value={formValues.description}
               onChange={handleChange('description')}
-              placeholder="Tilføj en beskrivelse (valgfrit)"
+              placeholder={t(
+                'booking.services.addNew.fields.description.placeholder',
+                'Tilføj en beskrivelse (valgfrit)'
+              )}
               rows={4}
             />
           </div>
 
           <div className="addnew-inline-fields">
             <div className="addnew-field-group">
-              <label htmlFor="service-duration">Varighed</label>
+              <label htmlFor="service-duration">
+                {t('booking.services.addNew.fields.duration.label', 'Varighed')}
+              </label>
               <select
                 id="service-duration"
                 value={formValues.duration}
                 onChange={handleChange('duration')}
               >
                 {durationOptions.map((duration) => (
-                  <option key={duration} value={duration}>
-                    {duration}
+                  <option key={duration.value} value={duration.value}>
+                    {duration.label}
                   </option>
                 ))}
               </select>
             </div>
-          <div className="addnew-field-group">
-            <label>Farve</label>
-            <div className="addnew-color-grid">
-              {colorOptions.map((c) => (
-                <button
-                  type="button"
-                  key={c.value}
-                  className={`addnew-color-swatch ${formValues.color === c.value ? 'selected' : ''}`}
-                  onClick={() => setFormValues((prev) => ({ ...prev, color: c.value }))}
-                  aria-label={c.label}
-                  title={c.label}
-                  style={{ background: c.value }}
-                >
-                  {formValues.color === c.value && <span className="addnew-color-check">✓</span>}
-                </button>
-              ))}
+            <div className="addnew-field-group">
+              <label htmlFor="service-color">
+                {t('booking.services.addNew.fields.color.label', 'Farve')}
+              </label>
+              <select
+                id="service-color"
+                value={formValues.color}
+                onChange={handleChange('color')}
+              >
+                {colorOptions.map((color) => (
+                  <option key={color.value} value={color.value}>
+                    {color.label}
+                  </option>
+                ))}
+              </select>
+              <p className="addnew-color-hint">
+                {t(
+                  'booking.services.addNew.fields.color.hint',
+                  'Vælg farve til visning i kalenderen.'
+                )}
+              </p>
             </div>
-            <p className="addnew-color-hint">Vælg farve til visning i kalenderen.</p>
-          </div>
           </div>
 
           <div className="addnew-inline-fields addnew-price-row">
             <div className="addnew-field-group">
-              <label>Pris</label>
+              <label>{t('booking.services.addNew.fields.price.label', 'Pris')}</label>
               <div className="addnew-price-inputs">
                 <select value={formValues.currency} onChange={handleChange('currency')}>
                   <option value="DKK">DKK</option>
@@ -319,13 +351,13 @@ function AddNewServiceModal({
                   step="0.5"
                   value={formValues.price}
                   onChange={handleChange('price')}
-                  placeholder="0,00"
+                  placeholder={t('booking.services.addNew.fields.price.placeholder', '0,00')}
                 />
               </div>
             </div>
 
             <div className="addnew-field-group addnew-tax-toggle">
-              <label>Moms</label>
+              <label>{t('booking.services.addNew.fields.vat.label', 'Moms')}</label>
               <label className="addnew-switch">
                 <input
                   type="checkbox"
@@ -351,7 +383,7 @@ function AddNewServiceModal({
                 onClick={handleDelete}
                 disabled={isSaving}
               >
-                Slet ydelse
+                {t('booking.services.addNew.actions.delete', 'Slet ydelse')}
               </button>
             )}
             <button
@@ -360,7 +392,7 @@ function AddNewServiceModal({
               onClick={onClose}
               disabled={isSaving}
             >
-              Annuller
+              {t('booking.services.addNew.actions.cancel', 'Annuller')}
             </button>
             <button
               type="submit"
@@ -368,9 +400,10 @@ function AddNewServiceModal({
               disabled={isSaving}
               aria-busy={isSaving}
             >
-              {isSaving ? 'Gemmer...' : (
+              {isSaving ? t('booking.services.addNew.actions.saving', 'Gemmer...') : (
                 <>
-                  Næste <span className="addnew-btn-arrow">›</span>
+                  {t('booking.services.addNew.actions.next', 'Næste')}{' '}
+                  <span className="addnew-btn-arrow">›</span>
                 </>
               )}
             </button>

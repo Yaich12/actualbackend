@@ -101,10 +101,10 @@ export default function HeroSection() {
                     <span className="h-2 w-2 rounded-full bg-emerald-400" />
                   </div>
                   <div className="mt-3 rounded-xl bg-slate-100 px-3 py-2 text-[12px] text-slate-600">
-                    Velkommen til Klinik Selma, hvad kan jeg hjælpe med?
+                    Welcome to Selma Clinic, how can I help?
                   </div>
                   <div className="mt-4 flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-400">
-                    Skriv en besked...
+                    Type a message...
                     <span className="ml-auto inline-flex items-center justify-center rounded-full bg-blue-600 px-3 py-1 text-[10px] font-semibold text-white">
                       Send
                     </span>
@@ -113,10 +113,10 @@ export default function HeroSection() {
               </div>
             </div>
 
-            <h3 className="mt-8 text-2xl font-semibold text-white">Din klinik er altid åben</h3>
+            <h3 className="mt-8 text-2xl font-semibold text-white">Your clinic is always open</h3>
             <p className="mt-3 text-sm leading-relaxed text-white/90">
-              Få en smuk hjemmeside med indbygget AI-receptionist. Den tager imod nye patienter og svarer på spørgsmål
-              døgnet rundt – også mens du sover.
+              Get a beautiful website with a built-in AI receptionist. It welcomes new patients and answers questions
+              around the clock—even while you sleep.
             </p>
             <Link
               to="/website-builder"
@@ -126,7 +126,7 @@ export default function HeroSection() {
               }}
               className="mt-6 inline-flex items-center justify-center text-sm font-semibold text-white/95 transition hover:text-white"
             >
-              Se løsningen →
+              See the solution →
             </Link>
           </div>
 
@@ -145,7 +145,9 @@ export default function HeroSection() {
                 <div className="rounded-2xl bg-white p-4 shadow-sm">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-xl bg-slate-50 p-3">
-                      <div className="text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-400">Kalender</div>
+                      <div className="text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                        Calendar
+                      </div>
                       <div className="mt-3 space-y-2">
                         <div className="h-2 w-full rounded-full bg-blue-200/80" />
                         <div className="h-2 w-5/6 rounded-full bg-slate-200" />
@@ -172,23 +174,23 @@ export default function HeroSection() {
               </div>
             </div>
 
-            <h3 className="mt-8 text-2xl font-semibold text-white">Mere tid til behandling</h3>
+            <h3 className="mt-8 text-2xl font-semibold text-white">More time for care</h3>
             <p className="mt-3 text-sm leading-relaxed text-white/90">
-              Slut med at klikke rundt. I Selma+ er din kalender og journal smeltet sammen, og AI-assistenten hjælper
-              dig med at skrive notaterne lynhurtigt.
+              Stop clicking around. In Selma+, your calendar and journal are merged, and the AI assistant helps you
+              write notes lightning fast.
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link
                 to="/features"
                 className="inline-flex items-center justify-center rounded-full border border-white/80 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-[#4f6fc1]"
               >
-                Udforsk systemet →
+                Explore the system →
               </Link>
               <Link
                 to="/selma-copilot"
                 className="inline-flex items-center justify-center rounded-full border border-white/80 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-[#4f6fc1]"
               >
-                Mød Ally →
+                Meet Ally →
               </Link>
             </div>
           </div>
@@ -198,7 +200,7 @@ export default function HeroSection() {
             <div className="rounded-[28px] bg-white p-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <div className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-                  OVERBLIK
+                  OVERVIEW
                 </div>
                 <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">
                   <LayoutGrid className="h-5 w-5" />
@@ -208,14 +210,14 @@ export default function HeroSection() {
                 <div className="rounded-2xl bg-white p-4 shadow-sm">
                   <div className="rounded-2xl border border-emerald-100 bg-white p-4">
                     <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
-                      <span>Omsætning</span>
+                      <span>Revenue</span>
                       <span className="text-emerald-600">+12%</span>
                     </div>
                     <div className="mt-3 h-12 rounded-xl bg-emerald-50 p-2">
                       <div className="h-full w-full rounded-lg bg-gradient-to-r from-emerald-200 via-emerald-100 to-white" />
                     </div>
                     <div className="mt-4 flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">
-                      Status: Alt afstemt
+                      Status: All reconciled
                       <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-semibold text-white">
                         ✓
                       </span>
@@ -225,16 +227,16 @@ export default function HeroSection() {
               </div>
             </div>
 
-            <h3 className="mt-8 text-2xl font-semibold text-white">Ro i maven omkring tallene</h3>
+            <h3 className="mt-8 text-2xl font-semibold text-white">Peace of mind about the numbers</h3>
             <p className="mt-3 text-sm leading-relaxed text-white/90">
-              Slip for det manuelle bøvl. Fakturering, indberetning til &quot;danmark&quot; og regnskab sker automatisk
-              i baggrunden.
+              Skip the manual hassle. Invoicing, reporting to &quot;danmark&quot;, and accounting happen automatically
+              in the background.
             </p>
             <Link
               to="/features/operations"
               className="mt-6 inline-flex text-sm font-semibold text-white/90 transition hover:text-white"
             >
-              Se funktioner →
+              See features →
             </Link>
           </div>
         </div>

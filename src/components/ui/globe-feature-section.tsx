@@ -11,11 +11,21 @@ export default function Featured_05() {
         <div className="flex flex-col-reverse items-center justify-between gap-10 md:flex-row">
           <div className="z-10 max-w-xl text-left">
             <h1 className="text-3xl font-normal text-gray-900 dark:text-white leading-tight">
-              Build with <span className="text-primary">Selma</span>{" "}
-              <span className="text-gray-500 dark:text-gray-400">Empower your team with fast, elegant, and scalable UI components. Selma brings simplicity and performance to your modern apps.</span>
+              <span className="block font-semibold text-gray-900 dark:text-white">
+                Build with <span className="text-primary">Selma</span>
+              </span>
+              <span className="mt-3 block text-gray-500 dark:text-gray-400">
+                Support clinical teams with secure transcription and AI-assisted documentation—designed
+                to improve consistency, reduce administrative time, and scale across modern practice.
+              </span>
             </h1>
-            <Button className="mt-6 inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-2 text-sm font-semibold text-background transition hover:bg-black">
-              Join Today <ArrowRight className="h-4 w-4" />
+            <Button
+              asChild
+              className="mt-6 inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-2 text-sm font-semibold text-background transition hover:bg-black"
+            >
+              <a href="/signup">
+                Join Today <ArrowRight className="h-4 w-4" />
+              </a>
             </Button>
           </div>
           <div className="relative h-[180px] w-full max-w-xl md:h-[300px]">
@@ -146,4 +156,3 @@ export function Globe({
     </div>
   );
 }
-

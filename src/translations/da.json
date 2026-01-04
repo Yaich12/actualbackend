@@ -31,7 +31,11 @@
         "title": "Vælg den mulighed der passer bedst til din virksomhed",
         "subtitle": "Du kan ændre dette senere",
         "hint": "{count}/{max} valgt",
-        "options": ["Physiotherapist", "Osteopath", "Chiropractor"]
+        "options": [
+          "Physiotherapist",
+          "Osteopath",
+          "Chiropractor"
+        ]
       },
       "accountType": {
         "title": "Vælg kontotype",
@@ -41,7 +45,11 @@
       },
       "teamSize": {
         "title": "Hvor mange medarbejdere har du",
-        "options": ["2-5 personer", "6-10 personer", "11+ personer"]
+        "options": [
+          "2-5 personer",
+          "6-10 personer",
+          "11+ personer"
+        ]
       },
       "serviceModel": {
         "title": "Hvor tilbyder du dine tjenester?",
@@ -98,6 +106,10 @@
       "title": "Din virksomhed er oprettet!",
       "subtitle": "Få 14 dages gratis brug af Selma for virksomheder",
       "button": "Færdig"
+    },
+    "currency": {
+      "label": "Valuta",
+      "subtitle": "Du kan ændre valuta senere i indstillinger."
     }
   },
   "booking": {
@@ -106,6 +118,7 @@
       "clients": "Klienter",
       "services": "Ydelser",
       "forloeb": "Forløb",
+      "product": "Produkt",
       "invoices": "Salg",
       "stats": "Statistik",
       "team": "Team",
@@ -122,7 +135,7 @@
       "help": "Hjælp og support",
       "logout": "Log ud",
       "defaultUser": "Selma bruger",
-      "clinicSettings": "Klinikindstillinger"
+      "clinicSettings": "Klinik overblik"
     },
     "calendar": {
       "today": "I dag",
@@ -148,7 +161,445 @@
       "memberFallback": "Medarbejder",
       "you": "Dig",
       "notLoggedIn": "Ikke logget ind",
-      "loginToContinue": "Log ind for at fortsætte"
+      "loginToContinue": "Log ind for at fortsætte",
+      "addCustomer": "Tilføj kunde",
+      "addCustomerNote": "Efterlad feltet tomt til drop-in",
+      "addMode": {
+        "available": "Se tilgængelige tidspunkter",
+        "close": "Luk",
+        "closePanel": "Luk",
+        "repeat": "Gentages ikke",
+        "title": "Vælg en tid, der skal bookes"
+      },
+      "addService": "Tilføj tjeneste",
+      "clients": {
+        "empty": "Ingen kunder fundet",
+        "loading": "Indlæser kunder..."
+      },
+      "payment": "Betaling",
+      "save": "Gem",
+      "searchClients": "Søg efter kunde",
+      "services": {
+        "defaultGroup": "Ydelser",
+        "loading": "Indlæser ydelser...",
+        "search": "Søg efter tjenestenavn",
+        "section": "Tjenester",
+        "title": "Vælg en tjeneste"
+      },
+      "total": "I alt",
+      "confirmDeleteProgram": "Dette er en del af et forløb.\n\nOK: Slet hele klientens forløb.\nAnnuller: Slet kun denne dato.",
+      "unknownClient": "Ukendt klient",
+      "status": {
+        "active": "Aktiv"
+      },
+      "selectClient": "Vælg en kunde",
+      "addNewClient": "Tilføj ny kunde",
+      "createNewClient": "Opret en ny kunde"
+    },
+    "dropdown": {
+      "add": "Tilføj",
+      "calendar": "I kalenderen",
+      "manual": "Manuelt"
+    },
+    "stats": {
+      "title": "Statistik",
+      "subtitle": "Overblik over aftaler og omsætning baseret på dine rigtige booking-data.",
+      "period": {
+        "today": "I dag",
+        "week": "Denne uge",
+        "month": "Denne måned",
+        "year": "Dette år",
+        "all": "Alt"
+      },
+      "error": "Kan ikke hente statistik lige nu. Sørg for at du er logget ind, og at der findes aftaler i Firestore.",
+      "loading": "Indlæser data fra klinikken…",
+      "empty": "Ingen aftaler i den valgte periode. Skift periode eller opret nye aftaler.",
+      "cards": {
+        "revenue": {
+          "title": "Omsætning",
+          "subtitle": "Valgt periode"
+        },
+        "appointments": {
+          "title": "Aftaler",
+          "subtitle": "Bookede i perioden"
+        },
+        "clients": {
+          "title": "Unikke klienter",
+          "subtitle": "I perioden",
+          "extra": "{count} klienter i alt"
+        },
+        "cancel": {
+          "title": "Afbud / no-show",
+          "subtitle": "Andel af aftaler"
+        }
+      },
+      "load": {
+        "title": "Gennemsnitlig klinik-belastning",
+        "subtitle": "Hvor mange timer du i gennemsnit er booket de dage, hvor du faktisk har aftaler."
+      },
+      "topServices": {
+        "title": "Mest bookede ydelser",
+        "subtitle": "Dine 5 mest anvendte ydelser i den valgte periode.",
+        "empty": "Ingen data i perioden."
+      },
+      "countSuffix": "×",
+      "otherService": "Andet",
+      "hoursShort": "t"
+    },
+    "services": {
+      "title": "Ydelser",
+      "actions": {
+        "create": "Opret ny",
+        "createFull": "Opret ny ydelse"
+      },
+      "search": {
+        "placeholder": "Søg"
+      },
+      "loading": "Henter ydelser...",
+      "price": {
+        "currency": "DKK",
+        "inclVat": "inkl. moms"
+      },
+      "list": {
+        "title": "Dine ydelser"
+      },
+      "empty": "Du har ingen ydelser endnu. Opret din første ydelse.",
+      "selector": {
+        "placeholder": "Ingen ydelse valgt",
+        "loading": "Henter ydelser…",
+        "empty": "Du har ingen ydelser eller forløb endnu.",
+        "label": "Vælg behandling",
+        "groups": {
+          "services": "Ydelser",
+          "programs": "Forløb"
+        },
+        "tags": {
+          "service": "Ydelse",
+          "program": "Forløb"
+        }
+      },
+      "duration": {
+        "15m": "15 minutter",
+        "30m": "30 minutter",
+        "45m": "45 minutter",
+        "60m": "1 time",
+        "90m": "1 time 30 minutter",
+        "120m": "2 timer"
+      },
+      "colors": {
+        "amber": "Rav / Amber",
+        "teal": "Turkis / Teal",
+        "softBlue": "Blød blå",
+        "violet": "Violet",
+        "red": "Rød",
+        "pink": "Lyserød"
+      },
+      "addNew": {
+        "title": {
+          "edit": "Rediger ydelse",
+          "create": "Opret ny ydelse"
+        },
+        "actions": {
+          "close": "Luk",
+          "delete": "Slet ydelse",
+          "cancel": "Annuller",
+          "saving": "Gemmer...",
+          "next": "Næste"
+        },
+        "fields": {
+          "name": {
+            "label": "Navn",
+            "placeholder": "Angiv navn på ydelsen"
+          },
+          "description": {
+            "label": "Beskrivelse",
+            "placeholder": "Tilføj en beskrivelse (valgfrit)"
+          },
+          "duration": {
+            "label": "Varighed"
+          },
+          "color": {
+            "label": "Farve",
+            "hint": "Vælg farve til visning i kalenderen."
+          },
+          "price": {
+            "label": "Pris",
+            "placeholder": "0,00"
+          },
+          "vat": {
+            "label": "Moms"
+          }
+        },
+        "errors": {
+          "notLoggedIn": "Du skal være logget ind for at gemme en ydelse.",
+          "saveFailed": "Kunne ikke gemme ydelsen. Prøv igen.",
+          "deleteFailed": "Kunne ikke slette ydelsen. Prøv igen."
+        },
+        "confirmDelete": "Er du sikker på, at du vil slette denne ydelse? Dette kan ikke fortrydes."
+      }
+    },
+    "programs": {
+      "defaultName": "Forløb",
+      "sessionsCount": "{count} sessioner",
+      "weeksCount": "{count} uger",
+      "loadError": "Kunne ikke hente forløb",
+      "create": {
+        "title": "Opret nyt forløb",
+        "subtitle": "Design et struktureret behandlingsforløb - f.eks. artroseforløb, GLAD-hold eller postoperativ genoptræning.",
+        "alertSaved": "Forløb oprettet (hook det op til Firestore senere).",
+        "fields": {
+          "name": {
+            "label": "Forløbsnavn",
+            "placeholder": "GLAD knæ, Hofteartrose-forløb, Lændehold, osv."
+          },
+          "condition": {
+            "label": "Primær problemstilling"
+          },
+          "format": {
+            "label": "Format"
+          },
+          "setting": {
+            "label": "Setting"
+          },
+          "maxParticipants": {
+            "label": "Max antal deltagere"
+          },
+          "durationWeeks": {
+            "label": "Varighed (uger)"
+          },
+          "sessionsPerWeek": {
+            "label": "Sessioner pr. uge"
+          },
+          "sessionLength": {
+            "label": "Varighed pr. session (min)"
+          },
+          "goals": {
+            "label": "Kliniske & funktionelle mål",
+            "placeholder": "F.eks. reducere smerte, øge gangdistance, forbedre STS, øge selv-efficacy ift. træning osv."
+          },
+          "content": {
+            "label": "Hvad indeholder forløbet typisk?",
+            "education": "Patientuddannelse / smerteforklaring",
+            "strength": "Styrketræning (store muskelgrupper)",
+            "neuromuscular": "Neuromuskulær træning / balance",
+            "homeProgram": "Hjemmeprogram med progression",
+            "outcomes": "Outcome-mål (f.eks. KOOS, HOOS, NRS, STS)"
+          },
+          "notes": {
+            "label": "Interne noter (valgfrit)",
+            "placeholder": "Praktiske detaljer, kontraindikationer, krav til udstyr osv."
+          }
+        }
+      },
+      "options": {
+        "condition": {
+          "kneeOa": "Knæartrose",
+          "hipOa": "Hofteartrose",
+          "glad": "GLAD-forløb",
+          "acl": "Postoperativ ACL",
+          "shoulder": "Skulder / impingement",
+          "lowBack": "Uspecifik lændesmerte",
+          "other": "Andet / blandet MSK"
+        },
+        "format": {
+          "individual": "Individuel",
+          "smallGroup": "Lille hold (2–4)",
+          "group": "Hold (5–12)",
+          "individualShort": "Individuel",
+          "smallGroupShort": "Lille hold",
+          "groupShort": "Hold"
+        },
+        "setting": {
+          "clinic": "Klinik / træningssal",
+          "gym": "Fitnesscenter",
+          "online": "Online / hybrid",
+          "home": "Hjemmebaseret",
+          "clinicShort": "Klinik",
+          "gymShort": "Fitness",
+          "onlineShort": "Online",
+          "homeShort": "Hjemme"
+        }
+      },
+      "summary": {
+        "title": "Overblik",
+        "newProgram": "Nyt forløb",
+        "sessions": "{weeks} uger · {sessions} sessioner/uge · ca. {total} sessioner i alt",
+        "empty": "Angiv uger og sessioner/uge for at se totalen.",
+        "format": "Format",
+        "formatSmall": "Lille hold",
+        "formatGroup": "Hold",
+        "setting": "Setting",
+        "settingClinic": "Klinik",
+        "settingGym": "Fitness",
+        "settingOnline": "Online",
+        "settingHome": "Hjemme",
+        "maxParticipants": "Max deltagere"
+      },
+      "financial": {
+        "title": "Økonomi",
+        "sessionPrice": "Pris pr. session ({currency})",
+        "packagePrice": "Pakkepris for hele forløbet ({currency})",
+        "hint": "Du kan udfylde begge felter og vælge i faktureringen, hvad du bruger i praksis.",
+        "estimate": "Estimeret omsætning pr. deltager ved sessionpris:"
+      },
+      "actions": {
+        "saving": "Gemmer...",
+        "save": "Gem forløb",
+        "create": "Opret forløb"
+      },
+      "errors": {
+        "loadFailed": "Kunne ikke hente forløb.",
+        "notLoggedIn": "Log ind for at gemme forløb.",
+        "saveFailed": "Kunne ikke gemme forløb. Prøv igen."
+      },
+      "list": {
+        "title": "Forløb",
+        "subtitle": "Overblik over dine gemte forløb. Opret nye med Opret forløb.",
+        "searchPlaceholder": "Søg forløb eller diagnose",
+        "loading": "Henter forløb...",
+        "empty": "Ingen forløb endnu. Klik Opret forløb for at komme i gang.",
+        "untitled": "Uden navn",
+        "sessionsMeta": "{weeks} uger · {sessions}/uge · {total} sessioner",
+        "sessionLength": "Varighed pr. session: {count} min",
+        "pricePerSession": "Pris pr. session:",
+        "packagePrice": "Pakkepris:",
+        "maxParticipants": "Maks deltagere: {count}",
+        "goals": "Mål: {goals}"
+      }
+    },
+    "overview": {
+      "currencySuffix": "kr.",
+      "status": {
+        "booked": "Booket",
+        "confirmed": "Bekræftet",
+        "arrived": "Ankommet",
+        "started": "Begyndt",
+        "completed": "Gennemført",
+        "cancelled": "Aflyst",
+        "pending": "Afventer",
+        "noshow": "Udeblivelse"
+      },
+      "title": "Klinik overblik",
+      "subtitle": "Et hurtigt overblik over dagens drift og de seneste resultater.",
+      "period": {
+        "last7": "Seneste 7 dage"
+      },
+      "sales": {
+        "title": "Seneste salg",
+        "range": "Seneste {count} dage",
+        "option7": "Seneste 7 dage",
+        "option30": "Seneste 30 dage",
+        "appointments": "Aftaler",
+        "appointmentValue": "Aftalens værdi"
+      },
+      "actions": {
+        "more": "Flere muligheder"
+      },
+      "dropdown": {
+        "period": "Periode"
+      },
+      "legend": {
+        "sales": "Salg",
+        "appointments": "Aftaler",
+        "confirmed": "Bekræftet",
+        "cancelled": "Aflysning"
+      },
+      "upcoming": {
+        "title": "Kommende aftaler",
+        "range": "Næste {count} dage",
+        "option7": "Næste 7 dage",
+        "option30": "Næste 30 dage",
+        "confirmed": "Bekræftede aftaler",
+        "cancelled": "Aflyste aftaler",
+        "bookedCount": "{count} booket"
+      },
+      "activity": {
+        "title": "Aftaleaktivitet",
+        "loadingTitle": "Henter aftaler...",
+        "loadingSubtitle": "Vi opdaterer historikken lige nu",
+        "errorTitle": "Kunne ikke hente aftaler",
+        "errorSubtitle": "Prøv igen om lidt",
+        "emptyTitle": "Ingen tidligere aftaler",
+        "emptySubtitle": "Historik vises her, når du har afsluttede aftaler",
+        "unknownClient": "Ukendt kunde",
+        "defaultService": "Aftale",
+        "withStaff": "med {name}"
+      },
+      "today": {
+        "title": "Næste aftaler i dag",
+        "loadingTitle": "Henter aftaler...",
+        "loadingSubtitle": "Vi opdaterer dagens plan",
+        "errorTitle": "Kunne ikke hente aftaler",
+        "errorSubtitle": "Prøv igen om lidt",
+        "emptyTitle": "Ingen aftaler i dag",
+        "emptySubtitle": "Gå til afsnittet med din {calendar} for at tilføje aftaler",
+        "calendarLink": "kalender"
+      },
+      "topServices": {
+        "title": "Toptjenester",
+        "columns": {
+          "service": "Tjeneste"
+        }
+      },
+      "columns": {
+        "thisMonth": "Denne måned",
+        "lastMonth": "Sidste måned"
+      },
+      "table": {
+        "loading": "Henter data...",
+        "error": "Kunne ikke hente data.",
+        "empty": "Ingen data endnu."
+      },
+      "topStaff": {
+        "title": "Topmedarbejder",
+        "columns": {
+          "staff": "Medarbejder"
+        }
+      },
+      "footer": {
+        "revenueToday": "Omsætning i dag",
+        "newClients": "Nye klienter"
+      },
+      "sharedAccount": "fælles konto"
+    },
+    "clients": {
+      "title": "Klientoversigt",
+      "actions": {
+        "add": "Tilføj klient",
+        "edit": "Ændre klientoplysninger",
+        "addProgram": "Tilføj forløbsoplysninger"
+      },
+      "sort": {
+        "label": "Sortér",
+        "newest": "Nyeste",
+        "oldest": "Ældste",
+        "alphabetical": "Alfabetisk"
+      },
+      "search": {
+        "placeholder": "Søg"
+      },
+      "loading": "Henter klienter...",
+      "columns": {
+        "name": "Navn",
+        "status": "Status",
+        "email": "E-mail",
+        "phone": "Telefon",
+        "cpr": "CPR",
+        "address": "Adresse",
+        "city": "By",
+        "postalCode": "Postnummer",
+        "country": "Land"
+      }
+    },
+    "invoices": {
+      "sidebar": {
+        "dailyOverview": "Daglig Salgsoverblik",
+        "appointments": "Aftaler",
+        "sales": "Salg",
+        "payments": "Betalinger",
+        "title": "Fakturaer",
+        "subtitle": "Salg"
+      }
     }
   },
   "settings": {
@@ -193,6 +644,10 @@
     "language": {
       "title": "Sprog",
       "label": "Foretrukket sprog"
+    },
+    "currency": {
+      "label": "Valuta",
+      "placeholder": "Vælg valuta"
     }
   }
 }

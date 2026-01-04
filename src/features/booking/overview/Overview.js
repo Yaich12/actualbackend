@@ -1,46 +1,12 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import "./Overview.css";
 import { BookingSidebarLayout } from "../../../components/ui/BookingSidebarLayout";
 import { Activity, BarChart3, CalendarDays, Users } from "lucide-react";
 import { useAuth } from "../../../AuthContext";
+import { useLanguage } from "../../../LanguageContext";
 import useAppointments from "../../../hooks/useAppointments";
 import useSales from "../../../hooks/useSales";
-
-const formatCurrency = (value) =>
-  new Intl.NumberFormat("da-DK", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value || 0);
-
-const monthShortLabels = [
-  "jan",
-  "feb",
-  "mar",
-  "apr",
-  "maj",
-  "jun",
-  "jul",
-  "aug",
-  "sep",
-  "okt",
-  "nov",
-  "dec",
-];
-
-const weekdayShortLabels = ["søn", "man", "tir", "ons", "tor", "fre", "lør"];
-
-const statusLabels = {
-  booked: "Booket",
-  confirmed: "Bekræftet",
-  arrived: "Ankommet",
-  started: "Begyndt",
-  completed: "Gennemført",
-  cancelled: "Aflyst",
-  pending: "Afventer",
-  noshow: "Udeblivelse",
-  "no-show": "Udeblivelse",
-  "no_show": "Udeblivelse",
-};
+import { formatServiceDuration } from "../../../utils/serviceLabels";
 
 const parseDateString = (value) => {
   if (!value) return null;
@@ -120,11 +86,6 @@ const toNiceCountMax = (value) => {
 
 const getSaleDate = (sale) => sale.completedAtDate || sale.createdAtDate || null;
 
-const getAppointmentStatusLabel = (status) => {
-  if (!status) return "Booket";
-  return statusLabels[String(status)] || status;
-};
-
 const getAppointmentPrice = (appointment) => {
   if (typeof appointment?.servicePriceInclVat === "number") {
     return appointment.servicePriceInclVat;
@@ -135,33 +96,24 @@ const getAppointmentPrice = (appointment) => {
   return 0;
 };
 
-const formatDayMonth = (date) => {
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = monthShortLabels[date.getMonth()] || "";
-  return { day, month };
-};
-
-const formatDateTimeLabel = (date) => {
-  const weekday = weekdayShortLabels[date.getDay()] || "";
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = monthShortLabels[date.getMonth()] || "";
-  const year = date.getFullYear();
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${weekday}, ${day} ${month} ${year} ${hours}:${minutes}`;
-};
-
-const statusClassName = (status) => {
-  if (status === "Gennemført") return "overview-status overview-status--complete";
-  if (status === "Booket") return "overview-status overview-status--booked";
-  return "overview-status";
-};
-
-const statusGroup = (status) => {
+const normalizeStatus = (status) => {
   if (!status) return "booked";
   const normalized = String(status).toLowerCase();
-  if (normalized.includes("aflyst") || normalized.includes("cancel")) return "cancelled";
-  if (normalized.includes("bekræft") || normalized.includes("confirm")) return "confirmed";
+  if (
+    normalized.includes("aflyst") ||
+    normalized.includes("cancel") ||
+    normalized.includes("no-show") ||
+    normalized.includes("noshow") ||
+    normalized.includes("no_show")
+  ) {
+    return "cancelled";
+  }
+  if (normalized.includes("confirm") || normalized.includes("bekræft")) return "confirmed";
+  if (normalized.includes("arriv")) return "arrived";
+  if (normalized.includes("start")) return "started";
+  if (normalized.includes("complete") || normalized.includes("gennemført"))
+    return "completed";
+  if (normalized.includes("pending") || normalized.includes("afvent")) return "pending";
   if (normalized.includes("book")) return "booked";
   return "booked";
 };
@@ -174,6 +126,7 @@ const ChartSvg = ({ width, height, children }) => (
 
 function Overview() {
   const { user } = useAuth();
+  const { t, locale } = useLanguage();
   const {
     appointments,
     loading: appointmentsLoading,
@@ -185,19 +138,113 @@ function Overview() {
     error: salesError,
   } = useSales(user?.uid || null, { status: "completed" });
 
+  // State for period selection for both cards
+  const [salesPeriod, setSalesPeriod] = useState("7"); // "7" or "30"
+  const [appointmentsPeriod, setAppointmentsPeriod] = useState("7"); // "7" or "30"
+  const [showSalesDropdown, setShowSalesDropdown] = useState(false);
+  const [showAppointmentsDropdown, setShowAppointmentsDropdown] = useState(false);
+  
+  const salesDropdownRef = useRef(null);
+  const appointmentsDropdownRef = useRef(null);
+  const formatCurrency = (value) =>
+    new Intl.NumberFormat(locale, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value || 0);
+  const currencySuffix = t("booking.overview.currencySuffix", "kr.");
+  const weekdayShortFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { weekday: "short" }),
+    [locale]
+  );
+  const weekdayLongFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { weekday: "long" }),
+    [locale]
+  );
+  const monthShortFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { month: "short" }),
+    [locale]
+  );
+  const dateTimeFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    [locale]
+  );
+  const formatDayMonth = (date) => {
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = monthShortFormatter.format(date);
+    return { day, month };
+  };
+  const formatDateTimeLabel = (date) => dateTimeFormatter.format(date);
+  const statusLabels = useMemo(
+    () => ({
+      booked: t("booking.overview.status.booked", "Booket"),
+      confirmed: t("booking.overview.status.confirmed", "Bekræftet"),
+      arrived: t("booking.overview.status.arrived", "Ankommet"),
+      started: t("booking.overview.status.started", "Begyndt"),
+      completed: t("booking.overview.status.completed", "Gennemført"),
+      cancelled: t("booking.overview.status.cancelled", "Aflyst"),
+      pending: t("booking.overview.status.pending", "Afventer"),
+      noshow: t("booking.overview.status.noshow", "Udeblivelse"),
+    }),
+    [t]
+  );
+  const getAppointmentStatusLabel = (status) => {
+    const normalized = normalizeStatus(status);
+    return statusLabels[normalized] || statusLabels.booked;
+  };
+  const statusClassName = (status) => {
+    const normalized = normalizeStatus(status);
+    if (normalized === "completed") return "overview-status overview-status--complete";
+    if (normalized === "booked" || normalized === "confirmed")
+      return "overview-status overview-status--booked";
+    return "overview-status";
+  };
+  const statusGroup = (status) => {
+    const normalized = normalizeStatus(status);
+    if (normalized === "cancelled") return "cancelled";
+    return "confirmed";
+  };
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (salesDropdownRef.current && !salesDropdownRef.current.contains(event.target)) {
+        setShowSalesDropdown(false);
+      }
+      if (appointmentsDropdownRef.current && !appointmentsDropdownRef.current.contains(event.target)) {
+        setShowAppointmentsDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const today = useMemo(() => new Date(), []);
   const todayStart = startOfDay(today);
   const todayEnd = endOfDay(today);
-  const last7Start = startOfDay(addDays(todayStart, -6));
-  const next7End = endOfDay(addDays(todayStart, 6));
   const tomorrowStart = startOfDay(addDays(todayStart, 1));
-  const last7Dates = useMemo(
-    () => Array.from({ length: 7 }, (_, index) => addDays(last7Start, index)),
-    [last7Start]
+  
+  // Calculate date ranges based on selected periods
+  const salesDays = parseInt(salesPeriod, 10);
+  const appointmentsDays = parseInt(appointmentsPeriod, 10);
+  
+  const lastSalesStart = startOfDay(addDays(todayStart, -(salesDays - 1)));
+  const nextAppointmentsEnd = endOfDay(addDays(todayStart, appointmentsDays));
+  
+  const lastSalesDates = useMemo(
+    () => Array.from({ length: salesDays }, (_, index) => addDays(lastSalesStart, index)),
+    [lastSalesStart, salesDays]
   );
-  const next7Dates = useMemo(
-    () => Array.from({ length: 7 }, (_, index) => addDays(tomorrowStart, index)),
-    [tomorrowStart]
+  const nextAppointmentsDates = useMemo(
+    () => Array.from({ length: appointmentsDays }, (_, index) => addDays(tomorrowStart, index)),
+    [tomorrowStart, appointmentsDays]
   );
 
   const appointmentEntries = useMemo(() => {
@@ -210,9 +257,9 @@ function Overview() {
       .filter(Boolean);
   }, [appointments]);
 
-  const appointmentsLast7 = useMemo(() => {
-    return appointmentEntries.filter(({ date }) => date >= last7Start && date <= todayEnd);
-  }, [appointmentEntries, last7Start, todayEnd]);
+  const appointmentsLastSales = useMemo(() => {
+    return appointmentEntries.filter(({ date }) => date >= lastSalesStart && date <= todayEnd);
+  }, [appointmentEntries, lastSalesStart, todayEnd]);
 
   const appointmentsToday = useMemo(() => {
     return appointmentEntries.filter(({ date }) => date >= todayStart && date <= todayEnd);
@@ -220,9 +267,9 @@ function Overview() {
 
   const appointmentsUpcoming = useMemo(() => {
     return appointmentEntries
-      .filter(({ date }) => date >= tomorrowStart && date <= next7End)
+      .filter(({ date }) => date >= tomorrowStart && date <= nextAppointmentsEnd)
       .sort((a, b) => a.date - b.date);
-  }, [appointmentEntries, next7End, tomorrowStart]);
+  }, [appointmentEntries, nextAppointmentsEnd, tomorrowStart]);
 
   const appointmentsPast = useMemo(() => {
     return appointmentEntries
@@ -230,13 +277,13 @@ function Overview() {
       .sort((a, b) => b.date - a.date);
   }, [appointmentEntries, todayStart]);
 
-  const salesLast7 = useMemo(() => {
+  const salesLastPeriod = useMemo(() => {
     return sales.filter((sale) => {
       const date = getSaleDate(sale);
       if (!date) return false;
-      return date >= last7Start && date <= todayEnd;
+      return date >= lastSalesStart && date <= todayEnd;
     });
-  }, [sales, last7Start, todayEnd]);
+  }, [sales, lastSalesStart, todayEnd]);
 
   const salesToday = useMemo(() => {
     return sales.filter((sale) => {
@@ -248,7 +295,7 @@ function Overview() {
 
   const salesTotalsByDate = useMemo(() => {
     const map = new Map();
-    salesLast7.forEach((sale) => {
+    salesLastPeriod.forEach((sale) => {
       const date = getSaleDate(sale);
       if (!date) return;
       const key = formatDateKey(date);
@@ -256,26 +303,26 @@ function Overview() {
       map.set(key, current + (sale.totals?.total ?? 0));
     });
     return map;
-  }, [salesLast7]);
+  }, [salesLastPeriod]);
 
   const appointmentValueByDate = useMemo(() => {
     const map = new Map();
-    appointmentsLast7.forEach(({ appointment, date }) => {
+    appointmentsLastSales.forEach(({ appointment, date }) => {
       const key = formatDateKey(date);
       const current = map.get(key) || 0;
       map.set(key, current + getAppointmentPrice(appointment));
     });
     return map;
-  }, [appointmentsLast7]);
+  }, [appointmentsLastSales]);
 
   const salesSeries = useMemo(
-    () => last7Dates.map((date) => salesTotalsByDate.get(formatDateKey(date)) || 0),
-    [last7Dates, salesTotalsByDate]
+    () => lastSalesDates.map((date) => salesTotalsByDate.get(formatDateKey(date)) || 0),
+    [lastSalesDates, salesTotalsByDate]
   );
 
   const appointmentSeries = useMemo(
-    () => last7Dates.map((date) => appointmentValueByDate.get(formatDateKey(date)) || 0),
-    [last7Dates, appointmentValueByDate]
+    () => lastSalesDates.map((date) => appointmentValueByDate.get(formatDateKey(date)) || 0),
+    [lastSalesDates, appointmentValueByDate]
   );
 
   const lineChartConfig = useMemo(() => {
@@ -325,18 +372,22 @@ function Overview() {
     };
   }, [salesSeries, appointmentSeries]);
 
-  const lineChartLabels = useMemo(
-    () =>
-      last7Dates.map((date) => {
-        const weekday = weekdayShortLabels[date.getDay()] || "";
-        return `${weekday} ${date.getDate()}`;
-      }),
-    [last7Dates]
-  );
+  const lineChartLabelEntries = useMemo(() => {
+    return lastSalesDates
+      .map((date, index) => ({ date, index }))
+      .filter(({ index }) => salesPeriod === "7" || index % 3 === 0)
+      .map(({ date, index }) => {
+        const weekday = weekdayShortFormatter.format(date);
+        return {
+          label: `${weekday} ${date.getDate()}`,
+          index,
+        };
+      });
+  }, [lastSalesDates, salesPeriod, weekdayShortFormatter]);
 
   const upcomingStatusByDate = useMemo(() => {
     const map = new Map();
-    next7Dates.forEach((date) => {
+    nextAppointmentsDates.forEach((date) => {
       map.set(formatDateKey(date), { confirmed: 0, cancelled: 0 });
     });
     appointmentsUpcoming.forEach(({ appointment, date }) => {
@@ -348,16 +399,16 @@ function Overview() {
       if (group === "cancelled") entry.cancelled += 1;
     });
     return map;
-  }, [appointmentsUpcoming, next7Dates]);
+  }, [appointmentsUpcoming, nextAppointmentsDates]);
 
   const confirmedSeries = useMemo(
-    () => next7Dates.map((date) => upcomingStatusByDate.get(formatDateKey(date))?.confirmed || 0),
-    [next7Dates, upcomingStatusByDate]
+    () => nextAppointmentsDates.map((date) => upcomingStatusByDate.get(formatDateKey(date))?.confirmed || 0),
+    [nextAppointmentsDates, upcomingStatusByDate]
   );
 
   const cancelledSeries = useMemo(
-    () => next7Dates.map((date) => upcomingStatusByDate.get(formatDateKey(date))?.cancelled || 0),
-    [next7Dates, upcomingStatusByDate]
+    () => nextAppointmentsDates.map((date) => upcomingStatusByDate.get(formatDateKey(date))?.cancelled || 0),
+    [nextAppointmentsDates, upcomingStatusByDate]
   );
 
   const barChartConfig = useMemo(() => {
@@ -368,11 +419,26 @@ function Overview() {
     const innerHeight = height - padding.top - padding.bottom;
     const maxValue = toNiceCountMax(Math.max(...confirmedSeries, ...cancelledSeries, 0));
     const safeMax = maxValue || 1;
+    
+    // For 30 days, we show labels for every 3rd day, but bars for all days
+    const visibleLabelsCount = appointmentsPeriod === "7" 
+      ? confirmedSeries.length 
+      : Math.ceil(confirmedSeries.length / 3);
+    const totalDays = confirmedSeries.length;
+    
+    // Calculate group width based on visible labels (for positioning)
     const groupWidth =
-      confirmedSeries.length > 0 ? innerWidth / confirmedSeries.length : innerWidth;
-    const barGap = 6;
-    const barWidth = Math.max(8, Math.min(16, (groupWidth - barGap) / 2));
-    const groupOffset = (groupWidth - (barWidth * 2 + barGap)) / 2;
+      visibleLabelsCount > 0 ? innerWidth / visibleLabelsCount : innerWidth;
+    
+    // For 30 days, each group represents 3 days, so we need to adjust
+    const actualGroupWidth = appointmentsPeriod === "7" 
+      ? groupWidth 
+      : innerWidth / totalDays;
+    
+    const barGap = appointmentsPeriod === "7" ? 6 : 4;
+    const baseBarWidth = appointmentsPeriod === "7" ? 12 : 6;
+    const barWidth = Math.max(4, Math.min(baseBarWidth, (actualGroupWidth - barGap) / 2));
+    const groupOffset = (actualGroupWidth - (barWidth * 2 + barGap)) / 2;
 
     const ticks = Array.from({ length: 5 }, (_, index) => {
       const value = maxValue - (maxValue / 4) * index;
@@ -387,33 +453,48 @@ function Overview() {
       innerHeight,
       maxValue,
       safeMax,
-      groupWidth,
+      groupWidth: actualGroupWidth, // Use actual group width for bar positioning
+      visibleGroupWidth: groupWidth, // Use visible group width for label positioning
       barWidth,
       barGap,
       groupOffset,
       ticks,
+      totalDays,
+      visibleLabelsCount,
     };
-  }, [confirmedSeries, cancelledSeries]);
+  }, [confirmedSeries, cancelledSeries, appointmentsPeriod]);
 
-  const barChartLabels = useMemo(
-    () =>
-      next7Dates.map((date) => {
-        const weekday = weekdayShortLabels[date.getDay()] || "";
-        return `${weekday} ${date.getDate()}`;
-      }),
-    [next7Dates]
-  );
+  const barChartLabelEntries = useMemo(() => {
+    return nextAppointmentsDates
+      .map((date, index) => ({ date, index }))
+      .filter(({ index }) => appointmentsPeriod === "7" || index % 3 === 0)
+      .map(({ date, index }) => {
+        const weekday =
+          appointmentsPeriod === "7"
+            ? weekdayShortFormatter.format(date)
+            : weekdayLongFormatter.format(date);
+        return {
+          label: `${weekday} ${date.getDate()}`,
+          index,
+        };
+      });
+  }, [
+    nextAppointmentsDates,
+    appointmentsPeriod,
+    weekdayLongFormatter,
+    weekdayShortFormatter,
+  ]);
 
   const salesSummaryTotal = useMemo(() => {
-    return salesLast7.reduce((sum, sale) => sum + (sale.totals?.total ?? 0), 0);
-  }, [salesLast7]);
+    return salesLastPeriod.reduce((sum, sale) => sum + (sale.totals?.total ?? 0), 0);
+  }, [salesLastPeriod]);
 
-  const appointmentValueLast7 = useMemo(() => {
-    return appointmentsLast7.reduce(
+  const appointmentValueLastPeriod = useMemo(() => {
+    return appointmentsLastSales.reduce(
       (sum, entry) => sum + getAppointmentPrice(entry.appointment),
       0
     );
-  }, [appointmentsLast7]);
+  }, [appointmentsLastSales]);
 
   const salesTodayTotal = useMemo(() => {
     return salesToday.reduce((sum, sale) => sum + (sale.totals?.total ?? 0), 0);
@@ -451,7 +532,7 @@ function Overview() {
     sales.forEach((sale) => {
       const date = getSaleDate(sale);
       if (!date) return;
-      const name = sale.employeeName || "fælles konto";
+      const name = sale.employeeName || t("booking.overview.sharedAccount", "fælles konto");
       if (!map.has(name)) {
         map.set(name, { name, month: 0, lastMonth: 0 });
       }
@@ -468,10 +549,17 @@ function Overview() {
       .slice(0, 5)
       .map((entry) => ({
         ...entry,
-        monthLabel: `${formatCurrency(entry.month)} kr.`,
-        lastMonthLabel: `${formatCurrency(entry.lastMonth)} kr.`,
+        monthLabel: `${formatCurrency(entry.month)} ${currencySuffix}`,
+        lastMonthLabel: `${formatCurrency(entry.lastMonth)} ${currencySuffix}`,
       }));
-  }, [sales, currentMonthStart, nextMonthStart, previousMonthEnd, previousMonthStart]);
+  }, [
+    sales,
+    currentMonthStart,
+    nextMonthStart,
+    previousMonthEnd,
+    previousMonthStart,
+    t,
+  ]);
 
   const newClientsToday = useMemo(() => {
     const clients = new Set();
@@ -483,19 +571,27 @@ function Overview() {
   }, [appointmentsToday]);
 
   const salesSummaryTotalLabel =
-    salesLoading || salesError ? "—" : `${formatCurrency(salesSummaryTotal)} kr.`;
-  const appointmentsLast7Label =
-    appointmentsLoading || appointmentsError ? "—" : String(appointmentsLast7.length);
+    salesLoading || salesError
+      ? "—"
+      : `${formatCurrency(salesSummaryTotal)} ${currencySuffix}`;
+  const appointmentsLastPeriodLabel =
+    appointmentsLoading || appointmentsError ? "—" : String(appointmentsLastSales.length);
   const appointmentValueLabel =
-    appointmentsLoading || appointmentsError ? "—" : `${formatCurrency(appointmentValueLast7)} kr.`;
+    appointmentsLoading || appointmentsError
+      ? "—"
+      : `${formatCurrency(appointmentValueLastPeriod)} ${currencySuffix}`;
   const salesTodayLabel =
-    salesLoading || salesError ? "—" : `${formatCurrency(salesTodayTotal)} kr.`;
+    salesLoading || salesError
+      ? "—"
+      : `${formatCurrency(salesTodayTotal)} ${currencySuffix}`;
   const newClientsLabel =
     appointmentsLoading || appointmentsError ? "—" : String(newClientsToday);
   const upcomingTotalLabel =
     appointmentsLoading || appointmentsError
       ? "—"
-      : `${appointmentsUpcoming.length} booket`;
+      : t("booking.overview.upcoming.bookedCount", "{count} booket", {
+          count: appointmentsUpcoming.length,
+        });
   const upcomingConfirmedLabel =
     appointmentsLoading || appointmentsError
       ? "—"
@@ -504,17 +600,29 @@ function Overview() {
     appointmentsLoading || appointmentsError
       ? "—"
       : String(cancelledSeries.reduce((sum, value) => sum + value, 0));
+  const calendarToken = "{calendar}";
+  const emptyTodaySubtitle = t(
+    "booking.overview.today.emptySubtitle",
+    "Gå til afsnittet med din {calendar} for at tilføje aftaler",
+    { calendar: calendarToken }
+  );
+  const [emptyTodayPrefix, emptyTodaySuffix] = emptyTodaySubtitle.split(calendarToken);
 
   return (
     <BookingSidebarLayout>
       <div className="overview-page">
         <div className="overview-header">
           <div>
-            <h1>Klinik overblik</h1>
-            <p>Et hurtigt overblik over dagens drift og de seneste resultater.</p>
+            <h1>{t("booking.overview.title", "Klinik overblik")}</h1>
+            <p>
+              {t(
+                "booking.overview.subtitle",
+                "Et hurtigt overblik over dagens drift og de seneste resultater."
+              )}
+            </p>
           </div>
           <button type="button" className="overview-pill">
-            Seneste 7 dage
+            {t("booking.overview.period.last7", "Seneste 7 dage")}
           </button>
         </div>
 
@@ -522,24 +630,70 @@ function Overview() {
           <div className="overview-card overview-card--chart">
             <div className="overview-card-header">
               <div>
-                <h3>Seneste salg</h3>
-                <span>Seneste 7 dage</span>
+                <h3>{t("booking.overview.sales.title", "Seneste salg")}</h3>
+                <span>
+                  {t("booking.overview.sales.range", "Seneste {count} dage", {
+                    count: salesPeriod,
+                  })}
+                </span>
               </div>
-              <button type="button" className="overview-icon-button" aria-label="Flere muligheder">
-                <span>...</span>
-              </button>
+              <div style={{ position: "relative" }} ref={salesDropdownRef}>
+                <button 
+                  type="button" 
+                  className="overview-icon-button" 
+                  aria-label={t("booking.overview.actions.more", "Flere muligheder")}
+                  onClick={() => setShowSalesDropdown(!showSalesDropdown)}
+                >
+                  <span>...</span>
+                </button>
+                {showSalesDropdown && (
+                  <div className="overview-dropdown">
+                    <div className="overview-dropdown-header">
+                      {t("booking.overview.dropdown.period", "Periode")}
+                    </div>
+                    <button
+                      className={`overview-dropdown-item ${salesPeriod === "7" ? "overview-dropdown-item--active" : ""}`}
+                      onClick={() => {
+                        setSalesPeriod("7");
+                        setShowSalesDropdown(false);
+                      }}
+                    >
+                      {salesPeriod === "7" && "✓ "}
+                      {t("booking.overview.sales.option7", "Seneste 7 dage")}
+                    </button>
+                    <button
+                      className={`overview-dropdown-item ${salesPeriod === "30" ? "overview-dropdown-item--active" : ""}`}
+                      onClick={() => {
+                        setSalesPeriod("30");
+                        setShowSalesDropdown(false);
+                      }}
+                    >
+                      {salesPeriod === "30" && "✓ "}
+                      {t("booking.overview.sales.option30", "Seneste 30 dage")}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="overview-kpi">
               <div className="overview-kpi-value">{salesSummaryTotalLabel}</div>
               <div className="overview-kpi-meta">
-                <span>Aftaler {appointmentsLast7Label}</span>
-                <span>Aftalens værdi {appointmentValueLabel}</span>
+                <span>
+                  {t("booking.overview.sales.appointments", "Aftaler")}{" "}
+                  <strong>{appointmentsLastPeriodLabel}</strong>
+                </span>
+                <span>
+                  {t("booking.overview.sales.appointmentValue", "Aftalens værdi")}{" "}
+                  <strong>{appointmentValueLabel}</strong>
+                </span>
               </div>
             </div>
             <div className="overview-chart">
               <div className="overview-chart-axis">
                 {lineChartConfig.ticks.map((tick, index) => (
-                  <span key={`line-tick-${index}`}>{formatCurrency(tick)} kr.</span>
+                  <span key={`line-tick-${index}`}>
+                    {formatCurrency(tick)} {currencySuffix}
+                  </span>
                 ))}
               </div>
               <div className="overview-chart-area">
@@ -561,11 +715,13 @@ function Overview() {
                         />
                       );
                     })}
-                    {lineChartLabels.map((_, index) => {
-                      const x = lineChartConfig.padding.left + index * lineChartConfig.stepX;
+                    {lineChartLabelEntries.map((entry) => {
+                      const x =
+                        lineChartConfig.padding.left +
+                        entry.index * lineChartConfig.stepX;
                       return (
                         <line
-                          key={`line-vertical-${index}`}
+                          key={`line-vertical-${entry.index}`}
                           x1={x}
                           y1={lineChartConfig.padding.top}
                           x2={x}
@@ -602,39 +758,94 @@ function Overview() {
                     />
                   ))}
                 </ChartSvg>
-                <div className="overview-chart-x">
-                  {lineChartLabels.map((label, index) => (
-                    <span key={`line-label-${index}`}>{label}</span>
+                <div 
+                  className={`overview-chart-x ${salesPeriod === "30" ? "overview-chart-x--rotated" : ""}`}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${lastSalesDates.length}, minmax(0, 1fr))`
+                  }}
+                >
+                  {lineChartLabelEntries.map((entry) => (
+                    <span
+                      key={`line-label-${entry.index}`}
+                      style={
+                        salesPeriod === "30"
+                          ? { gridColumn: `${entry.index + 1} / span 3` }
+                          : undefined
+                      }
+                    >
+                      {entry.label}
+                    </span>
                   ))}
                 </div>
               </div>
             </div>
             <div className="overview-legend">
               <span className="overview-legend-dot overview-legend-dot--primary" />
-              <span>Salg</span>
+              <span>{t("booking.overview.legend.sales", "Salg")}</span>
               <span className="overview-legend-dot overview-legend-dot--secondary" />
-              <span>Aftaler</span>
+              <span>{t("booking.overview.legend.appointments", "Aftaler")}</span>
             </div>
           </div>
 
           <div className="overview-card">
             <div className="overview-card-header">
               <div>
-                <h3>Kommende aftaler</h3>
-                <span>Næste 7 dage</span>
+                <h3>{t("booking.overview.upcoming.title", "Kommende aftaler")}</h3>
+                <span>
+                  {t("booking.overview.upcoming.range", "Næste {count} dage", {
+                    count: appointmentsPeriod,
+                  })}
+                </span>
               </div>
-              <button type="button" className="overview-icon-button" aria-label="Flere muligheder">
-                <span>...</span>
-              </button>
+              <div style={{ position: "relative" }} ref={appointmentsDropdownRef}>
+                <button 
+                  type="button" 
+                  className="overview-icon-button" 
+                  aria-label={t("booking.overview.actions.more", "Flere muligheder")}
+                  onClick={() => setShowAppointmentsDropdown(!showAppointmentsDropdown)}
+                >
+                  <span>...</span>
+                </button>
+                {showAppointmentsDropdown && (
+                  <div className="overview-dropdown">
+                    <div className="overview-dropdown-header">
+                      {t("booking.overview.dropdown.period", "Periode")}
+                    </div>
+                    <button
+                      className={`overview-dropdown-item ${appointmentsPeriod === "7" ? "overview-dropdown-item--active" : ""}`}
+                      onClick={() => {
+                        setAppointmentsPeriod("7");
+                        setShowAppointmentsDropdown(false);
+                      }}
+                    >
+                      {appointmentsPeriod === "7" && "✓ "}
+                      {t("booking.overview.upcoming.option7", "Næste 7 dage")}
+                    </button>
+                    <button
+                      className={`overview-dropdown-item ${appointmentsPeriod === "30" ? "overview-dropdown-item--active" : ""}`}
+                      onClick={() => {
+                        setAppointmentsPeriod("30");
+                        setShowAppointmentsDropdown(false);
+                      }}
+                    >
+                      {appointmentsPeriod === "30" && "✓ "}
+                      {t("booking.overview.upcoming.option30", "Næste 30 dage")}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="overview-kpi">
               <div className="overview-kpi-value">{upcomingTotalLabel}</div>
               <div className="overview-kpi-meta overview-kpi-meta--split">
                 <span>
-                  Bekræftede aftaler <strong>{upcomingConfirmedLabel}</strong>
+                  {t("booking.overview.upcoming.confirmed", "Bekræftede aftaler")}{" "}
+                  <strong>{upcomingConfirmedLabel}</strong>
                 </span>
                 <span>
-                  Aflyste aftaler <strong>{upcomingCancelledLabel}</strong>
+                  {t("booking.overview.upcoming.cancelled", "Aflyste aftaler")}{" "}
+                  <strong>{upcomingCancelledLabel}</strong>
                 </span>
               </div>
             </div>
@@ -711,18 +922,33 @@ function Overview() {
                     );
                   })}
                 </ChartSvg>
-                <div className="overview-chart-x">
-                  {barChartLabels.map((label, index) => (
-                    <span key={`bar-label-${index}`}>{label}</span>
+                <div
+                  className={`overview-chart-x ${appointmentsPeriod === "30" ? "overview-chart-x--rotated" : ""}`}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${nextAppointmentsDates.length}, minmax(0, 1fr))`
+                  }}
+                >
+                  {barChartLabelEntries.map((entry) => (
+                    <span
+                      key={`bar-label-${entry.index}`}
+                      style={
+                        appointmentsPeriod === "30"
+                          ? { gridColumn: `${entry.index + 1} / span 3` }
+                          : undefined
+                      }
+                    >
+                      {entry.label}
+                    </span>
                   ))}
                 </div>
               </div>
             </div>
             <div className="overview-legend">
               <span className="overview-legend-dot overview-legend-dot--primary" />
-              <span>Bekræftet</span>
+              <span>{t("booking.overview.legend.confirmed", "Bekræftet")}</span>
               <span className="overview-legend-dot overview-legend-dot--alert" />
-              <span>Aflysning</span>
+              <span>{t("booking.overview.legend.cancelled", "Aflysning")}</span>
             </div>
           </div>
         </div>
@@ -730,7 +956,7 @@ function Overview() {
         <div className="overview-grid overview-grid--middle">
           <div className="overview-card">
             <div className="overview-card-header">
-              <h3>Aftaleaktivitet</h3>
+              <h3>{t("booking.overview.activity.title", "Aftaleaktivitet")}</h3>
             </div>
             <div className="overview-list">
               {appointmentsLoading && (
@@ -738,8 +964,8 @@ function Overview() {
                   <div className="overview-empty-icon">
                     <Activity size={28} />
                   </div>
-                  <h4>Henter aftaler...</h4>
-                  <p>Vi opdaterer historikken lige nu</p>
+                  <h4>{t("booking.overview.activity.loadingTitle", "Henter aftaler...")}</h4>
+                  <p>{t("booking.overview.activity.loadingSubtitle", "Vi opdaterer historikken lige nu")}</p>
                 </div>
               )}
               {!appointmentsLoading && appointmentsError && (
@@ -747,8 +973,8 @@ function Overview() {
                   <div className="overview-empty-icon">
                     <Activity size={28} />
                   </div>
-                  <h4>Kunne ikke hente aftaler</h4>
-                  <p>Prøv igen om lidt</p>
+                  <h4>{t("booking.overview.activity.errorTitle", "Kunne ikke hente aftaler")}</h4>
+                  <p>{t("booking.overview.activity.errorSubtitle", "Prøv igen om lidt")}</p>
                 </div>
               )}
               {!appointmentsLoading &&
@@ -758,8 +984,13 @@ function Overview() {
                     <div className="overview-empty-icon">
                       <Activity size={28} />
                     </div>
-                    <h4>Ingen tidligere aftaler</h4>
-                    <p>Historik vises her, når du har afsluttede aftaler</p>
+                    <h4>{t("booking.overview.activity.emptyTitle", "Ingen tidligere aftaler")}</h4>
+                    <p>
+                      {t(
+                        "booking.overview.activity.emptySubtitle",
+                        "Historik vises her, når du har afsluttede aftaler"
+                      )}
+                    </p>
                   </div>
                 )}
               {!appointmentsLoading &&
@@ -767,15 +998,28 @@ function Overview() {
                 pastAppointments.map(({ appointment, date }) => {
                   const { day, month } = formatDayMonth(date);
                   const clientName =
-                    appointment.client || appointment.clientEmail || "Ukendt kunde";
-                  const serviceName = appointment.service || appointment.title || "Aftale";
+                    appointment.client ||
+                    appointment.clientEmail ||
+                    t("booking.overview.activity.unknownClient", "Ukendt kunde");
+                  const serviceName =
+                    appointment.service ||
+                    appointment.title ||
+                    t("booking.overview.activity.defaultService", "Aftale");
+                  const statusKey = normalizeStatus(appointment.status);
                   const statusLabel = getAppointmentStatusLabel(appointment.status);
                   const noteParts = [clientName];
                   if (appointment.serviceDuration) {
-                    noteParts.push(appointment.serviceDuration);
+                    noteParts.push(
+                      formatServiceDuration(appointment.serviceDuration, t) ||
+                        appointment.serviceDuration
+                    );
                   }
                   if (appointment.calendarOwner) {
-                    noteParts.push(`med ${appointment.calendarOwner}`);
+                    noteParts.push(
+                      t("booking.overview.activity.withStaff", "med {name}", {
+                        name: appointment.calendarOwner,
+                      })
+                    );
                   }
                   return (
                     <div key={appointment.id} className="overview-list-item">
@@ -786,7 +1030,7 @@ function Overview() {
                       <div className="overview-list-body">
                         <div className="overview-list-meta">
                           <span>{formatDateTimeLabel(date)}</span>
-                          <span className={statusClassName(statusLabel)}>{statusLabel}</span>
+                          <span className={statusClassName(statusKey)}>{statusLabel}</span>
                         </div>
                         <div className="overview-list-title">{serviceName}</div>
                         <div className="overview-list-note">{noteParts.join(" • ")}</div>
@@ -799,41 +1043,49 @@ function Overview() {
 
           <div className="overview-card">
             <div className="overview-card-header">
-              <h3>Næste aftaler i dag</h3>
+              <h3>{t("booking.overview.today.title", "Næste aftaler i dag")}</h3>
             </div>
             {appointmentsLoading ? (
               <div className="overview-empty-state">
                 <div className="overview-empty-icon">
                   <CalendarDays size={28} />
                 </div>
-                <h4>Henter aftaler...</h4>
-                <p>Vi opdaterer dagens plan</p>
+                <h4>{t("booking.overview.today.loadingTitle", "Henter aftaler...")}</h4>
+                <p>{t("booking.overview.today.loadingSubtitle", "Vi opdaterer dagens plan")}</p>
               </div>
             ) : appointmentsError ? (
               <div className="overview-empty-state">
                 <div className="overview-empty-icon">
                   <CalendarDays size={28} />
                 </div>
-                <h4>Kunne ikke hente aftaler</h4>
-                <p>Prøv igen om lidt</p>
+                <h4>{t("booking.overview.today.errorTitle", "Kunne ikke hente aftaler")}</h4>
+                <p>{t("booking.overview.today.errorSubtitle", "Prøv igen om lidt")}</p>
               </div>
             ) : todayAppointments.length === 0 ? (
               <div className="overview-empty-state">
                 <div className="overview-empty-icon">
                   <CalendarDays size={28} />
                 </div>
-                <h4>Ingen aftaler i dag</h4>
+                <h4>{t("booking.overview.today.emptyTitle", "Ingen aftaler i dag")}</h4>
                 <p>
-                  Gå til afsnittet med din <span className="overview-link">kalender</span> for at
-                  tilføje aftaler
+                  {emptyTodayPrefix}
+                  <span className="overview-link">
+                    {t("booking.overview.today.calendarLink", "kalender")}
+                  </span>
+                  {emptyTodaySuffix}
                 </p>
               </div>
             ) : (
               <div className="overview-mini-list">
                 {todayAppointments.map(({ appointment, date }) => {
                   const clientName =
-                    appointment.client || appointment.clientEmail || "Ukendt kunde";
-                  const serviceName = appointment.service || appointment.title || "Aftale";
+                    appointment.client ||
+                    appointment.clientEmail ||
+                    t("booking.overview.activity.unknownClient", "Ukendt kunde");
+                  const serviceName =
+                    appointment.service ||
+                    appointment.title ||
+                    t("booking.overview.activity.defaultService", "Aftale");
                   return (
                     <div key={appointment.id} className="overview-mini-item">
                       <div>
@@ -852,32 +1104,38 @@ function Overview() {
         <div className="overview-grid overview-grid--bottom">
           <div className="overview-card">
             <div className="overview-card-header">
-              <h3>Toptjenester</h3>
+              <h3>{t("booking.overview.topServices.title", "Toptjenester")}</h3>
             </div>
             <table className="overview-table">
               <thead>
                 <tr>
-                  <th>Tjeneste</th>
-                  <th>Denne måned</th>
-                  <th>Sidste måned</th>
+                  <th>{t("booking.overview.topServices.columns.service", "Tjeneste")}</th>
+                  <th>{t("booking.overview.columns.thisMonth", "Denne måned")}</th>
+                  <th>{t("booking.overview.columns.lastMonth", "Sidste måned")}</th>
                 </tr>
               </thead>
               <tbody>
                 {appointmentsLoading && (
                   <tr>
-                    <td colSpan={3}>Henter data...</td>
+                    <td colSpan={3}>
+                      {t("booking.overview.table.loading", "Henter data...")}
+                    </td>
                   </tr>
                 )}
                 {!appointmentsLoading && appointmentsError && (
                   <tr>
-                    <td colSpan={3}>Kunne ikke hente data.</td>
+                    <td colSpan={3}>
+                      {t("booking.overview.table.error", "Kunne ikke hente data.")}
+                    </td>
                   </tr>
                 )}
                 {!appointmentsLoading &&
                   !appointmentsError &&
                   topServices.length === 0 && (
                     <tr>
-                      <td colSpan={3}>Ingen data endnu.</td>
+                      <td colSpan={3}>
+                        {t("booking.overview.table.empty", "Ingen data endnu.")}
+                      </td>
                     </tr>
                   )}
                 {!appointmentsLoading &&
@@ -895,30 +1153,36 @@ function Overview() {
 
           <div className="overview-card">
             <div className="overview-card-header">
-              <h3>Topmedarbejder</h3>
+              <h3>{t("booking.overview.topStaff.title", "Topmedarbejder")}</h3>
             </div>
             <table className="overview-table">
               <thead>
                 <tr>
-                  <th>Medarbejder</th>
-                  <th>Denne måned</th>
-                  <th>Sidste måned</th>
+                  <th>{t("booking.overview.topStaff.columns.staff", "Medarbejder")}</th>
+                  <th>{t("booking.overview.columns.thisMonth", "Denne måned")}</th>
+                  <th>{t("booking.overview.columns.lastMonth", "Sidste måned")}</th>
                 </tr>
               </thead>
               <tbody>
                 {salesLoading && (
                   <tr>
-                    <td colSpan={3}>Henter data...</td>
+                    <td colSpan={3}>
+                      {t("booking.overview.table.loading", "Henter data...")}
+                    </td>
                   </tr>
                 )}
                 {!salesLoading && salesError && (
                   <tr>
-                    <td colSpan={3}>Kunne ikke hente data.</td>
+                    <td colSpan={3}>
+                      {t("booking.overview.table.error", "Kunne ikke hente data.")}
+                    </td>
                   </tr>
                 )}
                 {!salesLoading && !salesError && topStaff.length === 0 && (
                   <tr>
-                    <td colSpan={3}>Ingen data endnu.</td>
+                    <td colSpan={3}>
+                      {t("booking.overview.table.empty", "Ingen data endnu.")}
+                    </td>
                   </tr>
                 )}
                 {!salesLoading &&
@@ -942,7 +1206,7 @@ function Overview() {
                 <BarChart3 size={20} />
               </div>
               <div>
-                <p>Omsætning i dag</p>
+                <p>{t("booking.overview.footer.revenueToday", "Omsætning i dag")}</p>
                 <strong>{salesTodayLabel}</strong>
               </div>
             </div>
@@ -953,7 +1217,7 @@ function Overview() {
                 <Users size={20} />
               </div>
               <div>
-                <p>Nye klienter</p>
+                <p>{t("booking.overview.footer.newClients", "Nye klienter")}</p>
                 <strong>{newClientsLabel}</strong>
               </div>
             </div>

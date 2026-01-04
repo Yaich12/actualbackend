@@ -31,7 +31,11 @@
         "title": "اختر الخيار الأنسب لعملك",
         "subtitle": "يمكنك تغيير ذلك لاحقًا",
         "hint": "{count}/{max} تم الاختيار",
-        "options": ["أخصائي علاج طبيعي", "أخصائي تقويم العظام", "معالج يدوي"]
+        "options": [
+          "أخصائي علاج طبيعي",
+          "أخصائي تقويم العظام",
+          "معالج يدوي"
+        ]
       },
       "accountType": {
         "title": "اختر نوع الحساب",
@@ -41,7 +45,11 @@
       },
       "teamSize": {
         "title": "كم عدد الموظفين لديك",
-        "options": ["2-5 أشخاص", "6-10 أشخاص", "11+ أشخاص"]
+        "options": [
+          "2-5 أشخاص",
+          "6-10 أشخاص",
+          "11+ أشخاص"
+        ]
       },
       "serviceModel": {
         "title": "أين تقدم خدماتك؟",
@@ -98,6 +106,10 @@
       "title": "تم إعداد نشاطك التجاري!",
       "subtitle": "احصل على 14 يومًا مجانيًا من Selma للأعمال",
       "button": "إنهاء"
+    },
+    "currency": {
+      "label": "العملة",
+      "subtitle": "يمكنك تغيير العملة لاحقًا في الإعدادات."
     }
   },
   "booking": {
@@ -148,7 +160,445 @@
       "memberFallback": "موظف",
       "you": "أنت",
       "notLoggedIn": "غير مسجل الدخول",
-      "loginToContinue": "سجّل الدخول للمتابعة"
+      "loginToContinue": "سجّل الدخول للمتابعة",
+      "addCustomer": "إضافة عميل",
+      "addCustomerNote": "اتركه فارغًا للزيارات بدون موعد",
+      "addMode": {
+        "available": "عرض الأوقات المتاحة",
+        "close": "إغلاق",
+        "closePanel": "إغلاق",
+        "repeat": "لا يتكرر",
+        "title": "اختر وقتًا للحجز"
+      },
+      "addService": "إضافة خدمة",
+      "clients": {
+        "empty": "لم يتم العثور على عملاء",
+        "loading": "جارٍ تحميل العملاء..."
+      },
+      "payment": "الدفع",
+      "save": "حفظ",
+      "searchClients": "ابحث عن عميل",
+      "services": {
+        "defaultGroup": "الخدمات",
+        "loading": "جارٍ تحميل الخدمات...",
+        "search": "ابحث عن اسم الخدمة",
+        "section": "الخدمات",
+        "title": "اختر خدمة"
+      },
+      "total": "الإجمالي",
+      "confirmDeleteProgram": "هذا جزء من برنامج.\n\nموافق: حذف برنامج العميل بالكامل.\nإلغاء: حذف هذا التاريخ فقط.",
+      "unknownClient": "عميل غير معروف",
+      "status": {
+        "active": "نشط"
+      },
+      "selectClient": "اختر عميلًا",
+      "addNewClient": "إضافة عميل جديد",
+      "createNewClient": "إنشاء عميل جديد"
+    },
+    "dropdown": {
+      "add": "إضافة",
+      "calendar": "في التقويم",
+      "manual": "يدوي"
+    },
+    "stats": {
+      "title": "الإحصاءات",
+      "subtitle": "نظرة عامة على المواعيد والإيرادات بناءً على بيانات الحجز الفعلية.",
+      "period": {
+        "today": "اليوم",
+        "week": "هذا الأسبوع",
+        "month": "هذا الشهر",
+        "year": "هذا العام",
+        "all": "الكل"
+      },
+      "error": "لا يمكن تحميل الإحصاءات الآن. تأكد من تسجيل الدخول وأن المواعيد موجودة في Firestore.",
+      "loading": "جارٍ تحميل بيانات العيادة…",
+      "empty": "لا توجد مواعيد في الفترة المحددة. غيّر الفترة أو أنشئ مواعيد جديدة.",
+      "cards": {
+        "revenue": {
+          "title": "الإيرادات",
+          "subtitle": "الفترة المحددة"
+        },
+        "appointments": {
+          "title": "المواعيد",
+          "subtitle": "المحجوزة في الفترة"
+        },
+        "clients": {
+          "title": "عملاء فريدون",
+          "subtitle": "في الفترة",
+          "extra": "{count} عميل إجمالاً"
+        },
+        "cancel": {
+          "title": "الإلغاءات / عدم الحضور",
+          "subtitle": "نسبة المواعيد"
+        }
+      },
+      "load": {
+        "title": "متوسط ضغط العيادة",
+        "subtitle": "عدد الساعات التي تكون محجوزًا فيها في المتوسط في الأيام التي لديك فيها مواعيد."
+      },
+      "topServices": {
+        "title": "أكثر الخدمات حجزًا",
+        "subtitle": "أفضل 5 خدمات مستخدمة في الفترة المحددة.",
+        "empty": "لا توجد بيانات في هذه الفترة."
+      },
+      "countSuffix": "×",
+      "otherService": "أخرى",
+      "hoursShort": "س"
+    },
+    "services": {
+      "title": "الخدمات",
+      "actions": {
+        "create": "إنشاء جديد",
+        "createFull": "إنشاء خدمة جديدة"
+      },
+      "search": {
+        "placeholder": "بحث"
+      },
+      "loading": "جارٍ تحميل الخدمات...",
+      "price": {
+        "currency": "DKK",
+        "inclVat": "شامل الضريبة"
+      },
+      "list": {
+        "title": "خدماتك"
+      },
+      "empty": "لا توجد خدمات بعد. أنشئ أول خدمة لك.",
+      "selector": {
+        "placeholder": "لا توجد خدمة محددة",
+        "loading": "جارٍ تحميل الخدمات…",
+        "empty": "لا توجد خدمات أو برامج بعد.",
+        "label": "اختر العلاج",
+        "groups": {
+          "services": "الخدمات",
+          "programs": "البرامج"
+        },
+        "tags": {
+          "service": "خدمة",
+          "program": "برنامج"
+        }
+      },
+      "duration": {
+        "15m": "15 دقيقة",
+        "30m": "30 دقيقة",
+        "45m": "45 دقيقة",
+        "60m": "ساعة واحدة",
+        "90m": "ساعة و30 دقيقة",
+        "120m": "ساعتان"
+      },
+      "colors": {
+        "amber": "كهرماني",
+        "teal": "فيروزي",
+        "softBlue": "أزرق هادئ",
+        "violet": "بنفسجي",
+        "red": "أحمر",
+        "pink": "وردي"
+      },
+      "addNew": {
+        "title": {
+          "edit": "تعديل الخدمة",
+          "create": "إنشاء خدمة جديدة"
+        },
+        "actions": {
+          "close": "إغلاق",
+          "delete": "حذف الخدمة",
+          "cancel": "إلغاء",
+          "saving": "جارٍ الحفظ…",
+          "next": "التالي"
+        },
+        "fields": {
+          "name": {
+            "label": "الاسم",
+            "placeholder": "أدخل اسم الخدمة"
+          },
+          "description": {
+            "label": "الوصف",
+            "placeholder": "أضف وصفًا (اختياري)"
+          },
+          "duration": {
+            "label": "المدة"
+          },
+          "color": {
+            "label": "اللون",
+            "hint": "اختر لونًا للعرض في التقويم."
+          },
+          "price": {
+            "label": "السعر",
+            "placeholder": "0.00"
+          },
+          "vat": {
+            "label": "ضريبة القيمة المضافة"
+          }
+        },
+        "errors": {
+          "notLoggedIn": "يجب تسجيل الدخول لحفظ الخدمة.",
+          "saveFailed": "تعذر حفظ الخدمة. حاول مرة أخرى.",
+          "deleteFailed": "تعذر حذف الخدمة. حاول مرة أخرى."
+        },
+        "confirmDelete": "هل أنت متأكد أنك تريد حذف هذه الخدمة؟ لا يمكن التراجع عن هذا."
+      }
+    },
+    "programs": {
+      "defaultName": "برنامج",
+      "sessionsCount": "{count} جلسات",
+      "weeksCount": "{count} أسابيع",
+      "loadError": "تعذر تحميل البرامج",
+      "create": {
+        "title": "إنشاء برنامج جديد",
+        "subtitle": "صمّم برنامج علاج منظم - مثل برامج الفصال العظمي أو مجموعة GLAD أو إعادة التأهيل بعد الجراحة.",
+        "alertSaved": "تم إنشاء البرنامج (اربِطه بـ Firestore لاحقًا).",
+        "fields": {
+          "name": {
+            "label": "اسم البرنامج",
+            "placeholder": "مثال: GLAD الركبة، برنامج فصال الورك، مجموعة الظهر، إلخ."
+          },
+          "condition": {
+            "label": "الحالة الرئيسية"
+          },
+          "format": {
+            "label": "النوع"
+          },
+          "setting": {
+            "label": "المكان"
+          },
+          "maxParticipants": {
+            "label": "الحد الأقصى للمشاركين"
+          },
+          "durationWeeks": {
+            "label": "المدة (أسابيع)"
+          },
+          "sessionsPerWeek": {
+            "label": "الجلسات في الأسبوع"
+          },
+          "sessionLength": {
+            "label": "مدة الجلسة (دقيقة)"
+          },
+          "goals": {
+            "label": "الأهداف السريرية والوظيفية",
+            "placeholder": "مثل تقليل الألم، زيادة مسافة المشي، تحسين STS، زيادة الفعالية الذاتية، إلخ."
+          },
+          "content": {
+            "label": "ما الذي يتضمنه البرنامج عادةً؟",
+            "education": "تثقيف المريض / شرح الألم",
+            "strength": "تدريب القوة (مجموعات عضلية كبيرة)",
+            "neuromuscular": "تدريب عصبي عضلي / توازن",
+            "homeProgram": "برنامج منزلي مع تقدم",
+            "outcomes": "مقاييس النتائج (مثل KOOS و HOOS و NRS و STS)"
+          },
+          "notes": {
+            "label": "ملاحظات داخلية (اختياري)",
+            "placeholder": "تفاصيل عملية، موانع، متطلبات المعدات، إلخ."
+          }
+        }
+      },
+      "options": {
+        "condition": {
+          "kneeOa": "فصال عظمي في الركبة",
+          "hipOa": "فصال عظمي في الورك",
+          "glad": "برنامج GLAD",
+          "acl": "ACL بعد الجراحة",
+          "shoulder": "الكتف / انحشار",
+          "lowBack": "ألم أسفل الظهر غير محدد",
+          "other": "أخرى / MSK مختلط"
+        },
+        "format": {
+          "individual": "فردي",
+          "smallGroup": "مجموعة صغيرة (2–4)",
+          "group": "مجموعة (5–12)",
+          "individualShort": "فردي",
+          "smallGroupShort": "مجموعة صغيرة",
+          "groupShort": "مجموعة"
+        },
+        "setting": {
+          "clinic": "عيادة / صالة تدريب",
+          "gym": "نادي رياضي",
+          "online": "أونلاين / هجين",
+          "home": "في المنزل",
+          "clinicShort": "عيادة",
+          "gymShort": "نادي",
+          "onlineShort": "أونلاين",
+          "homeShort": "منزل"
+        }
+      },
+      "summary": {
+        "title": "نظرة عامة",
+        "newProgram": "برنامج جديد",
+        "sessions": "{weeks} أسابيع · {sessions} جلسات/أسبوع · تقريبًا {total} جلسة إجمالاً",
+        "empty": "أدخل الأسابيع والجلسات/الأسبوع لرؤية الإجمالي.",
+        "format": "النوع",
+        "formatSmall": "مجموعة صغيرة",
+        "formatGroup": "مجموعة",
+        "setting": "المكان",
+        "settingClinic": "عيادة",
+        "settingGym": "نادي",
+        "settingOnline": "أونلاين",
+        "settingHome": "منزل",
+        "maxParticipants": "الحد الأقصى للمشاركين"
+      },
+      "financial": {
+        "title": "المالية",
+        "sessionPrice": "السعر لكل جلسة ({currency})",
+        "packagePrice": "سعر الباقة للبرنامج بالكامل ({currency})",
+        "hint": "يمكنك ملء الحقلين واختيار ما تستخدمه في الفوترة.",
+        "estimate": "الإيراد المقدر لكل مشارك بسعر الجلسة:"
+      },
+      "actions": {
+        "saving": "جارٍ الحفظ...",
+        "save": "حفظ البرنامج",
+        "create": "إنشاء برنامج"
+      },
+      "errors": {
+        "loadFailed": "تعذر تحميل البرامج.",
+        "notLoggedIn": "يرجى تسجيل الدخول لحفظ البرامج.",
+        "saveFailed": "تعذر حفظ البرنامج. حاول مرة أخرى."
+      },
+      "list": {
+        "title": "البرامج",
+        "subtitle": "نظرة عامة على البرامج المحفوظة. أنشئ برامج جديدة باستخدام إنشاء برنامج.",
+        "searchPlaceholder": "ابحث عن برنامج أو تشخيص",
+        "loading": "جارٍ تحميل البرامج...",
+        "empty": "لا توجد برامج بعد. انقر إنشاء برنامج للبدء.",
+        "untitled": "بدون اسم",
+        "sessionsMeta": "{weeks} أسابيع · {sessions}/أسبوع · {total} جلسة",
+        "sessionLength": "مدة الجلسة: {count} دقيقة",
+        "pricePerSession": "السعر لكل جلسة:",
+        "packagePrice": "سعر الباقة:",
+        "maxParticipants": "الحد الأقصى للمشاركين: {count}",
+        "goals": "الأهداف: {goals}"
+      }
+    },
+    "overview": {
+      "currencySuffix": "DKK",
+      "status": {
+        "booked": "محجوز",
+        "confirmed": "مؤكد",
+        "arrived": "وصل",
+        "started": "بدأ",
+        "completed": "مكتمل",
+        "cancelled": "ملغي",
+        "pending": "قيد الانتظار",
+        "noshow": "عدم الحضور"
+      },
+      "title": "نظرة عامة على العيادة",
+      "subtitle": "نظرة سريعة على عمل اليوم وأحدث النتائج.",
+      "period": {
+        "last7": "آخر 7 أيام"
+      },
+      "sales": {
+        "title": "المبيعات الأخيرة",
+        "range": "آخر {count} أيام",
+        "option7": "آخر 7 أيام",
+        "option30": "آخر 30 يومًا",
+        "appointments": "المواعيد",
+        "appointmentValue": "قيمة الموعد"
+      },
+      "actions": {
+        "more": "خيارات أخرى"
+      },
+      "dropdown": {
+        "period": "الفترة"
+      },
+      "legend": {
+        "sales": "المبيعات",
+        "appointments": "المواعيد",
+        "confirmed": "مؤكد",
+        "cancelled": "إلغاء"
+      },
+      "upcoming": {
+        "title": "المواعيد القادمة",
+        "range": "الأيام {count} القادمة",
+        "option7": "الأيام 7 القادمة",
+        "option30": "الأيام 30 القادمة",
+        "confirmed": "المواعيد المؤكدة",
+        "cancelled": "المواعيد الملغاة",
+        "bookedCount": "{count} محجوز"
+      },
+      "activity": {
+        "title": "نشاط المواعيد",
+        "loadingTitle": "جارٍ تحميل المواعيد...",
+        "loadingSubtitle": "نقوم بتحديث السجل الآن",
+        "errorTitle": "تعذر تحميل المواعيد",
+        "errorSubtitle": "حاول مرة أخرى لاحقًا",
+        "emptyTitle": "لا توجد مواعيد سابقة",
+        "emptySubtitle": "سيظهر السجل هنا عندما يكون لديك مواعيد مكتملة",
+        "unknownClient": "عميل غير معروف",
+        "defaultService": "موعد",
+        "withStaff": "مع {name}"
+      },
+      "today": {
+        "title": "المواعيد التالية اليوم",
+        "loadingTitle": "جارٍ تحميل المواعيد...",
+        "loadingSubtitle": "نحدّث خطة اليوم",
+        "errorTitle": "تعذر تحميل المواعيد",
+        "errorSubtitle": "حاول مرة أخرى لاحقًا",
+        "emptyTitle": "لا توجد مواعيد اليوم",
+        "emptySubtitle": "اذهب إلى {calendar} لإضافة مواعيد",
+        "calendarLink": "التقويم"
+      },
+      "topServices": {
+        "title": "أفضل الخدمات",
+        "columns": {
+          "service": "الخدمة"
+        }
+      },
+      "columns": {
+        "thisMonth": "هذا الشهر",
+        "lastMonth": "الشهر الماضي"
+      },
+      "table": {
+        "loading": "جارٍ تحميل البيانات...",
+        "error": "تعذر تحميل البيانات.",
+        "empty": "لا توجد بيانات بعد."
+      },
+      "topStaff": {
+        "title": "أفضل موظف",
+        "columns": {
+          "staff": "الموظف"
+        }
+      },
+      "footer": {
+        "revenueToday": "إيرادات اليوم",
+        "newClients": "عملاء جدد"
+      },
+      "sharedAccount": "حساب مشترك"
+    },
+    "clients": {
+      "title": "نظرة عامة على العملاء",
+      "actions": {
+        "add": "إضافة عميل",
+        "edit": "تعديل بيانات العميل",
+        "addProgram": "إضافة بيانات البرنامج"
+      },
+      "sort": {
+        "label": "ترتيب",
+        "newest": "الأحدث",
+        "oldest": "الأقدم",
+        "alphabetical": "أبجديًا"
+      },
+      "search": {
+        "placeholder": "بحث"
+      },
+      "loading": "جارٍ تحميل العملاء...",
+      "columns": {
+        "name": "الاسم",
+        "status": "الحالة",
+        "email": "البريد الإلكتروني",
+        "phone": "الهاتف",
+        "cpr": "CPR",
+        "address": "العنوان",
+        "city": "المدينة",
+        "postalCode": "الرمز البريدي",
+        "country": "البلد"
+      }
+    },
+    "invoices": {
+      "sidebar": {
+        "dailyOverview": "نظرة عامة على المبيعات اليومية",
+        "appointments": "المواعيد",
+        "sales": "المبيعات",
+        "payments": "المدفوعات",
+        "title": "الفواتير",
+        "subtitle": "المبيعات"
+      }
     }
   },
   "settings": {
@@ -193,6 +643,10 @@
     "language": {
       "title": "اللغة",
       "label": "اللغة المفضلة"
+    },
+    "currency": {
+      "label": "العملة",
+      "placeholder": "اختر العملة"
     }
   }
 }

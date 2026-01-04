@@ -4,8 +4,10 @@ import './ydelser.css';
 import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayout';
 import AddNewServiceModal from './addnew/addnew';
 import { useAuth } from '../../../AuthContext';
+import { useLanguage } from '../../../LanguageContext';
 import { useUserServices } from './hooks/useUserServices';
 import { ChevronDown } from 'lucide-react';
+import { formatServiceDuration } from '../../../utils/serviceLabels';
 
 const normalizeService = (stored = {}) => {
   const price =
@@ -38,6 +40,7 @@ const normalizeService = (stored = {}) => {
 
 function Ydelser() {
   const { user } = useAuth();
+  const { t, locale } = useLanguage();
   const { services: remoteServices, loading: isLoadingServices, error: servicesLoadError } = useUserServices();
   const [searchQuery, setSearchQuery] = useState('');
   const [serviceList, setServiceList] = useState([]);
@@ -66,7 +69,7 @@ function Ydelser() {
   );
 
   const formatPrice = (price) => {
-    return new Intl.NumberFormat('da-DK', {
+    return new Intl.NumberFormat(locale, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }).format(price);
@@ -127,14 +130,17 @@ function Ydelser() {
   const userIdentity = useMemo(() => {
     if (!user) {
       return {
-        name: 'Ikke logget ind',
-        email: 'Log ind for at fortsætte',
+        name: t('booking.calendar.notLoggedIn', 'Ikke logget ind'),
+        email: t('booking.calendar.loginToContinue', 'Log ind for at fortsætte'),
         initials: '?',
         photoURL: null,
       };
     }
 
-    const name = user.displayName || user.email || 'Selma bruger';
+    const name =
+      user.displayName ||
+      user.email ||
+      t('booking.topbar.defaultUser', 'Selma bruger');
     const email = user.email || '—';
     const initialsSource = (user.displayName || user.email || '?').trim();
     const initials = initialsSource
@@ -161,7 +167,7 @@ function Ydelser() {
           {/* Page Header */}
           <div className="ydelser-header">
             <div className="header-left">
-              <h2 className="page-title">Ydelser</h2>
+              <h2 className="page-title">{t('booking.services.title', 'Ydelser')}</h2>
             </div>
             <div className="header-right">
               <button
@@ -169,7 +175,7 @@ function Ydelser() {
                 className="toolbar-pill toolbar-primary"
                 onClick={openCreateService}
               >
-                Opret ny
+                {t('booking.services.actions.create', 'Opret ny')}
                 <ChevronDown className="toolbar-caret" />
               </button>
             </div>
@@ -181,7 +187,7 @@ function Ydelser() {
               <span className="search-icon-small">🔍</span>
               <input 
                 type="text" 
-                placeholder="Søg" 
+                placeholder={t('booking.services.search.placeholder', 'Søg')}
                 className="search-input-services"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -197,7 +203,7 @@ function Ydelser() {
             >
               {servicesLoadError
                 ? servicesLoadError
-                : 'Henter ydelser...'}
+                : t('booking.services.loading', 'Henter ydelser...')}
             </div>
           )}
 
@@ -225,16 +231,18 @@ function Ydelser() {
                 </div>
                 <div className="service-name">{service.navn}</div>
                 <div className="service-duration">
-                  {service.varighed}
+                  {formatServiceDuration(service.varighed, t) || service.varighed}
                 </div>
                 <div className="service-price">
                   {service.pris === 10.00 ? (
                     <>
-                      DKK {formatPrice(service.pris)} (DKK {formatPrice(service.prisInklMoms)} inkl. moms)
+                      {t('booking.services.price.currency', 'DKK')} {formatPrice(service.pris)} (
+                      {t('booking.services.price.currency', 'DKK')} {formatPrice(service.prisInklMoms)}{' '}
+                      {t('booking.services.price.inclVat', 'inkl. moms')})
                     </>
                   ) : (
                     <>
-                      DKK {formatPrice(service.pris)}
+                      {t('booking.services.price.currency', 'DKK')} {formatPrice(service.pris)}
                     </>
                   )}
                 </div>

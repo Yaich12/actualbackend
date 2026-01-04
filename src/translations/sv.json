@@ -31,7 +31,11 @@
         "title": "Välj det alternativ som passar ditt företag bäst",
         "subtitle": "Du kan ändra detta senare",
         "hint": "{count}/{max} valda",
-        "options": ["Fysioterapeut", "Osteopat", "Kiropraktor"]
+        "options": [
+          "Fysioterapeut",
+          "Osteopat",
+          "Kiropraktor"
+        ]
       },
       "accountType": {
         "title": "Välj kontotyp",
@@ -41,7 +45,11 @@
       },
       "teamSize": {
         "title": "Hur många medarbetare har du",
-        "options": ["2-5 personer", "6-10 personer", "11+ personer"]
+        "options": [
+          "2-5 personer",
+          "6-10 personer",
+          "11+ personer"
+        ]
       },
       "serviceModel": {
         "title": "Var erbjuder du dina tjänster?",
@@ -98,6 +106,10 @@
       "title": "Ditt företag är klart!",
       "subtitle": "Få 14 dagars gratis användning av Selma för företag",
       "button": "Klart"
+    },
+    "currency": {
+      "label": "Valuta",
+      "subtitle": "Du kan ändra valuta senare i inställningar."
     }
   },
   "booking": {
@@ -148,7 +160,445 @@
       "memberFallback": "Medarbetare",
       "you": "Du",
       "notLoggedIn": "Inte inloggad",
-      "loginToContinue": "Logga in för att fortsätta"
+      "loginToContinue": "Logga in för att fortsätta",
+      "addCustomer": "Lägg till kund",
+      "addCustomerNote": "Lämna tomt för drop-in",
+      "addMode": {
+        "available": "Se tillgängliga tider",
+        "close": "Stäng",
+        "closePanel": "Stäng",
+        "repeat": "Upprepas inte",
+        "title": "Välj en tid att boka"
+      },
+      "addService": "Lägg till tjänst",
+      "clients": {
+        "empty": "Inga kunder hittades",
+        "loading": "Laddar kunder..."
+      },
+      "payment": "Betalning",
+      "save": "Spara",
+      "searchClients": "Sök efter kund",
+      "services": {
+        "defaultGroup": "Tjänster",
+        "loading": "Laddar tjänster...",
+        "search": "Sök efter tjänstenamn",
+        "section": "Tjänster",
+        "title": "Välj en tjänst"
+      },
+      "total": "Totalt",
+      "confirmDeleteProgram": "Detta är en del av ett program.\n\nOK: Ta bort hela kundens program.\nAvbryt: Ta bort endast detta datum.",
+      "unknownClient": "Okänd kund",
+      "status": {
+        "active": "Aktiv"
+      },
+      "selectClient": "Välj en kund",
+      "addNewClient": "Lägg till ny kund",
+      "createNewClient": "Skapa en ny kund"
+    },
+    "dropdown": {
+      "add": "Lägg till",
+      "calendar": "I kalendern",
+      "manual": "Manuellt"
+    },
+    "stats": {
+      "title": "Statistik",
+      "subtitle": "Översikt över bokningar och omsättning baserat på din riktiga bokningsdata.",
+      "period": {
+        "today": "I dag",
+        "week": "Denna vecka",
+        "month": "Denna månad",
+        "year": "Detta år",
+        "all": "Alla"
+      },
+      "error": "Kan inte hämta statistik just nu. Se till att du är inloggad och att det finns bokningar i Firestore.",
+      "loading": "Laddar klinikdata…",
+      "empty": "Inga bokningar i vald period. Byt period eller skapa nya bokningar.",
+      "cards": {
+        "revenue": {
+          "title": "Omsättning",
+          "subtitle": "Vald period"
+        },
+        "appointments": {
+          "title": "Bokningar",
+          "subtitle": "Bokade i perioden"
+        },
+        "clients": {
+          "title": "Unika kunder",
+          "subtitle": "I perioden",
+          "extra": "{count} kunder totalt"
+        },
+        "cancel": {
+          "title": "Avbokningar / no-show",
+          "subtitle": "Andel av bokningar"
+        }
+      },
+      "load": {
+        "title": "Genomsnittlig klinikbelastning",
+        "subtitle": "Hur många timmar du i snitt är bokad de dagar du faktiskt har bokningar."
+      },
+      "topServices": {
+        "title": "Mest bokade tjänster",
+        "subtitle": "Dina 5 mest använda tjänster i den valda perioden.",
+        "empty": "Ingen data i perioden."
+      },
+      "countSuffix": "×",
+      "otherService": "Övrigt",
+      "hoursShort": "h"
+    },
+    "services": {
+      "title": "Tjänster",
+      "actions": {
+        "create": "Skapa ny",
+        "createFull": "Skapa ny tjänst"
+      },
+      "search": {
+        "placeholder": "Sök"
+      },
+      "loading": "Laddar tjänster...",
+      "price": {
+        "currency": "DKK",
+        "inclVat": "inkl. moms"
+      },
+      "list": {
+        "title": "Dina tjänster"
+      },
+      "empty": "Du har inga tjänster ännu. Skapa din första tjänst.",
+      "selector": {
+        "placeholder": "Ingen tjänst vald",
+        "loading": "Laddar tjänster…",
+        "empty": "Du har inga tjänster eller program ännu.",
+        "label": "Välj behandling",
+        "groups": {
+          "services": "Tjänster",
+          "programs": "Program"
+        },
+        "tags": {
+          "service": "Tjänst",
+          "program": "Program"
+        }
+      },
+      "duration": {
+        "15m": "15 minuter",
+        "30m": "30 minuter",
+        "45m": "45 minuter",
+        "60m": "1 timme",
+        "90m": "1 timme 30 minuter",
+        "120m": "2 timmar"
+      },
+      "colors": {
+        "amber": "Bärnsten",
+        "teal": "Turkos",
+        "softBlue": "Mjuk blå",
+        "violet": "Violett",
+        "red": "Röd",
+        "pink": "Rosa"
+      },
+      "addNew": {
+        "title": {
+          "edit": "Redigera tjänst",
+          "create": "Skapa ny tjänst"
+        },
+        "actions": {
+          "close": "Stäng",
+          "delete": "Ta bort tjänst",
+          "cancel": "Avbryt",
+          "saving": "Sparar...",
+          "next": "Nästa"
+        },
+        "fields": {
+          "name": {
+            "label": "Namn",
+            "placeholder": "Ange tjänstens namn"
+          },
+          "description": {
+            "label": "Beskrivning",
+            "placeholder": "Lägg till en beskrivning (valfritt)"
+          },
+          "duration": {
+            "label": "Varaktighet"
+          },
+          "color": {
+            "label": "Färg",
+            "hint": "Välj färg för visning i kalendern."
+          },
+          "price": {
+            "label": "Pris",
+            "placeholder": "0,00"
+          },
+          "vat": {
+            "label": "Moms"
+          }
+        },
+        "errors": {
+          "notLoggedIn": "Du måste vara inloggad för att spara en tjänst.",
+          "saveFailed": "Kunde inte spara tjänsten. Försök igen.",
+          "deleteFailed": "Kunde inte ta bort tjänsten. Försök igen."
+        },
+        "confirmDelete": "Är du säker på att du vill ta bort den här tjänsten? Detta kan inte ångras."
+      }
+    },
+    "programs": {
+      "defaultName": "Program",
+      "sessionsCount": "{count} sessioner",
+      "weeksCount": "{count} veckor",
+      "loadError": "Kunde inte hämta program",
+      "create": {
+        "title": "Skapa nytt program",
+        "subtitle": "Designa ett strukturerat behandlingsprogram - t.ex. artrosprogram, GLAD-grupp eller postoperativ rehabilitering.",
+        "alertSaved": "Programmet skapades (koppla till Firestore senare).",
+        "fields": {
+          "name": {
+            "label": "Programnamn",
+            "placeholder": "t.ex. GLAD knä, höftartrosprogram, rygggrupp, osv."
+          },
+          "condition": {
+            "label": "Primär diagnos"
+          },
+          "format": {
+            "label": "Format"
+          },
+          "setting": {
+            "label": "Plats"
+          },
+          "maxParticipants": {
+            "label": "Max antal deltagare"
+          },
+          "durationWeeks": {
+            "label": "Varaktighet (veckor)"
+          },
+          "sessionsPerWeek": {
+            "label": "Sessioner per vecka"
+          },
+          "sessionLength": {
+            "label": "Sessionlängd (min)"
+          },
+          "goals": {
+            "label": "Kliniska & funktionella mål",
+            "placeholder": "t.ex. minska smärta, öka gångdistans, förbättra STS, öka självtillit för träning osv."
+          },
+          "content": {
+            "label": "Vad ingår vanligtvis i programmet?",
+            "education": "Patientutbildning / smärtförklaring",
+            "strength": "Styrketräning (stora muskelgrupper)",
+            "neuromuscular": "Neuromuskulär träning / balans",
+            "homeProgram": "Hemprogram med progression",
+            "outcomes": "Utfallsmått (t.ex. KOOS, HOOS, NRS, STS)"
+          },
+          "notes": {
+            "label": "Interna anteckningar (valfritt)",
+            "placeholder": "Praktiska detaljer, kontraindikationer, utrustningskrav osv."
+          }
+        }
+      },
+      "options": {
+        "condition": {
+          "kneeOa": "Knäartros",
+          "hipOa": "Höftartros",
+          "glad": "GLAD-program",
+          "acl": "Postoperativ ACL",
+          "shoulder": "Axel / impingement",
+          "lowBack": "Ospecifik ländryggssmärta",
+          "other": "Annat / blandad MSK"
+        },
+        "format": {
+          "individual": "Individuell",
+          "smallGroup": "Liten grupp (2–4)",
+          "group": "Grupp (5–12)",
+          "individualShort": "Individuell",
+          "smallGroupShort": "Liten grupp",
+          "groupShort": "Grupp"
+        },
+        "setting": {
+          "clinic": "Klinik / träningssal",
+          "gym": "Gym",
+          "online": "Online / hybrid",
+          "home": "Hembaserat",
+          "clinicShort": "Klinik",
+          "gymShort": "Gym",
+          "onlineShort": "Online",
+          "homeShort": "Hemma"
+        }
+      },
+      "summary": {
+        "title": "Översikt",
+        "newProgram": "Nytt program",
+        "sessions": "{weeks} veckor · {sessions} sessioner/vecka · ca {total} sessioner totalt",
+        "empty": "Ange veckor och sessioner/vecka för att se totalen.",
+        "format": "Format",
+        "formatSmall": "Liten grupp",
+        "formatGroup": "Grupp",
+        "setting": "Plats",
+        "settingClinic": "Klinik",
+        "settingGym": "Gym",
+        "settingOnline": "Online",
+        "settingHome": "Hemma",
+        "maxParticipants": "Max deltagare"
+      },
+      "financial": {
+        "title": "Ekonomi",
+        "sessionPrice": "Pris per session ({currency})",
+        "packagePrice": "Paketpris för hela programmet ({currency})",
+        "hint": "Du kan fylla i båda fälten och välja i faktureringen vad du använder i praktiken.",
+        "estimate": "Uppskattad omsättning per deltagare vid sessionspris:"
+      },
+      "actions": {
+        "saving": "Sparar...",
+        "save": "Spara program",
+        "create": "Skapa program"
+      },
+      "errors": {
+        "loadFailed": "Kunde inte hämta program.",
+        "notLoggedIn": "Logga in för att spara program.",
+        "saveFailed": "Kunde inte spara programmet. Försök igen."
+      },
+      "list": {
+        "title": "Program",
+        "subtitle": "Översikt över dina sparade program. Skapa nya med Skapa program.",
+        "searchPlaceholder": "Sök program eller diagnos",
+        "loading": "Laddar program...",
+        "empty": "Inga program ännu. Klicka Skapa program för att komma igång.",
+        "untitled": "Utan namn",
+        "sessionsMeta": "{weeks} veckor · {sessions}/vecka · {total} sessioner",
+        "sessionLength": "Sessionlängd: {count} min",
+        "pricePerSession": "Pris per session:",
+        "packagePrice": "Paketpris:",
+        "maxParticipants": "Max deltagare: {count}",
+        "goals": "Mål: {goals}"
+      }
+    },
+    "overview": {
+      "currencySuffix": "kr.",
+      "status": {
+        "booked": "Bokad",
+        "confirmed": "Bekräftad",
+        "arrived": "Ankom",
+        "started": "Påbörjad",
+        "completed": "Genomförd",
+        "cancelled": "Inställd",
+        "pending": "Väntande",
+        "noshow": "Utebliven"
+      },
+      "title": "Kliniköversikt",
+      "subtitle": "En snabb översikt över dagens drift och de senaste resultaten.",
+      "period": {
+        "last7": "Senaste 7 dagarna"
+      },
+      "sales": {
+        "title": "Senaste försäljning",
+        "range": "Senaste {count} dagar",
+        "option7": "Senaste 7 dagar",
+        "option30": "Senaste 30 dagar",
+        "appointments": "Bokningar",
+        "appointmentValue": "Bokningens värde"
+      },
+      "actions": {
+        "more": "Fler alternativ"
+      },
+      "dropdown": {
+        "period": "Period"
+      },
+      "legend": {
+        "sales": "Försäljning",
+        "appointments": "Bokningar",
+        "confirmed": "Bekräftad",
+        "cancelled": "Inställning"
+      },
+      "upcoming": {
+        "title": "Kommande bokningar",
+        "range": "Nästa {count} dagar",
+        "option7": "Nästa 7 dagar",
+        "option30": "Nästa 30 dagar",
+        "confirmed": "Bekräftade bokningar",
+        "cancelled": "Inställda bokningar",
+        "bookedCount": "{count} bokade"
+      },
+      "activity": {
+        "title": "Bokningsaktivitet",
+        "loadingTitle": "Laddar bokningar...",
+        "loadingSubtitle": "Vi uppdaterar historiken just nu",
+        "errorTitle": "Kunde inte ladda bokningar",
+        "errorSubtitle": "Försök igen om en stund",
+        "emptyTitle": "Inga tidigare bokningar",
+        "emptySubtitle": "Historiken visas här när du har avslutade bokningar",
+        "unknownClient": "Okänd kund",
+        "defaultService": "Bokning",
+        "withStaff": "med {name}"
+      },
+      "today": {
+        "title": "Nästa bokningar i dag",
+        "loadingTitle": "Laddar bokningar...",
+        "loadingSubtitle": "Vi uppdaterar dagens schema",
+        "errorTitle": "Kunde inte ladda bokningar",
+        "errorSubtitle": "Försök igen om en stund",
+        "emptyTitle": "Inga bokningar i dag",
+        "emptySubtitle": "Gå till din {calendar} för att lägga till bokningar",
+        "calendarLink": "kalender"
+      },
+      "topServices": {
+        "title": "Toptjänster",
+        "columns": {
+          "service": "Tjänst"
+        }
+      },
+      "columns": {
+        "thisMonth": "Denna månad",
+        "lastMonth": "Förra månaden"
+      },
+      "table": {
+        "loading": "Laddar data...",
+        "error": "Kunde inte hämta data.",
+        "empty": "Ingen data ännu."
+      },
+      "topStaff": {
+        "title": "Topmedarbetare",
+        "columns": {
+          "staff": "Medarbetare"
+        }
+      },
+      "footer": {
+        "revenueToday": "Omsättning i dag",
+        "newClients": "Nya klienter"
+      },
+      "sharedAccount": "gemensamt konto"
+    },
+    "clients": {
+      "title": "Klientöversikt",
+      "actions": {
+        "add": "Lägg till kund",
+        "edit": "Ändra kunduppgifter",
+        "addProgram": "Lägg till programuppgifter"
+      },
+      "sort": {
+        "label": "Sortera",
+        "newest": "Nyast",
+        "oldest": "Äldst",
+        "alphabetical": "Alfabetisk"
+      },
+      "search": {
+        "placeholder": "Sök"
+      },
+      "loading": "Laddar kunder...",
+      "columns": {
+        "name": "Namn",
+        "status": "Status",
+        "email": "E-post",
+        "phone": "Telefon",
+        "cpr": "CPR",
+        "address": "Adress",
+        "city": "Stad",
+        "postalCode": "Postnummer",
+        "country": "Land"
+      }
+    },
+    "invoices": {
+      "sidebar": {
+        "dailyOverview": "Daglig försäljningsöversikt",
+        "appointments": "Bokningar",
+        "sales": "Försäljning",
+        "payments": "Betalningar",
+        "title": "Fakturor",
+        "subtitle": "Försäljning"
+      }
     }
   },
   "settings": {
@@ -193,6 +643,10 @@
     "language": {
       "title": "Språk",
       "label": "Föredraget språk"
+    },
+    "currency": {
+      "label": "Valuta",
+      "placeholder": "Välj valuta"
     }
   }
 }

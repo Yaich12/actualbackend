@@ -3,17 +3,20 @@ import { ChevronDown } from 'lucide-react';
 import AddNewServiceModal from './addnew/addnew';
 import { useUserServices } from './hooks/useUserServices';
 import './ydelser.css';
-
-const formatPrice = (price) =>
-  new Intl.NumberFormat('da-DK', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(price ?? 0);
+import { useLanguage } from '../../../LanguageContext';
+import { formatServiceDuration } from '../../../utils/serviceLabels';
 
 function ServicesPage() {
   const { services, loading, error } = useUserServices();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [localServices, setLocalServices] = useState([]);
+  const { t, locale } = useLanguage();
+
+  const formatPrice = (price) =>
+    new Intl.NumberFormat(locale, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(price ?? 0);
 
   useEffect(() => {
     setLocalServices(services);
@@ -34,13 +37,13 @@ function ServicesPage() {
   return (
     <div className="services-page">
       <div className="services-header">
-        <h1>Dine ydelser</h1>
+        <h1>{t('booking.services.list.title', 'Dine ydelser')}</h1>
         <button
           type="button"
           className="toolbar-pill toolbar-primary"
           onClick={() => setIsModalOpen(true)}
         >
-          Opret ny ydelse
+          {t('booking.services.actions.createFull', 'Opret ny ydelse')}
           <ChevronDown className="toolbar-caret" />
         </button>
       </div>
@@ -51,11 +54,20 @@ function ServicesPage() {
         onSubmit={handleAddServiceToList}
       />
 
-      {loading && <p className="services-status-message">Henter ydelser…</p>}
+      {loading && (
+        <p className="services-status-message">
+          {t('booking.services.loading', 'Henter ydelser…')}
+        </p>
+      )}
       {error && <p className="services-status-message error">{error}</p>}
 
       {!loading && !localServices.length && (
-        <p className="services-empty">Du har ingen ydelser endnu. Opret din første ydelse.</p>
+        <p className="services-empty">
+          {t(
+            'booking.services.empty',
+            'Du har ingen ydelser endnu. Opret din første ydelse.'
+          )}
+        </p>
       )}
 
       <ul className="services-list">
@@ -63,9 +75,11 @@ function ServicesPage() {
           <li key={service.id} className="services-item">
             <div>
               <strong>{service.navn}</strong>
-              <div>{service.varighed}</div>
+              <div>{formatServiceDuration(service.varighed, t) || service.varighed}</div>
             </div>
-            <div>DKK {formatPrice(service.pris)}</div>
+            <div>
+              {t('booking.services.price.currency', 'DKK')} {formatPrice(service.pris)}
+            </div>
           </li>
         ))}
       </ul>
