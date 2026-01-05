@@ -2,8 +2,11 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Mic, Sparkles } from 'lucide-react';
 import FeaturesWorkflow from './components/FeaturesWorkflow';
+import { useLanguage } from './language/LanguageProvider';
 
 function TranscriptionFactsrPage() {
+  const { t } = useLanguage();
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <section className="relative overflow-hidden">
@@ -13,38 +16,37 @@ function TranscriptionFactsrPage() {
         <div className="relative mx-auto w-full max-w-6xl px-4 py-16">
           <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-blue-200/70">
-              AI Intelligence Hub
+              {t('features.transcriptionFactsr.hero.eyebrow')}
             </p>
             <h1 className="mt-4 text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-              Transcription and FactsR
+              {t('features.transcriptionFactsr.hero.title')}
             </h1>
             <p className="mt-4 text-base text-slate-200">
-              Live transkribering og FactsR samlet ét sted, så du kan fokusere på patienten og
-              få struktureret dokumentation uden ekstra klik.
+              {t('features.transcriptionFactsr.hero.description')}
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-4">
               <Link
                 to="/signup"
                 className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-slate-100"
               >
-                Prøv systemet gratis
+                {t('features.transcriptionFactsr.hero.ctaPrimary')}
               </Link>
               <a
                 href="#factsr-section"
                 className="inline-flex items-center gap-2 text-sm font-semibold text-blue-200 transition hover:text-white"
               >
                 <Sparkles className="h-4 w-4" />
-                Se FactsR demo
+                {t('features.transcriptionFactsr.hero.ctaSecondary')}
               </a>
             </div>
             <div className="mt-6 flex flex-wrap items-center gap-3 text-xs text-slate-400">
               <span className="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1">
                 <Mic className="h-4 w-4 text-blue-200" />
-                Live transkribering
+                {t('features.transcriptionFactsr.hero.pillTranscription')}
               </span>
               <span className="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1">
                 <Sparkles className="h-4 w-4 text-blue-200" />
-                FactsR strukturering
+                {t('features.transcriptionFactsr.hero.pillFactsr')}
               </span>
             </div>
           </div>

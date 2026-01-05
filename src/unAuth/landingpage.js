@@ -4,19 +4,23 @@ import Navbar from './components/navbar';
 import Frontpage from './components/frontpage';
 import Demo from './components/demo';
 import Footer from './components/footer';
-import Preview from './components/preview';
 import ScrollSection from './components/scroll';
 import Manifesto from './components/Manifesto';
 import Pricing from '../pricing/pricing';
+import { Stats } from '../components/ui/stats-section-with-text';
+import { useLanguage } from './language/LanguageProvider';
 
-const LandingDivider = () => (
-  <div className="landing-divider" aria-label="Divider: from physios to physios">
-    <span className="landing-divider-text">from physios to physios</span>
+const LandingDivider = ({ text, ariaLabel }) => (
+  <div className="landing-divider" aria-label={ariaLabel}>
+    <span className="landing-divider-text">{text}</span>
   </div>
 );
 
 function LandingPage() {
+  const { t } = useLanguage();
   const showManifesto = false;
+  const dividerText = t('landing.divider.text');
+  const dividerLabel = t('landing.divider.aria');
 
   return (
     <div className="landing-page">
@@ -27,11 +31,13 @@ function LandingPage() {
             <Frontpage />
           </div>
         </section>
-        <section className="landing-section landing-section-full" id="preview">
-          <Preview />
-        </section>
         <section className="landing-section landing-section-full" id="parallax-demo">
           <ScrollSection />
+        </section>
+        <section className="landing-section landing-section-full" id="stats">
+          <div className="bg-white">
+            <Stats />
+          </div>
         </section>
         <section
           className="landing-section landing-section-full landing-section-demo landing-section-hidden"
@@ -41,7 +47,7 @@ function LandingPage() {
         </section>
         {showManifesto && (
           <>
-            <LandingDivider />
+            <LandingDivider text={dividerText} ariaLabel={dividerLabel} />
             <section className="landing-section landing-section-full" id="manifesto">
               <Manifesto />
             </section>

@@ -5,86 +5,25 @@ import { TimelineContent } from "components/ui/timeline-animation";
 import { VerticalCutReveal } from "components/ui/vertical-cut-reveal";
 import { cn } from "lib/utils";
 import NumberFlow from "@number-flow/react";
-import { Briefcase, CheckCheck, Database, Server } from "lucide-react";
+import { CheckCheck } from "lucide-react";
 import { motion } from "motion/react";
 import { useRef, useState } from "react";
+import { useLanguage } from "../../unAuth/language/LanguageProvider";
 
-const plans = [
-  {
-    name: "Starter",
-    description:
-      "Great for small businesses and startups looking to get started with AI",
-    price: 12,
-    yearlyPrice: 99,
-    buttonText: "Get started",
-    buttonVariant: "outline" as const,
-    features: [
-      { text: "Up to 10 boards per workspace", icon: <Briefcase size={20} /> },
-      { text: "Up to 10GB storage", icon: <Database size={20} /> },
-      { text: "Limited analytics", icon: <Server size={20} /> },
-    ],
-    includes: [
-      "Free includes:",
-      "Unlimted Cards",
-      "Custom background & stickers",
-      "2-factor authentication",
-      "Up to 2 individual users",
-      "Up to 2 workspaces",
-    ],
-  },
-  {
-    name: "Business",
-    description:
-      "Best value for growing businesses that need more advanced features",
-    price: 48,
-    yearlyPrice: 399,
-    buttonText: "Get started",
-    buttonVariant: "default" as const,
-    popular: true,
-    features: [
-      { text: "Unlimted boards", icon: <Briefcase size={20} /> },
-      { text: "Storage (250MB/file)", icon: <Database size={20} /> },
-      { text: "100 workspace command runs", icon: <Server size={20} /> },
-    ],
-    includes: [
-      "Everything in Starter, plus:",
-      "Advanced checklists",
-      "Custom fields",
-      "Servedless functions",
-      "Up to 10 individual users",
-      "Up to 10 workspaces",
-    ],
-  },
-  {
-    name: "Enterprise",
-    description:
-      "Advanced plan with enhanced security and unlimited access for large teams",
-    price: 96,
-    yearlyPrice: 899,
-    buttonText: "Get started",
-    buttonVariant: "outline" as const,
-    features: [
-      { text: "Unlimited board", icon: <Briefcase size={20} /> },
-      { text: "Unlimited storage ", icon: <Database size={20} /> },
-      { text: "Unlimited workspaces", icon: <Server size={20} /> },
-    ],
-    includes: [
-      "Everything in Business, plus:",
-      "Multi-board management",
-      "Multi-board guest",
-      "Attachment permissions",
-      "Custom roles",
-      "Custom boards",
-    ],
-  },
+const PLAN_CONFIG = [
+  { id: "starter", price: 12, yearlyPrice: 99, buttonVariant: "outline" as const },
+  { id: "business", price: 48, yearlyPrice: 399, buttonVariant: "default" as const, popular: true },
+  { id: "enterprise", price: 96, yearlyPrice: 899, buttonVariant: "outline" as const },
 ];
 
 const PricingSwitch = ({
   onSwitch,
   className,
+  labels,
 }: {
   onSwitch: (value: string) => void;
   className?: string;
+  labels: { monthly: string; yearly: string; savings: string };
 }) => {
   const [selected, setSelected] = useState("0");
 
@@ -112,7 +51,7 @@ const PricingSwitch = ({
               transition={{ type: "spring", stiffness: 500, damping: 30 }}
             />
           )}
-          <span className="relative">Monthly Billing</span>
+          <span className="relative">{labels.monthly}</span>
         </button>
 
         <button
@@ -132,9 +71,9 @@ const PricingSwitch = ({
             />
           )}
           <span className="relative flex items-center gap-2">
-            Yearly Billing
+            {labels.yearly}
             <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-medium text-black">
-              Save 20%
+              {labels.savings}
             </span>
           </span>
         </button>
@@ -144,8 +83,16 @@ const PricingSwitch = ({
 };
 
 export default function PricingSection5() {
+  const { t, getArray } = useLanguage();
   const [isYearly, setIsYearly] = useState(false);
   const pricingRef = useRef<HTMLDivElement>(null);
+  const plans = PLAN_CONFIG.map((plan) => ({
+    ...plan,
+    name: t(`pricing.plans.${plan.id}.name`),
+    description: t(`pricing.plans.${plan.id}.description`),
+    buttonText: t(`pricing.plans.${plan.id}.buttonText`),
+    includes: getArray(`pricing.plans.${plan.id}.includes`, []),
+  }));
 
   const revealVariants = {
     visible: (i: number) => ({
@@ -184,7 +131,7 @@ export default function PricingSection5() {
               delay: 0,
             }}
           >
-            {"We've got a plan that's perfect for you"}
+            {t("pricing.title")}
           </VerticalCutReveal>
         </h2>
 
@@ -195,8 +142,7 @@ export default function PricingSection5() {
           customVariants={revealVariants}
           className="md:text-base text-sm text-gray-600 w-[80%]"
         >
-          Trusted by millions, We help teams all around the world, Explore which
-          option is right for you.
+          {t("pricing.description")}
         </TimelineContent>
 
         <TimelineContent
@@ -205,7 +151,15 @@ export default function PricingSection5() {
           timelineRef={pricingRef}
           customVariants={revealVariants}
         >
-          <PricingSwitch onSwitch={togglePricingPeriod} className="w-fit" />
+          <PricingSwitch
+            onSwitch={togglePricingPeriod}
+            className="w-fit"
+            labels={{
+              monthly: t("pricing.switch.monthly"),
+              yearly: t("pricing.switch.yearly"),
+              savings: t("pricing.switch.savings"),
+            }}
+          />
         </TimelineContent>
       </article>
 
@@ -226,12 +180,12 @@ export default function PricingSection5() {
               <CardHeader className="text-left">
                 <div className="flex justify-between">
                   <h3 className="xl:text-3xl md:text-2xl text-3xl font-semibold text-gray-900 mb-2">
-                    {plan.name} Plan
+                    {t("pricing.planTitle", { name: plan.name })}
                   </h3>
                   {plan.popular && (
                     <div>
                       <span className="bg-orange-500 text-white px-3 py-1 rounded-full text-sm font-medium">
-                        Popular
+                        {t("pricing.labels.popular")}
                       </span>
                     </div>
                   )}
@@ -251,7 +205,7 @@ export default function PricingSection5() {
                     />
                   </span>
                   <span className="text-gray-600 ml-1">
-                    /{isYearly ? "year" : "month"}
+                    /{isYearly ? t("pricing.labels.year") : t("pricing.labels.month")}
                   </span>
                 </div>
               </CardHeader>
@@ -269,15 +223,15 @@ export default function PricingSection5() {
                   {plan.buttonText}
                 </button>
                 <button className="w-full mb-6 p-4 text-xl rounded-xl bg-white text-black border border-gray-200 shadow-lg shadow-gray-200">
-                  Click to Sale
+                  {t("pricing.secondaryCta")}
                 </button>
 
                 <div className="space-y-3 pt-4 border-t border-neutral-200">
                   <h2 className="text-xl font-semibold uppercase text-gray-900 mb-3">
-                    Features
+                    {t("pricing.labels.features")}
                   </h2>
                   <h4 className="font-medium text-base text-gray-900 mb-3">
-                    {plan.includes[0]}
+                    {plan.includes[0] || ""}
                   </h4>
                   <ul className="space-y-2 font-semibold">
                     {plan.includes.slice(1).map((feature, featureIndex) => (

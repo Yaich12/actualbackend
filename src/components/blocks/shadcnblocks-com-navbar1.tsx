@@ -34,6 +34,18 @@ interface MenuItem {
   itemsHeader?: string;
   itemsNote?: string;
   itemsColumns?: number;
+  dualList?: {
+    left: {
+      header?: string;
+      note?: string;
+      items: MenuItem[];
+    };
+    right: {
+      header?: string;
+      note?: string;
+      items: MenuItem[];
+    };
+  };
   featured?: {
     title: string;
     description?: string;
@@ -150,14 +162,15 @@ interface Navbar1Props {
     url: string;
   }[];
   auth?: {
-    login: {
+    login?: {
       text: string;
       url: string;
     };
-    signup: {
+    signup?: {
       text: string;
       url: string;
     };
+    loginNode?: ReactNode;
   };
   className?: string;
   containerClassName?: string;
@@ -194,6 +207,39 @@ const Navbar1 = ({
   className,
   containerClassName,
 }: Navbar1Props) => {
+  const renderLoginControl = (className?: string) => {
+    if (auth.loginNode) {
+      return className ? <div className={className}>{auth.loginNode}</div> : auth.loginNode;
+    }
+    if (!auth.login) {
+      return null;
+    }
+    return (
+      <Button asChild variant="outline" size="sm" className={cn("navbar-cta-outline", className)}>
+        {auth.login.url.startsWith("/") ? (
+          <RouterLink to={auth.login.url}>{auth.login.text}</RouterLink>
+        ) : (
+          <a href={auth.login.url}>{auth.login.text}</a>
+        )}
+      </Button>
+    );
+  };
+
+  const renderSignupControl = (className?: string) => {
+    if (!auth.signup) {
+      return null;
+    }
+    return (
+      <Button asChild size="sm" className={cn("navbar-cta-btn", className)}>
+        {auth.signup.url.startsWith("/") ? (
+          <RouterLink to={auth.signup.url}>{auth.signup.text}</RouterLink>
+        ) : (
+          <a href={auth.signup.url}>{auth.signup.text}</a>
+        )}
+      </Button>
+    );
+  };
+
   return (
     <section className={cn("py-0 w-full", className)}>
       <div className={cn("w-full", containerClassName)}>
@@ -219,20 +265,8 @@ const Navbar1 = ({
             </div>
           </div>
           <div className="flex gap-2">
-            <Button asChild variant="outline" size="sm" className="navbar-cta-outline">
-              {auth.login.url.startsWith("/") ? (
-                <RouterLink to={auth.login.url}>{auth.login.text}</RouterLink>
-              ) : (
-                <a href={auth.login.url}>{auth.login.text}</a>
-              )}
-            </Button>
-            <Button asChild size="sm" className="navbar-cta-btn">
-              {auth.signup.url.startsWith("/") ? (
-                <RouterLink to={auth.signup.url}>{auth.signup.text}</RouterLink>
-              ) : (
-                <a href={auth.signup.url}>{auth.signup.text}</a>
-              )}
-            </Button>
+            {renderSignupControl()}
+            {renderLoginControl()}
           </div>
         </nav>
         <div className="block lg:hidden w-full">
@@ -289,20 +323,8 @@ const Navbar1 = ({
                     </div>
                   )}
                   <div className="flex flex-col gap-3">
-                    <Button asChild variant="outline" className="navbar-cta-outline">
-                      {auth.login.url.startsWith("/") ? (
-                        <RouterLink to={auth.login.url}>{auth.login.text}</RouterLink>
-                      ) : (
-                        <a href={auth.login.url}>{auth.login.text}</a>
-                      )}
-                    </Button>
-                    <Button asChild className="navbar-cta-btn">
-                      {auth.signup.url.startsWith("/") ? (
-                        <RouterLink to={auth.signup.url}>{auth.signup.text}</RouterLink>
-                      ) : (
-                        <a href={auth.signup.url}>{auth.signup.text}</a>
-                      )}
-                    </Button>
+                    {renderSignupControl("w-full justify-center")}
+                    {renderLoginControl("w-full flex justify-center")}
                   </div>
                 </div>
               </SheetContent>
@@ -315,6 +337,98 @@ const Navbar1 = ({
 };
 
 const renderMenuItem = (item: MenuItem) => {
+  if (item.dualList) {
+    const { left, right } = item.dualList;
+    const renderListItems = (items: MenuItem[]) =>
+      items.map((subItem) => {
+        const isRich = Boolean(subItem.icon || subItem.description);
+        if (!isRich) {
+          return (
+            <li key={subItem.title}>
+              <NavigationMenuLink asChild>
+                <a
+                  className="block rounded-2xl px-2 py-2 text-base font-semibold text-slate-900 transition hover:bg-slate-50"
+                  href={subItem.url}
+                >
+                  {subItem.title}
+                </a>
+              </NavigationMenuLink>
+            </li>
+          );
+        }
+        return (
+          <li key={subItem.title}>
+            <NavigationMenuLink asChild>
+              <a
+                className="group flex items-start gap-4 rounded-2xl p-3 transition hover:bg-slate-50"
+                href={subItem.url}
+              >
+                {subItem.icon ? (
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 transition group-hover:bg-blue-100">
+                    {subItem.icon}
+                  </span>
+                ) : null}
+                <span>
+                  <span className="block text-sm font-semibold text-slate-900">
+                    {subItem.title}
+                  </span>
+                  {subItem.description && (
+                    <span className="mt-1 block text-xs text-slate-500">
+                      {subItem.description}
+                    </span>
+                  )}
+                </span>
+              </a>
+            </NavigationMenuLink>
+          </li>
+        );
+      });
+
+    return (
+      <NavigationMenuItem key={item.title} className="text-white">
+        <NavigationMenuTrigger className="rounded-full bg-transparent text-white/90 hover:bg-white/10 hover:text-white data-[state=open]:bg-white/10 data-[state=open]:text-white">
+          {item.title}
+        </NavigationMenuTrigger>
+        <NavigationMenuContent>
+          <div className="w-[680px] p-5">
+            <div className="grid gap-6 md:grid-cols-2">
+              <div>
+                {left.header ? (
+                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                    {left.header}
+                  </div>
+                ) : null}
+                {left.note ? (
+                  <p className="mt-2 text-sm font-semibold text-slate-500">
+                    {left.note}
+                  </p>
+                ) : null}
+                <ul className="mt-4 grid gap-3">
+                  {renderListItems(left.items)}
+                </ul>
+              </div>
+              <div className="border-l border-slate-200 pl-6">
+                {right.header ? (
+                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                    {right.header}
+                  </div>
+                ) : null}
+                {right.note ? (
+                  <p className="mt-2 text-xs font-semibold text-slate-500">
+                    {right.note}
+                  </p>
+                ) : null}
+                <ul className="mt-4 grid gap-3">
+                  {renderListItems(right.items)}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </NavigationMenuContent>
+      </NavigationMenuItem>
+    );
+  }
+
   if (item.items) {
     const hasFeatured = Boolean(item.featured);
     const columnCount = item.itemsColumns && item.itemsColumns > 1 ? 2 : 1;
@@ -491,6 +605,67 @@ const renderMenuItem = (item: MenuItem) => {
 
 const renderMobileMenuItem = (item: MenuItem) => {
   if (item.items) {
+    if (item.dualList) {
+      const { left, right } = item.dualList;
+      const renderList = (list: MenuItem[]) =>
+        list.map((subItem) => (
+          <a
+            key={subItem.title}
+            className="flex select-none gap-4 rounded-md p-3 leading-none outline-none transition-colors hover:bg-muted hover:text-accent-foreground"
+            href={subItem.url}
+          >
+            {subItem.icon ? subItem.icon : null}
+            <div>
+              <div className="text-sm font-semibold">{subItem.title}</div>
+              {subItem.description && (
+                <p className="text-sm leading-snug text-muted-foreground">
+                  {subItem.description}
+                </p>
+              )}
+            </div>
+          </a>
+        ));
+
+      return (
+        <AccordionItem key={item.title} value={item.title} className="border-b-0">
+          <AccordionTrigger className="py-0 font-semibold hover:no-underline">
+            {item.title}
+          </AccordionTrigger>
+          <AccordionContent className="mt-3 space-y-4">
+            <div>
+              {left.header ? (
+                <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  {left.header}
+                </div>
+              ) : null}
+              {left.note ? (
+                <div className="px-3 text-xs font-semibold text-muted-foreground">
+                  {left.note}
+                </div>
+              ) : null}
+              <div className="mt-2 space-y-2">
+                {renderList(left.items)}
+              </div>
+            </div>
+            <div>
+              {right.header ? (
+                <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  {right.header}
+                </div>
+              ) : null}
+              {right.note ? (
+                <div className="px-3 text-xs font-semibold text-muted-foreground">
+                  {right.note}
+                </div>
+              ) : null}
+              <div className="mt-2 space-y-2">
+                {renderList(right.items)}
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      );
+    }
     return (
       <AccordionItem key={item.title} value={item.title} className="border-b-0">
         <AccordionTrigger className="py-0 font-semibold hover:no-underline">
@@ -513,7 +688,7 @@ const renderMobileMenuItem = (item: MenuItem) => {
               className="flex select-none gap-4 rounded-md p-3 leading-none outline-none transition-colors hover:bg-muted hover:text-accent-foreground"
               href={subItem.url}
             >
-              {subItem.icon}
+              {subItem.icon ? subItem.icon : null}
               <div>
                 <div className="text-sm font-semibold">{subItem.title}</div>
                 {subItem.description && (

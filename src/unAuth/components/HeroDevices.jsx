@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Mac } from '../../components/ui/mac';
+import { useLanguage } from '../language/LanguageProvider';
 import './HeroDevices.css';
 
 const LAPTOP_IMAGES = ['/hero-4/clinic-overview.png', '/hero-4/calendar-week.png'];
 
 function HeroDevices() {
   const [activeImage, setActiveImage] = useState(0);
+  const { t } = useLanguage();
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -18,17 +20,14 @@ function HeroDevices() {
     <section className="hero-devices">
       <div className="hero-devices__inner">
         <div className="hero-devices__text">
-          <p className="hero-devices__eyebrow">Selma+ platform</p>
-          <h1>The overview that comes to you.</h1>
+          <p className="hero-devices__eyebrow">{t('landing.heroDevices.eyebrow')}</p>
+          <h1>{t('landing.heroDevices.title')}</h1>
           <p className="hero-devices__sub">
-            Forget clicking around for information before the next consultation. When a patient is
-            about to arrive, Selma+ automatically serves everything for you: who’s coming, an AI
-            summary of the last session, and a clear plan for today. You’re ready before the patient
-            walks in the door.
+            {t('landing.heroDevices.description')}
           </p>
           <div className="hero-devices__cta">
-            <button className="hero-devices__button">Try Selma+ booking</button>
-            <span className="hero-devices__hint">Ingen installation. Se demo på 2 minutter.</span>
+            <button className="hero-devices__button">{t('landing.heroDevices.cta')}</button>
+            <span className="hero-devices__hint">{t('landing.heroDevices.hint')}</span>
           </div>
         </div>
 

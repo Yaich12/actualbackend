@@ -6,8 +6,8 @@ import HeroDevices from './HeroDevices';
 function ScrollSection() {
   return (
     <section className="scroll-section" id="scroll-parallax">
-      <DemoOne />
       <HeroDevices />
+      <DemoOne />
     </section>
   );
 }

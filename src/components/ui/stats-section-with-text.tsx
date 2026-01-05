@@ -1,68 +1,82 @@
-import { MoveUpRight } from "lucide-react"
+import { useEffect, useState } from "react"
+import { useLanguage } from "../../unAuth/language/LanguageProvider"
+
+const SLIDE_DURATION = 10000
+
+type Slide = {
+  title: string
+  text: string
+  image: string
+  alt: string
+}
 
 function Stats() {
-  const stats = [
-    { label: "EU Average", value: "13%", flag: "🇪🇺", note: "Rising trend" },
-    { label: "Denmark", value: "7.4%", flag: "🇩🇰", note: "High potential" },
-    { label: "Norway", value: "3.9%", flag: "🇳🇴", note: "Untapped market" },
-    { label: "Sweden", value: "8.5%", flag: "🇸🇪", note: "Growing" },
-  ]
+  const { getArray } = useLanguage()
+  const slides = getArray("landing.statsSection.slides", []) as Slide[]
+  const [activeIndex, setActiveIndex] = useState(0)
+
+  useEffect(() => {
+    if (!slides?.length) return
+    const interval = setInterval(() => {
+      setActiveIndex((current) => (current + 1) % slides.length)
+    }, SLIDE_DURATION)
+
+    return () => clearInterval(interval)
+  }, [slides?.length])
+
+  const activeSlide = slides[activeIndex] || slides[0]
 
   return (
     <div className="w-full py-20 lg:py-40">
       <div className="container mx-auto">
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
-          <div className="flex flex-col items-start gap-4">
-            <div className="flex flex-col gap-2">
-              <h2 className="text-left text-2xl font-semibold tracking-tight md:text-3xl lg:text-5xl">
-                Freedom is closer than you think.
-              </h2>
-              <p className="text-left text-base leading-relaxed text-slate-600 md:text-lg">
-                Today only a small percentage of Nordic clinicians work independently. Why? Because administration has
-                been a roadblock. We built Selma+ to remove that barrier, so you can focus on what you do best.
-              </p>
-              <a
-                href="/signup"
-                className="mt-4 inline-flex items-center text-sm font-semibold text-blue-600 transition hover:text-blue-700"
-              >
-                Be part of the future →
-              </a>
-            </div>
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-center">
+          <div className="relative order-2 lg:order-1 min-h-[340px] sm:min-h-[280px] lg:min-h-[320px]">
+            {activeSlide ? (
+              <div className="space-y-4 animate-fade-in">
+                <h2 className="text-left text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl lg:text-4xl">
+                  {activeSlide.title}
+                </h2>
+                <p className="text-left text-base leading-relaxed text-slate-600 md:text-lg">
+                  {activeSlide.text}
+                </p>
+              </div>
+            ) : null}
           </div>
-
-          <div className="flex items-center justify-center">
-            <div className="grid w-full grid-cols-1 gap-2 text-left sm:grid-cols-2 lg:grid-cols-2">
-              {stats.map((stat) => (
-                <div
-                  key={stat.label}
-                  className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-                >
-                  <div className="absolute -right-8 -bottom-8 h-24 w-40 rounded-full bg-gradient-to-tr from-emerald-200/40 via-transparent to-blue-200/20" />
-                  <svg
-                    viewBox="0 0 120 60"
-                    className="absolute -right-6 -bottom-4 h-20 w-32 text-emerald-400/60"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M2 54 C 20 40, 40 20, 68 28 S 112 22, 118 6"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <div className="relative">
-                    <div className="flex items-center justify-between text-sm font-semibold text-slate-500">
-                      <span>{stat.label}</span>
-                      <span className="text-2xl">{stat.flag}</span>
+          <div className="relative order-1 lg:order-2">
+            <div className="relative overflow-hidden rounded-3xl shadow-[0_28px_60px_rgba(15,23,42,0.12)]">
+              <div className="relative h-[320px] sm:h-[420px] lg:h-[520px]">
+                {slides.map((slide, index) => {
+                  const isActive = index === activeIndex
+                  return (
+                    <div
+                      key={`${slide.image}-${index}`}
+                      className={`absolute inset-0 transition-opacity duration-700 ${
+                        isActive ? "opacity-100" : "opacity-0"
+                      }`}
+                    >
+                      <div
+                        className="absolute inset-0 scale-110 bg-cover bg-center blur-2xl"
+                        style={{ backgroundImage: `url(${slide.image})` }}
+                        aria-hidden="true"
+                      />
+                      <img
+                        src={slide.image}
+                        alt={slide.alt}
+                        className="relative h-full w-full object-contain"
+                      />
                     </div>
-                    <div className="mt-4 text-4xl font-bold text-slate-900">{stat.value}</div>
-                    <div className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-emerald-600">
-                      <MoveUpRight className="h-4 w-4" />
-                      {stat.note}
-                    </div>
-                  </div>
-                </div>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="mt-4 flex items-center gap-3">
+              {slides.map((_, index) => (
+                <span
+                  key={`slide-dot-${index}`}
+                  className={`h-1.5 rounded-full transition-all duration-700 ${
+                    index === activeIndex ? "w-10 bg-slate-900/80" : "w-4 bg-slate-300"
+                  }`}
+                />
               ))}
             </div>
           </div>

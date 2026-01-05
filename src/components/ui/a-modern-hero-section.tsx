@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { CalendarDays, LayoutGrid, Mic } from 'lucide-react';
+import { useLanguage } from '../../unAuth/language/LanguageProvider';
 
 const SCROLL_DURATION_MS = 1350;
 const SCROLL_KEY = 'selmaScrollToLiveBuilder';
@@ -38,6 +39,8 @@ const scrollToElementById = (id: string, duration = SCROLL_DURATION_MS) => {
 };
 
 export default function HeroSection() {
+  const { t } = useLanguage();
+
   const handleScrollToBuilder = () => {
     const didScroll = scrollToElementById('live-builder-demo');
     if (didScroll) return;
@@ -53,15 +56,13 @@ export default function HeroSection() {
         {/* Top section with title and text */}
         <div className="text-center mb-8 sm:mb-12">
           <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-black mb-4 sm:mb-6 tracking-tight">
-            The first clinic system designed to disappear.
+            {t('landing.heroCards.title')}
           </h2>
           <p className="text-lg sm:text-xl text-black/80 mb-6 sm:mb-8 max-w-3xl mx-auto leading-relaxed">
-            You became a therapist to heal people, not to manage software. That&apos;s why we built Selma+. It handles
-            the booking, writes the journals, and balances the books—automatically. So you can stop looking at the
-            screen, and start looking at your patient.
+            {t('landing.heroCards.description')}
           </p>
           <p className="text-sm sm:text-base text-black/70 font-medium tracking-wide mb-8 sm:mb-10">
-            See how we give you your time back:
+            {t('landing.heroCards.subtitle')}
           </p>
           
           {/* Action buttons */}
@@ -70,13 +71,13 @@ export default function HeroSection() {
               to="#demo"
               className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-8 py-3 sm:px-10 sm:py-4 rounded-full text-base sm:text-lg transition-colors duration-200 min-w-[160px] text-center"
             >
-              Læs mere
+              {t('landing.heroCards.ctaPrimary')}
             </Link>
             <Link
               to="/signup"
               className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-8 py-3 sm:px-10 sm:py-4 rounded-full text-base sm:text-lg transition-colors duration-200 min-w-[160px] text-center"
             >
-              Prøv gratis
+              {t('landing.heroCards.ctaSecondary')}
             </Link>
           </div>
         </div>
@@ -88,7 +89,7 @@ export default function HeroSection() {
             <div className="rounded-[28px] bg-white p-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <div className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-                  DIGITAL RECEPTION
+                  {t('landing.heroCards.cards.digitalReception.label')}
                 </div>
                 <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">
                   <CalendarDays className="h-5 w-5" />
@@ -97,26 +98,27 @@ export default function HeroSection() {
               <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="rounded-2xl bg-white p-4 shadow-sm">
                   <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700">
-                    <span>Selma+ Reception</span>
+                    <span>{t('landing.heroCards.cards.digitalReception.widgetTitle')}</span>
                     <span className="h-2 w-2 rounded-full bg-emerald-400" />
                   </div>
                   <div className="mt-3 rounded-xl bg-slate-100 px-3 py-2 text-[12px] text-slate-600">
-                    Welcome to Selma Clinic, how can I help?
+                    {t('landing.heroCards.cards.digitalReception.message')}
                   </div>
                   <div className="mt-4 flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-400">
-                    Type a message...
+                    {t('landing.heroCards.cards.digitalReception.inputPlaceholder')}
                     <span className="ml-auto inline-flex items-center justify-center rounded-full bg-blue-600 px-3 py-1 text-[10px] font-semibold text-white">
-                      Send
+                      {t('landing.heroCards.cards.digitalReception.send')}
                     </span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <h3 className="mt-8 text-2xl font-semibold text-white">Your clinic is always open</h3>
+            <h3 className="mt-8 text-2xl font-semibold text-white">
+              {t('landing.heroCards.cards.digitalReception.title')}
+            </h3>
             <p className="mt-3 text-sm leading-relaxed text-white/90">
-              Get a beautiful website with a built-in AI receptionist. It welcomes new patients and answers questions
-              around the clock—even while you sleep.
+              {t('landing.heroCards.cards.digitalReception.description')}
             </p>
             <Link
               to="/website-builder"
@@ -126,7 +128,7 @@ export default function HeroSection() {
               }}
               className="mt-6 inline-flex items-center justify-center text-sm font-semibold text-white/95 transition hover:text-white"
             >
-              See the solution →
+              {t('landing.heroCards.cards.digitalReception.cta')} →
             </Link>
           </div>
 
@@ -135,7 +137,7 @@ export default function HeroSection() {
             <div className="rounded-[28px] bg-white p-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <div className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-                  INTELLIGENT SYSTEM
+                  {t('landing.heroCards.cards.intelligentSystem.label')}
                 </div>
                 <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">
                   <Mic className="h-5 w-5" />
@@ -146,7 +148,7 @@ export default function HeroSection() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-xl bg-slate-50 p-3">
                       <div className="text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                        Calendar
+                        {t('landing.heroCards.cards.intelligentSystem.calendar')}
                       </div>
                       <div className="mt-3 space-y-2">
                         <div className="h-2 w-full rounded-full bg-blue-200/80" />
@@ -157,9 +159,9 @@ export default function HeroSection() {
                     </div>
                     <div className="rounded-xl bg-slate-50 p-3">
                       <div className="flex items-center justify-between text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                        Journal
+                        {t('landing.heroCards.cards.intelligentSystem.journal')}
                         <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[9px] font-semibold text-white">
-                          AI
+                          {t('common.ai')}
                         </span>
                       </div>
                       <div className="mt-3 space-y-2">
@@ -174,23 +176,24 @@ export default function HeroSection() {
               </div>
             </div>
 
-            <h3 className="mt-8 text-2xl font-semibold text-white">More time for care</h3>
+            <h3 className="mt-8 text-2xl font-semibold text-white">
+              {t('landing.heroCards.cards.intelligentSystem.title')}
+            </h3>
             <p className="mt-3 text-sm leading-relaxed text-white/90">
-              Stop clicking around. In Selma+, your calendar and journal are merged, and the AI assistant helps you
-              write notes lightning fast.
+              {t('landing.heroCards.cards.intelligentSystem.description')}
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link
                 to="/features"
                 className="inline-flex items-center justify-center rounded-full border border-white/80 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-[#4f6fc1]"
               >
-                Explore the system →
+                {t('landing.heroCards.cards.intelligentSystem.ctaPrimary')} →
               </Link>
               <Link
                 to="/selma-copilot"
                 className="inline-flex items-center justify-center rounded-full border border-white/80 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-[#4f6fc1]"
               >
-                Meet Ally →
+                {t('landing.heroCards.cards.intelligentSystem.ctaSecondary')} →
               </Link>
             </div>
           </div>
@@ -200,7 +203,7 @@ export default function HeroSection() {
             <div className="rounded-[28px] bg-white p-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <div className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-                  OVERVIEW
+                  {t('landing.heroCards.cards.overview.label')}
                 </div>
                 <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">
                   <LayoutGrid className="h-5 w-5" />
@@ -210,14 +213,14 @@ export default function HeroSection() {
                 <div className="rounded-2xl bg-white p-4 shadow-sm">
                   <div className="rounded-2xl border border-emerald-100 bg-white p-4">
                     <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
-                      <span>Revenue</span>
+                      <span>{t('landing.heroCards.cards.overview.metricLabel')}</span>
                       <span className="text-emerald-600">+12%</span>
                     </div>
                     <div className="mt-3 h-12 rounded-xl bg-emerald-50 p-2">
                       <div className="h-full w-full rounded-lg bg-gradient-to-r from-emerald-200 via-emerald-100 to-white" />
                     </div>
                     <div className="mt-4 flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">
-                      Status: All reconciled
+                      {t('landing.heroCards.cards.overview.status')}
                       <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-semibold text-white">
                         ✓
                       </span>
@@ -227,16 +230,17 @@ export default function HeroSection() {
               </div>
             </div>
 
-            <h3 className="mt-8 text-2xl font-semibold text-white">Peace of mind about the numbers</h3>
+            <h3 className="mt-8 text-2xl font-semibold text-white">
+              {t('landing.heroCards.cards.overview.title')}
+            </h3>
             <p className="mt-3 text-sm leading-relaxed text-white/90">
-              Skip the manual hassle. Invoicing, reporting to &quot;danmark&quot;, and accounting happen automatically
-              in the background.
+              {t('landing.heroCards.cards.overview.description')}
             </p>
             <Link
               to="/features/operations"
               className="mt-6 inline-flex text-sm font-semibold text-white/90 transition hover:text-white"
             >
-              See features →
+              {t('landing.heroCards.cards.overview.cta')} →
             </Link>
           </div>
         </div>

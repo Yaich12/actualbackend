@@ -21,11 +21,13 @@ import {
   peekPostAuthRedirectTarget,
   setPostAuthRedirectTarget,
 } from "../utils/postAuthRedirect";
+import { useLanguage } from "../unAuth/language/LanguageProvider";
 import "./SignUp.css";
 
 const EMAIL_STORAGE_KEY = "selmaEmailForSignIn";
 
 function SignUp() {
+  const { t } = useLanguage();
   const [status, setStatus] = useState(null);
   const [sending] = useState(false);
   const [processingLink, setProcessingLink] = useState(false);
@@ -107,7 +109,7 @@ function SignUp() {
         await persistUserProfile(redirectResult.user);
         setStatus({
           type: "success",
-          message: "Du er nu logget ind. Klargør din konto…",
+          message: t("login.status.loggedIn"),
         });
         await redirectAfterAuth(redirectResult.user);
       } catch (error) {
@@ -123,7 +125,7 @@ function SignUp() {
         console.error("[SignUp] Google redirect sign-in failed:", error);
         setStatus({
           type: "error",
-          message: error.message ?? "Google sign-in failed.",
+          message: t("login.errors.google"),
         });
       } finally {
         if (isMounted) {
@@ -154,13 +156,13 @@ function SignUp() {
 
       let storedEmail = window.localStorage.getItem(EMAIL_STORAGE_KEY);
       if (!storedEmail) {
-        storedEmail = window.prompt("Please confirm your email for sign in");
+        storedEmail = window.prompt(t("login.prompt.confirmEmail"));
       }
 
       if (!storedEmail) {
         setStatus({
           type: "error",
-          message: "Email confirmation is required to finish signing in.",
+          message: t("login.errors.emailConfirmationRequired"),
         });
         setProcessingLink(false);
         return;
@@ -173,14 +175,14 @@ function SignUp() {
         window.localStorage.removeItem(EMAIL_STORAGE_KEY);
         setStatus({
           type: "success",
-          message: "Du er nu logget ind. Klargør din konto…",
+          message: t("login.status.loggedIn"),
         });
         await redirectAfterAuth(credential?.user);
       } catch (error) {
         console.error("[SignUp] email link sign-in failed:", error);
         setStatus({
           type: "error",
-          message: error.message ?? "Unable to finish sign in.",
+          message: t("login.errors.emailLinkFailed"),
         });
       } finally {
         setProcessingLink(false);
@@ -212,7 +214,7 @@ function SignUp() {
       console.error("[SignUp] Google sign-in failed:", error);
       setStatus({
         type: "error",
-        message: error.message ?? "Google sign-in failed.",
+        message: t("login.errors.google"),
       });
     }
   };
@@ -224,7 +226,7 @@ function SignUp() {
     setPostAuthRedirectTarget("/welcome");
     setStatus({
       type: "success",
-      message: "Logger ind…",
+      message: t("login.status.signingIn"),
     });
     setProcessingLink(true);
     const formData = new FormData(event.currentTarget);
@@ -233,7 +235,7 @@ function SignUp() {
     setLastEmail(emailInput);
     try {
       if (!emailInput || !passwordInput) {
-        setStatusMessage("Indtast både email og kodeord.");
+        setStatusMessage(t("login.errors.emailPasswordRequired"));
         return;
       }
 
@@ -248,22 +250,22 @@ function SignUp() {
     } catch (error) {
       console.error("[SignUp] email/password sign-in failed:", error);
       if (error?.code === "auth/wrong-password" || error?.code === "auth/invalid-credential") {
-        setStatusMessage("Forkert kodeord. Prøv igen.");
+        setStatusMessage(t("login.errors.wrongPassword"));
         return;
       }
       if (error?.code === "auth/weak-password") {
-        setStatusMessage("Kodeordet er for svagt. Brug mindst 6 tegn.");
+        setStatusMessage(t("login.errors.weakPassword"));
         return;
       }
       if (error?.code === "auth/invalid-email") {
-        setStatusMessage("Ugyldig email. Tjek stavning og prøv igen.");
+        setStatusMessage(t("login.errors.invalidEmail"));
         return;
       }
       if (error?.code === "auth/email-already-in-use") {
-        setStatusMessage("Emailen findes allerede. Prøv at logge ind med dit kodeord.");
+        setStatusMessage(t("login.errors.emailInUse"));
         return;
       }
-      setStatusMessage(error.message || "Kunne ikke logge ind eller oprette bruger.");
+      setStatusMessage(t("login.errors.authFailed"));
     } finally {
       setProcessingLink(false);
       setStatus(null);
@@ -276,7 +278,7 @@ function SignUp() {
     setPostAuthRedirectTarget("/welcome");
     setStatus({
       type: "success",
-      message: "Logger ind…",
+      message: t("login.status.signingIn"),
     });
     setProcessingLink(true);
 
@@ -287,7 +289,7 @@ function SignUp() {
 
     try {
       if (!emailInput || !passwordInput) {
-        setStatusMessage("Indtast email og kodeord først.");
+        setStatusMessage(t("login.errors.emailPasswordFirst"));
         return;
       }
 
@@ -297,18 +299,18 @@ function SignUp() {
     } catch (error) {
       console.error("[SignUp] login-only failed:", error);
       if (error?.code === "auth/user-not-found") {
-        setStatusMessage("Email findes ikke. Tryk på 'Opret konto' for at oprette en bruger.");
+        setStatusMessage(t("login.errors.userNotFound"));
         return;
       }
       if (error?.code === "auth/wrong-password" || error?.code === "auth/invalid-credential") {
-        setStatusMessage("Forkert kodeord. Prøv igen.");
+        setStatusMessage(t("login.errors.wrongPassword"));
         return;
       }
       if (error?.code === "auth/invalid-email") {
-        setStatusMessage("Ugyldig email. Tjek stavning og prøv igen.");
+        setStatusMessage(t("login.errors.invalidEmail"));
         return;
       }
-      setStatusMessage(error.message || "Kunne ikke logge ind.");
+      setStatusMessage(t("login.errors.loginFailed"));
     } finally {
       setProcessingLink(false);
       setStatus(null);
@@ -325,7 +327,7 @@ function SignUp() {
     const formPassword = (document.querySelector('input[name="password"]')?.value || "").toString();
 
     if (!emailInput || !formPassword) {
-      setStatusMessage("Indtast email og kodeord først.");
+      setStatusMessage(t("login.errors.emailPasswordFirst"));
       return;
     }
     try {
@@ -340,18 +342,18 @@ function SignUp() {
     } catch (error) {
       console.error("[SignUp] create account failed:", error);
       if (error?.code === "auth/wrong-password" || error?.code === "auth/invalid-credential") {
-        setStatusMessage("Forkert kodeord. Prøv igen.");
+        setStatusMessage(t("login.errors.wrongPassword"));
         return;
       }
       if (error?.code === "auth/weak-password") {
-        setStatusMessage("Kodeordet er for svagt. Brug mindst 6 tegn.");
+        setStatusMessage(t("login.errors.weakPassword"));
         return;
       }
       if (error?.code === "auth/invalid-email") {
-        setStatusMessage("Ugyldig email. Tjek stavning og prøv igen.");
+        setStatusMessage(t("login.errors.invalidEmail"));
         return;
       }
-      setStatusMessage(error.message || "Kunne ikke oprette eller logge ind.");
+      setStatusMessage(t("login.errors.signupFailed"));
     }
   };
 
@@ -359,15 +361,15 @@ function SignUp() {
     if (!auth) return;
     const emailInput = lastEmail || document.querySelector('input[name="email"]')?.value || "";
     if (!emailInput) {
-      setStatusMessage("Enter your email first, then choose Reset password.");
+      setStatusMessage(t("login.errors.resetMissingEmail"));
       return;
     }
     try {
       await sendPasswordResetEmail(auth, emailInput);
-      setStatusMessage("Password reset email sent. Check your inbox.");
+      setStatusMessage(t("login.status.resetSent"));
     } catch (error) {
       console.error("[SignUp] reset password failed:", error);
-      setStatusMessage(error.message || "Could not send reset email.");
+      setStatusMessage(t("login.errors.resetFailed"));
     }
   };
 
@@ -375,7 +377,7 @@ function SignUp() {
     <div className="signup-page">
       <section className="signup-auth-wrapper" aria-busy={sending || processingLink}>
         <div className="signup-logo-chip">
-          <Link to="/" aria-label="Tilbage til forsiden">
+          <Link to="/" aria-label={t("login.aria.backHome")}>
             <Gem className="h-4 w-4 text-white" />
           </Link>
         </div>
@@ -387,8 +389,8 @@ function SignUp() {
           onResetPassword={handleResetPassword}
           onLoginLink={handleEmailPasswordLoginOnly}
           onSignUp={handleCreateAccount}
-          title={<span className="font-light">Velkommen tilbage</span>}
-          description="Log ind med email og kode eller fortsæt med Google. Du kan stadig bruge din magiske link-login hvis du har en aktiv email link."
+          title={<span className="font-light">{t("login.title")}</span>}
+          description={t("login.description")}
         />
         {status && (
           <p className={`signup-status ${status.type}`} style={{ maxWidth: '480px', margin: '1rem auto' }}>

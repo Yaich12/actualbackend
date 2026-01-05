@@ -112,7 +112,11 @@
   color: #ffffff !important;
   border-radius: 999px !important;
   font-weight: 600 !important;
-  padding: 0.65rem 1.6rem !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0.25rem 0.625rem !important;
+  font-size: 0.875rem !important;
+  line-height: 1.25 !important;
   border: 1px solid rgba(255, 255, 255, 0.3) !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
 }
@@ -134,6 +138,31 @@
 .navbar-cta-outline:hover {
   background: rgba(255, 255, 255, 0.12) !important;
   transform: translateY(-1px);
+}
+
+.navbar-language-select-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.navbar-language-select {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+
+.navbar-language-select:focus {
+  outline: none;
+}
+
+.navbar-language-select-icon {
+  font-size: 0.75rem;
+  opacity: 0.85;
 }
 
 @media (max-width: 768px) {

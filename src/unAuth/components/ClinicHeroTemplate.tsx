@@ -1,6 +1,7 @@
 import React from "react";
 import { Calendar, ArrowRight, Phone } from "lucide-react";
 import { Button } from "../../components/ui/button";
+import { useLanguage } from "../language/LanguageProvider";
 
 interface HeroStat {
   value: string;
@@ -56,26 +57,31 @@ const ImageWithFallback = ({
 };
 
 const ClinicHeroTemplate: React.FC<ClinicHeroProps> = ({
-  headline = "Advanced Healthcare for Your Whole Family",
-  supportingText = "Experience compassionate, personalized care with a clinic that puts your needs first.",
-  primaryButtonText = "Book Appointment",
-  secondaryButtonText = "Call Us Now",
+  headline,
+  supportingText,
+  primaryButtonText,
+  secondaryButtonText,
   imageUrl = "/hero-2/pexels-cottonbro-7581072.jpg",
   secondaryImageUrl = "/hero-2/pexels-yankrukov-5793991.jpg",
-  imageAlt = "Modern clinic facility",
-  secondaryImageAlt = "Clinic treatment",
-  badgeText = "Now accepting new patients",
+  imageAlt,
+  secondaryImageAlt,
+  badgeText,
   primaryHref,
   secondaryHref,
   onPrimaryClick,
   onSecondaryClick,
-  stats = [
-    { value: "15+", label: "Years experience" },
-    { value: "2k+", label: "Happy patients" },
-    { value: "4.9★", label: "Patient rating" },
-  ],
+  stats,
   className = "",
 }) => {
+  const { t, getArray } = useLanguage();
+  const resolvedHeadline = headline || t("features.websiteBuilder.preview.hero.headline");
+  const resolvedSupportingText = supportingText || t("features.websiteBuilder.preview.hero.supportingText");
+  const resolvedPrimaryText = primaryButtonText || t("features.websiteBuilder.preview.hero.ctaPrimary");
+  const resolvedSecondaryText = secondaryButtonText || t("features.websiteBuilder.preview.hero.ctaSecondary");
+  const resolvedImageAlt = imageAlt || t("features.websiteBuilder.preview.hero.imageAlt");
+  const resolvedSecondaryImageAlt = secondaryImageAlt || t("features.websiteBuilder.preview.hero.secondaryImageAlt");
+  const resolvedBadgeText = badgeText || t("features.websiteBuilder.preview.hero.badge");
+  const resolvedStats = stats?.length ? stats : getArray("features.websiteBuilder.preview.heroStats", []);
   return (
     <section className={`relative w-full overflow-hidden bg-background ${className}`}>
       <div className="absolute inset-0 -z-10">
@@ -93,16 +99,16 @@ const ClinicHeroTemplate: React.FC<ClinicHeroProps> = ({
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75"></span>
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500"></span>
                 </span>
-                {badgeText}
+                {resolvedBadgeText}
               </span>
             </div>
 
             <h1 className="text-5xl font-bold leading-tight tracking-tight text-foreground md:text-6xl lg:text-7xl">
-              {headline}
+              {resolvedHeadline}
             </h1>
 
             <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground md:text-xl">
-              {supportingText}
+              {resolvedSupportingText}
             </p>
 
             <div className="flex flex-col gap-4 pt-4 sm:flex-row">
@@ -114,7 +120,7 @@ const ClinicHeroTemplate: React.FC<ClinicHeroProps> = ({
                 >
                   <a href={primaryHref}>
                     <Calendar className="mr-2 h-5 w-5" />
-                    {primaryButtonText}
+                    {resolvedPrimaryText}
                     <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
                   </a>
                 </Button>
@@ -125,7 +131,7 @@ const ClinicHeroTemplate: React.FC<ClinicHeroProps> = ({
                   onClick={onPrimaryClick}
                 >
                   <Calendar className="mr-2 h-5 w-5" />
-                  {primaryButtonText}
+                  {resolvedPrimaryText}
                   <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
                 </Button>
               )}
@@ -139,7 +145,7 @@ const ClinicHeroTemplate: React.FC<ClinicHeroProps> = ({
                 >
                   <a href={secondaryHref}>
                     <Phone className="mr-2 h-5 w-5" />
-                    {secondaryButtonText}
+                    {resolvedSecondaryText}
                   </a>
                 </Button>
               ) : (
@@ -150,13 +156,13 @@ const ClinicHeroTemplate: React.FC<ClinicHeroProps> = ({
                   onClick={onSecondaryClick}
                 >
                   <Phone className="mr-2 h-5 w-5" />
-                  {secondaryButtonText}
+                  {resolvedSecondaryText}
                 </Button>
               )}
             </div>
 
             <div className="flex flex-wrap items-center gap-8 border-t border-border pt-8">
-              {stats.map((stat, idx) => (
+              {resolvedStats.map((stat, idx) => (
                 <div key={`${stat.value}-${idx}`} className="flex flex-col">
                   <span className="text-3xl font-bold text-foreground">{stat.value}</span>
                   <span className="text-sm text-muted-foreground">{stat.label}</span>
@@ -179,7 +185,7 @@ const ClinicHeroTemplate: React.FC<ClinicHeroProps> = ({
                 <ImageWithFallback
                   src={imageUrl}
                   fallbackSrc="/hero-2/pexels-cottonbro-7581072.jpg"
-                  alt={imageAlt}
+                  alt={resolvedImageAlt}
                   className="h-full w-full object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-blue-600/30 to-transparent"></div>
@@ -189,7 +195,7 @@ const ClinicHeroTemplate: React.FC<ClinicHeroProps> = ({
                 <ImageWithFallback
                   src={secondaryImageUrl}
                   fallbackSrc="/hero-2/pexels-yankrukov-5793991.jpg"
-                  alt={secondaryImageAlt}
+                  alt={resolvedSecondaryImageAlt}
                   className="h-full w-full object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-600/30 to-transparent"></div>
@@ -201,8 +207,12 @@ const ClinicHeroTemplate: React.FC<ClinicHeroProps> = ({
                     <Calendar className="h-8 w-8 text-white" />
                   </div>
                   <div>
-                    <div className="text-3xl font-bold text-foreground">24/7</div>
-                    <div className="text-sm text-muted-foreground">Available</div>
+                    <div className="text-3xl font-bold text-foreground">
+                      {t("common.availabilityValue")}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {t("features.websiteBuilder.preview.hero.availabilityLabel")}
+                    </div>
                   </div>
                 </div>
               </div>

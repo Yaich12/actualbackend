@@ -5,7 +5,8 @@ import { useRef, useState, type ReactNode } from 'react'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { Sparkles, X } from 'lucide-react'
 
-import { Stats } from 'components/ui/stats-section-with-text'
+import Preview from '../../unAuth/components/preview'
+import { useLanguage } from '../../unAuth/language/LanguageProvider'
 
 const IMG_PADDING = 12
 
@@ -26,22 +27,24 @@ type OverlayCopyProps = {
 }
 
 export const TextParallaxContentExample = () => {
+  const { t } = useLanguage()
+
   return (
     <div className="bg-white">
       <TextParallaxContent
         imgUrl="/hero-2/pexels-yankrukov-5793904.jpg"
-        subheading="Collaborate"
-        heading="Built for all of us."
+        subheading={t('landing.parallax.sections.collaborate.subheading')}
+        heading={t('landing.parallax.sections.collaborate.heading')}
       />
 
-      <div className="bg-white">
-        <Stats />
+      <div className="landing-section landing-section-full" id="preview">
+        <Preview />
       </div>
 
       <TextParallaxContent
         imgUrl="/hero-2/pexels-shkrabaanthony-5217852.jpg"
-        subheading="Quality"
-        heading="Never compromise."
+        subheading={t('landing.parallax.sections.quality.subheading')}
+        heading={t('landing.parallax.sections.quality.heading')}
       />
     </div>
   )
@@ -126,4 +129,3 @@ const OverlayCopy = ({ subheading, heading }: OverlayCopyProps) => {
     </motion.div>
   )
 }
-

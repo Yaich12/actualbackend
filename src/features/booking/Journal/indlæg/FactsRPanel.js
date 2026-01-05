@@ -1,20 +1,79 @@
 import React, { useMemo, useState } from 'react';
 
-const statusLabel = (status) => {
-  switch (status) {
-    case 'connecting':
-      return 'Forbinder…';
-    case 'streaming':
-      return 'Live';
-    case 'finalizing':
-      return 'Afslutter…';
-    case 'ended':
-      return 'Afsluttet';
-    case 'error':
-      return 'Fejl';
-    default:
-      return 'Klar';
-  }
+const DEFAULT_LABELS = {
+  title: 'FactsR™',
+  poweredBy: 'Drevet af Corti',
+  groupFallback: 'Andet',
+  status: {
+    connecting: 'Forbinder…',
+    streaming: 'Live',
+    finalizing: 'Afslutter…',
+    ended: 'Afsluttet',
+    error: 'Fejl',
+    idle: 'Klar',
+  },
+  record: {
+    start: 'Optag',
+    stop: 'Stop optagelse',
+  },
+  interactionLabel: 'Interaktion:',
+  latestLabel: 'Seneste',
+  insertBarLabel: 'Indsæt i journal',
+  insertBarTitle: 'Indsæt i journal:',
+  insertTargets: {
+    auto: 'Auto',
+    anamnesis: 'Anamnese',
+    conclusion_focus: 'Fokusområder',
+    conclusion_content: 'Sessionens indhold',
+    conclusion_tasks: 'Opgaver',
+    conclusion_reflection: 'Refleksion',
+    combined: 'Samlet',
+  },
+  insertSelected: 'Indsæt i journal',
+  insertSelectedTitle: 'Indsæt de markerede fakta',
+  insertAll: 'Indsæt alle',
+  insertAllTitle: 'Indsæt alle fakta i valgt felt',
+  tabs: {
+    facts: 'Fakta',
+    transcript: 'Transkript',
+  },
+  actions: {
+    flush: 'Opdater',
+    clear: 'Ryd',
+  },
+  item: {
+    select: 'Marker',
+    recommended: 'Anbefalet',
+    insert: 'Indsæt',
+    insertTitle: 'Indsæt denne sætning i valgt felt',
+  },
+  empty: {
+    facts:
+      'Ingen fakta endnu. Typisk kommer de første fakta efter ~60 sek. Brug dem som forslag og gennemgå altid klinisk.',
+    transcript: 'Ingen transkript endnu.',
+  },
+  meta: {
+    source: 'kilde',
+    discarded: 'kasseret',
+  },
+};
+
+const mergeLabels = (overrides = {}) => ({
+  ...DEFAULT_LABELS,
+  ...overrides,
+  status: { ...DEFAULT_LABELS.status, ...(overrides.status || {}) },
+  record: { ...DEFAULT_LABELS.record, ...(overrides.record || {}) },
+  insertTargets: { ...DEFAULT_LABELS.insertTargets, ...(overrides.insertTargets || {}) },
+  tabs: { ...DEFAULT_LABELS.tabs, ...(overrides.tabs || {}) },
+  actions: { ...DEFAULT_LABELS.actions, ...(overrides.actions || {}) },
+  item: { ...DEFAULT_LABELS.item, ...(overrides.item || {}) },
+  empty: { ...DEFAULT_LABELS.empty, ...(overrides.empty || {}) },
+  meta: { ...DEFAULT_LABELS.meta, ...(overrides.meta || {}) },
+});
+
+const statusLabel = (status, labels) => {
+  if (!status) return labels.status.idle;
+  return labels.status[status] || labels.status.idle;
 };
 
 export default function FactsRPanel({
@@ -34,19 +93,21 @@ export default function FactsRPanel({
   onInsertOne,
   onFlush,
   onClear,
+  labels,
 }) {
+  const copy = mergeLabels(labels);
   const [tab, setTab] = useState('facts'); // facts | transcript
   const [selectedIds, setSelectedIds] = useState(() => new Set());
 
   const factGroups = useMemo(() => {
     const grouped = new Map();
     (facts || []).forEach((f) => {
-      const k = f.group || 'andet';
+      const k = f.group || copy.groupFallback || '';
       if (!grouped.has(k)) grouped.set(k, []);
       grouped.get(k).push(f);
     });
     return Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [facts]);
+  }, [facts, copy.groupFallback]);
 
   const selectedCount = useMemo(() => selectedIds.size, [selectedIds]);
 
@@ -83,40 +144,44 @@ export default function FactsRPanel({
       <div className="factsR-header">
         <div className="factsR-titleRow">
           <div className="factsR-title">
-            FactsR™ <span className="factsR-powered">Powered by Corti</span>
+            {copy.title} <span className="factsR-powered">{copy.poweredBy}</span>
           </div>
           <div className="factsR-right">
-            <span className={`factsR-pill factsR-pill--${status || 'idle'}`}>{statusLabel(status)}</span>
+            <span className={`factsR-pill factsR-pill--${status || 'idle'}`}>{statusLabel(status, copy)}</span>
             <button
               type="button"
               className={`factsR-recordBtn ${isRecording ? 'active' : ''}`}
               onClick={onToggleRecording}
             >
               <span className="factsR-recordDot" aria-hidden="true" />
-              {isRecording ? 'Stop optagelse' : 'Optag'}
+              {isRecording ? copy.record.stop : copy.record.start}
             </button>
           </div>
         </div>
         <div className="factsR-meta">
-          <span className="factsR-metaLabel">Interaction:</span>{' '}
+          <span className="factsR-metaLabel">{copy.interactionLabel}</span>{' '}
           <span className="factsR-mono">{interactionId || '—'}</span>
         </div>
-        {latestTranscript ? <div className="factsR-peek">Seneste: “{latestTranscript}”</div> : null}
+        {latestTranscript ? (
+          <div className="factsR-peek">
+            {copy.latestLabel}: “{latestTranscript}”
+          </div>
+        ) : null}
         {recordingStatus ? <div className="factsR-recordingStatus">{recordingStatus}</div> : null}
         {error ? <div className="factsR-error">{error}</div> : null}
       </div>
 
-      <div className="factsR-insertBar" aria-label="Indsæt i journal">
-        <div className="factsR-insertTitle">Indsæt i journal:</div>
+      <div className="factsR-insertBar" aria-label={copy.insertBarLabel}>
+        <div className="factsR-insertTitle">{copy.insertBarTitle}</div>
         <div className="factsR-targets">
           {[
-            ['auto', 'Auto'],
-            ['anamnesis', 'Anamnese'],
-            ['conclusion_focus', 'Fokusområder'],
-            ['conclusion_content', 'Sessionens indhold'],
-            ['conclusion_tasks', 'Opgaver'],
-            ['conclusion_reflection', 'Refleksion'],
-            ['combined', 'Samlet'],
+            ['auto', copy.insertTargets.auto],
+            ['anamnesis', copy.insertTargets.anamnesis],
+            ['conclusion_focus', copy.insertTargets.conclusion_focus],
+            ['conclusion_content', copy.insertTargets.conclusion_content],
+            ['conclusion_tasks', copy.insertTargets.conclusion_tasks],
+            ['conclusion_reflection', copy.insertTargets.conclusion_reflection],
+            ['combined', copy.insertTargets.combined],
           ].map(([key, label]) => (
             <button
               key={key}
@@ -134,18 +199,18 @@ export default function FactsRPanel({
             className="factsR-insertPrimary"
             onClick={handleInsertSelected}
             disabled={!selectedCount}
-            title="Indsæt de markerede facts"
+            title={copy.insertSelectedTitle}
           >
-            Indsæt i journal{selectedCount ? ` (${selectedCount})` : ''}
+            {copy.insertSelected}{selectedCount ? ` (${selectedCount})` : ''}
           </button>
           <button
             type="button"
             className="factsR-insertSecondary"
             onClick={() => onInsertAll?.((facts || []).filter((f) => !f.isDiscarded).map((f) => f.text).filter(Boolean))}
             disabled={!(facts?.length)}
-            title="Indsæt alle facts i valgt felt"
+            title={copy.insertAllTitle}
           >
-            Indsæt alle
+            {copy.insertAll}
           </button>
         </div>
       </div>
@@ -156,21 +221,26 @@ export default function FactsRPanel({
           className={`factsR-tab ${tab === 'facts' ? 'active' : ''}`}
           onClick={() => setTab('facts')}
         >
-          Fakta <span className="factsR-count">{facts?.length || 0}</span>
+          {copy.tabs.facts} <span className="factsR-count">{facts?.length || 0}</span>
         </button>
         <button
           type="button"
           className={`factsR-tab ${tab === 'transcript' ? 'active' : ''}`}
           onClick={() => setTab('transcript')}
         >
-          Transkript <span className="factsR-count">{transcripts?.length || 0}</span>
+          {copy.tabs.transcript} <span className="factsR-count">{transcripts?.length || 0}</span>
         </button>
         <div className="factsR-spacer" />
-        <button type="button" className="factsR-ghostBtn" onClick={onFlush} disabled={status !== 'streaming'}>
-          Flush
+        <button
+          type="button"
+          className="factsR-ghostBtn"
+          onClick={onFlush}
+          disabled={status !== 'streaming'}
+        >
+          {copy.actions.flush}
         </button>
         <button type="button" className="factsR-ghostBtn" onClick={onClear}>
-          Ryd
+          {copy.actions.clear}
         </button>
       </div>
 
@@ -191,7 +261,7 @@ export default function FactsRPanel({
                         onInsertOne?.(f?.text, suggestion?.key);
                       }}
                       disabled={!f?.text || f.isDiscarded}
-                      title="Klik for at indsætte i det anbefalede felt"
+                      title={copy.item.insertTitle}
                     >
                       <div className="factsR-itemTop">
                         <label className="factsR-check">
@@ -201,11 +271,11 @@ export default function FactsRPanel({
                             onChange={() => f?.id && toggleSelected(f.id)}
                             disabled={!f?.id || f.isDiscarded}
                           />
-                          <span>Marker</span>
+                          <span>{copy.item.select}</span>
                         </label>
                         <span className="factsR-suggest">
                           {typeof suggestionForFact === 'function'
-                            ? `Anbefalet: ${suggestionForFact(f)?.label || 'Anamnese'}`
+                            ? `${copy.item.recommended}: ${suggestionForFact(f)?.label || copy.insertTargets.anamnesis}`
                             : ''}
                         </span>
                         <button
@@ -218,24 +288,22 @@ export default function FactsRPanel({
                             onInsertOne?.(f?.text, suggestion?.key);
                           }}
                           disabled={!f?.text || f.isDiscarded}
-                          title="Indsæt dette statement i valgt felt"
+                          title={copy.item.insertTitle}
                         >
-                          Indsæt
+                          {copy.item.insert}
                         </button>
                       </div>
                       <div className="factsR-itemText">{f.text}</div>
                       <div className="factsR-itemMeta">
-                        {f.source ? <span>source: {f.source}</span> : null}
-                        {f.isDiscarded ? <span>discarded</span> : null}
+                        {f.source ? <span>{copy.meta.source}: {f.source}</span> : null}
+                        {f.isDiscarded ? <span>{copy.meta.discarded}</span> : null}
                       </div>
                     </button>
                   ))}
                 </div>
               ))
             ) : (
-              <div className="factsR-empty">
-                Ingen fakta endnu. Typisk kommer første “facts” efter ~60 sek. Brug dem som forslag og gennemgå altid klinisk.
-              </div>
+              <div className="factsR-empty">{copy.empty.facts}</div>
             )}
           </div>
         ) : (
@@ -248,7 +316,7 @@ export default function FactsRPanel({
                 </div>
               ))
             ) : (
-              <div className="factsR-empty">Ingen transkript endnu.</div>
+              <div className="factsR-empty">{copy.empty.transcript}</div>
             )}
           </div>
         )}
@@ -256,5 +324,3 @@ export default function FactsRPanel({
     </div>
   );
 }
-
-

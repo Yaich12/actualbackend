@@ -10,6 +10,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useLanguage } from '../language/LanguageProvider';
 
 type Category = {
   id: string;
@@ -38,102 +39,23 @@ type Slot = {
   practitionerId: string;
 };
 
-const categories: Category[] = [
-  {
-    id: 'physio',
-    title: 'Fysioterapi',
-    description: 'Smerter, bevægelighed og genoptræning.',
-    icon: Activity,
-  },
-  {
-    id: 'chiro',
-    title: 'Kiropraktik',
-    description: 'Ryg, nakke og holdningsjusteringer.',
-    icon: Stethoscope,
-  },
-  {
-    id: 'osteopathy',
-    title: 'Osteopati',
-    description: 'Helhedsorienteret behandling.',
-    icon: HandHeart,
-  },
-  {
-    id: 'sports',
-    title: 'Sportsbehandling',
-    description: 'Skader og performance.',
-    icon: HeartPulse,
-  },
-  {
-    id: 'mind',
-    title: 'Psykologisk støtte',
-    description: 'Stress, angst og mental ro.',
-    icon: Brain,
-  },
-  {
-    id: 'recovery',
-    title: 'Recovery',
-    description: 'Pleje og restitution.',
-    icon: Sparkles,
-  },
-];
-
-const servicesByCategory: Record<string, Service[]> = {
-  physio: [
-    { id: 'physio-1', name: 'Førstegangskonsultation', duration: 45, price: 520 },
-    { id: 'physio-2', name: 'Opfølgende behandling', duration: 30, price: 360 },
-    { id: 'physio-3', name: 'Udvidet behandling', duration: 60, price: 690 },
-  ],
-  chiro: [
-    { id: 'chiro-1', name: 'Ryganalyse', duration: 40, price: 580 },
-    { id: 'chiro-2', name: 'Justering', duration: 25, price: 420 },
-    { id: 'chiro-3', name: 'Kombi-session', duration: 55, price: 720 },
-  ],
-  osteopathy: [
-    { id: 'osteo-1', name: 'Helkropsbehandling', duration: 50, price: 610 },
-    { id: 'osteo-2', name: 'Fascia & mobilitet', duration: 35, price: 440 },
-    { id: 'osteo-3', name: 'Dybdeterapi', duration: 60, price: 740 },
-  ],
-  sports: [
-    { id: 'sport-1', name: 'Skadescreening', duration: 30, price: 390 },
-    { id: 'sport-2', name: 'Performance check', duration: 50, price: 610 },
-    { id: 'sport-3', name: 'Return to play', duration: 60, price: 760 },
-  ],
-  mind: [
-    { id: 'mind-1', name: 'Samtaleforløb', duration: 50, price: 720 },
-    { id: 'mind-2', name: 'Akut stress-session', duration: 30, price: 520 },
-    { id: 'mind-3', name: 'Forløbsplan', duration: 60, price: 840 },
-  ],
-  recovery: [
-    { id: 'recovery-1', name: 'Kropsscanning', duration: 35, price: 360 },
-    { id: 'recovery-2', name: 'Genopladning', duration: 45, price: 520 },
-    { id: 'recovery-3', name: 'Restitution plus', duration: 60, price: 690 },
-  ],
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  physio: Activity,
+  chiro: Stethoscope,
+  osteopathy: HandHeart,
+  sports: HeartPulse,
+  mind: Brain,
+  recovery: Sparkles,
 };
-
-const practitioners: Practitioner[] = [
-  {
-    id: 'practitioner-1',
-    name: 'Anna Madsen',
-    title: 'Senior behandler',
-    avatar: '/hero-2/physio-hero-01.jpg',
-  },
-  {
-    id: 'practitioner-2',
-    name: 'Jonas Kragh',
-    title: 'Fysioterapeut',
-    avatar: '/hero-2/physio-hero-02.jpg',
-  },
-  {
-    id: 'practitioner-3',
-    name: 'Maria Lyng',
-    title: 'Osteopat',
-    avatar: '/hero-2/physio-hero-03.jpg',
-  },
-];
 
 const baseTimes = ['08:30', '09:15', '10:00', '11:30', '13:00', '14:15', '15:00', '16:30'];
 
 const BookingFlow: React.FC = () => {
+  const { t, getArray, language } = useLanguage();
+  const locale = language === 'en' ? 'en-US' : 'da-DK';
+  const minutesLabel = t('common.units.minutes');
+  const currencyLabel = t('common.units.currency');
+  const placeholder = t('common.placeholder');
   const [step, setStep] = useState(1);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [serviceId, setServiceId] = useState<string | null>(null);
@@ -145,6 +67,34 @@ const BookingFlow: React.FC = () => {
   const [contactAddress, setContactAddress] = useState('');
   const [contactPhone, setContactPhone] = useState('');
 
+  const categories: Category[] = useMemo(() => {
+    const items = getArray('features.websiteBuilder.bookingFlow.categories', []);
+    return items.map((item) => ({
+      ...item,
+      icon: CATEGORY_ICONS[item.id] || Sparkles,
+    }));
+  }, [getArray]);
+
+  const servicesByCategory: Record<string, Service[]> = useMemo(
+    () => ({
+      physio: getArray('features.websiteBuilder.bookingFlow.services.physio', []),
+      chiro: getArray('features.websiteBuilder.bookingFlow.services.chiro', []),
+      osteopathy: getArray('features.websiteBuilder.bookingFlow.services.osteopathy', []),
+      sports: getArray('features.websiteBuilder.bookingFlow.services.sports', []),
+      mind: getArray('features.websiteBuilder.bookingFlow.services.mind', []),
+      recovery: getArray('features.websiteBuilder.bookingFlow.services.recovery', []),
+    }),
+    [getArray]
+  );
+
+  const practitioners: Practitioner[] = useMemo(
+    () => getArray('features.websiteBuilder.bookingFlow.practitioners', []),
+    [getArray]
+  );
+
+  const stepLabels = getArray('features.websiteBuilder.bookingFlow.steps', []);
+  const weekdayLabels = getArray('features.websiteBuilder.bookingFlow.weekdays', []);
+
   const dates = useMemo(() => {
     const today = new Date();
     return Array.from({ length: 14 }, (_, index) => {
@@ -152,13 +102,13 @@ const BookingFlow: React.FC = () => {
       date.setDate(today.getDate() + index);
       return {
         key: date.toISOString().slice(0, 10),
-        label: date.toLocaleDateString('da-DK', { weekday: 'short' }),
+        label: date.toLocaleDateString(locale, { weekday: 'short' }),
         day: date.getDate(),
-        month: date.toLocaleDateString('da-DK', { month: 'long' }),
+        month: date.toLocaleDateString(locale, { month: 'long' }),
         year: date.getFullYear(),
       };
     });
-  }, []);
+  }, [locale]);
 
   const calendarLabel = useMemo(() => {
     const first = dates[0];
@@ -193,7 +143,6 @@ const BookingFlow: React.FC = () => {
     return practitioners.find((person) => person.id === selectedSlot.practitionerId) ?? null;
   }, [selectedSlot]);
 
-  const stepLabels = ['Behandling', 'Ydelse', 'Tid & behandler', 'Bekræft'];
   const canProceed =
     (step === 1 && Boolean(categoryId)) ||
     (step === 2 && Boolean(serviceId)) ||
@@ -234,15 +183,15 @@ const BookingFlow: React.FC = () => {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
-                Booking-flow
+                {t('features.websiteBuilder.bookingFlow.eyebrow')}
               </p>
               <h2 className="text-3xl font-semibold text-slate-900 sm:text-4xl">
-                Book din tid hurtigt og trygt
+                {t('features.websiteBuilder.bookingFlow.title')}
               </h2>
             </div>
             <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600">
               <UserRound className="h-4 w-4 text-slate-400" />
-              Patient-visning
+              {t('features.websiteBuilder.bookingFlow.viewTag')}
             </div>
           </div>
           <div className="flex flex-wrap gap-3 text-sm font-medium text-slate-500">
@@ -281,10 +230,10 @@ const BookingFlow: React.FC = () => {
               <div className="space-y-6">
                 <div>
                   <h3 className="text-2xl font-semibold text-slate-900">
-                    Trin 1 · Vælg behandlingstype
+                    {t('features.websiteBuilder.bookingFlow.step1.title')}
                   </h3>
                   <p className="mt-2 text-sm text-slate-600">
-                    Vælg det område, der passer bedst til dine behov.
+                    {t('features.websiteBuilder.bookingFlow.step1.description')}
                   </p>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -320,10 +269,10 @@ const BookingFlow: React.FC = () => {
               <div className="space-y-6">
                 <div>
                   <h3 className="text-2xl font-semibold text-slate-900">
-                    Trin 2 · Vælg specifik ydelse
+                    {t('features.websiteBuilder.bookingFlow.step2.title')}
                   </h3>
                   <p className="mt-2 text-sm text-slate-600">
-                    Se varighed og pris, og vælg den ydelse der passer bedst.
+                    {t('features.websiteBuilder.bookingFlow.step2.description')}
                   </p>
                 </div>
                 <div className="space-y-3">
@@ -335,7 +284,7 @@ const BookingFlow: React.FC = () => {
                       <div>
                         <p className="text-lg font-semibold text-slate-900">{service.name}</p>
                         <p className="text-sm text-slate-500">
-                          {service.duration} min · {service.price} kr
+                          {service.duration} {minutesLabel} · {service.price} {currencyLabel}
                         </p>
                       </div>
                       <button
@@ -343,7 +292,7 @@ const BookingFlow: React.FC = () => {
                         onClick={() => handleServiceSelect(service.id)}
                         className="rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
                       >
-                        Vælg
+                        {t('features.websiteBuilder.bookingFlow.actions.select')}
                       </button>
                     </div>
                   ))}
@@ -355,20 +304,22 @@ const BookingFlow: React.FC = () => {
               <div className="space-y-6">
                 <div>
                   <h3 className="text-2xl font-semibold text-slate-900">
-                    Trin 3 · Vælg tid og behandler
+                    {t('features.websiteBuilder.bookingFlow.step3.title')}
                   </h3>
                   <p className="mt-2 text-sm text-slate-600">
-                    Vælg en dato og se ledige tider med din behandler.
+                    {t('features.websiteBuilder.bookingFlow.step3.description')}
                   </p>
                 </div>
                 <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex items-center justify-between text-sm font-semibold text-slate-700">
                       <span>{calendarLabel}</span>
-                      <span className="text-xs text-slate-400">Vælg dato</span>
+                      <span className="text-xs text-slate-400">
+                        {t('features.websiteBuilder.bookingFlow.calendar.selectDate')}
+                      </span>
                     </div>
                     <div className="mt-4 grid grid-cols-7 gap-2 text-center text-xs text-slate-500">
-                      {['ma', 'ti', 'on', 'to', 'fr', 'lø', 'sø'].map((day) => (
+                      {weekdayLabels.map((day) => (
                         <span key={day} className="uppercase tracking-wider">
                           {day}
                         </span>
@@ -427,7 +378,9 @@ const BookingFlow: React.FC = () => {
                               </p>
                             </div>
                           </div>
-                          <span className="text-xs font-semibold text-blue-600">Vælg</span>
+                          <span className="text-xs font-semibold text-blue-600">
+                            {t('features.websiteBuilder.bookingFlow.actions.select')}
+                          </span>
                         </button>
                       );
                     })}
@@ -440,23 +393,29 @@ const BookingFlow: React.FC = () => {
               <div className="space-y-6">
                 <div>
                   <h3 className="text-2xl font-semibold text-slate-900">
-                    Trin 4 · Bekræftelse
+                    {t('features.websiteBuilder.bookingFlow.step4.title')}
                   </h3>
                   <p className="mt-2 text-sm text-slate-600">
-                    Vælg hvordan du vil bekræfte din tid. Det tager kun et øjeblik.
+                    {t('features.websiteBuilder.bookingFlow.step4.description')}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                  <p className="font-semibold text-slate-900">Dit valg</p>
+                  <p className="font-semibold text-slate-900">
+                    {t('features.websiteBuilder.bookingFlow.step4.summaryTitle')}
+                  </p>
                   <div className="mt-2 grid gap-2 sm:grid-cols-2">
                     <div>
-                      <span className="text-slate-400">Behandling</span>
-                      <p>{selectedService?.name || '—'}</p>
+                      <span className="text-slate-400">
+                        {t('features.websiteBuilder.bookingFlow.step4.summaryService')}
+                      </span>
+                      <p>{selectedService?.name || placeholder}</p>
                     </div>
                     <div>
-                      <span className="text-slate-400">Tid</span>
+                      <span className="text-slate-400">
+                        {t('features.websiteBuilder.bookingFlow.step4.summaryTime')}
+                      </span>
                       <p>
-                        {selectedSlot?.time || '—'} · {selectedPractitioner?.name || '—'}
+                        {selectedSlot?.time || placeholder} · {selectedPractitioner?.name || placeholder}
                       </p>
                     </div>
                   </div>
@@ -471,7 +430,7 @@ const BookingFlow: React.FC = () => {
                         : 'border border-slate-200 bg-white text-slate-600'
                     }`}
                   >
-                    SMS-kode
+                    {t('features.websiteBuilder.bookingFlow.step4.sms')}
                   </button>
                   <button
                     type="button"
@@ -482,46 +441,52 @@ const BookingFlow: React.FC = () => {
                         : 'border border-slate-200 bg-white text-slate-600'
                     }`}
                   >
-                    Fortsæt som gæst
+                    {t('features.websiteBuilder.bookingFlow.step4.guest')}
                   </button>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="text-sm font-semibold text-slate-700">Navn</label>
+                    <label className="text-sm font-semibold text-slate-700">
+                      {t('features.websiteBuilder.bookingFlow.step4.nameLabel')}
+                    </label>
                     <input
                       value={contactName}
                       onChange={(event) => setContactName(event.target.value)}
-                      placeholder="Dit navn"
-                      className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-semibold text-slate-700">Email</label>
-                    <input
-                      value={contactEmail}
-                      onChange={(event) => setContactEmail(event.target.value)}
-                      placeholder="din@email.dk"
-                      className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="text-sm font-semibold text-slate-700">Adresse</label>
-                    <input
-                      value={contactAddress}
-                      onChange={(event) => setContactAddress(event.target.value)}
-                      placeholder="Gade, postnummer, by"
+                      placeholder={t('features.websiteBuilder.bookingFlow.step4.namePlaceholder')}
                       className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500"
                     />
                   </div>
                   <div>
                     <label className="text-sm font-semibold text-slate-700">
-                      Telefonnummer
+                      {t('features.websiteBuilder.bookingFlow.step4.emailLabel')}
+                    </label>
+                    <input
+                      value={contactEmail}
+                      onChange={(event) => setContactEmail(event.target.value)}
+                      placeholder={t('features.websiteBuilder.bookingFlow.step4.emailPlaceholder')}
+                      className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-sm font-semibold text-slate-700">
+                      {t('features.websiteBuilder.bookingFlow.step4.addressLabel')}
+                    </label>
+                    <input
+                      value={contactAddress}
+                      onChange={(event) => setContactAddress(event.target.value)}
+                      placeholder={t('features.websiteBuilder.bookingFlow.step4.addressPlaceholder')}
+                      className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700">
+                      {t('features.websiteBuilder.bookingFlow.step4.phoneLabel')}
                     </label>
                     <input
                       value={contactPhone}
                       onChange={(event) => setContactPhone(event.target.value)}
-                      placeholder="+45 12 34 56 78"
+                      placeholder={t('features.websiteBuilder.bookingFlow.step4.phonePlaceholder')}
                       className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500"
                     />
                   </div>
@@ -533,10 +498,12 @@ const BookingFlow: React.FC = () => {
                       type="button"
                       className="w-full rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
                     >
-                      Send SMS-kode
+                      {t('features.websiteBuilder.bookingFlow.step4.smsCta')}
                     </button>
                     <p className="text-xs text-slate-500">
-                      Vi sender en kort kode til {contactPhone || 'dit nummer'}.
+                      {t('features.websiteBuilder.bookingFlow.step4.smsHint', {
+                        phone: contactPhone || t('features.websiteBuilder.bookingFlow.step4.phoneFallback'),
+                      })}
                     </p>
                   </div>
                 ) : (
@@ -545,10 +512,12 @@ const BookingFlow: React.FC = () => {
                       type="button"
                       className="w-full rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
                     >
-                      Bekræft booking
+                      {t('features.websiteBuilder.bookingFlow.step4.confirmCta')}
                     </button>
                     <p className="text-xs text-slate-500">
-                      Vi sender en bekræftelse til {contactEmail || 'din email'}.
+                      {t('features.websiteBuilder.bookingFlow.step4.confirmHint', {
+                        email: contactEmail || t('features.websiteBuilder.bookingFlow.step4.emailFallback'),
+                      })}
                     </p>
                   </div>
                 )}
@@ -564,7 +533,7 @@ const BookingFlow: React.FC = () => {
             disabled={step === 1}
             className="rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Tilbage
+            {t('features.websiteBuilder.bookingFlow.actions.back')}
           </button>
           {step < 4 ? (
             <button
@@ -573,7 +542,7 @@ const BookingFlow: React.FC = () => {
               disabled={!canProceed}
               className="rounded-full bg-slate-900 px-6 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Næste trin
+              {t('features.websiteBuilder.bookingFlow.actions.next')}
             </button>
           ) : null}
         </div>

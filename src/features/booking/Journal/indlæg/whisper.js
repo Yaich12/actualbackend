@@ -1,8 +1,32 @@
 import React, { useMemo } from 'react';
 import './whisper.css';
 
-const Whisper = ({ data }) => {
+const DEFAULT_LABELS = {
+  ariaLabel: 'Whisper transskription',
+  title: 'Whisper transskription',
+  subtitle: 'Seneste data fra transskription',
+  excerptTitle: 'Tekstuddrag',
+  placeholder: 'Ingen tekst tilgængelig.',
+  usageTitle: 'Tokenforbrug',
+  usageLabels: {
+    type: 'Type',
+    input: 'Input',
+    output: 'Output',
+    total: 'Total',
+    textTokens: 'Teksttokens',
+    audioTokens: 'Lydtokens',
+  },
+};
+
+const mergeLabels = (overrides = {}) => ({
+  ...DEFAULT_LABELS,
+  ...overrides,
+  usageLabels: { ...DEFAULT_LABELS.usageLabels, ...(overrides.usageLabels || {}) },
+});
+
+const Whisper = ({ data, labels }) => {
   const safeData = data || {};
+  const copy = mergeLabels(labels);
   const { text = '', usage = {} } = safeData;
 
   const paragraphs = useMemo(() => {
@@ -57,17 +81,17 @@ const Whisper = ({ data }) => {
   }
 
   return (
-    <div className="whisper-panel" role="region" aria-label="Whisper transskription">
+    <div className="whisper-panel" role="region" aria-label={copy.ariaLabel}>
       <div className="whisper-header">
         <div className="whisper-header-icon">🔊</div>
         <div>
-          <p className="whisper-title">Whisper transskription</p>
-          <p className="whisper-subtitle">Seneste data fra transskription</p>
+          <p className="whisper-title">{copy.title}</p>
+          <p className="whisper-subtitle">{copy.subtitle}</p>
         </div>
       </div>
 
       <div className="whisper-section">
-        <p className="whisper-section-title">Tekstuddrag</p>
+        <p className="whisper-section-title">{copy.excerptTitle}</p>
         {paragraphs.length > 0 ? (
           paragraphs.map((paragraph, index) => (
             <p key={`whisper-paragraph-${index}`} className="whisper-paragraph">
@@ -75,28 +99,28 @@ const Whisper = ({ data }) => {
             </p>
           ))
         ) : (
-          <p className="whisper-placeholder">Ingen tekst tilgængelig.</p>
+          <p className="whisper-placeholder">{copy.placeholder}</p>
         )}
       </div>
 
       {hasUsage && (
         <div className="whisper-section">
-          <p className="whisper-section-title">Tokenforbrug</p>
+          <p className="whisper-section-title">{copy.usageTitle}</p>
           <div className="whisper-usage-grid">
             <div className="whisper-usage-item">
-              <span className="whisper-usage-label">Type</span>
+              <span className="whisper-usage-label">{copy.usageLabels.type}</span>
               <span className="whisper-usage-value">{usage.type || '—'}</span>
             </div>
             <div className="whisper-usage-item">
-              <span className="whisper-usage-label">Input</span>
+              <span className="whisper-usage-label">{copy.usageLabels.input}</span>
               <span className="whisper-usage-value">{usage.input_tokens ?? '—'}</span>
             </div>
             <div className="whisper-usage-item">
-              <span className="whisper-usage-label">Output</span>
+              <span className="whisper-usage-label">{copy.usageLabels.output}</span>
               <span className="whisper-usage-value">{usage.output_tokens ?? '—'}</span>
             </div>
             <div className="whisper-usage-item">
-              <span className="whisper-usage-label">Total</span>
+              <span className="whisper-usage-label">{copy.usageLabels.total}</span>
               <span className="whisper-usage-value">{usage.total_tokens ?? '—'}</span>
             </div>
           </div>
@@ -104,11 +128,11 @@ const Whisper = ({ data }) => {
           {hasInputDetails && (
             <div className="whisper-token-details">
               <div>
-                <span className="whisper-usage-label">Tekst tokens</span>
+                <span className="whisper-usage-label">{copy.usageLabels.textTokens}</span>
                 <span className="whisper-usage-value">{hasTextTokenDetails ? inputDetails.text_tokens : '—'}</span>
               </div>
               <div>
-                <span className="whisper-usage-label">Audio tokens</span>
+                <span className="whisper-usage-label">{copy.usageLabels.audioTokens}</span>
                 <span className="whisper-usage-value">{hasAudioTokenDetails ? inputDetails.audio_tokens : '—'}</span>
               </div>
             </div>

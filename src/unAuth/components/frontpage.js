@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { useLanguage } from "../language/LanguageProvider";
 import "./frontpage.css";
 
 const clips = [
@@ -29,8 +30,9 @@ const syncHeroVideo = (src, time) => {
 };
 
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           function Frontpage() {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            const [active, setActive] = useState(0);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            const [next, setNext] = useState(1);
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            const { t } = useLanguage();
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           const [active, setActive] = useState(0);
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           const [next, setNext] = useState(1);
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             const [isFading, setIsFading] = useState(false);
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             const [hasPreloaded, setHasPreloaded] = useState(false);
 
@@ -118,22 +120,23 @@ const syncHeroVideo = (src, time) => {
       <div className="frontpage-grid">
         <div className="frontpage-container">
           <h1 className="frontpage-title">
-            <span className="frontpage-title-line">Stay focused on your patients.</span>
+            <span className="frontpage-title-line">{t("landing.frontpage.titleLine1")}</span>
             <span className="frontpage-title-line">
-              We'll handle the rest<span className="frontpage-dot">.</span>
+              {t("landing.frontpage.titleLine2")}
+              <span className="frontpage-dot">.</span>
             </span>
           </h1>
 
           <p className="frontpage-subtitle">
-            The only tool you need to get everything done.
+            {t("landing.frontpage.subtitle")}
           </p>
 
           <div className="frontpage-buttons">
             <Link to="/signup" className="frontpage-button primary">
-              Start for free
+              {t("landing.frontpage.ctaPrimary")}
             </Link>
             <a href="#demo" className="frontpage-button secondary">
-              Book a demo
+              {t("landing.frontpage.ctaSecondary")}
             </a>
           </div>
         </div>

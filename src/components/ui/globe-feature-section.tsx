@@ -3,8 +3,11 @@ import { ArrowRight } from "lucide-react";
 import createGlobe, { COBEOptions } from "cobe";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
+import { useLanguage } from "../../unAuth/language/LanguageProvider";
 
 export default function Featured_05() {
+  const { t } = useLanguage();
+
   return (
     <section className="relative w-full overflow-hidden bg-muted border border-gray-200 dark:border-gray-800 px-6 py-16 md:px-16 md:py-24">
       <div className="max-w-7xl mx-auto">
@@ -12,11 +15,11 @@ export default function Featured_05() {
           <div className="z-10 max-w-xl text-left">
             <h1 className="text-3xl font-normal text-gray-900 dark:text-white leading-tight">
               <span className="block font-semibold text-gray-900 dark:text-white">
-                Build with <span className="text-primary">Selma</span>
+                {t("landing.globeFeature.titlePrefix")}{" "}
+                <span className="text-primary">{t("common.brandName")}</span>
               </span>
               <span className="mt-3 block text-gray-500 dark:text-gray-400">
-                Support clinical teams with secure transcription and AI-assisted documentation—designed
-                to improve consistency, reduce administrative time, and scale across modern practice.
+                {t("landing.globeFeature.subtitle")}
               </span>
             </h1>
             <Button
@@ -24,7 +27,7 @@ export default function Featured_05() {
               className="mt-6 inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-2 text-sm font-semibold text-background transition hover:bg-black"
             >
               <a href="/signup">
-                Join Today <ArrowRight className="h-4 w-4" />
+                {t("landing.globeFeature.cta")} <ArrowRight className="h-4 w-4" />
               </a>
             </Button>
           </div>

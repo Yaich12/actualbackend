@@ -50,11 +50,16 @@ module.exports = {
       },
       animation: {
         spotlight: "spotlight 2s ease .75s 1 forwards",
+        "fade-in": "fade-in 150ms ease-out",
       },
       keyframes: {
         spotlight: {
           "0%": { opacity: 0, transform: "translate(-20%, 20%) scale(0.75)" },
           "100%": { opacity: 1, transform: "translate(0, 0) scale(1)" },
+        },
+        "fade-in": {
+          "0%": { opacity: 0, transform: "translateY(-2px)" },
+          "100%": { opacity: 1, transform: "translateY(0)" },
         },
       },
     },

@@ -1,8 +1,11 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Quote } from 'lucide-react';
+import { useLanguage } from '../language/LanguageProvider';
 
 function Manifesto() {
+  const { t } = useLanguage();
+
   return (
     <section className="w-full bg-white py-16 sm:py-20">
       <motion.div
@@ -17,10 +20,10 @@ function Manifesto() {
           aria-hidden="true"
         />
         <div className="relative space-y-6 text-2xl font-serif font-medium leading-relaxed text-slate-800 sm:text-3xl">
-          <p>Vi fandt ud af, at et professionelt system ikke behøver koste en formue.</p>
-          <p>Ingen dyre hjemmesider. Ingen tunge IT-systemer.</p>
-          <p>Vi valgte at bygge det selv, fordi vi kunne gøre det bedre.</p>
-          <p className="font-semibold text-blue-600">Velkommen til Selma+.</p>
+          <p>{t('landing.manifesto.line1')}</p>
+          <p>{t('landing.manifesto.line2')}</p>
+          <p>{t('landing.manifesto.line3')}</p>
+          <p className="font-semibold text-blue-600">{t('landing.manifesto.line4')}</p>
         </div>
       </motion.div>
     </section>

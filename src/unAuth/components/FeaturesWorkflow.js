@@ -3,67 +3,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Mic, Sparkles } from "lucide-react";
 import FactsRPanel from "../../features/booking/Journal/indlæg/FactsRPanel";
 import Whisper from "../../features/booking/Journal/indlæg/whisper";
+import { useLanguage } from "../language/LanguageProvider";
 import "../../features/booking/Journal/indlæg/indlæg.css";
-
-const FEATURE_TABS = [
-  {
-    id: "transcription",
-    label: "Transkribering",
-    title: "Live transkribering direkte i journalen",
-    description:
-      "Selma+ lytter med og skriver samtalen ned, mens du behandler. Du får et ryddeligt transkript uden ekstra klik.",
-    bullets: [
-      "Speaker-adskillelse og tydelige markeringer",
-      "Seneste sætninger ligger klar til gennemgang",
-      "Skabt til kliniske noter og ro i rummet",
-    ],
-  },
-  {
-    id: "facts",
-    label: "FactsR™",
-    title: "FactsR™ udleder kliniske fakta automatisk",
-    description:
-      "FactsR sorterer samtalen i Anamnese, Fund og Plan, så du kan indsætte forslag direkte i journalens felter.",
-    bullets: [
-      "Auto-forslag til de rigtige journal-sektioner",
-      "Indsæt enkelt-facts eller hele blokke",
-      "Sparer tid uden at gå på kompromis",
-    ],
-  },
-];
-
-const FACTS_PANEL_SAMPLE = [
-  { id: "f-1", text: "Smerter i højre skulder ved løft", group: "Anamnese" },
-  { id: "f-2", text: "Debut for 3 uger siden efter havearbejde", group: "Anamnese" },
-  { id: "f-3", text: "Nedsat ROM ved abduktion", group: "Fund" },
-  { id: "f-4", text: "Palpationsømhed omkring deltoideus", group: "Fund" },
-  { id: "f-5", text: "Træningsprogram 2x/uge", group: "Plan" },
-  { id: "f-6", text: "Opfølgning om 2 uger", group: "Plan" },
-];
-
-const FACTS_PANEL_TRANSCRIPTS = [
-  { id: "t-1", transcript: "Patienten angiver smerter ved løft.", final: true },
-  { id: "t-2", transcript: "Tester ROM og planlægger øvelser.", final: true },
-  { id: "t-3", transcript: "Opfølgning om to uger.", final: false },
-];
-
-const WHISPER_SAMPLE = {
-  text:
-    "Behandler: Hvordan har skulderen været siden sidst?\n\n" +
-    "Patient: Den er bedre, men stadig stram ved løft.\n\n" +
-    "Behandler: Vi tester ROM og justerer øvelserne.\n\n" +
-    "Patient: Det lyder godt.",
-  usage: {
-    type: "clinical",
-    input_tokens: 812,
-    output_tokens: 156,
-    total_tokens: 968,
-    input_token_details: {
-      text_tokens: 410,
-      audio_tokens: 402,
-    },
-  },
-};
 
 const FACTS_STYLE_VARS = {
   "--bg-surface": "#ffffff",
@@ -76,7 +17,107 @@ const FACTS_STYLE_VARS = {
 const transition = { duration: 0.45, ease: "easeOut" };
 
 function FeaturesWorkflow({ sectionId } = {}) {
+  const { t, getArray } = useLanguage();
   const [activeId, setActiveId] = useState("facts");
+
+  const featureTabs = getArray("features.workflow.tabs", []);
+  const factsSample = getArray("features.workflow.sample.facts", []);
+  const transcriptSample = getArray("features.workflow.sample.transcripts", []);
+
+  const whisperSample = useMemo(
+    () => ({
+      text: t("features.workflow.sample.whisperText"),
+      usage: {
+        type: t("features.workflow.whisper.usageType"),
+        input_tokens: 812,
+        output_tokens: 156,
+        total_tokens: 968,
+        input_token_details: {
+          text_tokens: 410,
+          audio_tokens: 402,
+        },
+      },
+    }),
+    [t]
+  );
+
+  const factsGroupLabels = useMemo(
+    () => ({
+      anamnesis: t("features.workflow.factsPanel.groups.anamnesis"),
+      objective: t("features.workflow.factsPanel.groups.objective"),
+      plan: t("features.workflow.factsPanel.groups.plan"),
+    }),
+    [t]
+  );
+
+  const factsPanelLabels = useMemo(
+    () => ({
+      title: t("features.workflow.factsPanel.title"),
+      poweredBy: t("features.workflow.factsPanel.poweredBy"),
+      groupFallback: t("features.workflow.factsPanel.groupFallback"),
+      status: {
+        connecting: t("features.workflow.factsPanel.status.connecting"),
+        streaming: t("features.workflow.factsPanel.status.streaming"),
+        finalizing: t("features.workflow.factsPanel.status.finalizing"),
+        ended: t("features.workflow.factsPanel.status.ended"),
+        error: t("features.workflow.factsPanel.status.error"),
+        idle: t("features.workflow.factsPanel.status.idle"),
+      },
+      record: {
+        start: t("features.workflow.factsPanel.record.start"),
+        stop: t("features.workflow.factsPanel.record.stop"),
+      },
+      interactionLabel: t("features.workflow.factsPanel.interaction"),
+      latestLabel: t("features.workflow.factsPanel.latest"),
+      insertBarLabel: t("features.workflow.factsPanel.insertBarLabel"),
+      insertBarTitle: t("features.workflow.factsPanel.insertBarTitle"),
+      insertTargets: {
+        auto: t("features.workflow.factsPanel.insertTargets.auto"),
+        anamnesis: t("features.workflow.factsPanel.insertTargets.anamnesis"),
+        conclusion_focus: t("features.workflow.factsPanel.insertTargets.conclusionFocus"),
+        conclusion_content: t("features.workflow.factsPanel.insertTargets.conclusionContent"),
+        conclusion_tasks: t("features.workflow.factsPanel.insertTargets.conclusionTasks"),
+        conclusion_reflection: t("features.workflow.factsPanel.insertTargets.conclusionReflection"),
+        combined: t("features.workflow.factsPanel.insertTargets.combined"),
+      },
+      insertSelected: t("features.workflow.factsPanel.insertSelected"),
+      insertSelectedTitle: t("features.workflow.factsPanel.insertSelectedTitle"),
+      insertAll: t("features.workflow.factsPanel.insertAll"),
+      insertAllTitle: t("features.workflow.factsPanel.insertAllTitle"),
+      tabs: {
+        facts: t("features.workflow.factsPanel.tabs.facts"),
+        transcript: t("features.workflow.factsPanel.tabs.transcript"),
+      },
+      actions: {
+        flush: t("features.workflow.factsPanel.actions.flush"),
+        clear: t("features.workflow.factsPanel.actions.clear"),
+      },
+      item: {
+        select: t("features.workflow.factsPanel.item.select"),
+        recommended: t("features.workflow.factsPanel.item.recommended"),
+        insert: t("features.workflow.factsPanel.item.insert"),
+        insertTitle: t("features.workflow.factsPanel.item.insertTitle"),
+      },
+      empty: {
+        facts: t("features.workflow.factsPanel.empty.facts"),
+        transcript: t("features.workflow.factsPanel.empty.transcript"),
+      },
+      meta: {
+        source: t("features.workflow.factsPanel.meta.source"),
+        discarded: t("features.workflow.factsPanel.meta.discarded"),
+      },
+    }),
+    [t]
+  );
+
+  const formattedFacts = useMemo(
+    () =>
+      factsSample.map((fact) => ({
+        ...fact,
+        group: factsGroupLabels[fact.groupKey] || fact.group || "",
+      })),
+    [factsGroupLabels, factsSample]
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -95,9 +136,12 @@ function FeaturesWorkflow({ sectionId } = {}) {
   }, []);
 
   const activeFeature = useMemo(
-    () => FEATURE_TABS.find((feature) => feature.id === activeId) || FEATURE_TABS[0],
-    [activeId]
+    () =>
+      featureTabs.find((feature) => feature.id === activeId) ||
+      featureTabs[0] || { id: activeId, title: "", description: "", bullets: [] },
+    [activeId, featureTabs]
   );
+  const activeBullets = activeFeature?.bullets || [];
 
   const isFacts = activeId === "facts";
   const AccentIcon = isFacts ? Sparkles : Mic;
@@ -112,22 +156,25 @@ function FeaturesWorkflow({ sectionId } = {}) {
       <div className="mx-auto w-full max-w-6xl px-6">
         <div className="mb-8">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
-            Funktioner
+            {t("features.workflow.eyebrow")}
           </p>
           <h2 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
-            Transkribering og FactsR - sådan bruger du det i journalen
+            {t("features.workflow.title")}
           </h2>
           <p className="mt-3 max-w-2xl text-sm text-slate-600">
-            Vi viser præcis den arbejdsgang, du møder inde i journalen - bare gjort
-            klar til forsiden, så det er nemt at forstå for behandleren.
+            {t("features.workflow.description")}
           </p>
         </div>
 
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div id="features-transcription" className="scroll-mt-24" aria-hidden="true" />
           <div id="features-factsr" className="scroll-mt-24" aria-hidden="true" />
-          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Selma+ journal features">
-            {FEATURE_TABS.map((feature) => {
+          <div
+            className="flex flex-wrap gap-2"
+            role="tablist"
+            aria-label={t("features.workflow.ariaLabel")}
+          >
+            {featureTabs.map((feature) => {
               const isActive = feature.id === activeId;
               return (
                 <button
@@ -143,7 +190,7 @@ function FeaturesWorkflow({ sectionId } = {}) {
                   }`}
                 >
                   <span className="text-base font-semibold">{feature.label}</span>
-                  <span className="text-xs text-slate-400">Journal</span>
+                  <span className="text-xs text-slate-400">{t("features.workflow.tabTag")}</span>
                 </button>
               );
             })}
@@ -160,7 +207,9 @@ function FeaturesWorkflow({ sectionId } = {}) {
                 className="space-y-6"
               >
                 <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-                  {isFacts ? "FactsR™ i journalen" : "Live transkribering"}
+                  {isFacts
+                    ? t("features.workflow.badge.facts")
+                    : t("features.workflow.badge.transcription")}
                 </div>
                 <div>
                   <h3 className="text-2xl font-semibold text-slate-900">
@@ -171,7 +220,7 @@ function FeaturesWorkflow({ sectionId } = {}) {
                   </p>
                 </div>
                 <div className="grid gap-3">
-                  {activeFeature.bullets.map((bullet) => (
+                  {activeBullets.map((bullet) => (
                     <div key={bullet} className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-4">
                       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white">
                         <CheckCircle2 className="h-5 w-5" />
@@ -191,16 +240,20 @@ function FeaturesWorkflow({ sectionId } = {}) {
                   </div>
                   <div>
                     <div className="text-sm font-semibold text-slate-900">
-                      {isFacts ? "FactsR™" : "Live transkript"}
+                      {isFacts
+                        ? t("features.workflow.panel.titleFacts")
+                        : t("features.workflow.panel.titleTranscription")}
                     </div>
                     <div className="text-xs text-slate-500">
-                      {isFacts ? "Powered by Corti" : "Sikker lyd optagelse"}
+                      {isFacts
+                        ? t("features.workflow.panel.subtitleFacts")
+                        : t("features.workflow.panel.subtitleTranscription")}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold ${badgeClasses}`}>
-                    Live
+                    {t("features.workflow.panel.liveBadge")}
                   </span>
                   <button
                     type="button"
@@ -210,7 +263,7 @@ function FeaturesWorkflow({ sectionId } = {}) {
                       <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${dotPing}`} />
                       <span className={`relative inline-flex h-2 w-2 rounded-full ${dotSolid}`} />
                     </span>
-                    Optag
+                    {t("features.workflow.panel.record")}
                   </button>
                 </div>
               </div>
@@ -229,22 +282,32 @@ function FeaturesWorkflow({ sectionId } = {}) {
                       <FactsRPanel
                         status="streaming"
                         interactionId="7f23-9a2b"
-                        transcripts={FACTS_PANEL_TRANSCRIPTS}
-                        facts={FACTS_PANEL_SAMPLE}
+                        transcripts={transcriptSample}
+                        facts={formattedFacts}
                         isRecording
-                        recordingStatus="Optager i baggrunden"
+                        recordingStatus={t("features.workflow.panel.recordingStatus")}
                         onToggleRecording={() => {}}
                         insertTarget="auto"
                         onChangeInsertTarget={() => {}}
+                        labels={factsPanelLabels}
                         suggestionForFact={(fact) => {
-                          const group = `${fact?.group || ""}`.toLowerCase();
-                          if (group.includes("fund")) {
-                            return { label: "Fund", key: "objective" };
+                          const groupKey = fact?.groupKey;
+                          if (groupKey === "objective") {
+                            return { label: factsGroupLabels.objective, key: "objective" };
                           }
-                          if (group.includes("plan")) {
-                            return { label: "Plan", key: "plan" };
+                          if (groupKey === "plan") {
+                            return { label: factsGroupLabels.plan, key: "plan" };
                           }
-                          return { label: "Anamnese", key: "anamnesis" };
+                          if (!groupKey && typeof fact?.group === "string") {
+                            const normalized = fact.group.toLowerCase();
+                            if (normalized.includes(factsGroupLabels.objective.toLowerCase())) {
+                              return { label: factsGroupLabels.objective, key: "objective" };
+                            }
+                            if (normalized.includes(factsGroupLabels.plan.toLowerCase())) {
+                              return { label: factsGroupLabels.plan, key: "plan" };
+                            }
+                          }
+                          return { label: factsGroupLabels.anamnesis, key: "anamnesis" };
                         }}
                         onInsertSelected={() => {}}
                         onInsertAll={() => {}}
@@ -253,7 +316,25 @@ function FeaturesWorkflow({ sectionId } = {}) {
                         onClear={() => {}}
                       />
                     ) : (
-                      <Whisper data={WHISPER_SAMPLE} />
+                      <Whisper
+                        data={whisperSample}
+                        labels={{
+                          ariaLabel: t("features.workflow.whisper.ariaLabel"),
+                          title: t("features.workflow.whisper.title"),
+                          subtitle: t("features.workflow.whisper.subtitle"),
+                          excerptTitle: t("features.workflow.whisper.excerptTitle"),
+                          placeholder: t("features.workflow.whisper.placeholder"),
+                          usageTitle: t("features.workflow.whisper.usageTitle"),
+                          usageLabels: {
+                            type: t("features.workflow.whisper.usageLabels.type"),
+                            input: t("features.workflow.whisper.usageLabels.input"),
+                            output: t("features.workflow.whisper.usageLabels.output"),
+                            total: t("features.workflow.whisper.usageLabels.total"),
+                            textTokens: t("features.workflow.whisper.usageLabels.textTokens"),
+                            audioTokens: t("features.workflow.whisper.usageLabels.audioTokens"),
+                          },
+                        }}
+                      />
                     )}
                   </motion.div>
                 </AnimatePresence>
