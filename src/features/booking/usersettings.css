@@ -218,6 +218,67 @@
   gap: 4px;
 }
 
+.usersettings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.usersettings-claim-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.usersettings-claim-btn {
+  border: 1px solid #111827;
+  background: #111827;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.usersettings-claim-btn:hover {
+  background: #1f2937;
+  border-color: #1f2937;
+}
+
+.usersettings-claim-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.usersettings-slug-preview {
+  font-size: 12px;
+  color: rgba(107, 114, 128, 0.9);
+}
+
+.usersettings-status {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #eef2ff;
+  color: #1d4ed8;
+}
+
+.usersettings-status.error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.usersettings-status.success {
+  background: #dcfce7;
+  color: #15803d;
+}
+
 .usersettings-label {
   font-size: 13px;
   font-weight: 600;

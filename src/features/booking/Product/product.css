@@ -414,6 +414,18 @@
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
 }
 
+@media (min-width: 1024px) {
+  .product-modal-overlay {
+    justify-content: flex-start;
+    padding-left: 16rem;
+    padding-right: 24px;
+  }
+
+  .product-modal {
+    width: min(1180px, calc(100vw - 16rem - 48px));
+  }
+}
+
 .product-modal-header {
   position: sticky;
   top: 0;

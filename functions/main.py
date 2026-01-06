@@ -2,10 +2,14 @@
 # To get started, simply uncomment the below code or create your own.
 # Deploy with `firebase deploy`
 
+import hashlib
 import json
 import logging
 import os
+import re
+from datetime import datetime, timezone, timedelta, date
 from typing import Any, Dict, List
+from zoneinfo import ZoneInfo
 
 import firebase_admin
 import requests
@@ -69,9 +73,291 @@ CORS_HEADERS = {
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
 }
 
+PUBLIC_BOOKING_CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+}
+
+BOOKING_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("BOOKING_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+BOOKING_ALLOW_ANY = os.getenv("BOOKING_CORS_ALLOW_ANY", "").lower() in ("1", "true", "yes")
+LOVABLE_ORIGIN_RE = re.compile(r"^https://[a-z0-9-]+\.lovable\.app$")
+
 
 def _cors_headers() -> Dict[str, str]:
     return dict(CORS_HEADERS)
+
+
+def _public_booking_cors_headers() -> Dict[str, str]:
+    return dict(PUBLIC_BOOKING_CORS_HEADERS)
+
+
+def _public_booking_log(req: https_fn.Request, status: int) -> None:
+    origin = req.headers.get("Origin")
+    logger.info(
+        "public booking response: method=%s origin=%s status=%s",
+        req.method,
+        origin,
+        status,
+    )
+
+
+def _public_booking_json_response(
+    req: https_fn.Request, payload: Dict[str, Any], status: int
+) -> https_fn.Response:
+    _public_booking_log(req, status)
+    return https_fn.Response(
+        json.dumps(payload),
+        status=status,
+        headers=_public_booking_cors_headers(),
+        content_type="application/json",
+    )
+
+
+def _public_booking_error(
+    req: https_fn.Request,
+    message: str,
+    status: int,
+    missing: List[str] | None = None,
+) -> https_fn.Response:
+    if missing:
+        logger.warning("public booking validation error: missing=%s", missing)
+    else:
+        logger.warning("public booking error: %s", message)
+    payload: Dict[str, Any] = {"error": message}
+    if missing is not None:
+        payload["missing"] = missing
+    return _public_booking_json_response(req, payload, status)
+
+
+def _public_booking_empty_response(req: https_fn.Request, status: int) -> https_fn.Response:
+    _public_booking_log(req, status)
+    return https_fn.Response("", status=status, headers=_public_booking_cors_headers())
+
+
+def _parse_request_json(req: https_fn.Request) -> Dict[str, Any] | None:
+    data = req.get_json(silent=True)
+    if data is None:
+        raw = req.data
+        if raw:
+            try:
+                if isinstance(raw, (bytes, bytearray)):
+                    raw = raw.decode("utf-8")
+                data = json.loads(raw)
+            except Exception:
+                return None
+        else:
+            data = {}
+    if not isinstance(data, dict):
+        return None
+    return data
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    if raw.endswith("Z"):
+        raw = raw.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _to_utc_iso(dt: datetime) -> str:
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _parse_date_iso(date_iso: str) -> date | None:
+    if not date_iso:
+        return None
+    parts = str(date_iso).strip().split("-")
+    if len(parts) != 3:
+        return None
+    try:
+        year, month, day = (int(p) for p in parts)
+    except Exception:
+        return None
+    if not (1 <= month <= 12 and 1 <= day <= 31):
+        return None
+    try:
+        return date(year, month, day)
+    except Exception:
+        return None
+
+
+def _parse_time_minutes(value: str | None) -> int | None:
+    if not value:
+        return None
+    parts = str(value).strip().split(":")
+    if len(parts) != 2:
+        return None
+    try:
+        hours = int(parts[0])
+        minutes = int(parts[1])
+    except Exception:
+        return None
+    if not (0 <= hours <= 23 and 0 <= minutes <= 59):
+        return None
+    return hours * 60 + minutes
+
+
+def _parse_duration_minutes(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        minutes = int(value)
+        return minutes if minutes > 0 else None
+    if not isinstance(value, str):
+        return None
+    text = value.strip().lower()
+    if not text:
+        return None
+    total = 0
+    hours_match = re.search(r"(\d+)\s*(t|time|timer|hour|hours|hr|h)\b", text)
+    if hours_match:
+        total += int(hours_match.group(1)) * 60
+    minutes_match = re.search(r"(\d+)\s*(min|minute|minutter|m)\b", text)
+    if minutes_match:
+        total += int(minutes_match.group(1))
+    if total > 0:
+        return total
+    numeric = re.search(r"(\d+)", text)
+    if numeric:
+        minutes = int(numeric.group(1))
+        return minutes if minutes > 0 else None
+    return None
+
+
+def _parse_duration_minutes_or_default(
+    value: Any, default_minutes: int = 60, context: str | None = None
+) -> int:
+    parsed = _parse_duration_minutes(value)
+    if parsed is None:
+        if context:
+            logger.warning(
+                "Duration parse failed; defaulting to %s minutes (context=%s)",
+                default_minutes,
+                context,
+            )
+        else:
+            logger.warning(
+                "Duration parse failed; defaulting to %s minutes",
+                default_minutes,
+            )
+        return default_minutes
+    return parsed
+
+
+def _default_working_hours() -> Dict[str, List[Dict[str, str]]]:
+    return {
+        "mon": [{"start": "09:00", "end": "16:00"}],
+        "tue": [{"start": "09:00", "end": "16:00"}],
+        "wed": [{"start": "09:00", "end": "16:00"}],
+        "thu": [{"start": "09:00", "end": "16:00"}],
+        "fri": [{"start": "09:00", "end": "16:00"}],
+        "sat": [],
+        "sun": [],
+    }
+
+
+def _resolve_working_hours(
+    clinic_data: Dict[str, Any],
+    owner_data: Dict[str, Any],
+    staff_data: Dict[str, Any],
+) -> Dict[str, List[Dict[str, str]]]:
+    working_hours = staff_data.get("workingHours")
+    if isinstance(working_hours, dict):
+        return working_hours
+    working_hours = clinic_data.get("workingHours")
+    if isinstance(working_hours, dict):
+        return working_hours
+    working_hours = owner_data.get("workingHours")
+    if isinstance(working_hours, dict):
+        return working_hours
+    return _default_working_hours()
+
+
+def _get_day_key(target_date: date) -> str:
+    keys = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    return keys[target_date.weekday()]
+
+
+def _get_day_windows(
+    working_hours: Dict[str, Any], day_key: str
+) -> List[Dict[str, str]]:
+    windows = working_hours.get(day_key, [])
+    return windows if isinstance(windows, list) else []
+
+
+def _appointment_matches_staff(
+    appointment: Dict[str, Any],
+    staff_uid: str,
+    staff_name: str,
+    owner_uid: str,
+) -> bool:
+    if appointment.get("staffUid") == staff_uid:
+        return True
+    if appointment.get("calendarOwnerId") == staff_uid:
+        return True
+    if staff_name:
+        appt_owner = appointment.get("calendarOwner") or appointment.get("ownerName") or ""
+        if appt_owner and appt_owner.strip().lower() == staff_name.strip().lower():
+            return True
+    if staff_uid == owner_uid and not appointment.get("staffUid") and not appointment.get("calendarOwnerId"):
+        return True
+    return False
+
+
+def _resolve_booking_origin(origin: str | None) -> str:
+    if BOOKING_ALLOW_ANY:
+        return "*"
+    if not origin:
+        return ""
+    if LOVABLE_ORIGIN_RE.match(origin):
+        return origin
+    if origin in BOOKING_ALLOWED_ORIGINS:
+        return origin
+    if origin.startswith(("http://localhost", "http://127.0.0.1", "http://0.0.0.0", "http://[::1]")):
+        return "*"
+    return ""
+
+
+def _booking_cors_headers(origin: str | None) -> Dict[str, str]:
+    headers = {
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    }
+    resolved = _resolve_booking_origin(origin)
+    if resolved:
+        headers["Access-Control-Allow-Origin"] = resolved
+        headers["Vary"] = "Origin"
+    return headers
+
+
+def _booking_json_response(
+    payload: Dict[str, Any], status: int, origin: str | None
+) -> https_fn.Response:
+    return https_fn.Response(
+        json.dumps(payload),
+        status=status,
+        headers=_booking_cors_headers(origin),
+        content_type="application/json",
+    )
+
+
+def _booking_error(message: str, status: int, origin: str | None) -> https_fn.Response:
+    return _booking_json_response({"ok": False, "error": message}, status=status, origin=origin)
 
 
 def _json_response(payload: Dict[str, Any], status: int) -> https_fn.Response:
@@ -111,6 +397,20 @@ def _safe_int(value: Any, default: int) -> int:
         return int(value)
     except Exception:
         return default
+
+
+def _normalize_email(value: Any) -> str:
+    if not value:
+        return ""
+    return str(value).strip().lower()
+
+
+def _is_blank(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str) and not value.strip():
+        return True
+    return False
 
 
 def _now_ms() -> int:
@@ -803,3 +1103,943 @@ Feltet defaultMode skal være "append" som udgangspunkt; brug "replace" hvis blo
     except Exception:
         logger.exception("agent_chat failed")
         return _error("agent_chat failed", status=500)
+
+
+@https_fn.on_request()
+def createClientFromBooking(req: https_fn.Request) -> https_fn.Response:
+    logger.info("Incoming createClientFromBooking request: method=%s", req.method)
+
+    origin = req.headers.get("Origin")
+
+    if req.method == "OPTIONS":
+        return https_fn.Response("", status=204, headers=_booking_cors_headers(origin))
+
+    if req.method != "POST":
+        return _booking_error("Only POST requests are supported.", status=405, origin=origin)
+
+    data = req.get_json(silent=True) or {}
+    clinic_slug = str(data.get("clinicSlug") or "").strip().lower()
+    service_id = data.get("serviceId") or None
+    start_iso = str(data.get("startIso") or "").strip()
+    end_iso = str(data.get("endIso") or "").strip()
+    first_name = str(data.get("firstName") or "").strip()
+    last_name = str(data.get("lastName") or "").strip()
+    email = str(data.get("email") or "").strip()
+    email_lower = _normalize_email(email)
+    phone = str(data.get("phone") or "").strip()
+    notes = str(data.get("notes") or "").strip()
+    privacy_accepted = data.get("privacyAccepted") is True
+    marketing_opt_in = data.get("marketingOptIn") is True
+
+    if not clinic_slug:
+        return _booking_error("Missing clinicSlug.", status=400, origin=origin)
+
+    if not start_iso or not end_iso:
+        return _booking_error("Missing startIso or endIso.", status=400, origin=origin)
+
+    if not first_name or not email_lower:
+        return _booking_error("Missing firstName or email.", status=400, origin=origin)
+
+    if not privacy_accepted:
+        return _booking_error("Privacy acceptance required.", status=400, origin=origin)
+
+    telefon_land = ""
+    telefon_value = phone
+    if phone.startswith("+"):
+        parts = phone.split(maxsplit=1)
+        telefon_land = parts[0]
+        telefon_value = parts[1] if len(parts) > 1 else ""
+    elif phone:
+        telefon_land = "+45"
+        telefon_value = phone
+    telefon_komplet = phone or ""
+
+    clinic_ref = get_db().collection("publicClinics").document(clinic_slug)
+    clinic_snap = clinic_ref.get()
+    if not clinic_snap.exists:
+        return _booking_error("Clinic not found.", status=404, origin=origin)
+
+    clinic_data = clinic_snap.to_dict() or {}
+    if clinic_data.get("isActive") is not True:
+        return _booking_error("Clinic not found.", status=404, origin=origin)
+
+    owner_uid = clinic_data.get("ownerUid")
+    if not owner_uid:
+        return _booking_error("Clinic owner missing.", status=404, origin=origin)
+
+    clients_ref = (
+        get_db().collection("users").document(owner_uid).collection("clients")
+    )
+
+    existing_docs = list(
+        clients_ref.where("emailLower", "==", email_lower).limit(1).stream()
+    )
+
+    full_name = f"{first_name} {last_name}".strip()
+    now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    if existing_docs:
+        doc_snap = existing_docs[0]
+        updates: Dict[str, Any] = {
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+            "fornavn": first_name,
+            "email": email,
+            "emailLower": email_lower,
+        }
+
+        if last_name:
+            updates["efternavn"] = last_name
+        if full_name:
+            updates["navn"] = full_name
+        if phone:
+            updates["telefonKomplet"] = telefon_komplet
+            updates["telefon"] = telefon_value or phone
+            if telefon_land:
+                updates["telefonLand"] = telefon_land
+
+        doc_snap.reference.set(updates, merge=True)
+        client_id = doc_snap.id
+    else:
+        payload = {
+            "fornavn": first_name,
+            "efternavn": last_name,
+            "navn": full_name or first_name,
+            "email": email,
+            "emailLower": email_lower,
+            "telefonLand": telefon_land or "+45",
+            "telefon": telefon_value or phone,
+            "telefonKomplet": telefon_komplet,
+            "status": "Aktiv",
+            "ownerUid": owner_uid,
+            "source": "publicBooking",
+            "clinicSlug": clinic_slug,
+            "createdAt": firestore.SERVER_TIMESTAMP,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+            "createdAtIso": now_iso,
+        }
+        client_ref = clients_ref.document()
+        client_ref.set(payload)
+        client_id = client_ref.id
+
+    booking_payload = {
+        "clinicSlug": clinic_slug,
+        "clinicName": clinic_data.get("clinicName") or clinic_slug,
+        "serviceId": service_id,
+        "startIso": start_iso,
+        "endIso": end_iso,
+        "notes": notes,
+        "clientId": client_id,
+        "patient": {
+            "firstName": first_name,
+            "lastName": last_name,
+            "email": email,
+            "phone": phone,
+        },
+        "privacyAccepted": privacy_accepted,
+        "marketingOptIn": marketing_opt_in,
+        "createdAt": firestore.SERVER_TIMESTAMP,
+    }
+
+    booking_ref = (
+        get_db()
+        .collection("users")
+        .document(owner_uid)
+        .collection("bookingRequests")
+        .document()
+    )
+    booking_ref.set(booking_payload)
+
+    return _booking_json_response(
+        {"ok": True, "clientId": client_id, "bookingId": booking_ref.id},
+        status=200,
+        origin=origin,
+    )
+
+
+@https_fn.on_request()
+def publicBookAppointment(req: https_fn.Request) -> https_fn.Response:
+    if req.method == "OPTIONS":
+        return _public_booking_empty_response(req, status=204)
+
+    if req.method != "POST":
+        return _public_booking_error(req, "Only POST requests are supported.", status=405)
+
+    data = _parse_request_json(req)
+    if data is None:
+        return _public_booking_error(req, "Invalid JSON.", status=400)
+
+    clinic_slug = str(data.get("clinicSlug") or "").strip().lower()
+    staff_uid = str(data.get("staffUid") or "").strip()
+    first_name = str(data.get("firstName") or "").strip()
+    last_name = str(data.get("lastName") or "").strip()
+    email = str(data.get("email") or "").strip()
+    email_lower = _normalize_email(email)
+    service_id = str(data.get("serviceId") or "").strip()
+    start_iso = str(data.get("startIso") or "").strip()
+    end_iso = str(data.get("endIso") or "").strip()
+    phone = str(data.get("phone") or "").strip()
+    notes = str(data.get("notes") or "").strip()
+    privacy_accepted = data.get("privacyAccepted") is True
+    marketing_opt_in = data.get("marketingOptIn") is True
+
+    missing = []
+    if _is_blank(clinic_slug):
+        missing.append("clinicSlug")
+    if _is_blank(staff_uid):
+        missing.append("staffUid")
+    if _is_blank(first_name):
+        missing.append("firstName")
+    if _is_blank(last_name):
+        missing.append("lastName")
+    if _is_blank(email_lower):
+        missing.append("email")
+    if _is_blank(service_id):
+        missing.append("serviceId")
+    if _is_blank(start_iso):
+        missing.append("startIso")
+    if _is_blank(end_iso):
+        missing.append("endIso")
+    if _is_blank(phone):
+        missing.append("phone")
+    if not privacy_accepted:
+        missing.append("privacyAccepted")
+
+    if missing:
+        logger.warning(
+            "publicBookAppointment missing fields: %s clinicSlug=%s",
+            missing,
+            clinic_slug or "-",
+        )
+        return _public_booking_error(
+            req,
+            "Missing required fields",
+            status=400,
+            missing=missing,
+        )
+
+    clinic_ref = get_db().collection("publicClinics").document(clinic_slug)
+    clinic_snap = clinic_ref.get()
+    if not clinic_snap.exists:
+        return _public_booking_error(req, "Clinic not found.", status=404)
+
+    clinic_data = clinic_snap.to_dict() or {}
+    if clinic_data.get("isActive") is not True:
+        return _public_booking_error(req, "Clinic inactive.", status=403)
+
+    owner_uid = clinic_data.get("ownerUid")
+    if not owner_uid:
+        return _public_booking_error(req, "Clinic owner missing.", status=404)
+
+    full_name = f"{first_name} {last_name}".strip()
+
+    start_dt = _parse_iso_datetime(start_iso)
+    end_dt = _parse_iso_datetime(end_iso)
+    if not start_dt or not end_dt:
+        return _public_booking_error(req, "Invalid startIso/endIso.", status=400)
+    if end_dt <= start_dt:
+        return _public_booking_error(req, "Invalid time range.", status=400)
+
+    timezone_name = clinic_data.get("timezone") or "Europe/Copenhagen"
+    try:
+        tzinfo = ZoneInfo(timezone_name)
+    except Exception:
+        tzinfo = timezone.utc
+        timezone_name = "UTC"
+
+    staff_doc = (
+        get_db()
+        .collection("users")
+        .document(owner_uid)
+        .collection("team")
+        .document(staff_uid)
+        .get()
+    )
+    staff_data = staff_doc.to_dict() if staff_doc.exists else {}
+    staff_name = staff_data.get("name") or ""
+    if not staff_name:
+        staff_name = f"{staff_data.get('firstName') or ''} {staff_data.get('lastName') or ''}".strip()
+
+    calendar_owner_id = staff_uid or owner_uid
+
+    day_start = start_dt.astimezone(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    day_end = day_start + timedelta(days=1)
+
+    appointments_ref = (
+        get_db()
+        .collection("users")
+        .document(owner_uid)
+        .collection("appointments")
+    )
+    overlapping_docs = appointments_ref.where("start", ">=", _to_utc_iso(day_start)).where(
+        "start", "<", _to_utc_iso(day_end)
+    ).stream()
+
+    for doc in overlapping_docs:
+        appt = doc.to_dict() or {}
+        if not _appointment_matches_staff(appt, staff_uid, staff_name, owner_uid):
+            continue
+        appt_start = _parse_iso_datetime(appt.get("start") or appt.get("startIso"))
+        appt_end = _parse_iso_datetime(appt.get("end") or appt.get("endIso"))
+        if not appt_start or not appt_end:
+            continue
+        if start_dt < appt_end and end_dt > appt_start:
+            return _public_booking_error(req, "Slot unavailable.", status=409)
+
+    phone_digits = re.sub(r"\D", "", phone or "")
+    if len(phone_digits) == 8:
+        phone_norm = f"45{phone_digits}"
+    elif phone_digits.startswith("0045"):
+        phone_norm = phone_digits[2:]
+    else:
+        phone_norm = phone_digits
+
+    telefon_land = ""
+    telefon_value = phone
+    if phone.startswith("+"):
+        parts = phone.split(maxsplit=1)
+        telefon_land = parts[0]
+        telefon_value = parts[1] if len(parts) > 1 else ""
+    elif phone_norm.startswith("45") and len(phone_norm) >= 10:
+        telefon_land = "+45"
+        telefon_value = phone_norm[2:]
+    elif len(phone_digits) == 8:
+        telefon_land = "+45"
+        telefon_value = phone_digits
+
+    telefon_komplet = phone or f"{telefon_land} {telefon_value}".strip()
+
+    owner_profile = (
+        get_db().collection("users").document(calendar_owner_id).get()
+    )
+    owner_data = owner_profile.to_dict() if owner_profile.exists else {}
+    owner_email = owner_data.get("email") or owner_data.get("ownerEmail") or ""
+    owner_name = (
+        owner_data.get("displayName")
+        or owner_data.get("fullName")
+        or owner_data.get("name")
+        or ""
+    )
+    owner_identifier_source = owner_name or owner_email or calendar_owner_id or "unknown-user"
+    owner_identifier = re.sub(r"[^a-z0-9]+", "-", owner_identifier_source.lower()).strip("-")
+    if not owner_identifier:
+        owner_identifier = "unknown-user"
+
+    client_upsert_action = "created"
+    client_id = None
+    clients_ref = (
+        get_db().collection("users").document(calendar_owner_id).collection("clients")
+    )
+    existing_client = None
+    if phone_norm:
+        existing_client = list(
+            clients_ref.where("phoneNorm", "==", phone_norm).limit(1).stream()
+        )
+
+    now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    if existing_client:
+        client_doc = existing_client[0]
+        client_id = client_doc.id
+        client_data = client_doc.to_dict() or {}
+        updates: Dict[str, Any] = {
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        }
+        if _is_blank(client_data.get("email")) and email:
+            updates["email"] = email
+        if _is_blank(client_data.get("emailLower")) and email_lower:
+            updates["emailLower"] = email_lower
+        if _is_blank(client_data.get("navn")) and full_name:
+            updates["navn"] = full_name
+        if _is_blank(client_data.get("fornavn")) and first_name:
+            updates["fornavn"] = first_name
+        if _is_blank(client_data.get("efternavn")) and last_name:
+            updates["efternavn"] = last_name
+        if _is_blank(client_data.get("telefon")) and telefon_value:
+            updates["telefon"] = telefon_value
+        if _is_blank(client_data.get("telefonKomplet")) and telefon_komplet:
+            updates["telefonKomplet"] = telefon_komplet
+        if _is_blank(client_data.get("telefonLand")) and telefon_land:
+            updates["telefonLand"] = telefon_land
+        if phone_norm and client_data.get("phoneNorm") != phone_norm:
+            updates["phoneNorm"] = phone_norm
+        if _is_blank(client_data.get("ownerEmail")) and owner_email:
+            updates["ownerEmail"] = owner_email
+        if _is_blank(client_data.get("ownerIdentifier")) and owner_identifier:
+            updates["ownerIdentifier"] = owner_identifier
+        if len(updates) > 1:
+            client_doc.reference.set(updates, merge=True)
+        client_upsert_action = "found"
+    else:
+        client_payload = {
+            "navn": full_name or first_name,
+            "fornavn": first_name,
+            "efternavn": last_name,
+            "email": email,
+            "emailLower": email_lower,
+            "telefon": telefon_value or phone,
+            "telefonLand": telefon_land or "+45",
+            "telefonKomplet": telefon_komplet,
+            "phoneNorm": phone_norm,
+            "ownerUid": calendar_owner_id,
+            "ownerEmail": owner_email,
+            "ownerIdentifier": owner_identifier,
+            "status": "Aktiv",
+            "createdAt": firestore.SERVER_TIMESTAMP,
+            "createdAtIso": now_iso,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        }
+        client_ref = clients_ref.document()
+        client_ref.set(client_payload)
+        client_id = client_ref.id
+
+    logger.info(
+        "publicBookAppointment clientUpsert=%s clinicSlug=%s calendarOwnerId=%s staffUid=%s serviceId=%s",
+        client_upsert_action,
+        clinic_slug,
+        calendar_owner_id,
+        staff_uid,
+        service_id,
+    )
+
+    start_date_local = start_dt.astimezone(tzinfo)
+    end_date_local = end_dt.astimezone(tzinfo)
+    start_date = start_date_local.strftime("%d-%m-%Y")
+    start_time = start_date_local.strftime("%H:%M")
+    end_date = end_date_local.strftime("%d-%m-%Y")
+    end_time = end_date_local.strftime("%H:%M")
+
+    appointment_ref = appointments_ref.document()
+    appointment_payload = {
+        "clinicSlug": clinic_slug,
+        "clinicName": clinic_data.get("clinicName") or clinic_slug,
+        "ownerUid": owner_uid,
+        "staffUid": staff_uid,
+        "calendarOwnerId": staff_uid,
+        "calendarOwner": staff_name or clinic_data.get("clinicName") or "Clinician",
+        "title": full_name or service_id or "Booking",
+        "client": full_name,
+        "clientId": client_id,
+        "clientEmail": email,
+        "clientPhone": phone,
+        "serviceId": service_id,
+        "service": service_id,
+        "serviceType": "service",
+        "startIso": start_iso,
+        "endIso": end_iso,
+        "start": start_iso,
+        "end": end_iso,
+        "startDate": start_date,
+        "startTime": start_time,
+        "endDate": end_date,
+        "endTime": end_time,
+        "firstName": first_name,
+        "lastName": last_name,
+        "email": email,
+        "phone": phone,
+        "notes": notes,
+        "privacyAccepted": privacy_accepted,
+        "marketingOptIn": marketing_opt_in,
+        "status": "requested",
+        "createdAt": firestore.SERVER_TIMESTAMP,
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    }
+    appointment_ref.set(appointment_payload)
+
+    return _public_booking_json_response(
+        req,
+        {"ok": True, "appointmentId": appointment_ref.id, "clientId": client_id},
+        status=200,
+    )
+
+
+@https_fn.on_request()
+def publicGetAvailability(req: https_fn.Request) -> https_fn.Response:
+    if req.method == "OPTIONS":
+        return _public_booking_empty_response(req, status=204)
+
+    if req.method not in ("GET", "POST"):
+        return _public_booking_error(req, "Only GET/POST requests are supported.", status=405)
+
+    data = _parse_request_json(req) if req.method == "POST" else {}
+    if data is None:
+        return _public_booking_error(req, "Invalid JSON.", status=400)
+
+    query_params = dict(req.args or {})
+    clinic_slug = str(
+        (query_params.get("clinicSlug") if query_params else None) or data.get("clinicSlug") or ""
+    ).strip().lower()
+    staff_uid = str(
+        (query_params.get("staffUid") if query_params else None) or data.get("staffUid") or ""
+    ).strip()
+    date_iso = str(
+        (query_params.get("dateIso") if query_params else None) or data.get("dateIso") or ""
+    ).strip()
+    service_id = str(
+        (query_params.get("serviceId") if query_params else None) or data.get("serviceId") or ""
+    ).strip()
+
+    logger.info(
+        "publicGetAvailability params: %s",
+        {
+            "clinicSlug": clinic_slug,
+            "staffUid": staff_uid,
+            "dateIso": date_iso,
+            "serviceId": service_id,
+            "method": req.method,
+        },
+    )
+
+    missing = []
+    if _is_blank(clinic_slug):
+        missing.append("clinicSlug")
+    if _is_blank(staff_uid):
+        missing.append("staffUid")
+    if _is_blank(date_iso):
+        missing.append("dateIso")
+    if _is_blank(service_id):
+        missing.append("serviceId")
+    if missing:
+        return _public_booking_error(
+            req,
+            "Missing required fields",
+            status=400,
+            missing=missing,
+        )
+
+    clinic_ref = get_db().collection("publicClinics").document(clinic_slug)
+    clinic_snap = clinic_ref.get()
+    if not clinic_snap.exists:
+        return _public_booking_error(req, "Clinic not found.", status=404)
+
+    clinic_data = clinic_snap.to_dict() or {}
+    if clinic_data.get("isActive") is not True:
+        return _public_booking_error(req, "Clinic inactive.", status=403)
+
+    owner_uid = clinic_data.get("ownerUid")
+    if not owner_uid:
+        return _public_booking_error(req, "Clinic owner missing.", status=404)
+
+    timezone_name = clinic_data.get("timezone") or "Europe/Copenhagen"
+    try:
+        tzinfo = ZoneInfo(timezone_name)
+    except Exception:
+        tzinfo = timezone.utc
+        timezone_name = "UTC"
+
+    normalized_date_iso = date_iso.replace("Z", "+00:00")
+    parsed_date = _parse_date_iso(date_iso)
+    if not parsed_date:
+        parsed_dt = _parse_iso_datetime(normalized_date_iso)
+        if parsed_dt:
+            parsed_date = parsed_dt.astimezone(tzinfo).date()
+    if not parsed_date:
+        return _public_booking_error(
+            req,
+            "Invalid dateIso. Use YYYY-MM-DD or ISO timestamp.",
+            status=400,
+        )
+
+    slot_minutes = clinic_data.get("slotMinutes")
+    try:
+        slot_minutes = int(slot_minutes)
+    except Exception:
+        slot_minutes = 15
+    if slot_minutes <= 0:
+        slot_minutes = 15
+
+    service_ref = (
+        get_db()
+        .collection("users")
+        .document(owner_uid)
+        .collection("services")
+        .document(service_id)
+    )
+    service_snap = service_ref.get()
+    if not service_snap.exists:
+        return _public_booking_error(
+            req,
+            "Unknown serviceId.",
+            status=400,
+        )
+    service_data = service_snap.to_dict() or {}
+    service_minutes = _parse_duration_minutes_or_default(
+        service_data.get("duration") or service_data.get("varighed"),
+        default_minutes=60,
+        context=f"serviceId:{service_id}",
+    )
+
+    staff_doc = (
+        get_db()
+        .collection("users")
+        .document(owner_uid)
+        .collection("team")
+        .document(staff_uid)
+        .get()
+    )
+    staff_data = staff_doc.to_dict() if staff_doc.exists else {}
+
+    owner_doc = get_db().collection("users").document(owner_uid).get()
+    owner_data = owner_doc.to_dict() if owner_doc.exists else {}
+
+    working_hours = _resolve_working_hours(clinic_data, owner_data, staff_data)
+    day_key = _get_day_key(parsed_date)
+    windows = _get_day_windows(working_hours, day_key)
+
+    day_start_local = datetime(
+        parsed_date.year,
+        parsed_date.month,
+        parsed_date.day,
+        0,
+        0,
+        tzinfo=tzinfo,
+    )
+    day_end_local = day_start_local + timedelta(days=1)
+    day_start_iso = _to_utc_iso(day_start_local)
+    day_end_iso = _to_utc_iso(day_end_local)
+
+    staff_name = staff_data.get("name") or ""
+    if not staff_name:
+        first = staff_data.get("firstName") or ""
+        last = staff_data.get("lastName") or ""
+        staff_name = f"{first} {last}".strip()
+
+    appointments_ref = (
+        get_db()
+        .collection("users")
+        .document(owner_uid)
+        .collection("appointments")
+    )
+    appointment_docs = appointments_ref.where("start", ">=", day_start_iso).where(
+        "start", "<", day_end_iso
+    ).stream()
+
+    busy_ranges = []
+    for doc in appointment_docs:
+        appt = doc.to_dict() or {}
+        if not _appointment_matches_staff(appt, staff_uid, staff_name, owner_uid):
+            continue
+        appt_start = _parse_iso_datetime(appt.get("start") or appt.get("startIso"))
+        appt_end = _parse_iso_datetime(appt.get("end") or appt.get("endIso"))
+        if not appt_start or not appt_end:
+            continue
+        busy_ranges.append((appt_start, appt_end))
+
+    slots = []
+    for window in windows:
+        start_minutes = _parse_time_minutes(window.get("start"))
+        end_minutes = _parse_time_minutes(window.get("end"))
+        if start_minutes is None or end_minutes is None:
+            continue
+        if end_minutes <= start_minutes:
+            continue
+        slot_start_minutes = start_minutes
+        while slot_start_minutes + service_minutes <= end_minutes:
+            slot_start_local = day_start_local + timedelta(minutes=slot_start_minutes)
+            slot_end_local = slot_start_local + timedelta(minutes=service_minutes)
+            slot_start = slot_start_local.astimezone(timezone.utc)
+            slot_end = slot_end_local.astimezone(timezone.utc)
+            overlaps = False
+            for busy_start, busy_end in busy_ranges:
+                if slot_start < busy_end and slot_end > busy_start:
+                    overlaps = True
+                    break
+            if not overlaps:
+                slots.append(
+                    {
+                        "startIso": _to_utc_iso(slot_start_local),
+                        "endIso": _to_utc_iso(slot_end_local),
+                    }
+                )
+            slot_start_minutes += slot_minutes
+
+    return _public_booking_json_response(
+        req,
+        {
+            "slots": slots,
+            "timezone": timezone_name,
+            "slotMinutes": slot_minutes,
+            "serviceMinutes": service_minutes,
+        },
+        status=200,
+    )
+
+
+@https_fn.on_request()
+def getClinicStaffPublic(req: https_fn.Request) -> https_fn.Response:
+    if req.method == "OPTIONS":
+        return _public_booking_empty_response(req, status=204)
+
+    if req.method not in ("GET", "POST"):
+        return _public_booking_error(req, "Only GET/POST requests are supported.", status=405)
+
+    data = _parse_request_json(req) if req.method == "POST" else {}
+    if data is None:
+        return _public_booking_error(req, "Invalid JSON.", status=400)
+
+    clinic_slug = (
+        str((req.args.get("clinicSlug") if req.args else None) or data.get("clinicSlug") or "")
+        .strip()
+        .lower()
+    )
+    if _is_blank(clinic_slug):
+        return _public_booking_error(
+            req,
+            "Missing required fields",
+            status=400,
+            missing=["clinicSlug"],
+        )
+
+    clinic_ref = get_db().collection("publicClinics").document(clinic_slug)
+    clinic_snap = clinic_ref.get()
+    if not clinic_snap.exists:
+        return _public_booking_error(req, "Clinic not found.", status=404)
+
+    clinic_data = clinic_snap.to_dict() or {}
+    if clinic_data.get("isActive") is not True:
+        return _public_booking_error(req, "Clinic inactive.", status=403)
+
+    owner_uid = clinic_data.get("ownerUid")
+    if not owner_uid:
+        return _public_booking_error(req, "Clinic owner missing.", status=404)
+
+    team_docs = (
+        get_db()
+        .collection("users")
+        .document(owner_uid)
+        .collection("team")
+        .stream()
+    )
+    staff = []
+    for doc in team_docs:
+        member = doc.to_dict() or {}
+        staff.append(
+            {
+                "id": doc.id,
+                "name": member.get("name") or "",
+                "firstName": member.get("firstName") or "",
+                "lastName": member.get("lastName") or "",
+                "role": member.get("role") or "",
+                "avatarText": member.get("avatarText") or "",
+                "calendarColor": member.get("calendarColor") or "",
+            }
+        )
+
+    if not staff:
+        owner_doc = get_db().collection("users").document(owner_uid).get()
+        owner_data = owner_doc.to_dict() if owner_doc.exists else {}
+        fallback_name = (
+            owner_data.get("displayName")
+            or owner_data.get("navn")
+            or owner_data.get("name")
+            or clinic_data.get("clinicName")
+            or "Clinician"
+        )
+        staff = [
+            {
+                "id": owner_uid,
+                "name": fallback_name,
+                "firstName": owner_data.get("fornavn") or "",
+                "lastName": owner_data.get("efternavn") or "",
+                "role": "owner",
+                "avatarText": owner_data.get("avatarText") or "",
+                "calendarColor": owner_data.get("calendarColor") or "",
+            }
+        ]
+
+    return _public_booking_json_response(
+        req,
+        {
+            "ok": True,
+            "clinicSlug": clinic_slug,
+            "clinicName": clinic_data.get("clinicName") or clinic_slug,
+            "staff": staff,
+        },
+        status=200,
+    )
+
+
+@https_fn.on_request()
+def getClinicServicesPublic(req: https_fn.Request) -> https_fn.Response:
+    if req.method == "OPTIONS":
+        return _public_booking_empty_response(req, status=204)
+
+    if req.method not in ("GET", "POST"):
+        return _public_booking_error(req, "Only GET/POST requests are supported.", status=405)
+
+    data = _parse_request_json(req) if req.method == "POST" else {}
+    if data is None:
+        return _public_booking_error(req, "Invalid JSON.", status=400)
+
+    query_params = dict(req.args or {})
+    clinic_slug = str(
+        (query_params.get("clinicSlug") if query_params else None)
+        or (query_params.get("slug") if query_params else None)
+        or data.get("clinicSlug")
+        or data.get("slug")
+        or ""
+    ).strip().lower()
+
+    if _is_blank(clinic_slug):
+        return _public_booking_error(
+            req,
+            "Missing required field: clinicSlug",
+            status=400,
+        )
+
+    clinic_ref = get_db().collection("publicClinics").document(clinic_slug)
+    clinic_snap = clinic_ref.get()
+    if not clinic_snap.exists:
+        return _public_booking_error(req, "Clinic not found", status=404)
+
+    clinic_data = clinic_snap.to_dict() or {}
+    if clinic_data.get("isActive") is False:
+        return _public_booking_error(req, "Clinic is not active", status=403)
+
+    owner_uid = clinic_data.get("ownerUid")
+    if not owner_uid:
+        return _public_booking_error(req, "publicClinics is missing ownerUid", status=500)
+
+    service_docs = (
+        get_db()
+        .collection("users")
+        .document(owner_uid)
+        .collection("services")
+        .stream()
+    )
+    services = []
+    for doc in service_docs:
+        data = doc.to_dict() or {}
+        name = (data.get("name") or data.get("navn") or "").strip()
+        if not name:
+            continue
+        description = data.get("description") or data.get("beskrivelse") or ""
+        duration_raw = data.get("duration") or data.get("varighed")
+        duration_minutes = _parse_duration_minutes(duration_raw)
+        price = data.get("price") if isinstance(data.get("price"), (int, float)) else data.get("pris")
+        if isinstance(price, bool):
+            price = None
+        price_incl_vat = (
+            data.get("priceInclVat")
+            if isinstance(data.get("priceInclVat"), (int, float))
+            else data.get("prisInklMoms")
+        )
+        if isinstance(price_incl_vat, bool):
+            price_incl_vat = None
+        include_vat = data.get("includeVat")
+        if include_vat is None and price is not None and price_incl_vat is not None:
+            include_vat = price_incl_vat != price
+        if include_vat is None:
+            include_vat = False
+        services.append(
+            {
+                "id": doc.id,
+                "name": name,
+                "description": description,
+                "durationMinutes": duration_minutes,
+                "price": price,
+                "currency": data.get("currency") or "DKK",
+                "color": data.get("color") or None,
+                "includeVat": bool(include_vat),
+                "priceInclVat": price_incl_vat if price_incl_vat is not None else price,
+            }
+        )
+
+    logger.info("getClinicServicesPublic clinicSlug=%s services=%s", clinic_slug, len(services))
+
+    return _public_booking_json_response(req, {"services": services}, status=200)
+
+
+@https_fn.on_request()
+def publicGetServices(req: https_fn.Request) -> https_fn.Response:
+    if req.method == "OPTIONS":
+        return _public_booking_empty_response(req, status=204)
+
+    if req.method not in ("GET", "POST"):
+        return _public_booking_error(req, "Only GET/POST requests are supported.", status=405)
+
+    data = _parse_request_json(req) if req.method == "POST" else {}
+    if data is None:
+        return _public_booking_error(req, "Invalid JSON.", status=400)
+
+    query_params = dict(req.args or {})
+    clinic_slug = str(
+        (query_params.get("clinicSlug") if query_params else None)
+        or data.get("clinicSlug")
+        or ""
+    ).strip().lower()
+
+    if _is_blank(clinic_slug):
+        return _public_booking_error(
+            req,
+            "Missing required field: clinicSlug",
+            status=400,
+        )
+
+    clinic_ref = get_db().collection("publicClinics").document(clinic_slug)
+    clinic_snap = clinic_ref.get()
+    if not clinic_snap.exists:
+        return _public_booking_error(req, "Clinic not found", status=404)
+
+    clinic_data = clinic_snap.to_dict() or {}
+    if clinic_data.get("isActive") is False:
+        return _public_booking_error(req, "Clinic is not active", status=403)
+
+    owner_uid = clinic_data.get("ownerUid")
+    if not owner_uid:
+        return _public_booking_error(req, "publicClinics is missing ownerUid", status=500)
+
+    service_docs = (
+        get_db()
+        .collection("users")
+        .document(owner_uid)
+        .collection("services")
+        .stream()
+    )
+
+    services = []
+    for doc in service_docs:
+        data = doc.to_dict() or {}
+        name = (data.get("name") or data.get("navn") or "").strip()
+        if not name:
+            continue
+        description = data.get("description") or data.get("beskrivelse") or ""
+        duration_raw = data.get("duration") or data.get("varighed")
+        duration_minutes = _parse_duration_minutes_or_default(
+            duration_raw,
+            default_minutes=60,
+            context=f"serviceId:{doc.id}",
+        )
+        price = data.get("price") if isinstance(data.get("price"), (int, float)) else data.get("pris")
+        if isinstance(price, bool):
+            price = None
+        price_incl_vat = (
+            data.get("priceInclVat")
+            if isinstance(data.get("priceInclVat"), (int, float))
+            else data.get("prisInklMoms")
+        )
+        if isinstance(price_incl_vat, bool):
+            price_incl_vat = None
+        include_vat = data.get("includeVat")
+        if include_vat is None and price is not None and price_incl_vat is not None:
+            include_vat = price_incl_vat != price
+        if include_vat is None:
+            include_vat = False
+
+        services.append(
+            {
+                "id": doc.id,
+                "name": name,
+                "description": description,
+                "durationMinutes": duration_minutes,
+                "price": price,
+                "currency": data.get("currency") or "DKK",
+                "includeVat": include_vat,
+                "priceInclVat": price_incl_vat if price_incl_vat is not None else price,
+                "color": data.get("color") or None,
+            }
+        )
+
+    logger.info("publicGetServices clinicSlug=%s services=%s", clinic_slug, len(services))
+
+    return _public_booking_json_response(req, {"services": services}, status=200)

@@ -443,6 +443,7 @@ function Product() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState('create');
   const [editingProduct, setEditingProduct] = useState(null);
+  const [showLearnMore, setShowLearnMore] = useState(false);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -504,6 +505,15 @@ function Product() {
     setEditorOpen(true);
   };
 
+  const openLearnMore = () => {
+    setShowLearnMore(true);
+  };
+
+  const handleLearnMoreStart = () => {
+    setShowLearnMore(false);
+    openCreate();
+  };
+
   const handleDelete = async (product) => {
     if (!user?.uid || !product?.id) return;
     const confirmed = window.confirm(
@@ -521,6 +531,7 @@ function Product() {
   };
 
   const showEmptyState = !loading && !loadError && products.length === 0;
+  const showLearnMoreState = !loading && !loadError && products.length > 0 && showLearnMore;
 
   return (
     <BookingSidebarLayout>
@@ -539,7 +550,11 @@ function Product() {
               <ProductEmptyState onStart={openCreate} />
             )}
 
-            {!loading && !loadError && products.length > 0 && (
+            {showLearnMoreState && (
+              <ProductEmptyState onStart={handleLearnMoreStart} />
+            )}
+
+            {!loading && !loadError && products.length > 0 && !showLearnMoreState && (
               <>
                 <div className="product-header">
                   <div>
@@ -553,7 +568,7 @@ function Product() {
                         'Tilføj og administrer dine produkter på lager.'
                       )}
                       {' '}
-                      <button type="button" className="product-inline-link">
+                      <button type="button" className="product-inline-link" onClick={openLearnMore}>
                         {t('booking.products.list.learnMore', 'Læs mere')}
                       </button>
                     </p>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import './usersettings.css';
@@ -32,6 +32,8 @@ function UserSettings() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [clinicName, setClinicName] = useState('');
+  const [publicClinicName, setPublicClinicName] = useState('');
+  const [publicClinicSlug, setPublicClinicSlug] = useState('');
   const [website, setWebsite] = useState('');
   const [category, setCategory] = useState('');
   const [address, setAddress] = useState('');
@@ -46,6 +48,22 @@ function UserSettings() {
   const [agentCommsRetention, setAgentCommsRetention] = useState('30d');
   const [isSaving, setIsSaving] = useState(false);
   const [isAvatarUploading, setIsAvatarUploading] = useState(false);
+  const [isClaimingSlug, setIsClaimingSlug] = useState(false);
+  const [slugStatus, setSlugStatus] = useState(null);
+
+  const sanitizeSlug = (value) => {
+    if (!value) return '';
+    const normalized = String(value)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return normalized.slice(0, 40);
+  };
+
+  const previewSlug = useMemo(() => sanitizeSlug(clinicName), [clinicName]);
+
+  const previewUrl = previewSlug ? `/book/${previewSlug}` : '';
 
   const applyTheme = (mode) => {
     let resolvedMode = mode;
@@ -81,6 +99,8 @@ function UserSettings() {
           setFullName(data.displayName || user.displayName || '');
           setEmail(data.email || user.email || '');
           setClinicName(data.clinicName || '');
+          setPublicClinicName(data.publicClinicName || data.clinicName || '');
+          setPublicClinicSlug(data.publicClinicSlug || '');
           setWebsite(data.website || '');
           setPhotoURL(data.photoURL || user.photoURL || '');
           setAvatarPreviewUrl('');
@@ -106,6 +126,8 @@ function UserSettings() {
           setFullName(user.displayName || '');
           setEmail(user.email || '');
           setClinicName('');
+          setPublicClinicName('');
+          setPublicClinicSlug('');
           setWebsite('');
           setPhotoURL(user.photoURL || '');
           setAvatarPreviewUrl('');
@@ -254,6 +276,95 @@ function UserSettings() {
     } finally {
       setIsAvatarUploading(false);
       setIsSaving(false);
+    }
+  };
+
+  const handleClaimSlug = async () => {
+    if (!user?.uid) return;
+    const nameValue = (clinicName || '').trim();
+    const sanitizedSlug = sanitizeSlug(clinicName);
+
+    if (!nameValue) {
+      setSlugStatus({
+        tone: 'error',
+        message: t('settings.publicBooking.errors.missingName', 'Angiv et kliniknavn.'),
+      });
+      return;
+    }
+
+    if (!sanitizedSlug) {
+      setSlugStatus({
+        tone: 'error',
+        message: t(
+          'settings.publicBooking.errors.missingSlug',
+          'Kunne ikke generere et clinic slug.'
+        ),
+      });
+      return;
+    }
+
+    setIsClaimingSlug(true);
+    setSlugStatus(null);
+
+    try {
+      const clinicRef = doc(db, 'publicClinics', sanitizedSlug);
+      const clinicSnap = await getDoc(clinicRef);
+      if (clinicSnap.exists()) {
+        const data = clinicSnap.data() || {};
+        if (data.ownerUid && data.ownerUid !== user.uid) {
+          setSlugStatus({
+            tone: 'error',
+            message: t('settings.publicBooking.errors.slugTaken', 'Slug er optaget. Prøv en anden.'),
+          });
+          return;
+        }
+      }
+
+      const clinicPayload = {
+        ownerUid: user.uid,
+        clinicSlug: sanitizedSlug,
+        clinicName: nameValue,
+        isActive: true,
+        updatedAt: serverTimestamp(),
+      };
+
+      if (!clinicSnap.exists()) {
+        clinicPayload.createdAt = serverTimestamp();
+      }
+
+      await setDoc(clinicRef, clinicPayload, { merge: true });
+
+      const generatedUrl = `/book/${sanitizedSlug}`;
+
+      await setDoc(
+        doc(db, 'users', user.uid),
+        {
+          publicClinicSlug: sanitizedSlug,
+          publicClinicName: nameValue,
+          website: generatedUrl,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      setPublicClinicSlug(sanitizedSlug);
+      setPublicClinicName(nameValue);
+      setWebsite(generatedUrl);
+      setSlugStatus({
+        tone: 'success',
+        message: t(
+          'settings.publicBooking.success',
+          `Bookingsiden er aktiv: ${generatedUrl}`
+        ),
+      });
+    } catch (error) {
+      console.error('[UserSettings] Failed to claim clinic slug', error);
+      setSlugStatus({
+        tone: 'error',
+        message: t('settings.publicBooking.errors.generic', 'Kunne ikke gemme bookingsiden. Prøv igen.'),
+      });
+    } finally {
+      setIsClaimingSlug(false);
     }
   };
 
@@ -429,6 +540,7 @@ function UserSettings() {
                           )}
                         />
                       </div>
+
                     </>
                   )}
 
@@ -451,6 +563,74 @@ function UserSettings() {
                           placeholder={t('settings.account.websitePlaceholder', 'www.ditwebsted.com')}
                         />
                       </div>
+
+                      <div className="usersettings-divider" />
+
+                      <div className="usersettings-section">
+                        <div className="usersettings-title">
+                          {t('settings.publicBooking.title', 'Bookingside')}
+                        </div>
+                        <div className="usersettings-subtitle">
+                          {t(
+                            'settings.publicBooking.subtitle',
+                            'Aktivér en offentlig booking-side til dine klienter.'
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="usersettings-grid">
+                        <div className="usersettings-section">
+                          <label className="usersettings-label">
+                            {t('settings.publicBooking.clinicNameLabel', 'Kliniknavn')}
+                          </label>
+                          <input
+                            className="usersettings-input"
+                            value={clinicName}
+                            readOnly
+                          />
+                        </div>
+                        <div className="usersettings-section">
+                          <label className="usersettings-label">
+                            {t('settings.publicBooking.urlLabel', 'Bookingside URL')}
+                          </label>
+                          <input
+                            className="usersettings-input"
+                            value={previewUrl}
+                            readOnly
+                            placeholder={t(
+                              'settings.publicBooking.urlPlaceholder',
+                              '/book/din-klinik'
+                            )}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="usersettings-claim-row">
+                        <button
+                          type="button"
+                          className="usersettings-claim-btn"
+                          onClick={handleClaimSlug}
+                          disabled={isClaimingSlug || !clinicName.trim()}
+                        >
+                          {isClaimingSlug
+                            ? t('settings.publicBooking.claiming', 'Aktiverer...')
+                            : t('settings.publicBooking.activate', 'Aktiver bookingside')}
+                        </button>
+                        <span className="usersettings-slug-preview">
+                          {previewUrl
+                            ? t(
+                                'settings.publicBooking.urlPreview',
+                                `URL: ${previewUrl}`
+                              )
+                            : t('settings.publicBooking.urlPreviewEmpty', 'URL: /book/...')}
+                        </span>
+                      </div>
+
+                      {slugStatus?.message ? (
+                        <div className={`usersettings-status ${slugStatus.tone || ''}`}>
+                          {slugStatus.message}
+                        </div>
+                      ) : null}
 
                       <div className="usersettings-section">
                         <label className="usersettings-label">

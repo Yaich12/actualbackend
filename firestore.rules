@@ -31,6 +31,16 @@ service cloud.firestore {
       }
     }
 
+    match /publicClinics/{clinicSlug} {
+      allow read: if resource.data.isActive == true;
+      allow create: if isSignedIn()
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isSignedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
     // Default deny for anything outside /users/{userId}/...
     match /{document=**} {
       allow read, write: if false;

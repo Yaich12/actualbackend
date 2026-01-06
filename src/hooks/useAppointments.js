@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getApp } from 'firebase/app';
 import {
   collection,
   onSnapshot,
@@ -7,14 +8,26 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
-const deriveDatePartsFromIso = (iso) => {
-  if (!iso) {
-    return { startDate: '', startTime: '' };
+const toDateValue = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value?.toDate === 'function') {
+    const converted = value.toDate();
+    return converted instanceof Date ? converted : null;
   }
+  if (typeof value === 'object' && typeof value.seconds === 'number') {
+    return new Date(value.seconds * 1000 + Math.floor((value.nanoseconds || 0) / 1e6));
+  }
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return null;
+};
 
-  const date = new Date(iso);
-
-  if (Number.isNaN(date.getTime())) {
+const deriveDatePartsFromValue = (value) => {
+  const date = toDateValue(value);
+  if (!date) {
     return { startDate: '', startTime: '' };
   }
 
@@ -35,16 +48,20 @@ const deriveDatePartsFromIso = (iso) => {
  */
 const mapAppointmentDoc = (doc) => {
   const data = doc.data() || {};
+  const startValue = data.start || data.startIso || data.startTime || null;
+  const endValue = data.end || data.endIso || data.endTime || null;
+  const startDateObj = toDateValue(startValue);
+  const endDateObj = toDateValue(endValue);
 
   const {
     startDate: derivedStartDate,
     startTime: derivedStartTime,
-  } = deriveDatePartsFromIso(data.start);
+  } = deriveDatePartsFromValue(startValue);
 
   const {
     startDate: derivedEndDate,
     startTime: derivedEndTime,
-  } = deriveDatePartsFromIso(data.end);
+  } = deriveDatePartsFromValue(endValue);
 
   return {
     id: doc.id,
@@ -61,7 +78,19 @@ const mapAppointmentDoc = (doc) => {
       data.appointmentRefNr ||
       data.referenceId ||
       null,
+    staffUid:
+      data.staffUid ||
+      data.calendarOwnerId ||
+      data.staffId ||
+      data.therapistId ||
+      null,
     therapistId: data.therapistId || null,
+    calendarOwnerId:
+      data.calendarOwnerId ||
+      data.staffUid ||
+      data.staffId ||
+      data.therapistId ||
+      null,
     calendarOwner:
       data.calendarOwner ||
       data.ownerName ||
@@ -89,10 +118,10 @@ const mapAppointmentDoc = (doc) => {
     title: data.title || '',
     notes: data.notes || '',
     status: data.status || 'booked',
-    startIso: data.start || '',
-    endIso: data.end || '',
-    start: data.start || '',
-    end: data.end || '',
+    startIso: startDateObj ? startDateObj.toISOString() : data.start || '',
+    endIso: endDateObj ? endDateObj.toISOString() : data.end || '',
+    start: startDateObj || data.start || '',
+    end: endDateObj || data.end || '',
     startDate: derivedStartDate || data.startDate || '',
     startTime: derivedStartTime || data.startTime || '',
     endDate: derivedEndDate || data.endDate || '',
@@ -133,8 +162,10 @@ const useAppointments = (therapistId) => {
     const appointmentsRef = collection(db, 'users', therapistId, 'appointments');
     const appointmentsQuery = query(appointmentsRef, orderBy('start', 'asc'));
 
+    const projectId = getApp().options?.projectId || 'unknown-project';
     console.log(
-      '[useAppointments] subscribing to users/%s/appointments',
+      '[useAppointments] projectId=%s path=users/%s/appointments',
+      projectId,
       therapistId
     );
 

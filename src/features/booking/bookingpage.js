@@ -119,6 +119,40 @@ function BookingPage() {
   const TOTAL_MINUTES = VISIBLE_HOURS * 60;
   const CALENDAR_SLOT_STEP = 10;
   const DEFAULT_SERVICE_MINUTES = 60;
+  const normalizeValue = (value) =>
+    String(value || '')
+      .trim()
+      .toLowerCase();
+  const normalizePhone = (value) => normalizeValue(value).replace(/[^\d+]/g, '');
+  const resolveClientMatch = (appointment) => {
+    if (!appointment || !clients.length) return null;
+    if (appointment.clientId) {
+      const direct = clients.find((client) => client.id === appointment.clientId);
+      if (direct) return direct;
+    }
+    const email = normalizeValue(appointment.clientEmail);
+    if (email) {
+      const match = clients.find(
+        (client) => normalizeValue(client.email) === email
+      );
+      if (match) return match;
+    }
+    const phone = normalizePhone(appointment.clientPhone);
+    if (phone) {
+      const match = clients.find(
+        (client) => normalizePhone(client.telefon) === phone
+      );
+      if (match) return match;
+    }
+    const name = normalizeValue(appointment.client || appointment.title);
+    if (name) {
+      const match = clients.find(
+        (client) => normalizeValue(client.navn) === name
+      );
+      if (match) return match;
+    }
+    return null;
+  };
   const derivedSelectedClient = useMemo(() => {
     if (selectedClientId) {
       const match = clients.find((client) => client.id === selectedClientId);
@@ -1513,11 +1547,13 @@ function BookingPage() {
     if (startDate) {
       setCurrentDate(startDate);
     }
-    setSelectedClientId(appointment.clientId || null);
-    setSelectedClientFallback(
-      appointment.client || appointment.clientEmail || appointment.clientPhone
+    const matchedClient = resolveClientMatch(appointment);
+    const resolvedClientId = matchedClient?.id || appointment.clientId || null;
+    const fallbackClient =
+      matchedClient ||
+      (appointment.client || appointment.clientEmail || appointment.clientPhone
         ? {
-            id: appointment.clientId || 'legacy-client',
+            id: resolvedClientId,
             navn: appointment.client || t('booking.calendar.unknownClient', 'Ukendt klient'),
             email: appointment.clientEmail || '',
             telefon: appointment.clientPhone || '',
@@ -1527,9 +1563,12 @@ function BookingPage() {
             postnummer: '',
             land: 'Danmark',
           }
-        : null
+        : null);
+    setSelectedClientId(resolvedClientId);
+    setSelectedClientFallback(fallbackClient);
+    setSelectedAppointment(
+      resolvedClientId ? { ...appointment, clientId: resolvedClientId } : appointment
     );
-    setSelectedAppointment(appointment);
     setShowAppointmentForm(false);
   };
 
@@ -2400,7 +2439,6 @@ function BookingPage() {
     additionalServicesTotal;
   const hasServicePrice =
     typeof selectedServicePrice === 'number' || additionalServicesTotal > 0;
-
   return (
     <BookingSidebarLayout>
       <div className="booking-page">

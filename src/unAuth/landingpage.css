@@ -137,9 +137,13 @@
 }
 /* Preview section background (lightened version of demo gradient for smooth transition) */
 .landing-section#preview {
-  background:
-    radial-gradient(circle at 20% 80%, rgba(255, 182, 153, 0.18) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(255, 244, 214, 0.35) 0%, transparent 50%),
-    radial-gradient(circle at 40% 40%, rgba(255, 182, 153, 0.08) 0%, transparent 50%),
-    #fffdf8;
+  background: hsl(var(--muted));
+}
+
+.landing-section#pricing {
+  background: hsl(var(--muted));
+}
+
+.landing-section#stats {
+  background: hsl(var(--muted));
 }

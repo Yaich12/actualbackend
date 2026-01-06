@@ -6,6 +6,17 @@ This project was bootstrapped with [Create React App](https://github.com/faceboo
 
 In the project directory, you can run:
 
+## Firebase Functions (Python)
+
+If you deploy the Python Cloud Functions, the Firebase CLI expects a virtual environment inside `functions/`.
+
+```bash
+cd functions
+python3.12 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
 ### `npm start`
 
 Runs the app in the development mode.\
