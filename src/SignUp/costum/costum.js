@@ -5,6 +5,12 @@ import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useAuth } from '../../AuthContext';
 import { useLanguage } from '../../LanguageContext';
 import { db } from '../../firebase';
+import {
+  WORK_HOURS_DAYS,
+  buildWorkHoursPayload,
+  createDefaultWorkHours,
+  getWorkHoursValidation,
+} from '../../utils/workHours';
 import './costum.css';
 
 const CATEGORY_CARDS = [
@@ -35,7 +41,7 @@ const DEFAULT_SERVICE_MODEL_OPTIONS = [
   'Jeg tilbyder virtuelle tjenester online',
 ];
 
-const DEFAULT_SOFTWARE_OPTIONS = [
+export const DEFAULT_SOFTWARE_OPTIONS = [
   'Acuity',
   'Booksy',
   'Calendly',
@@ -102,6 +108,7 @@ function OnboardingSlides() {
   const [mapsLoaded, setMapsLoaded] = useState(false);
   const [isPersisting, setIsPersisting] = useState(false);
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
+  const [workHours, setWorkHours] = useState(() => createDefaultWorkHours());
   const [formData, setFormData] = useState({
     language: language || 'da',
     currency: '',
@@ -196,7 +203,7 @@ function OnboardingSlides() {
   }, [loading, navigate, user]);
 
   const steps = useMemo(() => {
-    const flow = ['language', 'business', 'categories', 'accountType'];
+    const flow = ['language', 'business', 'categories', 'accountType', 'workHours'];
     if (formData.accountType === 'team') {
       flow.push('teamSize');
     }
@@ -275,6 +282,32 @@ function OnboardingSlides() {
     };
   }, [language]);
 
+  const defaultWorkHours = useMemo(() => createDefaultWorkHours(), []);
+  const workHoursErrors = useMemo(
+    () => getWorkHoursValidation(workHours),
+    [workHours]
+  );
+  const hasWorkHoursErrors = Object.keys(workHoursErrors).length > 0;
+  const workHoursDayLabels = useMemo(
+    () => ({
+      monday: t('onboarding.workHours.days.monday', 'Mandag'),
+      tuesday: t('onboarding.workHours.days.tuesday', 'Tirsdag'),
+      wednesday: t('onboarding.workHours.days.wednesday', 'Onsdag'),
+      thursday: t('onboarding.workHours.days.thursday', 'Torsdag'),
+      friday: t('onboarding.workHours.days.friday', 'Fredag'),
+      saturday: t('onboarding.workHours.days.saturday', 'Lørdag'),
+      sunday: t('onboarding.workHours.days.sunday', 'Søndag'),
+    }),
+    [t]
+  );
+  const workHoursErrorMessages = useMemo(
+    () => ({
+      missing: t('onboarding.workHours.errors.missing', 'Angiv start og slut'),
+      order: t('onboarding.workHours.errors.order', 'Starttid skal være før sluttid'),
+    }),
+    [t]
+  );
+
   const isStepComplete = (step) => {
     switch (step) {
       case 'language':
@@ -285,6 +318,8 @@ function OnboardingSlides() {
         return formData.categories.length > 0;
       case 'accountType':
         return Boolean(formData.accountType);
+      case 'workHours':
+        return !hasWorkHoursErrors;
       case 'teamSize':
         return Boolean(formData.teamSize);
       case 'serviceModel':
@@ -326,6 +361,9 @@ function OnboardingSlides() {
     if (trimmedAddress) update.address = trimmedAddress;
     if (formData.software) update.software = formData.software;
     if (formData.heardFrom) update.heardFrom = formData.heardFrom;
+    if (!hasWorkHoursErrors) {
+      update.workHours = buildWorkHoursPayload(workHours);
+    }
 
     if (markComplete) {
       update.onboardingComplete = true;
@@ -367,8 +405,18 @@ function OnboardingSlides() {
     }
   };
 
-  const handleNext = () => {
-    if (!canContinue) return;
+  const handleNext = async () => {
+    if (!canContinue || isPersisting) return;
+    if (currentStep === 'workHours') {
+      setIsPersisting(true);
+      try {
+        await persistProfile(false);
+      } catch (error) {
+        console.error('[OnboardingSlides] Failed to save work hours', error);
+      } finally {
+        setIsPersisting(false);
+      }
+    }
     if (isLastStep) {
       if (currentStep === 'complete') {
         void handleFinish();
@@ -550,6 +598,106 @@ function OnboardingSlides() {
     </div>
   );
 
+  const updateWorkHoursField = (dayKey, field, value) => {
+    setWorkHours((prev) => ({
+      ...prev,
+      [dayKey]: {
+        ...prev[dayKey],
+        [field]: value,
+      },
+    }));
+  };
+
+  const toggleWorkHoursDay = (dayKey) => {
+    setWorkHours((prev) => {
+      const current = prev[dayKey] || {};
+      const nextEnabled = !current.enabled;
+      const defaultDay = defaultWorkHours[dayKey] || {};
+      const nextStart = nextEnabled ? current.start || defaultDay.start || '' : current.start;
+      const nextEnd = nextEnabled ? current.end || defaultDay.end || '' : current.end;
+      return {
+        ...prev,
+        [dayKey]: {
+          ...current,
+          enabled: nextEnabled,
+          start: nextStart,
+          end: nextEnd,
+        },
+      };
+    });
+  };
+
+  const renderWorkHoursStep = () => (
+    <div className="onboarding-content">
+      <p className="onboarding-eyebrow">{t('onboarding.eyebrow', 'Kontoopsætning')}</p>
+      <h1 className="onboarding-title">
+        {t('onboarding.workHours.title', 'Arbejdstid')}
+      </h1>
+      <p className="onboarding-subtitle">
+        {t(
+          'onboarding.workHours.subtitle',
+          'Angiv hvornår du har åbent for bookinger. Du kan ændre arbejdstiden senere.'
+        )}
+      </p>
+      <div className="onboarding-workhours">
+        {WORK_HOURS_DAYS.map((day) => {
+          const dayData = workHours[day.key] || {};
+          const errorCode = workHoursErrors[day.key];
+          const errorMessage = errorCode ? workHoursErrorMessages[errorCode] : '';
+          const isEnabled = Boolean(dayData.enabled);
+          return (
+            <div
+              key={day.key}
+              className={`onboarding-workhours-row ${errorCode ? 'has-error' : ''}`}
+            >
+              <div className="onboarding-workhours-day">
+                <span className="onboarding-workhours-label">
+                  {workHoursDayLabels[day.key] || day.key}
+                </span>
+                <label className="onboarding-workhours-toggle">
+                  <input
+                    type="checkbox"
+                    checked={isEnabled}
+                    onChange={() => toggleWorkHoursDay(day.key)}
+                  />
+                  <span>
+                    {isEnabled
+                      ? t('onboarding.workHours.open', 'Åben')
+                      : t('onboarding.workHours.closed', 'Lukket')}
+                  </span>
+                </label>
+              </div>
+              <div className="onboarding-workhours-time">
+                <input
+                  type="time"
+                  className={`onboarding-workhours-input ${errorCode ? 'is-error' : ''}`}
+                  value={dayData.start || ''}
+                  onChange={(e) => updateWorkHoursField(day.key, 'start', e.target.value)}
+                  disabled={!isEnabled}
+                  aria-invalid={Boolean(errorCode)}
+                />
+                <span className="onboarding-workhours-separator">–</span>
+                <input
+                  type="time"
+                  className={`onboarding-workhours-input ${errorCode ? 'is-error' : ''}`}
+                  value={dayData.end || ''}
+                  onChange={(e) => updateWorkHoursField(day.key, 'end', e.target.value)}
+                  disabled={!isEnabled}
+                  aria-invalid={Boolean(errorCode)}
+                />
+              </div>
+              {errorMessage ? (
+                <div className="onboarding-workhours-error" role="alert">
+                  {errorMessage}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   const renderServiceModelStep = () => (
     <div className="onboarding-content">
       <p className="onboarding-eyebrow">{t('onboarding.eyebrow', 'Kontoopsætning')}</p>
@@ -644,6 +792,8 @@ function OnboardingSlides() {
         return renderCategoriesStep();
       case 'accountType':
         return renderAccountTypeStep();
+      case 'workHours':
+        return renderWorkHoursStep();
       case 'teamSize':
         return renderTeamSizeStep();
       case 'serviceModel':
@@ -747,7 +897,7 @@ function OnboardingSlides() {
                   type="button"
                   className="primary-button"
                   onClick={handleNext}
-                  disabled={!canContinue}
+                  disabled={!canContinue || isPersisting}
                 >
                   {isLastStep
                     ? t('onboarding.actions.finish', 'Færdig')

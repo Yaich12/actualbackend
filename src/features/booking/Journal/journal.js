@@ -665,6 +665,18 @@ function Journal({
         {onCreateJournalEntry && (
           <div className="journal-section">
             <div className="journal-create-actions">
+              {selectedAppointment && (
+                <MovingBorderButton
+                  borderRadius="0.75rem"
+                  onClick={handleSummarizePatient}
+                  disabled={isSummarizing}
+                  containerClassName="w-full h-12 text-base disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="bg-white text-slate-900 border-slate-200 font-medium"
+                  borderClassName="bg-[radial-gradient(var(--sky-500)_40%,transparent_60%)]"
+                >
+                  {isSummarizing ? 'Opsummerer…' : 'Opsummér patient'}
+                </MovingBorderButton>
+              )}
               <button
                 className="journal-create-appointment-btn"
                 onClick={onCreateJournalEntry}
@@ -690,16 +702,6 @@ function Journal({
                 >
                   Se journal
                 </button>
-                <MovingBorderButton
-                  borderRadius="0.75rem"
-                  onClick={handleSummarizePatient}
-                  disabled={isSummarizing}
-                  containerClassName="w-full h-12 text-base disabled:opacity-60 disabled:cursor-not-allowed"
-                  className="bg-white text-slate-900 border-slate-200 font-medium"
-                  borderClassName="bg-[radial-gradient(var(--sky-500)_40%,transparent_60%)]"
-                >
-                  {isSummarizing ? 'Opsummerer…' : 'Opsummér patient'}
-                </MovingBorderButton>
                 <button
                   className="journal-action-btn"
                   onClick={() => {

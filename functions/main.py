@@ -86,6 +86,7 @@ BOOKING_ALLOWED_ORIGINS = [
 ]
 BOOKING_ALLOW_ANY = os.getenv("BOOKING_CORS_ALLOW_ANY", "").lower() in ("1", "true", "yes")
 LOVABLE_ORIGIN_RE = re.compile(r"^https://[a-z0-9-]+\.lovable\.app$")
+WORK_HOURS_TIMEZONE = "Europe/Copenhagen"
 
 
 def _cors_headers() -> Dict[str, str]:
@@ -199,7 +200,12 @@ def _parse_date_iso(date_iso: str) -> date | None:
 def _parse_time_minutes(value: str | None) -> int | None:
     if not value:
         return None
-    parts = str(value).strip().split(":")
+    raw = str(value).strip()
+    if not raw:
+        return None
+    if "." in raw and ":" not in raw:
+        raw = raw.replace(".", ":")
+    parts = raw.split(":")
     if len(parts) != 2:
         return None
     try:
@@ -271,20 +277,145 @@ def _default_working_hours() -> Dict[str, List[Dict[str, str]]]:
     }
 
 
+def _normalize_work_hours_payload(
+    work_hours: Any,
+) -> Dict[str, List[Dict[str, str]]] | None:
+    if not isinstance(work_hours, dict):
+        return None
+
+    day_map = {
+        "monday": "mon",
+        "tuesday": "tue",
+        "wednesday": "wed",
+        "thursday": "thu",
+        "friday": "fri",
+        "saturday": "sat",
+        "sunday": "sun",
+    }
+
+    normalized: Dict[str, List[Dict[str, str]]] = {}
+    has_any = False
+    for long_key, short_key in day_map.items():
+        entry = work_hours.get(long_key)
+        if not isinstance(entry, dict):
+            continue
+        has_any = True
+        enabled = entry.get("enabled") is True
+        start = entry.get("start")
+        end = entry.get("end")
+        if enabled and isinstance(start, str) and isinstance(end, str) and start and end:
+            normalized[short_key] = [{"start": start, "end": end}]
+        else:
+            normalized[short_key] = []
+
+    if not has_any:
+        return None
+
+    for short_key in day_map.values():
+        normalized.setdefault(short_key, [])
+
+    return normalized
+
+
+def _get_weekday_key_long(target_date: date) -> str:
+    keys = [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    ]
+    return keys[target_date.weekday()]
+
+
+def _format_minutes_as_time(minutes: int | None) -> str | None:
+    if minutes is None:
+        return None
+    hours = minutes // 60
+    mins = minutes % 60
+    return f"{hours:02d}:{mins:02d}"
+
+
+def _load_user_work_hours(uid: str | None) -> tuple[Dict[str, Any] | None, str | None]:
+    if not uid:
+        return None, None
+    user_doc = get_db().collection("users").document(uid).get()
+    if not user_doc.exists:
+        return None, None
+    data = user_doc.to_dict() or {}
+    work_hours = data.get("workHours")
+    if isinstance(work_hours, dict):
+        return work_hours, uid
+    return None, uid
+
+
+def _resolve_staff_work_hours(
+    clinic_data: Dict[str, Any],
+    staff_uid: str,
+    staff_data: Dict[str, Any] | None = None,
+) -> tuple[Dict[str, Any] | None, str | None]:
+    work_hours, resolved_uid = _load_user_work_hours(staff_uid)
+    if work_hours is not None:
+        return work_hours, resolved_uid or staff_uid
+
+    if isinstance(staff_data, dict):
+        team_work_hours = staff_data.get("workHours")
+        if isinstance(team_work_hours, dict):
+            return team_work_hours, staff_data.get("uid") or staff_uid
+
+        team_uid = staff_data.get("uid")
+        if team_uid:
+            work_hours, resolved_uid = _load_user_work_hours(str(team_uid))
+            if work_hours is not None:
+                return work_hours, resolved_uid or str(team_uid)
+            return None, resolved_uid or str(team_uid)
+
+        return None, resolved_uid
+
+    owner_uid = clinic_data.get("ownerUid")
+    if not owner_uid:
+        return None, resolved_uid
+
+    team_doc = (
+        get_db()
+        .collection("users")
+        .document(owner_uid)
+        .collection("team")
+        .document(staff_uid)
+        .get()
+    )
+    if not team_doc.exists:
+        return None, resolved_uid
+
+    team_data = team_doc.to_dict() or {}
+    team_work_hours = team_data.get("workHours")
+    if isinstance(team_work_hours, dict):
+        return team_work_hours, team_data.get("uid") or staff_uid
+
+    team_uid = team_data.get("uid")
+    if team_uid:
+        work_hours, resolved_uid = _load_user_work_hours(str(team_uid))
+        if work_hours is not None:
+            return work_hours, resolved_uid or str(team_uid)
+        return None, resolved_uid or str(team_uid)
+
+    return None, resolved_uid
+
+
 def _resolve_working_hours(
     clinic_data: Dict[str, Any],
     owner_data: Dict[str, Any],
     staff_data: Dict[str, Any],
 ) -> Dict[str, List[Dict[str, str]]]:
-    working_hours = staff_data.get("workingHours")
-    if isinstance(working_hours, dict):
-        return working_hours
-    working_hours = clinic_data.get("workingHours")
-    if isinstance(working_hours, dict):
-        return working_hours
-    working_hours = owner_data.get("workingHours")
-    if isinstance(working_hours, dict):
-        return working_hours
+    for source in (staff_data, clinic_data, owner_data):
+        normalized = _normalize_work_hours_payload(source.get("workHours"))
+        if normalized is not None:
+            return normalized
+        working_hours = source.get("workingHours")
+        if isinstance(working_hours, dict):
+            return working_hours
     return _default_working_hours()
 
 
@@ -1339,9 +1470,9 @@ def publicBookAppointment(req: https_fn.Request) -> https_fn.Response:
     if end_dt <= start_dt:
         return _public_booking_error(req, "Invalid time range.", status=400)
 
-    timezone_name = clinic_data.get("timezone") or "Europe/Copenhagen"
+    timezone_name = WORK_HOURS_TIMEZONE
     try:
-        tzinfo = ZoneInfo(timezone_name)
+        tzinfo = ZoneInfo(WORK_HOURS_TIMEZONE)
     except Exception:
         tzinfo = timezone.utc
         timezone_name = "UTC"
@@ -1358,6 +1489,34 @@ def publicBookAppointment(req: https_fn.Request) -> https_fn.Response:
     staff_name = staff_data.get("name") or ""
     if not staff_name:
         staff_name = f"{staff_data.get('firstName') or ''} {staff_data.get('lastName') or ''}".strip()
+
+    work_hours, _ = _resolve_staff_work_hours(clinic_data, staff_uid, staff_data)
+    work_day_key = _get_weekday_key_long(start_dt.astimezone(tzinfo).date())
+    work_day = work_hours.get(work_day_key) if isinstance(work_hours, dict) else None
+    if not isinstance(work_day, dict) or work_day.get("enabled") is not True:
+        return _public_booking_error(req, "Outside working hours", status=400)
+
+    start_raw = work_day.get("start")
+    end_raw = work_day.get("end")
+    start_minutes = _parse_time_minutes(start_raw) if isinstance(start_raw, str) else None
+    end_minutes = _parse_time_minutes(end_raw) if isinstance(end_raw, str) else None
+    if start_minutes is None or end_minutes is None or end_minutes <= start_minutes:
+        return _public_booking_error(req, "Outside working hours", status=400)
+
+    start_local = start_dt.astimezone(tzinfo)
+    end_local = end_dt.astimezone(tzinfo)
+    work_day_start = datetime(
+        start_local.year,
+        start_local.month,
+        start_local.day,
+        0,
+        0,
+        tzinfo=tzinfo,
+    )
+    work_start = work_day_start + timedelta(minutes=start_minutes)
+    work_end = work_day_start + timedelta(minutes=end_minutes)
+    if start_local < work_start or end_local > work_end:
+        return _public_booking_error(req, "Outside working hours", status=400)
 
     calendar_owner_id = staff_uid or owner_uid
 
@@ -1620,9 +1779,9 @@ def publicGetAvailability(req: https_fn.Request) -> https_fn.Response:
     if not owner_uid:
         return _public_booking_error(req, "Clinic owner missing.", status=404)
 
-    timezone_name = clinic_data.get("timezone") or "Europe/Copenhagen"
+    timezone_name = WORK_HOURS_TIMEZONE
     try:
-        tzinfo = ZoneInfo(timezone_name)
+        tzinfo = ZoneInfo(WORK_HOURS_TIMEZONE)
     except Exception:
         tzinfo = timezone.utc
         timezone_name = "UTC"
@@ -1679,12 +1838,57 @@ def publicGetAvailability(req: https_fn.Request) -> https_fn.Response:
     )
     staff_data = staff_doc.to_dict() if staff_doc.exists else {}
 
-    owner_doc = get_db().collection("users").document(owner_uid).get()
-    owner_data = owner_doc.to_dict() if owner_doc.exists else {}
+    day_key = _get_weekday_key_long(parsed_date)
+    work_hours, resolved_staff_uid = _resolve_staff_work_hours(
+        clinic_data, staff_uid, staff_data
+    )
+    work_day = work_hours.get(day_key) if isinstance(work_hours, dict) else None
+    if not isinstance(work_day, dict) or work_day.get("enabled") is not True:
+        logger.info(
+            "publicGetAvailability workHours closed clinicSlug=%s staffUid=%s dateIso=%s serviceId=%s resolvedStaffUid=%s weekday=%s workStart=%s workEnd=%s slotsBefore=%s slotsAfter=%s",
+            clinic_slug,
+            staff_uid,
+            date_iso,
+            service_id,
+            resolved_staff_uid or "-",
+            day_key,
+            "-",
+            "-",
+            0,
+            0,
+        )
+        return _public_booking_json_response(
+            req,
+            {
+                "slots": [],
+                "timezone": timezone_name,
+                "slotMinutes": slot_minutes,
+                "serviceMinutes": service_minutes,
+                "reason": "CLOSED",
+            },
+            status=200,
+        )
 
-    working_hours = _resolve_working_hours(clinic_data, owner_data, staff_data)
-    day_key = _get_day_key(parsed_date)
-    windows = _get_day_windows(working_hours, day_key)
+    start_raw = work_day.get("start")
+    end_raw = work_day.get("end")
+    if not isinstance(start_raw, str) or not isinstance(end_raw, str) or not start_raw or not end_raw:
+        return _public_booking_error(
+            req,
+            f"workHours missing start/end for {day_key}.",
+            status=400,
+        )
+
+    start_minutes = _parse_time_minutes(start_raw)
+    end_minutes = _parse_time_minutes(end_raw)
+    if start_minutes is None or end_minutes is None or end_minutes <= start_minutes:
+        return _public_booking_error(
+            req,
+            f"Invalid workHours for {day_key}.",
+            status=400,
+        )
+
+    work_start_label = _format_minutes_as_time(start_minutes)
+    work_end_label = _format_minutes_as_time(end_minutes)
 
     day_start_local = datetime(
         parsed_date.year,
@@ -1725,33 +1929,44 @@ def publicGetAvailability(req: https_fn.Request) -> https_fn.Response:
             continue
         busy_ranges.append((appt_start, appt_end))
 
+    candidate_slots = []
+    slot_start_minutes = start_minutes
+    while slot_start_minutes + service_minutes <= end_minutes:
+        slot_start_local = day_start_local + timedelta(minutes=slot_start_minutes)
+        slot_end_local = slot_start_local + timedelta(minutes=service_minutes)
+        candidate_slots.append((slot_start_local, slot_end_local))
+        slot_start_minutes += slot_minutes
+
     slots = []
-    for window in windows:
-        start_minutes = _parse_time_minutes(window.get("start"))
-        end_minutes = _parse_time_minutes(window.get("end"))
-        if start_minutes is None or end_minutes is None:
-            continue
-        if end_minutes <= start_minutes:
-            continue
-        slot_start_minutes = start_minutes
-        while slot_start_minutes + service_minutes <= end_minutes:
-            slot_start_local = day_start_local + timedelta(minutes=slot_start_minutes)
-            slot_end_local = slot_start_local + timedelta(minutes=service_minutes)
-            slot_start = slot_start_local.astimezone(timezone.utc)
-            slot_end = slot_end_local.astimezone(timezone.utc)
-            overlaps = False
-            for busy_start, busy_end in busy_ranges:
-                if slot_start < busy_end and slot_end > busy_start:
-                    overlaps = True
-                    break
-            if not overlaps:
-                slots.append(
-                    {
-                        "startIso": _to_utc_iso(slot_start_local),
-                        "endIso": _to_utc_iso(slot_end_local),
-                    }
-                )
-            slot_start_minutes += slot_minutes
+    for slot_start_local, slot_end_local in candidate_slots:
+        slot_start = slot_start_local.astimezone(timezone.utc)
+        slot_end = slot_end_local.astimezone(timezone.utc)
+        overlaps = False
+        for busy_start, busy_end in busy_ranges:
+            if slot_start < busy_end and slot_end > busy_start:
+                overlaps = True
+                break
+        if not overlaps:
+            slots.append(
+                {
+                    "startIso": _to_utc_iso(slot_start_local),
+                    "endIso": _to_utc_iso(slot_end_local),
+                }
+            )
+
+    logger.info(
+        "publicGetAvailability workHours clinicSlug=%s staffUid=%s dateIso=%s serviceId=%s resolvedStaffUid=%s weekday=%s workStart=%s workEnd=%s slotsBefore=%s slotsAfter=%s",
+        clinic_slug,
+        staff_uid,
+        date_iso,
+        service_id,
+        resolved_staff_uid or "-",
+        day_key,
+        work_start_label or "-",
+        work_end_label or "-",
+        len(candidate_slots),
+        len(slots),
+    )
 
     return _public_booking_json_response(
         req,

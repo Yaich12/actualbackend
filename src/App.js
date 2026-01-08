@@ -84,6 +84,7 @@ function App() {
             <Route path="/booking/fakturaer/*" element={<FakturaerPage />} />
             <Route path="/booking/team" element={<TeamPage />} />
             <Route path="/booking/settings" element={<UserSettings />} />
+            <Route path="/settings/transfer" element={<UserSettings />} />
             <Route path="/signup" element={<SignUp />} />
             <Route path="/sign-in-demo" element={<SignInPageDemo />} />
           </Routes>

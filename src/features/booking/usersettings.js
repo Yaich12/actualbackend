@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import './usersettings.css';
 import './bookingpage.css';
 import { BookingSidebarLayout } from '../../components/ui/BookingSidebarLayout';
@@ -9,6 +9,14 @@ import { useAuth } from '../../AuthContext';
 import { useLanguage } from '../../LanguageContext';
 import { updateProfile } from 'firebase/auth';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
+import Transfer from './transfer/transfer';
+import {
+  WORK_HOURS_DAYS,
+  buildWorkHoursPayload,
+  createDefaultWorkHours,
+  getWorkHoursValidation,
+  resolveWorkHours,
+} from '../../utils/workHours';
 
 const THEME_STORAGE_KEY = 'selma_theme_mode';
 const NIGHT_START_HOUR = 18; // 18:00
@@ -27,8 +35,17 @@ const CURRENCY_OPTIONS = [
 function UserSettings() {
   const { user, updateUserProfile } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { language, setLanguage, languageOptions, t } = useLanguage();
-  const [activeSection, setActiveSection] = useState('profile'); // profile | account | appearance | language | ai
+  const resolveSectionFromPath = (pathname) => {
+    if (pathname.startsWith('/settings/transfer')) {
+      return 'transfer';
+    }
+    return 'profile';
+  };
+  const [activeSection, setActiveSection] = useState(() =>
+    resolveSectionFromPath(location.pathname)
+  ); // profile | account | workHours | appearance | language | ai | transfer
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [clinicName, setClinicName] = useState('');
@@ -42,6 +59,7 @@ function UserSettings() {
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState('');
   const [removeAvatar, setRemoveAvatar] = useState(false);
+  const [workHours, setWorkHours] = useState(() => createDefaultWorkHours());
   const [colorMode, setColorMode] = useState('system');
   const [audioRetention, setAudioRetention] = useState('30d');
   const [transcriptRetention, setTranscriptRetention] = useState('30d');
@@ -64,6 +82,31 @@ function UserSettings() {
   const previewSlug = useMemo(() => sanitizeSlug(clinicName), [clinicName]);
 
   const previewUrl = previewSlug ? `/book/${previewSlug}` : '';
+  const defaultWorkHours = useMemo(() => createDefaultWorkHours(), []);
+  const workHoursErrors = useMemo(
+    () => getWorkHoursValidation(workHours),
+    [workHours]
+  );
+  const hasWorkHoursErrors = Object.keys(workHoursErrors).length > 0;
+  const workHoursDayLabels = useMemo(
+    () => ({
+      monday: t('settings.workHours.days.monday', 'Mandag'),
+      tuesday: t('settings.workHours.days.tuesday', 'Tirsdag'),
+      wednesday: t('settings.workHours.days.wednesday', 'Onsdag'),
+      thursday: t('settings.workHours.days.thursday', 'Torsdag'),
+      friday: t('settings.workHours.days.friday', 'Fredag'),
+      saturday: t('settings.workHours.days.saturday', 'Lørdag'),
+      sunday: t('settings.workHours.days.sunday', 'Søndag'),
+    }),
+    [t]
+  );
+  const workHoursErrorMessages = useMemo(
+    () => ({
+      missing: t('settings.workHours.errors.missing', 'Angiv start og slut'),
+      order: t('settings.workHours.errors.order', 'Starttid skal være før sluttid'),
+    }),
+    [t]
+  );
 
   const applyTheme = (mode) => {
     let resolvedMode = mode;
@@ -117,6 +160,7 @@ function UserSettings() {
             (typeof data.settings?.currency === 'string' && data.settings.currency.trim()) ||
             '';
           setCurrency(loadedCurrency);
+          setWorkHours(resolveWorkHours(data));
           if (data.themeMode === 'light' || data.themeMode === 'dark' || data.themeMode === 'system') {
             setColorMode(data.themeMode);
             applyTheme(data.themeMode);
@@ -136,6 +180,7 @@ function UserSettings() {
           setCategory('');
           setAddress('');
           setCurrency('');
+          setWorkHours(createDefaultWorkHours());
         }
       } catch (error) {
         console.error('[UserSettings] Failed to load profile', error);
@@ -193,6 +238,25 @@ function UserSettings() {
   }, [colorMode]);
 
   useEffect(() => {
+    if (location.pathname.startsWith('/settings/transfer')) {
+      setActiveSection('transfer');
+    }
+  }, [location.pathname]);
+
+  const handleSectionChange = (section) => {
+    setActiveSection(section);
+    if (section === 'transfer') {
+      if (!location.pathname.startsWith('/settings/transfer')) {
+        navigate('/settings/transfer');
+      }
+      return;
+    }
+    if (location.pathname.startsWith('/settings/transfer')) {
+      navigate('/booking/settings');
+    }
+  };
+
+  useEffect(() => {
     return () => {
       if (avatarPreviewUrl) {
         URL.revokeObjectURL(avatarPreviewUrl);
@@ -212,6 +276,9 @@ function UserSettings() {
 
   const handleSaveProfile = async () => {
     if (!user) return;
+    if (hasWorkHoursErrors) {
+      return;
+    }
     setIsSaving(true);
     try {
       const jobTitleForSave = category || '';
@@ -259,6 +326,7 @@ function UserSettings() {
         website,
         categories: category ? [category] : [],
         address,
+        workHours: buildWorkHoursPayload(workHours),
         updatedAt: serverTimestamp(),
       };
 
@@ -379,6 +447,35 @@ function UserSettings() {
     </button>
   );
 
+  const updateWorkHoursField = (dayKey, field, value) => {
+    setWorkHours((prev) => ({
+      ...prev,
+      [dayKey]: {
+        ...prev[dayKey],
+        [field]: value,
+      },
+    }));
+  };
+
+  const toggleWorkHoursDay = (dayKey) => {
+    setWorkHours((prev) => {
+      const current = prev[dayKey] || {};
+      const nextEnabled = !current.enabled;
+      const defaultDay = defaultWorkHours[dayKey] || {};
+      const nextStart = nextEnabled ? current.start || defaultDay.start || '' : current.start;
+      const nextEnd = nextEnabled ? current.end || defaultDay.end || '' : current.end;
+      return {
+        ...prev,
+        [dayKey]: {
+          ...current,
+          enabled: nextEnabled,
+          start: nextStart,
+          end: nextEnd,
+        },
+      };
+    });
+  };
+
   return (
     <BookingSidebarLayout>
       <div className="booking-page">
@@ -392,153 +489,106 @@ function UserSettings() {
                   <button
                     type="button"
                     className={`usersettings-nav-item ${activeSection === 'profile' ? 'active' : ''}`}
-                    onClick={() => setActiveSection('profile')}
+                    onClick={() => handleSectionChange('profile')}
                   >
                     {t('settings.sections.profile', 'Profil')}
                   </button>
                   <button
                     type="button"
                     className={`usersettings-nav-item ${activeSection === 'account' ? 'active' : ''}`}
-                    onClick={() => setActiveSection('account')}
+                    onClick={() => handleSectionChange('account')}
                   >
                     {t('settings.sections.account', 'Kontoopsætning')}
                   </button>
                   <button
                     type="button"
+                    className={`usersettings-nav-item ${activeSection === 'workHours' ? 'active' : ''}`}
+                    onClick={() => handleSectionChange('workHours')}
+                  >
+                    {t('settings.sections.workHours', 'Arbejdstid')}
+                  </button>
+                  <button
+                    type="button"
                     className={`usersettings-nav-item ${activeSection === 'appearance' ? 'active' : ''}`}
-                    onClick={() => setActiveSection('appearance')}
+                    onClick={() => handleSectionChange('appearance')}
                   >
                     {t('settings.sections.appearance', 'Appearance')}
                   </button>
                   <button
                     type="button"
                     className={`usersettings-nav-item ${activeSection === 'language' ? 'active' : ''}`}
-                    onClick={() => setActiveSection('language')}
+                    onClick={() => handleSectionChange('language')}
                   >
                     {t('settings.sections.language', 'Sprog')}
                   </button>
                   <button
                     type="button"
                     className={`usersettings-nav-item ${activeSection === 'ai' ? 'active' : ''}`}
-                    onClick={() => setActiveSection('ai')}
+                    onClick={() => handleSectionChange('ai')}
                   >
                     {t('settings.sections.ai', 'AI indstillinger')}
+                  </button>
+                  <button
+                    type="button"
+                    className={`usersettings-nav-item ${activeSection === 'transfer' ? 'active' : ''}`}
+                    onClick={() => handleSectionChange('transfer')}
+                  >
+                    {t('settings.sections.transfer', 'Transfer')}
                   </button>
                 </aside>
 
                 <main className="usersettings-panel">
                   {activeSection === 'profile' && (
                     <>
-                      <div className="usersettings-header">
-                        <div className="usersettings-title">
-                          {t('settings.profile.title', 'Rediger din onlineprofil')}
-                        </div>
-                      </div>
-
-                      <div className="usersettings-avatar-row">
-                        <div className="usersettings-avatar-meta">
-                          <div className="usersettings-title">
-                            {t('settings.profile.avatarTitle', 'Din avatar')}
-                          </div>
-                          <div className="usersettings-subtitle">
-                            {t(
-                              'settings.profile.avatarSubtitle',
-                              'Opdater din avatar til din professionelle profil.'
+                      <div className="usersettings-profile-fields">
+                        <div className="usersettings-section">
+                          <label className="usersettings-label">
+                            {t('settings.profile.fullName', 'Fulde navn')}
+                          </label>
+                          <input
+                            className="usersettings-input"
+                            value={fullName}
+                            onChange={(e) => setFullName(e.target.value)}
+                            placeholder={t(
+                              'settings.profile.fullNamePlaceholder',
+                              'Indtast dit fulde navn'
                             )}
-                          </div>
+                          />
                         </div>
 
-                        <div className="usersettings-avatar-control">
-                          <div className="usersettings-avatar-circle">
-                            {avatarPreviewUrl || photoURL ? (
-                              <img
-                                src={avatarPreviewUrl || photoURL}
-                                alt="Din avatar"
-                                className="usersettings-avatar-img"
-                              />
-                            ) : (
-                              <span className="usersettings-avatar-fallback">
-                                {(fullName || email || 'S').charAt(0).toUpperCase()}
-                              </span>
+                        <div className="usersettings-section">
+                          <label className="usersettings-label">
+                            {t('settings.profile.email', 'E-mail')}
+                          </label>
+                          <input className="usersettings-input" value={email} readOnly />
+                        </div>
+
+                        <div className="usersettings-section">
+                          <label className="usersettings-label">
+                            {t('settings.profile.clinicName', 'Kliniknavn')}
+                          </label>
+                          <input
+                            className="usersettings-input"
+                            value={clinicName}
+                            onChange={(e) => setClinicName(e.target.value)}
+                            placeholder={t(
+                              'settings.profile.clinicPlaceholder',
+                              'Angiv navnet på klinikken'
                             )}
-                          </div>
-
-                          <div className="usersettings-avatar-actions">
-                            <label className="usersettings-avatar-btn">
-                              {t('settings.profile.changePhoto', 'Skift billede')}
-                              <input
-                                type="file"
-                                accept="image/*"
-                                hidden
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0] || null;
-                                  if (!file) return;
-                                  if (avatarPreviewUrl) {
-                                    URL.revokeObjectURL(avatarPreviewUrl);
-                                  }
-                                  setAvatarFile(file);
-                                  setAvatarPreviewUrl(URL.createObjectURL(file));
-                                  setRemoveAvatar(false);
-                                }}
-                              />
-                            </label>
-                            <button
-                              type="button"
-                              className="usersettings-avatar-btn ghost"
-                              onClick={() => {
-                                if (avatarPreviewUrl) {
-                                  URL.revokeObjectURL(avatarPreviewUrl);
-                                }
-                                setAvatarPreviewUrl('');
-                                setAvatarFile(null);
-                                setRemoveAvatar(true);
-                                setPhotoURL('');
-                              }}
-                              disabled={!photoURL && !avatarPreviewUrl}
-                            >
-                              {t('settings.profile.remove', 'Fjern')}
-                            </button>
-                          </div>
+                          />
                         </div>
-                      </div>
 
-                      <div className="usersettings-divider" />
-
-                      <div className="usersettings-section">
-                        <label className="usersettings-label">
-                          {t('settings.profile.fullName', 'Fulde navn')}
-                        </label>
-                        <input
-                          className="usersettings-input"
-                          value={fullName}
-                          onChange={(e) => setFullName(e.target.value)}
-                          placeholder={t(
-                            'settings.profile.fullNamePlaceholder',
-                            'Indtast dit fulde navn'
-                          )}
-                        />
-                      </div>
-
-                      <div className="usersettings-section">
-                        <label className="usersettings-label">
-                          {t('settings.profile.email', 'E-mail')}
-                        </label>
-                        <input className="usersettings-input" value={email} readOnly />
-                      </div>
-
-                      <div className="usersettings-section">
-                        <label className="usersettings-label">
-                          {t('settings.profile.clinicName', 'Kliniknavn')}
-                        </label>
-                        <input
-                          className="usersettings-input"
-                          value={clinicName}
-                          onChange={(e) => setClinicName(e.target.value)}
-                          placeholder={t(
-                            'settings.profile.clinicPlaceholder',
-                            'Angiv navnet på klinikken'
-                          )}
-                        />
+                        <div className="usersettings-section">
+                          <label className="usersettings-label">
+                            {t('settings.account.address', 'Adresse')}
+                          </label>
+                          <input
+                            className="usersettings-input"
+                            value={address}
+                            onChange={(e) => setAddress(e.target.value)}
+                            placeholder={t('settings.account.addressPlaceholder', 'Indtast adresse')}
+                          />
+                        </div>
                       </div>
 
                     </>
@@ -552,116 +602,192 @@ function UserSettings() {
                         </div>
                       </div>
 
-                      <div className="usersettings-section">
-                        <label className="usersettings-label">
-                          {t('settings.account.website', 'Websted')}
-                        </label>
-                        <input
-                          className="usersettings-input"
-                          value={website}
-                          onChange={(e) => setWebsite(e.target.value)}
-                          placeholder={t('settings.account.websitePlaceholder', 'www.ditwebsted.com')}
-                        />
+                      <div className="usersettings-profile-fields">
+                        <div className="usersettings-section">
+                          <label className="usersettings-label">
+                            {t('settings.account.website', 'Websted')}
+                          </label>
+                          <input
+                            className="usersettings-input"
+                            value={website}
+                            onChange={(e) => setWebsite(e.target.value)}
+                            placeholder={t('settings.account.websitePlaceholder', 'www.ditwebsted.com')}
+                          />
+                        </div>
+
+                        <div className="usersettings-divider" />
+
+                        <div className="usersettings-section">
+                          <div className="usersettings-title">
+                            {t('settings.publicBooking.title', 'Bookingside')}
+                          </div>
+                          <div className="usersettings-subtitle">
+                            {t(
+                              'settings.publicBooking.subtitle',
+                              'Aktivér en offentlig booking-side til dine klienter.'
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="usersettings-grid">
+                          <div className="usersettings-section">
+                            <label className="usersettings-label">
+                              {t('settings.publicBooking.clinicNameLabel', 'Kliniknavn')}
+                            </label>
+                            <input
+                              className="usersettings-input"
+                              value={clinicName}
+                              readOnly
+                            />
+                          </div>
+                          <div className="usersettings-section">
+                            <label className="usersettings-label">
+                              {t('settings.publicBooking.urlLabel', 'Bookingside URL')}
+                            </label>
+                            <input
+                              className="usersettings-input"
+                              value={previewUrl}
+                              readOnly
+                              placeholder={t(
+                                'settings.publicBooking.urlPlaceholder',
+                                '/book/din-klinik'
+                              )}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="usersettings-claim-row">
+                          <button
+                            type="button"
+                            className="usersettings-claim-btn"
+                            onClick={handleClaimSlug}
+                            disabled={isClaimingSlug || !clinicName.trim()}
+                          >
+                            {isClaimingSlug
+                              ? t('settings.publicBooking.claiming', 'Aktiverer...')
+                              : t('settings.publicBooking.activate', 'Aktiver bookingside')}
+                          </button>
+                          <span className="usersettings-slug-preview">
+                            {previewUrl
+                              ? t(
+                                  'settings.publicBooking.urlPreview',
+                                  `URL: ${previewUrl}`
+                                )
+                              : t('settings.publicBooking.urlPreviewEmpty', 'URL: /book/...')}
+                          </span>
+                        </div>
+
+                        {slugStatus?.message ? (
+                          <div className={`usersettings-status ${slugStatus.tone || ''}`}>
+                            {slugStatus.message}
+                          </div>
+                        ) : null}
+
+                        <div className="usersettings-section">
+                          <label className="usersettings-label">
+                            {t('settings.account.category', 'Kategori')}
+                          </label>
+                          <select
+                            className="usersettings-input"
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value)}
+                          >
+                            <option value="">
+                              {t('settings.account.categoryPlaceholder', 'Vælg kategori')}
+                            </option>
+                            {CATEGORY_OPTIONS.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
 
-                      <div className="usersettings-divider" />
+                    </>
+                  )}
 
-                      <div className="usersettings-section">
+                  {activeSection === 'workHours' && (
+                    <>
+                      <div className="usersettings-header">
                         <div className="usersettings-title">
-                          {t('settings.publicBooking.title', 'Bookingside')}
+                          {t('settings.workHours.title', 'Arbejdstid')}
                         </div>
                         <div className="usersettings-subtitle">
                           {t(
-                            'settings.publicBooking.subtitle',
-                            'Aktivér en offentlig booking-side til dine klienter.'
+                            'settings.workHours.subtitle',
+                            'Angiv hvornår du kan bookes. Du kan justere tiderne når som helst.'
                           )}
                         </div>
                       </div>
 
-                      <div className="usersettings-grid">
-                        <div className="usersettings-section">
-                          <label className="usersettings-label">
-                            {t('settings.publicBooking.clinicNameLabel', 'Kliniknavn')}
-                          </label>
-                          <input
-                            className="usersettings-input"
-                            value={clinicName}
-                            readOnly
-                          />
+                      <div className="usersettings-profile-fields">
+                        <div className="usersettings-workhours">
+                          {WORK_HOURS_DAYS.map((day) => {
+                            const dayData = workHours[day.key] || {};
+                            const errorCode = workHoursErrors[day.key];
+                            const errorMessage = errorCode ? workHoursErrorMessages[errorCode] : '';
+                            const isEnabled = Boolean(dayData.enabled);
+                            return (
+                              <div
+                                key={day.key}
+                                className={`usersettings-workhours-row ${
+                                  errorCode ? 'has-error' : ''
+                                }`}
+                              >
+                                <div className="usersettings-workhours-day">
+                                  <span className="usersettings-workhours-label">
+                                    {workHoursDayLabels[day.key] || day.key}
+                                  </span>
+                                  <label className="usersettings-workhours-toggle">
+                                    <input
+                                      type="checkbox"
+                                      checked={isEnabled}
+                                      onChange={() => toggleWorkHoursDay(day.key)}
+                                    />
+                                    <span>
+                                      {isEnabled
+                                        ? t('settings.workHours.open', 'Åben')
+                                        : t('settings.workHours.closed', 'Lukket')}
+                                    </span>
+                                  </label>
+                                </div>
+                                <div className="usersettings-workhours-time">
+                                  <input
+                                    type="time"
+                                    className={`usersettings-workhours-input ${
+                                      errorCode ? 'is-error' : ''
+                                    }`}
+                                    value={dayData.start || ''}
+                                    onChange={(e) =>
+                                      updateWorkHoursField(day.key, 'start', e.target.value)
+                                    }
+                                    disabled={!isEnabled}
+                                    aria-invalid={Boolean(errorCode)}
+                                  />
+                                  <span className="usersettings-workhours-separator">–</span>
+                                  <input
+                                    type="time"
+                                    className={`usersettings-workhours-input ${
+                                      errorCode ? 'is-error' : ''
+                                    }`}
+                                    value={dayData.end || ''}
+                                    onChange={(e) =>
+                                      updateWorkHoursField(day.key, 'end', e.target.value)
+                                    }
+                                    disabled={!isEnabled}
+                                    aria-invalid={Boolean(errorCode)}
+                                  />
+                                </div>
+                                {errorMessage ? (
+                                  <div className="usersettings-workhours-error" role="alert">
+                                    {errorMessage}
+                                  </div>
+                                ) : null}
+                              </div>
+                            );
+                          })}
                         </div>
-                        <div className="usersettings-section">
-                          <label className="usersettings-label">
-                            {t('settings.publicBooking.urlLabel', 'Bookingside URL')}
-                          </label>
-                          <input
-                            className="usersettings-input"
-                            value={previewUrl}
-                            readOnly
-                            placeholder={t(
-                              'settings.publicBooking.urlPlaceholder',
-                              '/book/din-klinik'
-                            )}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="usersettings-claim-row">
-                        <button
-                          type="button"
-                          className="usersettings-claim-btn"
-                          onClick={handleClaimSlug}
-                          disabled={isClaimingSlug || !clinicName.trim()}
-                        >
-                          {isClaimingSlug
-                            ? t('settings.publicBooking.claiming', 'Aktiverer...')
-                            : t('settings.publicBooking.activate', 'Aktiver bookingside')}
-                        </button>
-                        <span className="usersettings-slug-preview">
-                          {previewUrl
-                            ? t(
-                                'settings.publicBooking.urlPreview',
-                                `URL: ${previewUrl}`
-                              )
-                            : t('settings.publicBooking.urlPreviewEmpty', 'URL: /book/...')}
-                        </span>
-                      </div>
-
-                      {slugStatus?.message ? (
-                        <div className={`usersettings-status ${slugStatus.tone || ''}`}>
-                          {slugStatus.message}
-                        </div>
-                      ) : null}
-
-                      <div className="usersettings-section">
-                        <label className="usersettings-label">
-                          {t('settings.account.category', 'Kategori')}
-                        </label>
-                        <select
-                          className="usersettings-input"
-                          value={category}
-                          onChange={(e) => setCategory(e.target.value)}
-                        >
-                          <option value="">
-                            {t('settings.account.categoryPlaceholder', 'Vælg kategori')}
-                          </option>
-                          {CATEGORY_OPTIONS.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="usersettings-section">
-                        <label className="usersettings-label">
-                          {t('settings.account.address', 'Adresse')}
-                        </label>
-                        <input
-                          className="usersettings-input"
-                          value={address}
-                          onChange={(e) => setAddress(e.target.value)}
-                          placeholder={t('settings.account.addressPlaceholder', 'Indtast adresse')}
-                        />
                       </div>
                     </>
                   )}
@@ -693,42 +819,44 @@ function UserSettings() {
                         </div>
                       </div>
 
-                      <div className="usersettings-section">
-                        <label className="usersettings-label">
-                          {t('settings.language.label', 'Foretrukket sprog')}
-                        </label>
-                        <select
-                          className="usersettings-input"
-                          value={language}
-                          onChange={(e) => {
-                            void setLanguage(e.target.value);
-                          }}
-                        >
-                          {languageOptions.map((option) => (
-                            <option key={option.code} value={option.code}>
-                              {option.label}
+                      <div className="usersettings-profile-fields">
+                        <div className="usersettings-section">
+                          <label className="usersettings-label">
+                            {t('settings.language.label', 'Foretrukket sprog')}
+                          </label>
+                          <select
+                            className="usersettings-input"
+                            value={language}
+                            onChange={(e) => {
+                              void setLanguage(e.target.value);
+                            }}
+                          >
+                            {languageOptions.map((option) => (
+                              <option key={option.code} value={option.code}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="usersettings-section">
+                          <label className="usersettings-label">
+                            {t('settings.currency.label', 'Valuta')}
+                          </label>
+                          <select
+                            className="usersettings-input"
+                            value={currency}
+                            onChange={(e) => setCurrency(e.target.value)}
+                          >
+                            <option value="">
+                              {t('settings.currency.placeholder', 'Vælg valuta')}
                             </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="usersettings-section">
-                        <label className="usersettings-label">
-                          {t('settings.currency.label', 'Valuta')}
-                        </label>
-                        <select
-                          className="usersettings-input"
-                          value={currency}
-                          onChange={(e) => setCurrency(e.target.value)}
-                        >
-                          <option value="">
-                            {t('settings.currency.placeholder', 'Vælg valuta')}
-                          </option>
-                          {CURRENCY_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
+                            {CURRENCY_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     </>
                   )}
@@ -741,79 +869,83 @@ function UserSettings() {
                         </div>
                       </div>
 
-                      <div className="usersettings-section">
-                        <label className="usersettings-label">
-                          {t('settings.ai.audio.title', 'Lydoptagelse')}
-                        </label>
-                        <p className="usersettings-subtitle">
-                          {t(
-                            'settings.ai.audio.description',
-                            'Selve lyden som optaget af mikrofonen. Lydfilen kan være hjælpsom, hvis vi efterfølgende skal ind og høre efter, om der er bestemte ord, udtaler eller dialekter vi misforstår.'
-                          )}
-                        </p>
-                        <select
-                          className="usersettings-input"
-                          value={audioRetention}
-                          onChange={(e) => setAudioRetention(e.target.value)}
-                        >
-                          <option value="immediate">
-                            {t('settings.ai.retention.immediate', 'Slet med det samme')}
-                          </option>
-                          <option value="30d">
-                            {t('settings.ai.retention.30d', 'Gem 30 dage')}
-                          </option>
-                        </select>
-                      </div>
+                      <div className="usersettings-profile-fields">
+                        <div className="usersettings-section">
+                          <label className="usersettings-label">
+                            {t('settings.ai.audio.title', 'Lydoptagelse')}
+                          </label>
+                          <p className="usersettings-subtitle">
+                            {t(
+                              'settings.ai.audio.description',
+                              'Selve lyden som optaget af mikrofonen. Lydfilen kan være hjælpsom, hvis vi efterfølgende skal ind og høre efter, om der er bestemte ord, udtaler eller dialekter vi misforstår.'
+                            )}
+                          </p>
+                          <select
+                            className="usersettings-input"
+                            value={audioRetention}
+                            onChange={(e) => setAudioRetention(e.target.value)}
+                          >
+                            <option value="immediate">
+                              {t('settings.ai.retention.immediate', 'Slet med det samme')}
+                            </option>
+                            <option value="30d">
+                              {t('settings.ai.retention.30d', 'Gem 30 dage')}
+                            </option>
+                          </select>
+                        </div>
 
-                      <div className="usersettings-section">
-                        <label className="usersettings-label">
-                          {t('settings.ai.transcript.title', 'Transkription')}
-                        </label>
-                        <p className="usersettings-subtitle">
-                          {t(
-                            'settings.ai.transcript.description',
-                            'Tekstudgaven af hvad systemet har "hørt". Vi har brug for transkriptionen, hvis vi skal hjælpe dig med "redningsforsøg", hvis en optagelse afbrydes, eller hvis der opstår andre tekniske problemer.'
-                          )}
-                        </p>
-                        <select
-                          className="usersettings-input"
-                          value={transcriptRetention}
-                          onChange={(e) => setTranscriptRetention(e.target.value)}
-                        >
-                          <option value="immediate">
-                            {t('settings.ai.retention.immediate', 'Slet med det samme')}
-                          </option>
-                          <option value="30d">
-                            {t('settings.ai.retention.30d', 'Gem 30 dage')}
-                          </option>
-                        </select>
-                      </div>
+                        <div className="usersettings-section">
+                          <label className="usersettings-label">
+                            {t('settings.ai.transcript.title', 'Transkription')}
+                          </label>
+                          <p className="usersettings-subtitle">
+                            {t(
+                              'settings.ai.transcript.description',
+                              'Tekstudgaven af hvad systemet har "hørt". Vi har brug for transkriptionen, hvis vi skal hjælpe dig med "redningsforsøg", hvis en optagelse afbrydes, eller hvis der opstår andre tekniske problemer.'
+                            )}
+                          </p>
+                          <select
+                            className="usersettings-input"
+                            value={transcriptRetention}
+                            onChange={(e) => setTranscriptRetention(e.target.value)}
+                          >
+                            <option value="immediate">
+                              {t('settings.ai.retention.immediate', 'Slet med det samme')}
+                            </option>
+                            <option value="30d">
+                              {t('settings.ai.retention.30d', 'Gem 30 dage')}
+                            </option>
+                          </select>
+                        </div>
 
-                      <div className="usersettings-section">
-                        <label className="usersettings-label">
-                          {t('settings.ai.agentComms.title', 'AI-genereret kommunikation')}
-                        </label>
-                        <p className="usersettings-subtitle">
-                          {t(
-                            'settings.ai.agentComms.description',
-                            'Tekst og svar der bliver genereret i dialogen med vores AI-agenter (fx forslag til journalnotat, opsummeringer og anbefalinger). Gemning kan være nyttig, hvis du vil kunne genfinde tidligere samtaler, dokumentere beslutningsgrundlag eller fortsætte et igangværende forløb.'
-                          )}
-                        </p>
-                        <select
-                          className="usersettings-input"
-                          value={agentCommsRetention}
-                          onChange={(e) => setAgentCommsRetention(e.target.value)}
-                        >
-                          <option value="immediate">
-                            {t('settings.ai.retention.immediate', 'Slet med det samme')}
-                          </option>
-                          <option value="30d">
-                            {t('settings.ai.retention.30d', 'Gem 30 dage')}
-                          </option>
-                        </select>
+                        <div className="usersettings-section">
+                          <label className="usersettings-label">
+                            {t('settings.ai.agentComms.title', 'AI-genereret kommunikation')}
+                          </label>
+                          <p className="usersettings-subtitle">
+                            {t(
+                              'settings.ai.agentComms.description',
+                              'Tekst og svar der bliver genereret i dialogen med vores AI-agenter (fx forslag til journalnotat, opsummeringer og anbefalinger). Gemning kan være nyttig, hvis du vil kunne genfinde tidligere samtaler, dokumentere beslutningsgrundlag eller fortsætte et igangværende forløb.'
+                            )}
+                          </p>
+                          <select
+                            className="usersettings-input"
+                            value={agentCommsRetention}
+                            onChange={(e) => setAgentCommsRetention(e.target.value)}
+                          >
+                            <option value="immediate">
+                              {t('settings.ai.retention.immediate', 'Slet med det samme')}
+                            </option>
+                            <option value="30d">
+                              {t('settings.ai.retention.30d', 'Gem 30 dage')}
+                            </option>
+                          </select>
+                        </div>
                       </div>
                     </>
                   )}
+
+                  {activeSection === 'transfer' && <Transfer />}
                 </main>
               </div>
               <div className="usersettings-actions">
@@ -828,7 +960,7 @@ function UserSettings() {
                   type="button"
                   className="usersettings-top-btn primary"
                   onClick={handleSaveProfile}
-                  disabled={isSaving || isAvatarUploading}
+                  disabled={isSaving || isAvatarUploading || hasWorkHoursErrors}
                   aria-busy={isSaving || isAvatarUploading}
                 >
                   {isSaving || isAvatarUploading

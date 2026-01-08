@@ -24,6 +24,7 @@ const mapDocToClient = (doc) => {
     by: data.by || '',
     land: data.land || 'Danmark',
     status: data.status || 'Aktiv',
+    maalForForloebet: data.clientensoplysninger?.maalForForloebet || '',
     createdAt: createdAtIso,
   };
 };
@@ -89,4 +90,3 @@ export function useUserClients() {
 }
 
 export default useUserClients;
-

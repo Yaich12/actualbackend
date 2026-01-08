@@ -243,6 +243,98 @@
   margin-top: 6px;
 }
 
+.onboarding-workhours {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  max-width: 720px;
+  margin-top: 6px;
+}
+
+.onboarding-workhours-row {
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #ffffff;
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(220px, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.onboarding-workhours-row.has-error {
+  border-color: #fca5a5;
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.12);
+}
+
+.onboarding-workhours-day {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.onboarding-workhours-label {
+  font-weight: 600;
+  color: #111827;
+}
+
+.onboarding-workhours-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.onboarding-workhours-toggle input {
+  accent-color: #4f46e5;
+}
+
+.onboarding-workhours-time {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.onboarding-workhours-input {
+  width: 120px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #111827;
+  background: #ffffff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.onboarding-workhours-input:focus {
+  outline: none;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+}
+
+.onboarding-workhours-input:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.onboarding-workhours-input.is-error {
+  border-color: #f87171;
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.12);
+}
+
+.onboarding-workhours-separator {
+  color: #6b7280;
+}
+
+.onboarding-workhours-error {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: #b91c1c;
+  margin-top: -4px;
+}
+
 .onboarding-option {
   width: 100%;
   text-align: left;
@@ -404,6 +496,20 @@
   .primary-button,
   .ghost-button {
     justify-content: center;
+  }
+
+  .onboarding-workhours-row {
+    grid-template-columns: 1fr;
+  }
+
+  .onboarding-workhours-time {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .onboarding-workhours-input {
+    width: 100%;
+    flex: 1;
   }
 }
 

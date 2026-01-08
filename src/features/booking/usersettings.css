@@ -129,7 +129,7 @@
   grid-template-columns: 1fr 240px;
   gap: 18px;
   align-items: center;
-  margin-top: 8px;
+  margin-top: 0;
 }
 
 .usersettings-avatar-meta .usersettings-title {
@@ -216,6 +216,101 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.usersettings-profile-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.usersettings-workhours {
+  display: grid;
+  gap: 12px;
+}
+
+.usersettings-workhours-row {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+  background: #ffffff;
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(220px, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.usersettings-workhours-row.has-error {
+  border-color: #fca5a5;
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.12);
+}
+
+.usersettings-workhours-day {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.usersettings-workhours-label {
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.usersettings-workhours-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(107, 114, 128, 0.9);
+}
+
+.usersettings-workhours-toggle input {
+  accent-color: #2563eb;
+}
+
+.usersettings-workhours-time {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.usersettings-workhours-input {
+  width: 120px;
+  padding: 9px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--text-color);
+  background: #ffffff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.usersettings-workhours-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.usersettings-workhours-input:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.usersettings-workhours-input.is-error {
+  border-color: #f87171;
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.12);
+}
+
+.usersettings-workhours-separator {
+  color: #6b7280;
+}
+
+.usersettings-workhours-error {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: #b91c1c;
+  margin-top: -4px;
 }
 
 .usersettings-grid {
@@ -411,5 +506,19 @@
 
   .usersettings-avatar-row {
     grid-template-columns: 1fr;
+  }
+
+  .usersettings-workhours-row {
+    grid-template-columns: 1fr;
+  }
+
+  .usersettings-workhours-time {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .usersettings-workhours-input {
+    width: 100%;
+    flex: 1;
   }
 }
