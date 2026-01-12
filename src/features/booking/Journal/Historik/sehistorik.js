@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import './sehistorik.css';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
 
-function SeHistorik({ clientId, clientName, onClose, onCreateEntry }) {
+function SeHistorik({ clientId, clientName, onClose }) {
   const [entries, setEntries] = useState([]);
   const [isLoadingEntries, setIsLoadingEntries] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [summaryText, setSummaryText] = useState('');
+  const [summaryError, setSummaryError] = useState('');
   const { user } = useAuth();
 
   // Format date
@@ -40,6 +44,55 @@ function SeHistorik({ clientId, clientName, onClose, onCreateEntry }) {
   const handleOpenOverview = (entryId) => {
     // Handle open overview
     console.log('Open overview for entry:', entryId);
+  };
+
+  const handleSummarizePatient = async () => {
+    if (!clientId || !user) {
+      setSummaryError('Mangler klient eller bruger.');
+      return;
+    }
+
+    if (!process.env.REACT_APP_SUMMARIZE_JOURNAL_URL) {
+      setSummaryError('Manglende opsummerings-URL (REACT_APP_SUMMARIZE_JOURNAL_URL).');
+      return;
+    }
+
+    try {
+      setIsSummarizing(true);
+      setSummaryError('');
+      setSummaryText('');
+
+      const auth = getAuth();
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        setSummaryError('Kunne ikke hente login-token.');
+        setIsSummarizing(false);
+        return;
+      }
+
+      const res = await fetch(process.env.REACT_APP_SUMMARIZE_JOURNAL_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ clientId }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        console.error('summarize error', data);
+        setSummaryError(data?.error || 'Ukendt fejl ved opsummering.');
+        return;
+      }
+
+      setSummaryText(data?.summary || '');
+    } catch (err) {
+      console.error(err);
+      setSummaryError('Der opstod en fejl. Prøv igen.');
+    } finally {
+      setIsSummarizing(false);
+    }
   };
 
   useEffect(() => {
@@ -101,6 +154,12 @@ function SeHistorik({ clientId, clientName, onClose, onCreateEntry }) {
     };
   }, [user, clientId]);
 
+  useEffect(() => {
+    setSummaryText('');
+    setSummaryError('');
+    setIsSummarizing(false);
+  }, [clientId]);
+
   return (
     <div className="sehistorik-container">
       {/* Header */}
@@ -113,10 +172,10 @@ function SeHistorik({ clientId, clientName, onClose, onCreateEntry }) {
           <div className="sehistorik-header-actions">
             <button
               className="sehistorik-create-entry-btn"
-              onClick={() => onCreateEntry && onCreateEntry()}
+              onClick={handleSummarizePatient}
+              disabled={isSummarizing}
             >
-              <span className="sehistorik-plus-icon">+</span>
-              Opret indlæg
+              {isSummarizing ? 'Opsummerer…' : 'Opsummér patient'}
             </button>
             <button className="sehistorik-close-btn" onClick={onClose}>✕</button>
           </div>
@@ -125,6 +184,21 @@ function SeHistorik({ clientId, clientName, onClose, onCreateEntry }) {
 
       {/* Content */}
       <div className="sehistorik-content">
+        {(summaryError || summaryText) && (
+          <div className="sehistorik-summary">
+            {summaryError && (
+              <div className="sehistorik-summary-error" role="alert">
+                {summaryError}
+              </div>
+            )}
+            {summaryText && (
+              <div className="sehistorik-summary-card">
+                <h3>Opsummering af journal</h3>
+                <pre>{summaryText}</pre>
+              </div>
+            )}
+          </div>
+        )}
         {isLoadingEntries ? (
           <div className="sehistorik-empty">
             <p>Henter journalindlæg...</p>

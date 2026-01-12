@@ -64,6 +64,11 @@
   background-color: #2563eb;
 }
 
+.sehistorik-create-entry-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .sehistorik-plus-icon {
   font-size: 18px;
   font-weight: 300;
@@ -98,6 +103,49 @@
   overflow-x: hidden;
   min-height: 0;
   color: var(--text-primary);
+}
+
+.sehistorik-summary {
+  margin-bottom: 16px;
+}
+
+.sehistorik-summary-error {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  background-color: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.sehistorik-summary-card {
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+  padding: 12px 12px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.sehistorik-summary-card h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.sehistorik-summary-card pre {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
 }
 
 .sehistorik-empty {

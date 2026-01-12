@@ -6,6 +6,22 @@ This project was bootstrapped with [Create React App](https://github.com/faceboo
 
 In the project directory, you can run:
 
+## Corti (local)
+
+Backend env vars (set in `.env` on the server side):
+- `CORTI_ENVIRONMENT=eu` (or `CORTI_ENV=eu`)
+- `CORTI_TENANT_NAME=...`
+- `CORTI_CLIENT_ID=...`
+- `CORTI_CLIENT_SECRET=...`
+- Optional: `PORT=4000`
+
+Local run:
+```bash
+npm install
+npm run server
+npm start
+```
+
 ## Firebase Functions (Python)
 
 If you deploy the Python Cloud Functions, the Firebase CLI expects a virtual environment inside `functions/`.

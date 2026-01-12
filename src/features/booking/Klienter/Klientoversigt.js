@@ -43,7 +43,7 @@ const ClientDetails = ({
   userId,
 }) => {
   const [activeTab, setActiveTab] = useState('journal');
-  const [goalDraft, setGoalDraft] = useState('');
+  const [goalDraft, setGoalDraft] = useState([]); // Array of { text: string, date: string }
   const [goalError, setGoalError] = useState('');
   const [goalSaving, setGoalSaving] = useState(false);
   const [journalEntries, setJournalEntries] = useState([]);
@@ -71,9 +71,18 @@ const ClientDetails = ({
   const statusValue = client?.status || 'Aktiv';
 
   useEffect(() => {
-    setGoalDraft(client?.maalForForloebet || '');
+    // Load goals from client data - support both old format (string) and new format (array)
+    const goalsData = client?.clientensoplysninger?.maalForForloebet || client?.maalForForloebet;
+    if (Array.isArray(goalsData)) {
+      setGoalDraft(goalsData);
+    } else if (typeof goalsData === 'string' && goalsData.trim()) {
+      // Migrate old string format to new array format
+      setGoalDraft([{ text: goalsData, date: '' }]);
+    } else {
+      setGoalDraft([]);
+    }
     setGoalError('');
-  }, [client?.maalForForloebet, client?.id]);
+  }, [client?.clientensoplysninger?.maalForForloebet, client?.maalForForloebet, client?.id]);
 
   useEffect(() => {
     if (!userId || !client?.id) {
@@ -196,8 +205,16 @@ const ClientDetails = ({
     setGoalError('');
 
     try {
+      // Filter out empty goals and trim text
+      const goalsToSave = goalDraft
+        .map((goal) => ({
+          text: goal.text?.trim() || '',
+          date: goal.date || '',
+        }))
+        .filter((goal) => goal.text.length > 0);
+
       await updateDoc(doc(db, 'users', userId, 'clients', client.id), {
-        'clientensoplysninger.maalForForloebet': goalDraft.trim(),
+        'clientensoplysninger.maalForForloebet': goalsToSave,
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
@@ -206,6 +223,21 @@ const ClientDetails = ({
     } finally {
       setGoalSaving(false);
     }
+  };
+
+  const handleAddGoal = () => {
+    setGoalDraft([...goalDraft, { text: '', date: '' }]);
+  };
+
+  const handleUpdateGoal = (index, field, value) => {
+    const updated = [...goalDraft];
+    updated[index] = { ...updated[index], [field]: value };
+    setGoalDraft(updated);
+  };
+
+  const handleRemoveGoal = (index) => {
+    const updated = goalDraft.filter((_, i) => i !== index);
+    setGoalDraft(updated);
   };
 
   const handleSummarizePatient = async () => {
@@ -445,14 +477,54 @@ const ClientDetails = ({
               </>
             ) : activeTab === 'goals' ? (
               <div className="client-details-goals">
-                <label className="client-details-label">Borgerens mål</label>
-                <textarea
-                  className="client-details-textarea"
-                  rows={6}
-                  value={goalDraft}
-                  onChange={(event) => setGoalDraft(event.target.value)}
-                  placeholder="Skriv mål for borgeren her..."
-                />
+                <div className="client-details-goals-header">
+                  <label className="client-details-label">Borgerens mål</label>
+                  <button
+                    type="button"
+                    className="client-details-add-goal-button"
+                    onClick={handleAddGoal}
+                  >
+                    + Tilføj mål
+                  </button>
+                </div>
+                {goalDraft.length === 0 ? (
+                  <div className="client-details-goals-empty">
+                    <p>Ingen mål oprettet endnu. Klik på "Tilføj mål" for at oprette et nyt mål.</p>
+                  </div>
+                ) : (
+                  <div className="client-details-goals-list">
+                    {goalDraft.map((goal, index) => (
+                      <div key={index} className="client-details-goal-card">
+                        <div className="client-details-goal-content">
+                          <textarea
+                            className="client-details-goal-textarea"
+                            rows={3}
+                            value={goal.text || ''}
+                            onChange={(event) => handleUpdateGoal(index, 'text', event.target.value)}
+                            placeholder="Skriv mål for borgeren her..."
+                          />
+                          <div className="client-details-goal-date-wrapper">
+                            <label className="client-details-goal-date-label">Dato</label>
+                            <input
+                              type="date"
+                              className="client-details-goal-date-input"
+                              value={goal.date || ''}
+                              onChange={(event) => handleUpdateGoal(index, 'date', event.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="client-details-goal-remove"
+                          onClick={() => handleRemoveGoal(index)}
+                          title="Fjern mål"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {goalError ? <p className="client-details-error">{goalError}</p> : null}
                 <button
                   type="button"

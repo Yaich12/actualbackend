@@ -8,15 +8,21 @@ const crypto = require('crypto');
 const { execFile } = require('child_process');
 const http = require('http');
 const axios = require('axios');
-const { CortiClient, CortiEnvironment, CortiAuth, CortiError } = require('@corti/sdk');
+const { CortiClient, CortiError } = require('@corti/sdk');
 const cors = require('cors');
-const { WebSocketServer } = require('ws');
 const OpenAI = require('openai');
+const cortiRoutes = require('./routes/cortiRoutes');
+const { createCortiTranscribeWss } = require('./ws/cortiTranscribeProxy');
+const { createFactsStreamWss } = require('./ws/factsStreamProxy');
+const {
+  createCortiClient,
+  getAccessToken,
+  resolvedCortiEnv,
+  resolvedEnvironment,
+} = require('./cortiAuth');
 // For facts/insights fetch
 const CORTI_API_BASE =
-  (process.env.CORTI_ENV || 'eu').toLowerCase() === 'us'
-    ? 'https://api.us.corti.app/v2'
-    : 'https://api.eu.corti.app/v2';
+  resolvedCortiEnv === 'us' ? 'https://api.us.corti.app/v2' : 'https://api.eu.corti.app/v2';
 
 const app = express();
 app.use(express.json());
@@ -27,6 +33,7 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
+app.use('/api/corti', cortiRoutes);
 const execFileAsync = util.promisify(execFile);
 
 const getOpenAIClient = () => {
@@ -38,9 +45,6 @@ const getOpenAIClient = () => {
 
 // In-memory agent cache (per process). In production, persist in DB/redis.
 let cachedAgentId = null;
-let cachedAccessToken = null;
-let cachedTokenExpiresAt = 0;
-const useTokenCaching = false; // force fresh token each call to avoid stale/invalid
 
 const DEFAULT_AGENT_PROMPT = `Du er en specialiseret klinisk assistent for tværfaglige klinikker (Fysioterapi, Kiropraktik, Psykologi).
 Din opgave er at assistere behandleren med journalføring, opsummering og faglig sparring.
@@ -204,80 +208,15 @@ const buildBuilderImagePrompts = ({ clinicName = '', profession = '', services =
   };
 };
 
-const missingEnv = ['CORTI_CLIENT_ID', 'CORTI_CLIENT_SECRET', 'CORTI_TENANT_NAME'].filter(
-  (key) => !process.env[key]
-);
-if (missingEnv.length) {
-  console.warn(`Missing Corti config: ${missingEnv.join(', ')}`);
-}
-
-const resolvedEnvironment =
-  (process.env.CORTI_ENV || 'eu').toLowerCase() === 'us'
-    ? CortiEnvironment.Us
-    : CortiEnvironment.Eu;
-
-const createCortiClient = async () => {
-  if (missingEnv.length) {
-    throw new Error(`Missing Corti config: ${missingEnv.join(', ')}`);
-  }
-
-  const auth = new CortiAuth({
-    environment: resolvedEnvironment,
-    tenantName: process.env.CORTI_TENANT_NAME,
-  });
-
-  const { accessToken } = await auth.getToken({
-    clientId: process.env.CORTI_CLIENT_ID,
-    clientSecret: process.env.CORTI_CLIENT_SECRET,
-  });
-
-  return new CortiClient({
-    environment: resolvedEnvironment,
-    tenantName: process.env.CORTI_TENANT_NAME,
-    auth: {
-      accessToken,
-    },
-  });
-};
-
-// --- OAuth token for direct REST calls (Agentic endpoints) ---
-const getCortiToken = async () => {
-  const { CORTI_CLIENT_ID, CORTI_CLIENT_SECRET } = process.env;
-  if (!CORTI_CLIENT_ID || !CORTI_CLIENT_SECRET) {
-    throw new Error('Missing CORTI_CLIENT_ID or CORTI_CLIENT_SECRET');
-  }
-  const now = Date.now();
-  if (useTokenCaching) {
-    if (cachedAccessToken && cachedTokenExpiresAt > now + 30_000) {
-      return cachedAccessToken;
-    }
-  }
-
-  const auth = new CortiAuth({
-    environment: resolvedEnvironment,
-    tenantName: process.env.CORTI_TENANT_NAME,
-  });
-
-  const { accessToken, expiresIn } = await auth.getToken({
-    clientId: CORTI_CLIENT_ID,
-    clientSecret: CORTI_CLIENT_SECRET,
-  });
-
-  if (useTokenCaching) {
-    cachedAccessToken = accessToken;
-    cachedTokenExpiresAt = now + (expiresIn ? expiresIn * 1000 : 300_000);
-    return cachedAccessToken;
-  }
-  return accessToken;
-};
+// Corti auth + env helpers live in ./cortiAuth.js
 
 // Helper: create agent via REST
 const createCortiAgent = async (
   accessToken,
   systemPrompt = 'You are a helpful assistant.'
 ) => {
-  const { CORTI_ENV, CORTI_TENANT_NAME } = process.env;
-  const envBase = (CORTI_ENV || 'eu').toLowerCase() === 'us'
+  const { CORTI_TENANT_NAME } = process.env;
+  const envBase = resolvedCortiEnv === 'us'
     ? 'https://api.us.corti.app'
     : 'https://api.eu.corti.app';
 
@@ -326,8 +265,8 @@ const createCortiAgent = async (
 };
 
 const listCortiAgents = async (accessToken) => {
-  const { CORTI_ENV, CORTI_TENANT_NAME } = process.env;
-  const envBase = (CORTI_ENV || 'eu').toLowerCase() === 'us'
+  const { CORTI_TENANT_NAME } = process.env;
+  const envBase = resolvedCortiEnv === 'us'
     ? 'https://api.us.corti.app'
     : 'https://api.eu.corti.app';
   const resp = await axios.get(`${envBase}/agents`, {
@@ -341,8 +280,8 @@ const listCortiAgents = async (accessToken) => {
 
 // Helper: send message to agent
 const sendAgentMessage = async (accessToken, agentId, text) => {
-  const { CORTI_ENV, CORTI_TENANT_NAME } = process.env;
-  const envBase = (CORTI_ENV || 'eu').toLowerCase() === 'us'
+  const { CORTI_TENANT_NAME } = process.env;
+  const envBase = resolvedCortiEnv === 'us'
     ? 'https://api.us.corti.app'
     : 'https://api.eu.corti.app';
   const { randomUUID } = require('crypto');
@@ -557,7 +496,7 @@ app.post('/api/transcribe', upload, async (req, res) => {
     // Fetch facts stored on the interaction (if any)
     let facts = null;
     try {
-      const token = await getCortiToken();
+      const token = await getAccessToken();
       facts = await fetchCortiFacts(interactionId, token);
     } catch (factsErr) {
       console.error('Corti facts error:', factsErr?.response?.data || factsErr);
@@ -680,7 +619,7 @@ app.post('/api/init-agent', async (req, res) => {
       cachedAgentId = process.env.CORTI_AGENT_ID;
       return res.json({ agentId: cachedAgentId });
     }
-    const token = await getCortiToken();
+    const token = await getAccessToken();
     console.info('Init-agent: token acquired');
     if (cachedAgentId) {
       return res.json({ agentId: cachedAgentId });
@@ -1102,7 +1041,7 @@ app.post('/api/chat', async (req, res) => {
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Missing message' });
     }
-    const token = await getCortiToken();
+    const token = await getAccessToken();
     const agentId = incomingAgentId || cachedAgentId;
     if (!agentId) {
       return res.status(400).json({ error: 'Agent not initialized' });
@@ -1131,118 +1070,29 @@ app.post('/api/chat', async (req, res) => {
 const PORT = process.env.PORT || 4000;
 const server = http.createServer(app);
 
-// WebSocket proxy server (same port as Express)
-const wss = new WebSocketServer({ server, path: '/ws/facts-stream' });
+const transcribeWss = createCortiTranscribeWss();
+const factsWss = createFactsStreamWss();
 
-wss.on('connection', async (clientWs, req) => {
-  // Parse query params
-  const url = new URL(req.url, `http://localhost:${PORT}`);
-  const interactionId = url.searchParams.get('interactionId');
-  const primaryLanguage = url.searchParams.get('primaryLanguage') || 'da';
-  const outputLocale = url.searchParams.get('outputLocale') || 'da';
+server.on('upgrade', (req, socket, head) => {
+  console.log('[WS UPGRADE]', req.url);
 
-  if (!interactionId) {
-    clientWs.send(JSON.stringify({ type: 'error', error: 'Missing interactionId' }));
-    clientWs.close();
+  if (req.url && req.url.startsWith('/ws/corti/transcribe')) {
+    console.log('[WS ROUTED]', 'transcribe');
+    transcribeWss.handleUpgrade(req, socket, head, (ws) => {
+      transcribeWss.emit('connection', ws, req);
+    });
     return;
   }
 
-  let cortiSocket = null;
-  try {
-    // Fresh token per WS connection
-    const accessToken = await getCortiToken();
-    const cortiClient = new CortiClient({
-      environment: resolvedEnvironment,
-      tenantName: process.env.CORTI_TENANT_NAME,
-      auth: { accessToken },
+  if (req.url && req.url.startsWith('/ws/facts-stream')) {
+    console.log('[WS ROUTED]', 'facts');
+    factsWss.handleUpgrade(req, socket, head, (ws) => {
+      factsWss.emit('connection', ws, req);
     });
-
-    const configuration = {
-      transcription: {
-        primaryLanguage,
-        isDiarization: false,
-        isMultichannel: false,
-        participants: [{ channel: 0, role: 'multiple' }],
-      },
-      mode: {
-        type: 'facts',
-        outputLocale,
-      },
-    };
-
-    cortiSocket = await cortiClient.stream.connect({
-      id: interactionId,
-      configuration,
-      debug: false,
-    });
-
-    cortiSocket.on('open', () => {
-      clientWs.send(JSON.stringify({ type: 'open', interactionId }));
-    });
-
-    cortiSocket.on('message', (msg) => {
-      try {
-        clientWs.send(JSON.stringify(msg));
-      } catch (_) {}
-    });
-
-    cortiSocket.on('error', (err) => {
-      try {
-        clientWs.send(JSON.stringify({ type: 'error', error: err?.message || String(err) }));
-      } catch (_) {}
-    });
-
-    cortiSocket.on('close', () => {
-      try {
-        clientWs.close();
-      } catch (_) {}
-    });
-
-    // Forward browser -> Corti
-    clientWs.on('message', (data, isBinary) => {
-      if (!cortiSocket) return;
-      try {
-        if (isBinary) {
-          cortiSocket.sendAudio(data);
-          return;
-        }
-        const txt = data.toString();
-        let msg = null;
-        try {
-          msg = JSON.parse(txt);
-        } catch (_) {
-          // Non-JSON text: treat as base64 audio
-          cortiSocket.sendAudio(txt);
-          return;
-        }
-        if (msg?.type === 'flush') {
-          cortiSocket.sendFlush({ type: 'flush' });
-          return;
-        }
-        if (msg?.type === 'end') {
-          cortiSocket.sendEnd({ type: 'end' });
-          return;
-        }
-      } catch (_) {}
-    });
-
-    clientWs.on('close', () => {
-      try {
-        cortiSocket?.close();
-      } catch (_) {}
-    });
-  } catch (e) {
-    console.error('facts-stream ws proxy error:', e?.response?.data || e);
-    try {
-      clientWs.send(JSON.stringify({ type: 'error', error: e?.message || String(e) }));
-    } catch (_) {}
-    try {
-      clientWs.close();
-    } catch (_) {}
-    try {
-      cortiSocket?.close();
-    } catch (_) {}
+    return;
   }
+
+  socket.destroy();
 });
 
 server.listen(PORT, () => {

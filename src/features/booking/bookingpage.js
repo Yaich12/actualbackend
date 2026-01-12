@@ -2442,7 +2442,7 @@ function BookingPage() {
   return (
     <BookingSidebarLayout>
       <div className="booking-page">
-        {calendarAddMode && (
+        {calendarAddMode && !showJournalEntryForm && (
           <div className="calendar-add-banner">
             <div className="calendar-add-banner-title">
               {t('booking.calendar.addMode.title', 'Vælg en tid, der skal bookes')}
@@ -2465,183 +2465,187 @@ function BookingPage() {
             </div>
           </div>
         )}
-        {/* Top Navigation Bar */}
-        <div className="booking-topbar booking-topbar-calendar">
-          <div className="calendar-toolbar">
-            <div className="calendar-toolbar-group">
-              <button type="button" className="toolbar-pill" onClick={goToToday}>
-                {t('booking.calendar.today', 'I dag')}
-              </button>
-              <div className="toolbar-pill toolbar-segment">
-                <button
-                  type="button"
-                  className="toolbar-segment-btn"
-                  onClick={() => navigateByView(-1)}
-                  aria-label={t('booking.calendar.previous', 'Forrige')}
-                >
-                  <ChevronLeft className="toolbar-icon" />
-                </button>
-                <span className="toolbar-date-label">{toolbarDateLabel}</span>
-                <button
-                  type="button"
-                  className="toolbar-segment-btn"
-                  onClick={() => navigateByView(1)}
-                  aria-label={t('booking.calendar.next', 'Næste')}
-                >
-                  <ChevronRight className="toolbar-icon" />
-                </button>
-              </div>
-              {hasTeamAccess ? (
-                <div className="team-filter-wrapper" ref={teamMenuRef}>
-                  <button
-                    type="button"
-                    className="team-filter-trigger"
-                    onClick={() => setTeamMenuOpen((open) => !open)}
-                  >
-                    <span className="team-filter-label">{selectedLabel}</span>
-                    <ChevronDown className={`team-filter-caret ${teamMenuOpen ? 'open' : ''}`} />
+        {!showJournalEntryForm && (
+          <>
+            {/* Top Navigation Bar */}
+            <div className="booking-topbar booking-topbar-calendar">
+              <div className="calendar-toolbar">
+                <div className="calendar-toolbar-group">
+                  <button type="button" className="toolbar-pill" onClick={goToToday}>
+                    {t('booking.calendar.today', 'I dag')}
                   </button>
-                  {teamMenuOpen && (
-                    <div className="team-filter-menu">
+                  <div className="toolbar-pill toolbar-segment">
+                    <button
+                      type="button"
+                      className="toolbar-segment-btn"
+                      onClick={() => navigateByView(-1)}
+                      aria-label={t('booking.calendar.previous', 'Forrige')}
+                    >
+                      <ChevronLeft className="toolbar-icon" />
+                    </button>
+                    <span className="toolbar-date-label">{toolbarDateLabel}</span>
+                    <button
+                      type="button"
+                      className="toolbar-segment-btn"
+                      onClick={() => navigateByView(1)}
+                      aria-label={t('booking.calendar.next', 'Næste')}
+                    >
+                      <ChevronRight className="toolbar-icon" />
+                    </button>
+                  </div>
+                  {hasTeamAccess ? (
+                    <div className="team-filter-wrapper" ref={teamMenuRef}>
                       <button
                         type="button"
-                        className={`team-filter-option ${teamFilter === 'all' ? 'active' : ''}`}
-                        onClick={selectAllMembers}
+                        className="team-filter-trigger"
+                        onClick={() => setTeamMenuOpen((open) => !open)}
                       >
-                        👥 {entireTeamLabel}
+                        <span className="team-filter-label">{selectedLabel}</span>
+                        <ChevronDown className={`team-filter-caret ${teamMenuOpen ? 'open' : ''}`} />
                       </button>
-
-                      <div className="team-filter-section">
-                        <div className="team-filter-item">
-                          <span
-                            className="avatar avatar-small"
-                            style={{ backgroundColor: ownerEntry.avatarColor || '#0ea5e9' }}
+                      {teamMenuOpen && (
+                        <div className="team-filter-menu">
+                          <button
+                            type="button"
+                            className={`team-filter-option ${teamFilter === 'all' ? 'active' : ''}`}
+                            onClick={selectAllMembers}
                           >
-                            {ownerEntry.avatarUrl ? (
-                              <img src={ownerEntry.avatarUrl} alt={ownerEntry.name} />
-                            ) : (
-                              ownerEntry.avatarText || ownerEntry.name?.charAt(0)
-                            )}
-                          </span>
-                          <span>
-                            {ownerEntry.name}{' '}
-                            ({t('booking.calendar.you', 'Dig')})
-                          </span>
-                        </div>
-                      </div>
+                            👥 {entireTeamLabel}
+                          </button>
 
-                      <hr className="team-filter-divider" />
-
-                      <div className="team-filter-section header">
-                        <span className="section-title">
-                          {t('booking.calendar.members', 'Medarbejdere')}
-                        </span>
-                        <button type="button" className="clear-link" onClick={clearMembers}>
-                          {t('booking.calendar.clearAll', 'Ryd alle')}
-                        </button>
-                      </div>
-
-                      <div className="team-filter-list">
-                        {teamMembers.map((member) => {
-                          const checked = selectedTeamMembers.includes(member.name);
-                          return (
-                            <button
-                              key={member.id}
-                              type="button"
-                              className={`team-filter-member ${checked ? 'selected' : ''}`}
-                              onClick={() => toggleMember(member.name)}
-                            >
-                              <span className="checkmark">{checked ? '✔' : ''}</span>
+                          <div className="team-filter-section">
+                            <div className="team-filter-item">
                               <span
                                 className="avatar avatar-small"
-                                style={{ backgroundColor: member.avatarColor || '#0ea5e9' }}
+                                style={{ backgroundColor: ownerEntry.avatarColor || '#0ea5e9' }}
                               >
-                                {member.avatarUrl ? (
-                                  <img src={member.avatarUrl} alt={member.name} />
+                                {ownerEntry.avatarUrl ? (
+                                  <img src={ownerEntry.avatarUrl} alt={ownerEntry.name} />
                                 ) : (
-                                  member.avatarText || member.name?.charAt(0)
+                                  ownerEntry.avatarText || ownerEntry.name?.charAt(0)
                                 )}
                               </span>
-                              <span>{member.name}</span>
+                              <span>
+                                {ownerEntry.name}{' '}
+                                ({t('booking.calendar.you', 'Dig')})
+                              </span>
+                            </div>
+                          </div>
+
+                          <hr className="team-filter-divider" />
+
+                          <div className="team-filter-section header">
+                            <span className="section-title">
+                              {t('booking.calendar.members', 'Medarbejdere')}
+                            </span>
+                            <button type="button" className="clear-link" onClick={clearMembers}>
+                              {t('booking.calendar.clearAll', 'Ryd alle')}
                             </button>
-                          );
-                        })}
-                      </div>
+                          </div>
+
+                          <div className="team-filter-list">
+                            {teamMembers.map((member) => {
+                              const checked = selectedTeamMembers.includes(member.name);
+                              return (
+                                <button
+                                  key={member.id}
+                                  type="button"
+                                  className={`team-filter-member ${checked ? 'selected' : ''}`}
+                                  onClick={() => toggleMember(member.name)}
+                                >
+                                  <span className="checkmark">{checked ? '✔' : ''}</span>
+                                  <span
+                                    className="avatar avatar-small"
+                                    style={{ backgroundColor: member.avatarColor || '#0ea5e9' }}
+                                  >
+                                    {member.avatarUrl ? (
+                                      <img src={member.avatarUrl} alt={member.name} />
+                                    ) : (
+                                      member.avatarText || member.name?.charAt(0)
+                                    )}
+                                  </span>
+                                  <span>{member.name}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
+                  ) : (
+                    <div className="toolbar-pill toolbar-static">{selectedLabel}</div>
+                  )}
+                  <button
+                    type="button"
+                    className="toolbar-icon-btn"
+                    aria-label={t('booking.calendar.filters', 'Filtre')}
+                  >
+                    <SlidersHorizontal className="toolbar-icon" />
+                  </button>
+                  <button
+                    type="button"
+                    className="toolbar-icon-btn"
+                    aria-label={t('booking.calendar.freeze', 'Frys')}
+                  >
+                    <Snowflake className="toolbar-icon" />
+                  </button>
+                </div>
+                <div className="calendar-toolbar-group">
+                  <button
+                    type="button"
+                    className="toolbar-icon-btn"
+                    aria-label={t('booking.calendar.settings', 'Indstillinger')}
+                    onClick={() => navigate('/booking/settings')}
+                  >
+                    <Settings className="toolbar-icon" />
+                  </button>
+                  <button
+                    type="button"
+                    className="toolbar-icon-btn"
+                    aria-label={t('booking.calendar.refresh', 'Opdater')}
+                    onClick={handleRefresh}
+                  >
+                    <RefreshCw className="toolbar-icon" />
+                  </button>
+                  <div
+                    className="toolbar-view-toggle"
+                    role="group"
+                    aria-label={t('booking.calendar.viewLabel', 'Kalendervisning')}
+                  >
+                    <button
+                      type="button"
+                      className={`view-toggle-btn ${currentView === 'month' ? 'active' : ''}`}
+                      onClick={() => setCurrentView('month')}
+                    >
+                      {t('booking.calendar.view.month', 'Måned')}
+                    </button>
+                    <button
+                      type="button"
+                      className={`view-toggle-btn ${currentView === 'week' ? 'active' : ''}`}
+                      onClick={() => setCurrentView('week')}
+                    >
+                      {t('booking.calendar.view.week', 'Uge')}
+                    </button>
+                    <button
+                      type="button"
+                      className={`view-toggle-btn ${currentView === 'day' ? 'active' : ''}`}
+                      onClick={() => setCurrentView('day')}
+                    >
+                      {t('booking.calendar.view.day', 'Dag')}
+                    </button>
+                  </div>
+                  {!selectedAppointment && (
+                    <Dropdown
+                      label={t('booking.calendar.add', 'Tilføj')}
+                      onManual={handleOpenAppointmentForm}
+                      onCalendar={handleStartCalendarAddMode}
+                    />
                   )}
                 </div>
-              ) : (
-                <div className="toolbar-pill toolbar-static">{selectedLabel}</div>
-              )}
-              <button
-                type="button"
-                className="toolbar-icon-btn"
-                aria-label={t('booking.calendar.filters', 'Filtre')}
-              >
-                <SlidersHorizontal className="toolbar-icon" />
-              </button>
-              <button
-                type="button"
-                className="toolbar-icon-btn"
-                aria-label={t('booking.calendar.freeze', 'Frys')}
-              >
-                <Snowflake className="toolbar-icon" />
-              </button>
-            </div>
-            <div className="calendar-toolbar-group">
-              <button
-                type="button"
-                className="toolbar-icon-btn"
-                aria-label={t('booking.calendar.settings', 'Indstillinger')}
-                onClick={() => navigate('/booking/settings')}
-              >
-                <Settings className="toolbar-icon" />
-              </button>
-              <button
-                type="button"
-                className="toolbar-icon-btn"
-                aria-label={t('booking.calendar.refresh', 'Opdater')}
-                onClick={handleRefresh}
-              >
-                <RefreshCw className="toolbar-icon" />
-              </button>
-              <div
-                className="toolbar-view-toggle"
-                role="group"
-                aria-label={t('booking.calendar.viewLabel', 'Kalendervisning')}
-              >
-                <button
-                  type="button"
-                  className={`view-toggle-btn ${currentView === 'month' ? 'active' : ''}`}
-                  onClick={() => setCurrentView('month')}
-                >
-                  {t('booking.calendar.view.month', 'Måned')}
-                </button>
-                <button
-                  type="button"
-                  className={`view-toggle-btn ${currentView === 'week' ? 'active' : ''}`}
-                  onClick={() => setCurrentView('week')}
-                >
-                  {t('booking.calendar.view.week', 'Uge')}
-                </button>
-                <button
-                  type="button"
-                  className={`view-toggle-btn ${currentView === 'day' ? 'active' : ''}`}
-                  onClick={() => setCurrentView('day')}
-                >
-                  {t('booking.calendar.view.day', 'Dag')}
-                </button>
               </div>
-              {!selectedAppointment && (
-                <Dropdown
-                  label={t('booking.calendar.add', 'Tilføj')}
-                  onManual={handleOpenAppointmentForm}
-                  onCalendar={handleStartCalendarAddMode}
-                />
-              )}
             </div>
-          </div>
-        </div>
+          </>
+        )}
 
         <div
           className={`booking-content ${

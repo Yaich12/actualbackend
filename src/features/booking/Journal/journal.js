@@ -36,9 +36,6 @@ function Journal({
   const [groupNameDraft, setGroupNameDraft] = useState('');
   const [groupNameError, setGroupNameError] = useState('');
   const [isSavingGroupName, setIsSavingGroupName] = useState(false);
-  const [isSummarizing, setIsSummarizing] = useState(false);
-  const [summaryText, setSummaryText] = useState('');
-  const [summaryError, setSummaryError] = useState('');
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestError, setSuggestError] = useState('');
   const { services: savedServices } = useUserServices();
@@ -352,55 +349,6 @@ function Journal({
     return d.toISOString();
   };
 
-  const handleSummarizePatient = async () => {
-    if (!client?.id || !user) {
-      setSummaryError('Mangler klient eller bruger.');
-      return;
-    }
-
-    if (!process.env.REACT_APP_SUMMARIZE_JOURNAL_URL) {
-      setSummaryError('Manglende opsummerings-URL (REACT_APP_SUMMARIZE_JOURNAL_URL).');
-      return;
-    }
-
-    try {
-      setIsSummarizing(true);
-      setSummaryError('');
-      setSummaryText('');
-
-      const auth = getAuth();
-      const idToken = await auth.currentUser?.getIdToken();
-      if (!idToken) {
-        setSummaryError('Kunne ikke hente login-token.');
-        setIsSummarizing(false);
-        return;
-      }
-
-      const res = await fetch(process.env.REACT_APP_SUMMARIZE_JOURNAL_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({ clientId: client.id }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        console.error('summarize error', data);
-        setSummaryError(data?.error || 'Ukendt fejl ved opsummering.');
-        return;
-      }
-
-      setSummaryText(data?.summary || '');
-    } catch (err) {
-      console.error(err);
-      setSummaryError('Der opstod en fejl. Prøv igen.');
-    } finally {
-      setIsSummarizing(false);
-    }
-  };
-
   const handleSuggestNextAppointment = async () => {
     if (!selectedAppointment || !client || !user) {
       setSuggestError('Mangler aftale, klient eller bruger.');
@@ -541,7 +489,6 @@ function Journal({
           setShowHistory(false);
           setHistoryTarget(null);
         }}
-        onCreateEntry={onCreateJournalEntry}
       />
     );
   }
@@ -662,28 +609,29 @@ function Journal({
         )}
 
         {/* Create Journal Entry Button */}
-        {onCreateJournalEntry && (
+        {(onCreateJournalEntry || selectedAppointment) && (
           <div className="journal-section">
             <div className="journal-create-actions">
               {selectedAppointment && (
-                <MovingBorderButton
-                  borderRadius="0.75rem"
-                  onClick={handleSummarizePatient}
-                  disabled={isSummarizing}
-                  containerClassName="w-full h-12 text-base disabled:opacity-60 disabled:cursor-not-allowed"
-                  className="bg-white text-slate-900 border-slate-200 font-medium"
-                  borderClassName="bg-[radial-gradient(var(--sky-500)_40%,transparent_60%)]"
+                <button
+                  className="journal-action-btn"
+                  onClick={() => {
+                    setHistoryTarget(null);
+                    setShowHistory(true);
+                  }}
                 >
-                  {isSummarizing ? 'Opsummerer…' : 'Opsummér patient'}
-                </MovingBorderButton>
+                  Se journal
+                </button>
               )}
-              <button
-                className="journal-create-appointment-btn"
-                onClick={onCreateJournalEntry}
-              >
-                <span className="journal-create-entry-icon">+</span>
-                Opret indlæg
-              </button>
+              {onCreateJournalEntry && (
+                <button
+                  className="journal-create-appointment-btn"
+                  onClick={onCreateJournalEntry}
+                >
+                  <span className="journal-create-entry-icon">+</span>
+                  Opret indlæg
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -693,15 +641,6 @@ function Journal({
           <>
             <div className="journal-section journal-appointment-section">
               <div className="journal-appointment-actions">
-                <button 
-                  className="journal-action-btn"
-                  onClick={() => {
-                    setHistoryTarget(null);
-                    setShowHistory(true);
-                  }}
-                >
-                  Se journal
-                </button>
                 <button
                   className="journal-action-btn"
                   onClick={() => {
@@ -750,21 +689,6 @@ function Journal({
                   Slet aftale
                 </button>
               </div>
-              {(summaryError || summaryText) && (
-                <div className="journal-summary">
-                  {summaryError && (
-                    <div className="journal-summary-error" role="alert">
-                      {summaryError}
-                    </div>
-                  )}
-                  {summaryText && (
-                    <div className="journal-summary-card">
-                      <h3>Opsummering af journal</h3>
-                      <pre>{summaryText}</pre>
-                    </div>
-                  )}
-                </div>
-              )}
               {suggestError && (
                 <div className="journal-summary">
                   <div className="journal-summary-error" role="alert">

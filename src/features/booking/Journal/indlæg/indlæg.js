@@ -1,35 +1,40 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import './indlæg.css';
-import Whisper from './whisper';
-import Prompt from './prompt';
-import FactsRPanel from './FactsRPanel';
-import { useFactsRStream } from './useFactsRStream';
-import { Component as AiAssistantCard } from '../../../../components/ui/ai-assistant-card';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
 
-const PROJECT_ID = process.env.REACT_APP_PROJECT_ID || '';
-const FUNCTION_REGION = process.env.REACT_APP_FUNCTION_REGION || 'us-central1';
-const FUNCTIONS_PORT = process.env.REACT_APP_FUNCTIONS_PORT || '5601';
+const TEMPLATE_LANGUAGE = 'da';
 
-const buildDefaultTranscribeUrl = () => {
-  if (!PROJECT_ID) {
-    return '';
+const getBackendHttpBase = () => {
+  const envBase = process.env.REACT_APP_BACKEND_URL;
+  if (envBase && typeof envBase === 'string') {
+    return envBase.replace(/\/+$/, '');
   }
 
-  if (
-    typeof window !== 'undefined' &&
-    window.location.hostname === 'localhost'
-  ) {
-    return `http://127.0.0.1:${FUNCTIONS_PORT}/${PROJECT_ID}/${FUNCTION_REGION}/transcribe_audio`;
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname === 'localhost') return 'http://localhost:4000';
+    return window.location.origin;
   }
 
-  return `https://${FUNCTION_REGION}-${PROJECT_ID}.cloudfunctions.net/transcribe_audio`;
+  return 'http://localhost:4000';
 };
 
-const TRANSCRIBE_FUNCTION_URL =
-  process.env.REACT_APP_TRANSCRIBE_URL || buildDefaultTranscribeUrl();
+const toWsBase = (httpBase) => {
+  try {
+    const url = new URL(httpBase);
+    const wsProto = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${wsProto}//${url.host}`;
+  } catch (_) {
+    return httpBase.replace(/^http/, 'ws');
+  }
+};
+
+const buildWsUrl = () => {
+  const httpBase = getBackendHttpBase();
+  const wsBase = toWsBase(httpBase);
+  return `${wsBase}/ws/corti/transcribe`;
+};
 
 const sanitizeIdentifier = (value) =>
   value
@@ -61,88 +66,37 @@ const deriveUserIdentifier = (user) => {
   return 'unknown-user';
 };
 
-const ANAMNESIS_TEMPLATES = {
-  first: {
-    subjective: '- Hovedklage\n- Debut\n- Forvaerrende/lindrende',
-    objective: '- Objektive fund\n- Relevante tests',
-    assessment: '- Vurdering\n- Hypoteser',
-    plan: '- Plan\n- Naeste skridt',
-  },
-  follow_up: {
-    subjective: '- Status siden sidst\n- Aendringer i symptomer',
-    objective: '- Nye fund\n- Progression',
-    assessment: '- Vurdering af udvikling',
-    plan: '- Justeret plan\n- Naeste skridt',
-  },
-};
-
-const normalizeBullet = (value) =>
-  String(value || '')
-    .replace(/^[-•\s]+/, '')
-    .trim();
-
-const toBulletItems = (text) =>
-  String(text || '')
-    .split(/\r?\n+/)
-    .map((line) => normalizeBullet(line))
-    .filter(Boolean);
-
-const appendBulletsDedup = (currentText, items) => {
-  const existingItems = toBulletItems(currentText);
-  const incomingItems = Array.isArray(items) ? items : toBulletItems(items);
-  const seen = new Set(existingItems.map((item) => item.toLowerCase()));
-  const merged = [...existingItems];
-
-  incomingItems.forEach((item) => {
-    const normalized = normalizeBullet(item);
-    if (!normalized) return;
-    const key = normalized.toLowerCase();
-    if (seen.has(key)) return;
-    seen.add(key);
-    merged.push(normalized);
-  });
-
-  return merged.map((item) => `- ${item}`).join('\n');
-};
-
-const FACTSR_SAMPLE_RATE = 16000;
-
-const resampleBuffer = (input, inputRate, outputRate) => {
-  if (inputRate === outputRate) {
-    return input;
+const getTranslation = (translations, lang) => {
+  if (!Array.isArray(translations) || translations.length === 0) {
+    return null;
   }
 
-  const ratio = inputRate / outputRate;
-  const outputLength = Math.max(1, Math.round(input.length / ratio));
-  const output = new Float32Array(outputLength);
-
-  for (let i = 0; i < outputLength; i += 1) {
-    const position = i * ratio;
-    const leftIndex = Math.floor(position);
-    const rightIndex = Math.min(leftIndex + 1, input.length - 1);
-    const blend = position - leftIndex;
-    output[i] = input[leftIndex] + (input[rightIndex] - input[leftIndex]) * blend;
-  }
-
-  return output;
+  const normalizedLang = String(lang || '').toLowerCase();
+  return (
+    translations.find((translation) =>
+      String(translation?.languagesId || '')
+        .toLowerCase()
+        .startsWith(normalizedLang)
+    ) || translations[0]
+  );
 };
 
-const float32ToPcm16 = (input) => {
-  const buffer = new ArrayBuffer(input.length * 2);
-  const view = new DataView(buffer);
-
-  for (let i = 0; i < input.length; i += 1) {
-    let sample = Math.max(-1, Math.min(1, input[i]));
-    sample = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
-    view.setInt16(i * 2, sample, true);
+const buildDocumentText = (sections) => {
+  if (!Array.isArray(sections) || sections.length === 0) {
+    return '';
   }
 
-  return buffer;
-};
-
-const toPcm16Buffer = (input, inputRate) => {
-  const resampled = resampleBuffer(input, inputRate, FACTSR_SAMPLE_RATE);
-  return float32ToPcm16(resampled);
+  return [...sections]
+    .sort((a, b) => (a?.sort ?? 0) - (b?.sort ?? 0))
+    .map((section) => {
+      const heading = section?.name || section?.key || 'Sektion';
+      const text = String(section?.text || '').trim();
+      if (!heading && !text) return '';
+      if (!text) return heading;
+      return `${heading}\n${text}`;
+    })
+    .filter(Boolean)
+    .join('\n\n');
 };
 
 function Indlæg({
@@ -151,104 +105,84 @@ function Indlæg({
   onClose,
   onSave,
   onOpenEntry,
-  participants = [],
   initialDate = '',
 }) {
-  const [title, setTitle] = useState('');
   const [date, setDate] = useState('14-11-2025');
-  const [isPrivate, setIsPrivate] = useState(false);
   const [content, setContent] = useState('');
-  const [consultationType, setConsultationType] = useState('first');
-  const [anamnesisSections, setAnamnesisSections] = useState(() => ({
-    subjective: '',
-    objective: '',
-    assessment: '',
-    plan: '',
-  }));
-  const [conclusionFocusAreas, setConclusionFocusAreas] = useState('');
-  const [conclusionSessionContent, setConclusionSessionContent] = useState('');
-  const [conclusionTasksNext, setConclusionTasksNext] = useState('');
-  const [conclusionReflection, setConclusionReflection] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const [dictationStatus, setDictationStatus] = useState('');
-  const [transcriptionResult, setTranscriptionResult] = useState(null);
-  const [isDictating, setIsDictating] = useState(false);
-  const [highlightField, setHighlightField] = useState('');
-  const [factsInsertTarget, setFactsInsertTarget] = useState('auto');
-  const [factsRecordingStatus, setFactsRecordingStatus] = useState('');
-  const [isFactsRecording, setIsFactsRecording] = useState(false);
 
-  // NYT: state til seneste sessioner
-  const [recentEntries, setRecentEntries] = useState([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [historyError, setHistoryError] = useState('');
+  const [recentEntries] = useState([]);
+  const [isLoadingHistory] = useState(false);
+  const [historyError] = useState('');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
-  const streamRef = useRef(null);
+  const [templates, setTemplates] = useState([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesError, setTemplatesError] = useState('');
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [templateDetailsLoading, setTemplateDetailsLoading] = useState(false);
+  const [templateDetailsError, setTemplateDetailsError] = useState('');
+
+  const [interactionId, setInteractionId] = useState('');
+  const [generationLoading, setGenerationLoading] = useState(false);
+  const [generationError, setGenerationError] = useState('');
+  const [generatedDocument, setGeneratedDocument] = useState(null);
+
+  const [recordingStatus, setRecordingStatus] = useState('Idle');
+  const [recordingError, setRecordingError] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [finalTranscript, setFinalTranscript] = useState('');
+  const [livePartial, setLivePartial] = useState('');
+  const [lastWs, setLastWs] = useState({ type: '—', reason: '' });
+
+  const wsRef = useRef(null);
   const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-  const factsMediaStreamRef = useRef(null);
-  const factsAudioContextRef = useRef(null);
-  const factsProcessorRef = useRef(null);
-  const factsSourceRef = useRef(null);
-  const factsSilenceRef = useRef(null);
-  const anamnesisSubjectiveRef = useRef(null);
-  const anamnesisObjectiveRef = useRef(null);
-  const anamnesisAssessmentRef = useRef(null);
-  const anamnesisPlanRef = useRef(null);
-  const conclusionFocusRef = useRef(null);
-  const conclusionContentRef = useRef(null);
-  const conclusionTasksRef = useRef(null);
-  const conclusionReflectionRef = useRef(null);
-  const combinedRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+  const isRecordingRef = useRef(false);
+  const isStartingRef = useRef(false);
+  const isStoppingRef = useRef(false);
+  const configAcceptedRef = useRef(false);
+  const recorderStartedRef = useRef(false);
+  const awaitingFlushRef = useRef(false);
+  const awaitingEndRef = useRef(false);
+  const cleanupInProgressRef = useRef(false);
 
   const { user } = useAuth();
-  const {
-    status: factsStatus,
-    interactionId: factsInteractionId,
-    error: factsError,
-    transcripts: factsTranscripts,
-    facts: factsItems,
-    start: startFactsStream,
-    sendAudio: sendFactsAudio,
-    flush: flushFactsStream,
-    end: endFactsStream,
-    clear: clearFactsStream,
-  } = useFactsRStream();
 
-  const activeAnamnesisTemplate = useMemo(() => {
-    return ANAMNESIS_TEMPLATES[consultationType] || ANAMNESIS_TEMPLATES.first;
-  }, [consultationType]);
+  const transcriptText = useMemo(() => {
+    if (!finalTranscript && !livePartial) return '';
+    if (finalTranscript && livePartial) return `${finalTranscript} ${livePartial}`.trim();
+    return finalTranscript || livePartial;
+  }, [finalTranscript, livePartial]);
 
-  const anamnesisContent = useMemo(() => {
-    const sections = [
-      ['Subjektivt', anamnesisSections.subjective],
-      ['Objektivt', anamnesisSections.objective],
-      ['Vurdering', anamnesisSections.assessment],
-      ['Plan', anamnesisSections.plan],
-    ];
+  const wordCount = useMemo(() => {
+    return finalTranscript.trim().split(/\s+/).filter(Boolean).length;
+  }, [finalTranscript]);
 
-    return sections
-      .filter(([, value]) => value && value.trim())
-      .map(([label, value]) => `${label}:\n${value.trim()}`)
-      .join('\n\n');
-  }, [anamnesisSections]);
+  const statusClass = useMemo(() => {
+    return recordingStatus
+      .toLowerCase()
+      .replace(/[^a-z]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }, [recordingStatus]);
 
-  const konklusionSuggestions = useMemo(() => {
-    const subjectiveItems = toBulletItems(anamnesisSections.subjective);
-    const objectiveItems = toBulletItems(anamnesisSections.objective);
-    const assessmentItems = toBulletItems(anamnesisSections.assessment);
-    const planItems = toBulletItems(anamnesisSections.plan);
+  const selectedTemplateSections = useMemo(() => {
+    if (!selectedTemplate?.templateSections) return [];
+    return [...selectedTemplate.templateSections].sort((a, b) => (a?.sort ?? 0) - (b?.sort ?? 0));
+  }, [selectedTemplate]);
 
+  const selectedTemplateMeta = useMemo(() => {
+    if (!selectedTemplateKey) return null;
+    const match = templates.find((template) => template.key === selectedTemplateKey);
+    if (!match) return null;
+    const translation = getTranslation(match.translations, TEMPLATE_LANGUAGE);
     return {
-      focusAreas: subjectiveItems.slice(0, 6),
-      sessionContent: objectiveItems.slice(0, 6),
-      tasksNext: planItems.slice(0, 6),
-      reflection: assessmentItems.slice(0, 6),
+      name: translation?.name || match.name || match.key || '',
+      description: translation?.description || match.description || '',
     };
-  }, [anamnesisSections]);
+  }, [selectedTemplateKey, templates]);
 
   useEffect(() => {
     if (initialDate) {
@@ -256,313 +190,413 @@ function Indlæg({
     }
   }, [initialDate]);
 
-  const flashHighlight = (field) => {
-    setHighlightField(field);
-    window.setTimeout(() => setHighlightField(''), 1200);
-  };
-
-  const handleInsertTemplate = () => {
-    setAnamnesisSections((current) => ({
-      subjective: current.subjective || activeAnamnesisTemplate.subjective,
-      objective: current.objective || activeAnamnesisTemplate.objective,
-      assessment: current.assessment || activeAnamnesisTemplate.assessment,
-      plan: current.plan || activeAnamnesisTemplate.plan,
-    }));
-    flashHighlight('anamnesis_subjective');
-  };
-
-  const insertIntoJournal = (text, mode = 'append') => {
-    if (!text) return;
-
-    if (mode === 'replace') {
-      setContent(text);
-    } else {
-      setContent((current) => (current ? `${current}\n${text}` : text));
+  const fetchTemplates = useCallback(async () => {
+    setTemplatesLoading(true);
+    setTemplatesError('');
+    try {
+      const response = await fetch(`/api/corti/templates?lang=${TEMPLATE_LANGUAGE}`);
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Server ${response.status}`);
+      }
+      const data = await response.json();
+      const items = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+      setTemplates(items);
+    } catch (error) {
+      console.error('Template fetch failed:', error);
+      setTemplatesError('Kunne ikke hente skabeloner. Prøv igen senere.');
+    } finally {
+      setTemplatesLoading(false);
     }
+  }, []);
 
-    flashHighlight('combined');
-  };
-
-  const handleMikrofonClick = () => {
-    if (isDictating) {
-      stopDictation();
+  const fetchTemplateDetails = useCallback(async (templateKey) => {
+    if (!templateKey) {
+      setSelectedTemplate(null);
       return;
     }
-    startDictation();
-  };
 
-  const suggestionForFact = useCallback((fact) => {
-    const group = (fact?.group || fact?.type || '').toLowerCase();
+    setTemplateDetailsLoading(true);
+    setTemplateDetailsError('');
 
-    if (group.includes('objective') || group.includes('objektiv') || group.includes('fund')) {
-      return { key: 'anamnesis_objective', label: 'Objektivt' };
+    try {
+      const response = await fetch(`/api/corti/templates/${encodeURIComponent(templateKey)}`);
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Server ${response.status}`);
+      }
+      const data = await response.json();
+      setSelectedTemplate(data || null);
+    } catch (error) {
+      console.error('Template detail fetch failed:', error);
+      setTemplateDetailsError('Kunne ikke hente skabelondetaljer.');
+      setSelectedTemplate(null);
+    } finally {
+      setTemplateDetailsLoading(false);
     }
-    if (group.includes('assessment') || group.includes('vurdering')) {
-      return { key: 'anamnesis_assessment', label: 'Vurdering' };
-    }
-    if (group.includes('plan') || group.includes('anbefaling')) {
-      return { key: 'anamnesis_plan', label: 'Plan' };
-    }
-    if (group.includes('reflection') || group.includes('refleksion')) {
-      return { key: 'conclusion_reflection', label: 'Refleksion' };
-    }
-
-    return { key: 'anamnesis_subjective', label: 'Subjektivt' };
   }, []);
 
-  const insertFactText = useCallback(
-    (text, targetKey) => {
-      const safeText = String(text || '').trim();
-      if (!safeText) return;
+  useEffect(() => {
+    fetchTemplates();
+  }, [fetchTemplates]);
 
-      const target = targetKey || 'anamnesis_subjective';
+  useEffect(() => {
+    fetchTemplateDetails(selectedTemplateKey);
+  }, [fetchTemplateDetails, selectedTemplateKey]);
 
-      if (target === 'combined') {
-        insertIntoJournal(safeText, 'append');
-        return;
-      }
-
-      if (target === 'conclusion_focus') {
-        setConclusionFocusAreas((current) => appendBulletsDedup(current, safeText));
-        flashHighlight('conclusion_focus');
-        return;
-      }
-      if (target === 'conclusion_content') {
-        setConclusionSessionContent((current) => appendBulletsDedup(current, safeText));
-        flashHighlight('conclusion_content');
-        return;
-      }
-      if (target === 'conclusion_tasks') {
-        setConclusionTasksNext((current) => appendBulletsDedup(current, safeText));
-        flashHighlight('conclusion_tasks');
-        return;
-      }
-      if (target === 'conclusion_reflection') {
-        setConclusionReflection((current) => appendBulletsDedup(current, safeText));
-        flashHighlight('conclusion_reflection');
-        return;
-      }
-
-      if (target === 'anamnesis_objective') {
-        setAnamnesisSections((current) => ({
-          ...current,
-          objective: appendBulletsDedup(current.objective, safeText),
-        }));
-        flashHighlight('anamnesis_objective');
-        return;
-      }
-      if (target === 'anamnesis_assessment') {
-        setAnamnesisSections((current) => ({
-          ...current,
-          assessment: appendBulletsDedup(current.assessment, safeText),
-        }));
-        flashHighlight('anamnesis_assessment');
-        return;
-      }
-      if (target === 'anamnesis_plan') {
-        setAnamnesisSections((current) => ({
-          ...current,
-          plan: appendBulletsDedup(current.plan, safeText),
-        }));
-        flashHighlight('anamnesis_plan');
-        return;
-      }
-
-      setAnamnesisSections((current) => ({
-        ...current,
-        subjective: appendBulletsDedup(current.subjective, safeText),
-      }));
-      flashHighlight('anamnesis_subjective');
-    },
-    [flashHighlight, insertIntoJournal]
-  );
-
-  const insertFactsList = useCallback(
-    (texts, target) => {
-      if (!Array.isArray(texts) || texts.length === 0) return;
-      const resolvedTarget = target === 'auto' ? 'anamnesis_subjective' : target;
-      texts.forEach((text) => insertFactText(text, resolvedTarget));
-    },
-    [insertFactText]
-  );
-
-  const handleInsertAllFacts = useCallback(
-    (texts) => {
-      if (factsInsertTarget === 'auto') {
-        (factsItems || [])
-          .filter((fact) => fact && !fact.isDiscarded)
-          .forEach((fact) => {
-            const suggestion = suggestionForFact(fact);
-            insertFactText(fact.text, suggestion?.key);
-          });
-        return;
-      }
-
-      insertFactsList(texts, factsInsertTarget);
-    },
-    [factsInsertTarget, factsItems, insertFactText, insertFactsList, suggestionForFact]
-  );
-
-  const handleInsertSelectedFacts = useCallback(
-    (texts) => {
-      insertFactsList(texts, factsInsertTarget);
-    },
-    [factsInsertTarget, insertFactsList]
-  );
-
-  const handleInsertOneFact = useCallback(
-    (text, targetKey) => {
-      const resolvedTarget =
-        targetKey || (factsInsertTarget === 'auto' ? 'anamnesis_subjective' : factsInsertTarget);
-      insertFactText(text, resolvedTarget);
-    },
-    [factsInsertTarget, insertFactText]
-  );
-
-  const cleanupFactsAudio = useCallback(() => {
-    if (factsProcessorRef.current) {
-      factsProcessorRef.current.disconnect();
-      factsProcessorRef.current.onaudioprocess = null;
-    }
-    if (factsSourceRef.current) {
-      factsSourceRef.current.disconnect();
-    }
-    if (factsSilenceRef.current) {
-      factsSilenceRef.current.disconnect();
-    }
-    if (factsMediaStreamRef.current) {
-      factsMediaStreamRef.current.getTracks().forEach((track) => track.stop());
-    }
-    if (factsAudioContextRef.current && factsAudioContextRef.current.state !== 'closed') {
-      factsAudioContextRef.current.close();
+  const ensureInteraction = useCallback(async () => {
+    if (interactionId) {
+      return interactionId;
     }
 
-    factsProcessorRef.current = null;
-    factsSourceRef.current = null;
-    factsSilenceRef.current = null;
-    factsMediaStreamRef.current = null;
-    factsAudioContextRef.current = null;
+    const response = await fetch('/api/corti/interactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: clientName ? `Journal: ${clientName}` : 'Journal session',
+        encounterIdentifier: clientId ? `journal-${clientId}-${Date.now()}` : `journal-${Date.now()}`,
+      }),
+    });
 
-    setIsFactsRecording(false);
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(message || `Server ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data?.interactionId) {
+      throw new Error('Mangler interactionId fra serveren.');
+    }
+
+    setInteractionId(data.interactionId);
+    return data.interactionId;
+  }, [clientId, clientName, interactionId]);
+
+  const handleGenerateDocument = useCallback(async () => {
+    if (!transcriptText || !transcriptText.trim()) {
+      setGenerationError('Ingen transskription tilgængelig endnu.');
+      return;
+    }
+
+    if (!selectedTemplateKey) {
+      setGenerationError('Vælg en skabelon før du skriver notat.');
+      return;
+    }
+
+    setGenerationLoading(true);
+    setGenerationError('');
+
+    try {
+      const resolvedInteractionId = await ensureInteraction();
+      const response = await fetch(`/api/corti/interactions/${resolvedInteractionId}/documents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcriptText,
+          templateKey: selectedTemplateKey,
+          outputLanguage: TEMPLATE_LANGUAGE,
+        }),
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Server ${response.status}`);
+      }
+
+      const data = await response.json();
+      setGeneratedDocument(data || null);
+
+      if (Array.isArray(data?.sections)) {
+        const nextContent = buildDocumentText(data.sections);
+        setContent(nextContent);
+      } else if (data) {
+        setContent(JSON.stringify(data, null, 2));
+      }
+    } catch (error) {
+      console.error('Document generation failed:', error);
+      setGenerationError('Kunne ikke generere notat. Prøv igen.');
+    } finally {
+      setGenerationLoading(false);
+    }
+  }, [ensureInteraction, selectedTemplateKey, transcriptText]);
+
+  const cleanupRecording = useCallback((finalStatus = 'Idle') => {
+    if (cleanupInProgressRef.current) return;
+    cleanupInProgressRef.current = true;
+
+    isRecordingRef.current = false;
+    isStartingRef.current = false;
+    if (finalStatus !== 'Ended') {
+      isStoppingRef.current = false;
+    }
+    setIsRecording(false);
+    setLivePartial('');
+    configAcceptedRef.current = false;
+    recorderStartedRef.current = false;
+    awaitingFlushRef.current = false;
+    awaitingEndRef.current = false;
+    setRecordingStatus(finalStatus);
+
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      try {
+        recorder.stop();
+      } catch (_) {}
+    }
+    mediaRecorderRef.current = null;
+
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+
+    if (wsRef.current) {
+      try {
+        wsRef.current.close();
+      } catch (_) {}
+    }
+    wsRef.current = null;
+
+    cleanupInProgressRef.current = false;
   }, []);
 
-  const startFactsRRecording = useCallback(async () => {
-    if (isFactsRecording) return;
+  const startMediaRecorder = useCallback((stream, ws) => {
+    if (recorderStartedRef.current) return;
+    if (!stream) return;
 
-    if (!navigator.mediaDevices || typeof window === 'undefined') {
-      setFactsRecordingStatus('Din browser understotter ikke FactsR optagelse.');
+    const preferred = 'audio/webm;codecs=opus';
+    const options =
+      typeof window !== 'undefined' &&
+      window.MediaRecorder &&
+      window.MediaRecorder.isTypeSupported(preferred)
+        ? { mimeType: preferred }
+        : undefined;
+
+    const recorder = new MediaRecorder(stream, options);
+    mediaRecorderRef.current = recorder;
+    recorderStartedRef.current = true;
+
+    recorder.ondataavailable = async (event) => {
+      if (!event.data || event.data.size === 0) return;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      try {
+        const buffer = await event.data.arrayBuffer();
+        ws.send(buffer);
+      } catch (error) {
+        console.error('Audio chunk send failed:', error);
+      }
+    };
+
+    recorder.start(250);
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    if (isStoppingRef.current) return;
+    isStoppingRef.current = true;
+    isRecordingRef.current = false;
+    setIsRecording(false);
+    setRecordingStatus('Flushing');
+
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      try {
+        recorder.requestData();
+      } catch (_) {}
+      try {
+        recorder.stop();
+      } catch (_) {}
+    }
+
+    const stream = mediaStreamRef.current;
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      awaitingFlushRef.current = true;
+      try {
+        ws.send(JSON.stringify({ type: 'flush' }));
+      } catch (_) {}
+    } else {
+      cleanupRecording('Ended');
+      isStoppingRef.current = false;
+    }
+  }, [cleanupRecording]);
+
+  const startRecording = useCallback(async () => {
+    if (isStartingRef.current || isRecordingRef.current || isStoppingRef.current) {
+      return;
+    }
+    isStartingRef.current = true;
+    isStoppingRef.current = false;
+
+    setRecordingError('');
+    setRecordingStatus('Requesting mic…');
+    setLastWs({ type: '—', reason: '' });
+    setFinalTranscript('');
+    setLivePartial('');
+    configAcceptedRef.current = false;
+    recorderStartedRef.current = false;
+    awaitingFlushRef.current = false;
+    awaitingEndRef.current = false;
+
+    if (!navigator.mediaDevices || typeof window.MediaRecorder === 'undefined') {
+      setRecordingError('Din browser understøtter ikke optagelse.');
+      cleanupRecording('Error');
+      return;
+    }
+
+    const wsUrl = buildWsUrl();
+    if (!wsUrl) {
+      setRecordingError('Manglende transskriptionsforbindelse.');
+      cleanupRecording('Error');
       return;
     }
 
     try {
-      setFactsRecordingStatus('Starter FactsR...');
-      await startFactsStream({
-        primaryLanguage: 'da',
-        outputLocale: 'da',
-        encounterIdentifier: clientId ? `journal-${clientId}-${Date.now()}` : `journal-${Date.now()}`,
-        title: clientName ? `Journal: ${clientName}` : 'Journal session',
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setRecordingStatus('Connecting…');
 
-      if (isDictating) {
-        const recorder = mediaRecorderRef.current;
-        if (recorder && recorder.state !== 'inactive') {
-          recorder.stop();
+      const ws = new WebSocket(wsUrl);
+      ws.binaryType = 'arraybuffer';
+
+      mediaStreamRef.current = stream;
+      wsRef.current = ws;
+      isRecordingRef.current = true;
+      setIsRecording(true);
+
+      ws.onopen = () => {
+        if (isStoppingRef.current) {
+          ws.close();
+          return;
         }
-        setIsDictating(false);
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } });
-      factsMediaStreamRef.current = stream;
-
-      const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-      const audioContext = new AudioContextCtor({ sampleRate: FACTSR_SAMPLE_RATE });
-      factsAudioContextRef.current = audioContext;
-      await audioContext.resume();
-
-      const source = audioContext.createMediaStreamSource(stream);
-      factsSourceRef.current = source;
-      const processor = audioContext.createScriptProcessor(4096, 1, 1);
-      factsProcessorRef.current = processor;
-
-      processor.onaudioprocess = (event) => {
-        if (!factsAudioContextRef.current) return;
-        const input = event.inputBuffer.getChannelData(0);
-        const buffer = toPcm16Buffer(input, audioContext.sampleRate || FACTSR_SAMPLE_RATE);
-        sendFactsAudio(buffer);
+        console.log('[UI] WS OPEN');
+        setRecordingStatus('Config');
+        const configMessage = {
+          type: 'config',
+          configuration: {
+            primaryLanguage: 'da',
+            automaticPunctuation: true,
+          },
+        };
+        const configString = JSON.stringify(configMessage);
+        console.log('[UI] SENT_CONFIG', configString);
+        ws.send(configString);
+        setLastWs({ type: 'SENT_CONFIG', reason: null });
       };
 
-      const silence = audioContext.createGain();
-      silence.gain.value = 0;
-      factsSilenceRef.current = silence;
+      ws.onmessage = (event) => {
+        if (!event?.data) return;
+        let message = null;
+        try {
+          message = JSON.parse(event.data);
+        } catch (_) {
+          return;
+        }
 
-      source.connect(processor);
-      processor.connect(silence);
-      silence.connect(audioContext.destination);
+        if (!message?.type) return;
+        if (message.type === 'DEBUG') {
+          setLastWs({
+            type: message.event || 'DEBUG',
+            reason: message.reason || '',
+          });
+          return;
+        }
+        const messageReason =
+          message.reason ||
+          message.error?.details ||
+          message.error?.title ||
+          (typeof message.error === 'string' ? message.error : null);
+        setLastWs({
+          type: message.type,
+          reason: messageReason,
+        });
 
-      setIsFactsRecording(true);
-      setFactsRecordingStatus('Optager...');
+        if (message?.type === 'CONFIG_ACCEPTED') {
+          configAcceptedRef.current = true;
+          setRecordingStatus('Listening');
+          startMediaRecorder(stream, ws);
+          return;
+        }
+
+        if (message?.type === 'CONFIG_TIMEOUT' || message?.type === 'CONFIG_DENIED') {
+          const reason = messageReason || 'No reason';
+          setRecordingStatus('Error');
+          setRecordingError(`${message.type}: ${reason}`);
+          cleanupRecording('Error');
+          return;
+        }
+
+        if (message?.type === 'flushed' || message?.type === 'FLUSHED') {
+          if (awaitingFlushRef.current && ws.readyState === WebSocket.OPEN) {
+            awaitingFlushRef.current = false;
+            awaitingEndRef.current = true;
+            try {
+              ws.send(JSON.stringify({ type: 'end' }));
+            } catch (_) {}
+          }
+          return;
+        }
+
+        if (message?.type === 'ended' || message?.type === 'ENDED') {
+          cleanupRecording('Ended');
+          return;
+        }
+
+        if (message?.type === 'transcript') {
+          const text = String(message?.data?.text || '').trim();
+          if (!text) return;
+          if (message?.data?.isFinal) {
+            setFinalTranscript((current) => (current ? `${current} ${text}` : text));
+            setLivePartial('');
+          } else {
+            setLivePartial(text);
+          }
+          return;
+        }
+
+        if (message?.type === 'error') {
+          const details = messageReason || 'No reason';
+          setRecordingStatus('Error');
+          setRecordingError(`error: ${details}`);
+          cleanupRecording('Error');
+        }
+      };
+
+      ws.onerror = () => {
+        setRecordingStatus('Error');
+        setRecordingError('WebSocket error');
+        cleanupRecording('Error');
+      };
+
+      ws.onclose = (evt) => {
+        if (!isStoppingRef.current) {
+          setRecordingStatus('Error');
+          setRecordingError(`WS closed: code=${evt.code} reason=${evt.reason || ''}`.trim());
+          cleanupRecording('Error');
+          return;
+        }
+
+        setRecordingStatus('Ended');
+        cleanupRecording('Ended');
+        isStoppingRef.current = false;
+      };
     } catch (error) {
-      console.error('FactsR start error:', error);
-      setFactsRecordingStatus('Kunne ikke starte FactsR.');
-      cleanupFactsAudio();
-      clearFactsStream();
+      console.error('Microphone error:', error);
+      setRecordingStatus('Error');
+      setRecordingError('Kunne ikke få adgang til mikrofonen.');
+      cleanupRecording('Error');
+    } finally {
+      isStartingRef.current = false;
     }
-  }, [
-    cleanupFactsAudio,
-    clearFactsStream,
-    clientId,
-    clientName,
-    isDictating,
-    isFactsRecording,
-    sendFactsAudio,
-    startFactsStream,
-  ]);
-
-  const stopFactsRRecording = useCallback(() => {
-    if (!isFactsRecording) return;
-    endFactsStream();
-    cleanupFactsAudio();
-    setFactsRecordingStatus('');
-  }, [cleanupFactsAudio, endFactsStream, isFactsRecording]);
-
-  const handleToggleFactsR = useCallback(() => {
-    if (isFactsRecording) {
-      stopFactsRRecording();
-      return;
-    }
-    startFactsRRecording();
-  }, [isFactsRecording, startFactsRRecording, stopFactsRRecording]);
-
-  const handleClearFactsR = useCallback(() => {
-    stopFactsRRecording();
-    clearFactsStream();
-    setFactsRecordingStatus('');
-  }, [clearFactsStream, stopFactsRRecording]);
-
-  useEffect(() => {
-    if (!isFactsRecording) return;
-
-    if (factsStatus === 'connecting') {
-      setFactsRecordingStatus('Forbinder...');
-    } else if (factsStatus === 'streaming') {
-      setFactsRecordingStatus('Live optagelse');
-    } else if (factsStatus === 'finalizing') {
-      setFactsRecordingStatus('Afslutter...');
-    } else if (factsStatus === 'ended') {
-      setFactsRecordingStatus('Afsluttet');
-      cleanupFactsAudio();
-    } else if (factsStatus === 'error') {
-      setFactsRecordingStatus('Fejl i FactsR');
-      cleanupFactsAudio();
-    }
-  }, [cleanupFactsAudio, factsStatus, isFactsRecording]);
+  }, [cleanupRecording, startMediaRecorder]);
 
   useEffect(() => {
     return () => {
-      cleanupFactsAudio();
-      clearFactsStream();
+      cleanupRecording();
     };
-  }, [cleanupFactsAudio, clearFactsStream]);
+  }, [cleanupRecording]);
 
   const handleSave = async () => {
     if (isSaving) {
@@ -583,35 +617,26 @@ function Indlæg({
 
     const nowIso = new Date().toISOString();
     const ownerIdentifier = deriveUserIdentifier(user);
+    const templateTitle =
+      typeof selectedTemplate?.name === 'string' ? selectedTemplate.name.trim() : '';
+    const fallbackTitle =
+      [clientName, date].filter(Boolean).join(' - ') || 'Journalnotat';
+    const resolvedTitle = templateTitle || fallbackTitle;
 
     const entryPayload = {
-      title: title.trim(),
+      title: resolvedTitle,
       date,
-      content,
-      consultationType,
-      // New structure
-      anamnesisContent,
-      conclusion: {
-        focusAreas: conclusionFocusAreas,
-        sessionContent: conclusionSessionContent,
-        tasksNext: conclusionTasksNext,
-        reflection: conclusionReflection,
-      },
-      // Legacy fields kept for backwards compatibility (optional)
-      subjectiveContent: anamnesisContent,
-      objectiveContent: '',
-      planContent: conclusionTasksNext,
-      summaryContent: conclusionReflection,
-      isPrivate,
+      content: content.trim(),
+      isPrivate: false,
       isStarred: false,
       isLocked: false,
       clientName,
       clientId,
-      searchQuery,
       ownerUid: user.uid,
       ownerEmail: user.email ?? null,
       ownerIdentifier,
       createdAtIso: nowIso,
+      templateKey: selectedTemplateKey || null,
     };
 
     setIsSaving(true);
@@ -650,787 +675,352 @@ function Indlæg({
     }
   };
 
-  const handleAddFile = () => {
-    console.log('Add journal file');
-  };
-
-  const handleUpload = () => {
-    console.log('Upload');
-  };
-
-  const handlePrint = () => {
-    console.log('Print');
-  };
-
-  const formatTranscriptAsAnamnesis = (text, facts) => {
-    // If Corti facts are available, prefer them for structure.
-    if (facts && typeof facts === 'object') {
-      const subj = [];
-      const obj = [];
-      const plan = [];
-
-      if (facts.chief_complaint) subj.push(`- CC: ${facts.chief_complaint}`);
-      if (facts.onset) subj.push(`- Debut: ${facts.onset}`);
-      if (facts.location) subj.push(`- Lokation: ${facts.location}`);
-      if (facts.severity) subj.push(`- Sværhedsgrad: ${facts.severity}`);
-      if (facts.modulating_factors) subj.push(`- Lindrende/forværrende: ${facts.modulating_factors}`);
-
-      if (facts.objective_findings) obj.push(`- Fund: ${facts.objective_findings}`);
-      if (facts.red_flags) obj.push(`- Red flags: ${facts.red_flags}`);
-
-      if (facts.plan) plan.push(`- Plan: ${facts.plan}`);
-      if (facts.recommendations) plan.push(`- Anbefalinger: ${facts.recommendations}`);
-
-      return [
-        'Anamnese (fys/kiro):',
-        '',
-        'Subjektivt:',
-        subj.length ? subj.join('\n') : '- (CC, debut, lokation, sværhedsgrad, lindrende/forværrende)',
-        '',
-        'Objektivt:',
-        obj.length ? obj.join('\n') : '- (ROM, smerteprovokation, neurofund, palpation)',
-        '',
-        'Vurdering/plan:',
-        plan.length ? plan.join('\n') : '- (tentativ vurdering og næste skridt)',
-      ].join('\n');
+  const templateSelectionLabel = useMemo(() => {
+    if (selectedTemplate) {
+      const translation = getTranslation(selectedTemplate.translations, TEMPLATE_LANGUAGE);
+      return translation?.name || selectedTemplate?.name || selectedTemplate?.key || '';
     }
-
-    // Fallback: bulletize plain text.
-    const cleaned = text.replace(/\s+/g, ' ').trim();
-    if (!cleaned) return '';
-
-    const fragments = cleaned
-      .split(/[.!?]\s+/)
-      .map((p) => p.trim())
-      .filter(Boolean)
-      .slice(0, 6)
-      .map((p) => `- ${p}`);
-
-    const subjektivt =
-      fragments.length > 0
-        ? fragments.join('\n')
-        : '- (kort hovedklage, debut, forværrende/lindrende)';
-
-    return [
-      'Anamnese (fys/kiro):',
-      '',
-      'Subjektivt:',
-      subjektivt,
-      '',
-      'Objektivt:',
-      '- (ROM, smerteprovokation, neurofund, palpation)',
-      '',
-      'Vurdering/plan:',
-      '- (tentativ vurdering og næste skridt)',
-    ].join('\n');
-  };
-
-  // Enhanced formatter that returns structured sections
-  const formatTranscriptStructured = (text, facts) => {
-    if (facts && typeof facts === 'object') {
-      const subj = [];
-      const obj = [];
-      const plan = [];
-      const summary = [];
-
-      if (facts.chief_complaint) subj.push(`- CC: ${facts.chief_complaint}`);
-      if (facts.onset) subj.push(`- Debut: ${facts.onset}`);
-      if (facts.location) subj.push(`- Lokation: ${facts.location}`);
-      if (facts.severity) subj.push(`- Sværhedsgrad: ${facts.severity}`);
-      if (facts.modulating_factors) subj.push(`- Lindrende/forværende: ${facts.modulating_factors}`);
-
-      if (facts.objective_findings) obj.push(`- Fund: ${facts.objective_findings}`);
-      if (facts.red_flags) obj.push(`- RED FLAG: ${facts.red_flags}`);
-
-      if (facts.plan) plan.push(`- Plan: ${facts.plan}`);
-      if (facts.recommendations) plan.push(`- Anbefalinger: ${facts.recommendations}`);
-
-      if (subj.length) summary.push(subj[0].replace(/^- /, ''));
-      if (obj.length) summary.push(obj[0].replace(/^- /, ''));
-      if (plan.length) summary.push(plan[0].replace(/^- /, ''));
-
-      return {
-        subjective: subj.length ? subj.join('\n') : '- (CC, debut, lokation, sværhedsgrad, lindrende/forværende)',
-        objective: obj.length ? obj.join('\n') : '- (ROM, smerteprovokation, neurofund, palpation)',
-        plan: plan.length ? plan.join('\n') : '- (tentativ vurdering og næste skridt)',
-        summary: summary.slice(0, 3).join(' · '),
-      };
-    }
-
-    const cleaned = text.replace(/\s+/g, ' ').trim();
-    if (!cleaned) return null;
-
-    const fragments = cleaned
-      .split(/[.!?]\s+/)
-      .map((p) => p.trim())
-      .filter(Boolean)
-      .slice(0, 6)
-      .map((p) => `- ${p}`);
-
-    const subjektivt =
-      fragments.length > 0
-        ? fragments.join('\n')
-        : '- (kort hovedklage, debut, forværende/lindrende)';
-
-    return {
-      subjective: subjektivt,
-      objective: '- (ROM, smerteprovokation, neurofund, palpation)',
-      plan: '- (tentativ vurdering og næste skridt)',
-      summary: fragments.slice(0, 2).map((f) => f.replace(/^- /, '')).join(' · '),
-    };
-  };
-
-  const appendContentFromExternalSource = (incomingText, facts) => {
-    if (typeof incomingText !== 'string' || !incomingText.trim()) {
-      return;
-    }
-
-    const formatted = formatTranscriptStructured(incomingText, facts);
-    if (!formatted) return;
-
-    // New journal structure mapping:
-    // - subjective/objective facts → Anamnese
-    // - plan → Opgaver til næste gang
-    // - summary → Refleksion (kort)
-    setAnamnesisSections((current) => {
-      const next = { ...current };
-      if (formatted.subjective) {
-        const items = toBulletItems(formatted.subjective);
-        next.subjective = appendBulletsDedup(current.subjective, items);
-      }
-      if (formatted.objective) {
-        const items = toBulletItems(formatted.objective);
-        next.objective = appendBulletsDedup(current.objective, items);
-      }
-      if (formatted.plan) {
-        // If plan is included in dictation, it often maps to next visit tasks;
-        // we still keep the editor's conclusion tasks field as the source of truth.
-        const items = toBulletItems(formatted.plan);
-        next.plan = appendBulletsDedup(current.plan, items);
-      }
-      return next;
-    });
-    if (formatted.plan) {
-      setConclusionTasksNext((current) => (current ? `${current}\n\n${formatted.plan}` : formatted.plan));
-    }
-    if (formatted.summary) {
-      setConclusionReflection((current) => (current ? `${current}\n${formatted.summary}` : formatted.summary));
-    }
-  };
-
-  const startDictation = async () => {
-    try {
-      if (!navigator.mediaDevices || typeof window.MediaRecorder === 'undefined') {
-        setDictationStatus('Din browser understøtter ikke diktering.');
-        return;
-      }
-
-      if (!TRANSCRIBE_FUNCTION_URL) {
-        setDictationStatus('Manglende transskriptions-endpoint.');
-        return;
-      }
-
-      setDictationStatus('Starter mikrofon...');
-      setTranscriptionResult(null);
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        try {
-          const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-          setDictationStatus('Forbereder lyd...');
-          await transcribeRecording(blob);
-        } catch (error) {
-          console.error('Transcription error:', error);
-          setDictationStatus('Fejl under transskription.');
-        } finally {
-          if (streamRef.current) {
-            streamRef.current.getTracks().forEach((track) => track.stop());
-            streamRef.current = null;
-          }
-          mediaRecorderRef.current = null;
-          audioChunksRef.current = [];
-        }
-      };
-
-      mediaRecorder.start();
-      setIsDictating(true);
-      setDictationStatus('Lytter....');
-    } catch (error) {
-      console.error('Microphone error:', error);
-      setDictationStatus('Kunne ikke få adgang til mikrofonen.');
-      setIsDictating(false);
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
-      }
-    }
-  };
-
-  const transcribeRecording = async (audioBlob) => {
-    if (!TRANSCRIBE_FUNCTION_URL) {
-      setDictationStatus('Manglende transskriptions-endpoint.');
-      return;
-    }
-
-    setDictationStatus('Genererer tekst...');
-    const formData = new FormData();
-    formData.append('file', audioBlob, 'recording.webm');
-    formData.append('response_format', 'text');
-
-    try {
-      const response = await fetch(TRANSCRIBE_FUNCTION_URL, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorMessage = await response.text();
-        throw new Error(`Server ${response.status}: ${errorMessage}`);
-      }
-
-      const responseBody = await response.text();
-      console.log('Transcribe response:', responseBody);
-
-      let parsedResult = null;
-      if (responseBody?.trim()) {
-        try {
-          parsedResult = JSON.parse(responseBody);
-        } catch (jsonError) {
-          parsedResult = { text: responseBody.trim() };
-        }
-      }
-
-      if (parsedResult) {
-        setTranscriptionResult(parsedResult);
-        if (parsedResult.text) {
-          appendContentFromExternalSource(parsedResult.text);
-        }
-        setDictationStatus('Transskription modtaget.');
-      } else {
-        setDictationStatus('Kunne ikke læse nogen tekst fra svaret.');
-      }
-    } catch (error) {
-      console.error('Transcription error:', error);
-      setDictationStatus('Fejl under transskription.');
-    }
-  };
-
-  const stopDictation = () => {
-    const recorder = mediaRecorderRef.current;
-    if (recorder && recorder.state !== 'inactive') {
-      recorder.stop();
-      setDictationStatus('Stopper optagelse...');
-    }
-    setIsDictating(false);
-  };
+    return selectedTemplateMeta?.name || '';
+  }, [selectedTemplate, selectedTemplateMeta]);
 
   return (
     <div className="indlæg-container">
       <div className="indlæg-layout">
         <div className="indlæg-main-pane">
-      {/* Header */}
-      <div className="indlæg-header">
-        <div className="indlæg-header-top">
-          <h2 className="indlæg-title">Journal for {clientName}</h2>
-        </div>
+          <div className="indlæg-header">
+            <div className="indlæg-header-top">
+              <div className="indlæg-title-block">
+                <h2 className="indlæg-title">{clientName || 'Ukendt klient'}</h2>
+                <span className="indlæg-title-date">{date || '—'}</span>
+              </div>
+            </div>
 
-        {/* NYT: Seneste sessioner */}
-        <div className="indlæg-history">
-          <div className="indlæg-history-header">
+            <div className="indlæg-history">
+              <div className="indlæg-history-header">
                 <button
                   type="button"
                   className="indlæg-history-toggle"
                   onClick={() => setIsHistoryOpen((open) => !open)}
                   aria-expanded={isHistoryOpen}
                 >
-            <span className="indlæg-label">Seneste sessioner</span>
-                  <span className="indlæg-history-chevron">
-                    {isHistoryOpen ? '▾' : '▸'}
-                  </span>
+                  <span className="indlæg-label">Seneste sessioner</span>
+                  <span className="indlæg-history-chevron">{isHistoryOpen ? '▾' : '▸'}</span>
                 </button>
-          </div>
+              </div>
 
               {isHistoryOpen && (
                 <>
-          {isLoadingHistory && (
-            <p className="indlæg-history-status">Henter seneste sessioner...</p>
-          )}
+                  {isLoadingHistory && (
+                    <p className="indlæg-history-status">Henter seneste sessioner...</p>
+                  )}
 
-          {historyError && !isLoadingHistory && (
-            <p className="indlæg-history-error">{historyError}</p>
-          )}
+                  {historyError && !isLoadingHistory && (
+                    <p className="indlæg-history-error">{historyError}</p>
+                  )}
 
-                  {!isLoadingHistory &&
-                    !historyError &&
-                    recentEntries.length === 0 && (
-            <p className="indlæg-history-empty">
-              Ingen tidligere sessioner for denne borger endnu.
-            </p>
-          )}
-
-                  {!isLoadingHistory &&
-                    !historyError &&
-                    recentEntries.length > 0 && (
-            <ul className="indlæg-history-list">
-              {recentEntries.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="indlæg-history-item"
-                  onClick={() => onOpenEntry && onOpenEntry(entry)}
-                >
-                  <div className="indlæg-history-item-main">
-                    <span className="indlæg-history-title">
-                      {entry.title || 'Uden titel'}
-                    </span>
-                    {entry.date && (
-                      <span className="indlæg-history-date">
-                        {entry.date}
-                      </span>
-                    )}
-                  </div>
-                  {entry.content && (
-                    <p className="indlæg-history-snippet">
-                      {String(entry.content).slice(0, 120)}
-                      {String(entry.content).length > 120 ? '…' : ''}
+                  {!isLoadingHistory && !historyError && recentEntries.length === 0 && (
+                    <p className="indlæg-history-empty">
+                      Ingen tidligere sessioner for denne borger endnu.
                     </p>
                   )}
-                  <span className="indlæg-history-link">Åbn session</span>
-                </li>
-              ))}
-            </ul>
-                    )}
+
+                  {!isLoadingHistory && !historyError && recentEntries.length > 0 && (
+                    <ul className="indlæg-history-list">
+                      {recentEntries.map((entry) => (
+                        <li
+                          key={entry.id}
+                          className="indlæg-history-item"
+                          onClick={() => onOpenEntry && onOpenEntry(entry)}
+                        >
+                          <div className="indlæg-history-item-main">
+                            <span className="indlæg-history-title">
+                              {entry.title || 'Uden titel'}
+                            </span>
+                            {entry.date && (
+                              <span className="indlæg-history-date">{entry.date}</span>
+                            )}
+                          </div>
+                          {entry.content && (
+                            <p className="indlæg-history-snippet">
+                              {String(entry.content).slice(0, 120)}
+                              {String(entry.content).length > 120 ? '…' : ''}
+                            </p>
+                          )}
+                          <span className="indlæg-history-link">Åbn session</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </>
-          )}
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="indlæg-content">
-        <div className="indlæg-workspace">
-          <div className="indlæg-main">
-        {/* Title and Date Section */}
-        <div className="indlæg-form-section">
-          <div className="indlæg-form-row">
-            <div className="indlæg-form-group">
-              <label className="indlæg-label">Dato</label>
-              <input
-                type="text"
-                className="indlæg-input indlæg-date-input"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                placeholder="dd-mm-yyyy"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="indlæg-form-section">
-          <div className="indlæg-form-row">
-            <div className="indlæg-form-group">
-              <label className="indlæg-label">Konsultationstype</label>
-              <select
-                className="indlæg-input"
-                value={consultationType}
-                onChange={(e) => setConsultationType(e.target.value)}
-              >
-                <option value="first">Første konsultation</option>
-                <option value="follow_up">Efterfølgende</option>
-              </select>
-            </div>
-            <div className="indlæg-form-group">
-              <label className="indlæg-label">Skabelon</label>
-              <button type="button" className="indlæg-action-btn" onClick={handleInsertTemplate}>
-                Indsæt skabelon
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Private Journal Toggle */}
-        <div className="indlæg-form-section">
-          <div className="indlæg-toggle-group">
-            <label className="indlæg-toggle-label">
-              <input
-                type="checkbox"
-                className="indlæg-toggle-input"
-                checked={isPrivate}
-                onChange={(e) => setIsPrivate(e.target.checked)}
-              />
-              <span className="indlæg-toggle-slider"></span>
-            </label>
-            <div className="indlæg-toggle-text-group">
-              <span className="indlæg-label">Privat journal</span>
-              <button className="indlæg-help-btn" title="Hjælp">
-                ?
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Anamnese / Journal */}
-        <div className="indlæg-section-title">Anamnese / Journal</div>
-
-        <div className="indlæg-form-section">
-          <label className="indlæg-label">Anamnese</label>
-          <div className="indlæg-anamneseGrid" aria-label="Anamnese sektioner">
-            <div className="indlæg-anamneseCard">
-              <div className="indlæg-anamneseHeading">Subjektivt</div>
-              <textarea
-                className={`indlæg-textarea indlæg-textarea--md${
-                  highlightField === 'anamnesis_subjective' ? ' indlæg-highlight' : ''
-                }`}
-                ref={anamnesisSubjectiveRef}
-                rows={6}
-                value={anamnesisSections.subjective}
-                onChange={(e) =>
-                  setAnamnesisSections((cur) => ({ ...cur, subjective: e.target.value }))
-                }
-                placeholder={activeAnamnesisTemplate.subjective || ''}
-              />
-            </div>
-
-            <div className="indlæg-anamneseCard">
-              <div className="indlæg-anamneseHeading">Objektivt</div>
-              <textarea
-                className={`indlæg-textarea indlæg-textarea--md${
-                  highlightField === 'anamnesis_objective' ? ' indlæg-highlight' : ''
-                }`}
-                ref={anamnesisObjectiveRef}
-                rows={6}
-                value={anamnesisSections.objective}
-                onChange={(e) =>
-                  setAnamnesisSections((cur) => ({ ...cur, objective: e.target.value }))
-                }
-                placeholder={activeAnamnesisTemplate.objective || ''}
-              />
-            </div>
-
-            <div className="indlæg-anamneseCard">
-              <div className="indlæg-anamneseHeading">Vurdering</div>
-              <textarea
-                className={`indlæg-textarea indlæg-textarea--md${
-                  highlightField === 'anamnesis_assessment' ? ' indlæg-highlight' : ''
-                }`}
-                ref={anamnesisAssessmentRef}
-                rows={6}
-                value={anamnesisSections.assessment}
-                onChange={(e) =>
-                  setAnamnesisSections((cur) => ({ ...cur, assessment: e.target.value }))
-                }
-                placeholder={activeAnamnesisTemplate.assessment || ''}
-              />
-            </div>
-
-            <div className="indlæg-anamneseCard">
-              <div className="indlæg-anamneseHeading">Plan</div>
-              <textarea
-                className={`indlæg-textarea indlæg-textarea--md${
-                  highlightField === 'anamnesis_plan' ? ' indlæg-highlight' : ''
-                }`}
-                ref={anamnesisPlanRef}
-                rows={6}
-                value={anamnesisSections.plan}
-                onChange={(e) => setAnamnesisSections((cur) => ({ ...cur, plan: e.target.value }))}
-                placeholder={activeAnamnesisTemplate.plan || ''}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="indlæg-form-section">
-          <label className="indlæg-label">Konklusion af sessionen</label>
-          <div className="indlæg-subgrid">
-            <div className="indlæg-subfield">
-              <label className="indlæg-sublabel">Fokusområder</label>
-              {konklusionSuggestions.focusAreas?.length ? (
-                <div className="indlæg-suggestions" aria-label="Forslag til fokusområder">
-                  <div className="indlæg-suggestionsTitle">Forslag fra anamnesen:</div>
-                  <div className="indlæg-suggestionsChips">
-                    {konklusionSuggestions.focusAreas.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        className="indlæg-suggestionChip"
-                        onClick={() => setConclusionFocusAreas((cur) => appendBulletsDedup(cur, s))}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              <textarea
-                className={`indlæg-textarea${highlightField === 'conclusion_focus' ? ' indlæg-highlight' : ''}`}
-                ref={conclusionFocusRef}
-                rows={3}
-                value={conclusionFocusAreas}
-                onChange={(e) => setConclusionFocusAreas(e.target.value)}
-                placeholder="Hvad var fokus i sessionen?"
-              />
-            </div>
-            <div className="indlæg-subfield">
-              <label className="indlæg-sublabel">Sessionens indhold</label>
-              {konklusionSuggestions.sessionContent?.length ? (
-                <div className="indlæg-suggestions" aria-label="Forslag til sessionens indhold">
-                  <div className="indlæg-suggestionsTitle">Forslag fra anamnesen:</div>
-                  <div className="indlæg-suggestionsChips">
-                    {konklusionSuggestions.sessionContent.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        className="indlæg-suggestionChip"
-                        onClick={() => setConclusionSessionContent((cur) => appendBulletsDedup(cur, s))}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              <textarea
-                className={`indlæg-textarea${highlightField === 'conclusion_content' ? ' indlæg-highlight' : ''}`}
-                ref={conclusionContentRef}
-                rows={3}
-                value={conclusionSessionContent}
-                onChange={(e) => setConclusionSessionContent(e.target.value)}
-                placeholder="Kort opsummering af hvad der blev gjort/besluttet."
-              />
-            </div>
-            <div className="indlæg-subfield">
-              <label className="indlæg-sublabel">Opgaver til næste gang</label>
-              {konklusionSuggestions.tasksNext?.length ? (
-                <div className="indlæg-suggestions" aria-label="Forslag til opgaver">
-                  <div className="indlæg-suggestionsTitle">Forslag fra anamnesen:</div>
-                  <div className="indlæg-suggestionsChips">
-                    {konklusionSuggestions.tasksNext.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        className="indlæg-suggestionChip"
-                        onClick={() => setConclusionTasksNext((cur) => appendBulletsDedup(cur, s))}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              <textarea
-                className={`indlæg-textarea${highlightField === 'conclusion_tasks' ? ' indlæg-highlight' : ''}`}
-                ref={conclusionTasksRef}
-                rows={3}
-                value={conclusionTasksNext}
-                onChange={(e) => setConclusionTasksNext(e.target.value)}
-                placeholder="Hjemmeøvelser, aftaler, næste skridt."
-              />
-            </div>
-            <div className="indlæg-subfield">
-              <label className="indlæg-sublabel">Refleksion</label>
-              {konklusionSuggestions.reflection?.length ? (
-                <div className="indlæg-suggestions" aria-label="Forslag til refleksion">
-                  <div className="indlæg-suggestionsTitle">Forslag fra anamnesen:</div>
-                  <div className="indlæg-suggestionsChips">
-                    {konklusionSuggestions.reflection.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        className="indlæg-suggestionChip"
-                        onClick={() => setConclusionReflection((cur) => appendBulletsDedup(cur, s))}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              <textarea
-                className={`indlæg-textarea${highlightField === 'conclusion_reflection' ? ' indlæg-highlight' : ''}`}
-                ref={conclusionReflectionRef}
-                rows={3}
-                value={conclusionReflection}
-                onChange={(e) => setConclusionReflection(e.target.value)}
-                placeholder="Kliniske overvejelser, bekymringer, red flags, mm."
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Rich Text Editor Toolbar */}
-        <div className="indlæg-form-section">
-          <label className="indlæg-label">Indhold (samlet tekst)</label>
-          <div className="indlæg-editor-toolbar">
-            <button className="indlæg-toolbar-btn" title="Fortryd">
-              ↶
-            </button>
-            <button className="indlæg-toolbar-btn" title="Gentag">
-              ↷
-            </button>
-            <div className="indlæg-toolbar-divider"></div>
-            <button className="indlæg-toolbar-btn" title="Fed">
-              B
-            </button>
-            <button className="indlæg-toolbar-btn" title="Kursiv">
-              I
-            </button>
-            <button className="indlæg-toolbar-btn" title="Understreg">
-              U
-            </button>
-            <button className="indlæg-toolbar-btn" title="Gennemstreg">
-              S
-            </button>
-            <div className="indlæg-toolbar-divider"></div>
-            <button className="indlæg-toolbar-btn" title="Punktliste">
-              •
-            </button>
-            <button className="indlæg-toolbar-btn" title="Nummereret liste">
-              1.
-            </button>
-            <div className="indlæg-toolbar-divider"></div>
-            <button className="indlæg-toolbar-btn" title="Venstrejuster">
-              ◀
-            </button>
-            <button className="indlæg-toolbar-btn" title="Centrer">
-              ⬌
-            </button>
-            <button className="indlæg-toolbar-btn" title="Højrejuster">
-              ▶
-            </button>
-            <div className="indlæg-toolbar-divider"></div>
-            <select className="indlæg-toolbar-select">
-              <option>Afsnit</option>
-            </select>
-            <button className="indlæg-toolbar-btn" title="Indsæt link">
-              🔗
-            </button>
-            <button className="indlæg-toolbar-btn" title="Indsæt tabel">
-              ⊞
-            </button>
-            <button className="indlæg-toolbar-btn" title="Indsæt billede">
-              🖼️
-            </button>
-          </div>
-
-          {/* Content Textarea */}
-          <textarea
-            className={`indlæg-textarea${highlightField === 'combined' ? ' indlæg-highlight' : ''}`}
-            ref={combinedRef}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Indtast indhold..."
-            rows={15}
-          />
-          <div className="indlæg-mikrofon-container">
-            <div className="indlæg-mikrofon-wrapper">
-              <div className="indlæg-mikrofon-actions">
-                <button
-                  type="button"
-                  className={`indlæg-mikrofon-btn${isDictating ? ' active' : ''}`}
-                  onClick={handleMikrofonClick}
-                  title={isDictating ? 'Stop diktering' : 'Start diktering'}
-                  aria-pressed={isDictating}
-                >
-                  <span className="indlæg-mikrofon-icon">🎤</span>
-                  Mikrofon
-                </button>
-                <button
-                  type="button"
-                  className="indlæg-save-btn indlæg-save-btn--inline"
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  aria-busy={isSaving}
-                >
-                  {isSaving ? 'Gemmer...' : 'Gem og luk'}
-                </button>
-              </div>
-              {dictationStatus && (
-                <p className="indlæg-dictation-status">{dictationStatus}</p>
               )}
             </div>
-            <Prompt onResult={appendContentFromExternalSource} />
           </div>
-          {transcriptionResult && <Whisper data={transcriptionResult} />}
-          {saveError && (
-            <p className="indlæg-save-error" role="alert">
-              {saveError}
-            </p>
-          )}
-        </div>
-        <div className="indlæg-agents indlæg-agents--hidden">
-          <div className="indlæg-agents-title">AI agenter</div>
-          <div className="indlæg-agent-grid">
-            <div className="indlæg-agent-card">
-              <AiAssistantCard
-                agentId="reasoner"
-                agentTitle="Agent 1 · Ræsonnering"
-                clientId={clientId || null}
-                clientName={clientName || null}
-                draftText={content}
-                onInsert={insertIntoJournal}
-              />
-            </div>
-            <div className="indlæg-agent-card">
-              <AiAssistantCard
-                agentId="guidelines"
-                agentTitle="Agent 2 · Evidens"
-                clientId={clientId || null}
-                clientName={clientName || null}
-                draftText={content}
-                onInsert={insertIntoJournal}
-              />
-            </div>
-            <div className="indlæg-agent-card">
-              <AiAssistantCard
-                agentId="planner"
-                agentTitle="Agent 3 · Forløbsplanlægger"
-                clientId={clientId || null}
-                clientName={clientName || null}
-                draftText={content}
-                onInsert={insertIntoJournal}
-              />
+
+          <div className="indlæg-content">
+            <div className="indlæg-workspace">
+              <aside className="indlæg-column indlæg-column--left">
+                <div className="indlæg-card">
+                  <div className="indlæg-card-header">
+                    <h3 className="indlæg-card-title">AI værktøjer</h3>
+                  </div>
+                  <div className="indlæg-card-body">
+                    <div className="indlæg-tool-grid">
+                      <button type="button" className="indlæg-tool-btn" disabled>
+                        Resume generator
+                      </button>
+                      <button type="button" className="indlæg-tool-btn" disabled>
+                        Diagnose forslag
+                      </button>
+                      <button type="button" className="indlæg-tool-btn" disabled>
+                        Journal tjekliste
+                      </button>
+                      <button type="button" className="indlæg-tool-btn" disabled>
+                        Evidens opslag
+                      </button>
+                    </div>
+                    <p className="indlæg-muted">
+                      Flere AI værktøjer kommer snart.
+                    </p>
+                  </div>
+                </div>
+              </aside>
+
+              <section className="indlæg-column indlæg-column--center">
+                <div className="indlæg-card">
+                  <div className="indlæg-card-header">
+                    <h3 className="indlæg-card-title">Skabeloner</h3>
+                  </div>
+                  <div className="indlæg-card-body">
+                    {templatesLoading && <p className="indlæg-muted">Henter skabeloner...</p>}
+                    {templatesError && <p className="indlæg-inline-error">{templatesError}</p>}
+                    {!templatesLoading && !templatesError && templates.length === 0 && (
+                      <p className="indlæg-muted">Ingen skabeloner fundet.</p>
+                    )}
+                    <div className="indlæg-form-group">
+                      <label className="indlæg-label" htmlFor="indlaeg-template-select">
+                        Vælg skabelon
+                      </label>
+                      <select
+                        id="indlaeg-template-select"
+                        className="indlæg-input indlæg-template-select"
+                        value={selectedTemplateKey}
+                        onChange={(event) => {
+                          setSelectedTemplateKey(event.target.value);
+                          setGenerationError('');
+                        }}
+                        disabled={templatesLoading || !!templatesError || templates.length === 0}
+                      >
+                        <option value="">Vælg skabelon</option>
+                        {templates.map((template) => {
+                          const translation = getTranslation(
+                            template.translations,
+                            TEMPLATE_LANGUAGE
+                          );
+                          const name = translation?.name || template.name || template.key;
+                          return (
+                            <option key={template.key} value={template.key}>
+                              {name}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      {selectedTemplateMeta?.description ? (
+                        <p className="indlæg-template-help">{selectedTemplateMeta.description}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="indlæg-card">
+                  <div className="indlæg-card-header">
+                    <h3 className="indlæg-card-title">Valgt skabelon</h3>
+                    {templateSelectionLabel ? (
+                      <span className="indlæg-pill">{templateSelectionLabel}</span>
+                    ) : null}
+                  </div>
+                  <div className="indlæg-card-body">
+                    {templateDetailsLoading && <p className="indlæg-muted">Henter detaljer...</p>}
+                    {templateDetailsError && (
+                      <p className="indlæg-inline-error">{templateDetailsError}</p>
+                    )}
+                    {!selectedTemplateKey && (
+                      <p className="indlæg-muted">Vælg en skabelon for at se sektionerne.</p>
+                    )}
+                    {!templateDetailsLoading && selectedTemplateKey && selectedTemplate && (
+                      <div className="indlæg-template-sections">
+                        {selectedTemplateSections.length === 0 ? (
+                          <p className="indlæg-muted">Skabelonen har ingen sektioner.</p>
+                        ) : (
+                          selectedTemplateSections.map((section) => {
+                            const sectionMeta = section?.sectionsId || section;
+                            const translation = getTranslation(
+                              sectionMeta?.translations,
+                              TEMPLATE_LANGUAGE
+                            );
+                            const sectionName = translation?.name || sectionMeta?.name || 'Sektion';
+                            const sectionDescription =
+                              translation?.description || sectionMeta?.description || '';
+                            return (
+                              <div key={`${sectionMeta?.key}-${section?.sort}`} className="indlæg-template-section">
+                                <div className="indlæg-template-section-title">{sectionName}</div>
+                                {sectionDescription ? (
+                                  <div className="indlæg-template-section-desc">
+                                    {sectionDescription}
+                                  </div>
+                                ) : null}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="indlæg-card">
+                  <div className="indlæg-card-header">
+                    <h3 className="indlæg-card-title">Genereret notat</h3>
+                  </div>
+                  <div className="indlæg-card-body">
+                    {generationLoading && <p className="indlæg-muted">Genererer notat...</p>}
+                    {generationError && <p className="indlæg-inline-error">{generationError}</p>}
+                    {!generationLoading && !generationError && !generatedDocument && (
+                      <p className="indlæg-muted">Ingen notat genereret endnu.</p>
+                    )}
+                    {generatedDocument?.sections && Array.isArray(generatedDocument.sections) ? (
+                      <div className="indlæg-generated-sections">
+                        {generatedDocument.sections
+                          .slice()
+                          .sort((a, b) => (a?.sort ?? 0) - (b?.sort ?? 0))
+                          .map((section) => (
+                            <div key={section.key || section.name} className="indlæg-generated-section">
+                              <div className="indlæg-generated-title">{section.name || section.key}</div>
+                              <div className="indlæg-generated-text">{section.text}</div>
+                            </div>
+                          ))}
+                      </div>
+                    ) : null}
+                    {generatedDocument && !generatedDocument?.sections ? (
+                      <pre className="indlæg-generated-raw">
+                        {JSON.stringify(generatedDocument, null, 2)}
+                      </pre>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="indlæg-card">
+                  <div className="indlæg-card-header">
+                    <h3 className="indlæg-card-title">Notat (redigerbart)</h3>
+                  </div>
+                  <div className="indlæg-card-body">
+                    <textarea
+                      className="indlæg-textarea indlæg-textarea--lg"
+                      value={content}
+                      onChange={(event) => setContent(event.target.value)}
+                      placeholder="Her vises det genererede notat. Du kan redigere frit."
+                      rows={12}
+                    />
+                    <div className="indlæg-card-actions">
+                      <button
+                        type="button"
+                        className="indlæg-save-btn"
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        aria-busy={isSaving}
+                      >
+                        {isSaving ? 'Gemmer...' : 'Gem indlæg'}
+                      </button>
+                    </div>
+                    {saveError && (
+                      <p className="indlæg-save-error" role="alert">
+                        {saveError}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              <aside className="indlæg-column indlæg-column--right indlæg-sidePanel">
+                <div className="indlæg-card">
+                  <div className="indlæg-card-header">
+                    <h3 className="indlæg-card-title">Live transskription</h3>
+                    <span className={`indlæg-status-pill indlæg-status-pill--${statusClass}`}>
+                      {recordingStatus}
+                    </span>
+                  </div>
+                  <div className="indlæg-card-body">
+                    <div className="indlæg-record-actions">
+                      <button
+                        type="button"
+                        className={`indlæg-mikrofon-btn${isRecording ? ' active' : ''}`}
+                        onClick={() => (isRecording ? stopRecording() : startRecording())}
+                        aria-pressed={isRecording}
+                      >
+                        <span className="indlæg-mikrofon-icon">🎤</span>
+                        {isRecording ? 'Stop' : 'Optag'}
+                      </button>
+                      <button
+                        type="button"
+                        className="indlæg-save-btn"
+                        onClick={handleGenerateDocument}
+                        disabled={
+                          generationLoading ||
+                          !transcriptText.trim() ||
+                          !selectedTemplateKey
+                        }
+                      >
+                        {generationLoading ? 'Skriver notat...' : 'Skriv notat'}
+                      </button>
+                    </div>
+
+                    <div className="indlæg-metrics">
+                      <div className="indlæg-metric">
+                        <span className="indlæg-metric-label">Status</span>
+                        <span className="indlæg-metric-value">{recordingStatus}</span>
+                      </div>
+                      <div className="indlæg-metric">
+                        <span className="indlæg-metric-label">Ord opfanget</span>
+                        <span className="indlæg-metric-value">{wordCount}</span>
+                      </div>
+                    </div>
+
+                    <div className="indlæg-metrics">
+                      <div className="indlæg-metric">
+                        <span className="indlæg-metric-label">Last WS message</span>
+                        <span className="indlæg-metric-value">{lastWs.type || '—'}</span>
+                      </div>
+                      <div className="indlæg-metric">
+                        <span className="indlæg-metric-label">Reason</span>
+                        <span className="indlæg-metric-value">{lastWs.reason || '—'}</span>
+                      </div>
+                    </div>
+
+                    {recordingError && (
+                      <p className="indlæg-inline-error" role="alert">
+                        {recordingError}
+                      </p>
+                    )}
+
+                    <div className="indlæg-transcript-block">
+                      <div className="indlæg-transcript-title">Live transcript</div>
+                      <div className="indlæg-transcript-box">
+                        {transcriptText || 'Ingen tekst endnu.'}
+                      </div>
+                    </div>
+
+                    {!selectedTemplateKey && (
+                      <p className="indlæg-muted">
+                        Vælg en skabelon i midten før du skriver notat.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </aside>
             </div>
           </div>
         </div>
       </div>
-      <aside className="indlæg-sidePanel">
-        <div className="indlæg-sideStack">
-          <div className="indlæg-factsr-section">
-            <FactsRPanel
-              status={factsStatus}
-              interactionId={factsInteractionId}
-              error={factsError}
-              transcripts={factsTranscripts}
-              facts={factsItems}
-              isRecording={isFactsRecording}
-              recordingStatus={factsRecordingStatus}
-              onToggleRecording={handleToggleFactsR}
-              insertTarget={factsInsertTarget}
-              onChangeInsertTarget={setFactsInsertTarget}
-              suggestionForFact={suggestionForFact}
-              onInsertSelected={handleInsertSelectedFacts}
-              onInsertAll={handleInsertAllFacts}
-              onInsertOne={handleInsertOneFact}
-              onFlush={flushFactsStream}
-              onClear={handleClearFactsR}
-            />
-          </div>
-        </div>
-      </aside>
     </div>
-  </div>
-    </div>
-  </div>
-</div>
   );
 }
 
