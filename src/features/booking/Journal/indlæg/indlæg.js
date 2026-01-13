@@ -1,5 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { addDoc, collection, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  doc,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+} from 'firebase/firestore';
 import './indlæg.css';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
@@ -108,21 +118,26 @@ function Indlæg({
   initialDate = '',
   initialEntry = null, // Existing entry to edit
 }) {
+  const originalEntryRef = useRef(initialEntry);
+  const previousEntryRef = useRef(null);
+  // used when user starts a brand new entry (unsaved) and navigates away to a past session
+  const previousDraftRef = useRef(null);
+  const [activeEntry, setActiveEntry] = useState(initialEntry);
   const [date, setDate] = useState(initialEntry?.date || initialDate || '14-11-2025');
   const [content, setContent] = useState(initialEntry?.content || '');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
-  const [recentEntries] = useState([]);
-  const [isLoadingHistory] = useState(false);
-  const [historyError] = useState('');
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [recentEntries, setRecentEntries] = useState([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState('');
 
   const [templates, setTemplates] = useState([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [templatesError, setTemplatesError] = useState('');
-  const [selectedTemplateKey, setSelectedTemplateKey] = useState('');
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState(initialEntry?.templateKey || '');
   const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [showTemplateDetails, setShowTemplateDetails] = useState(true);
   const [templateDetailsLoading, setTemplateDetailsLoading] = useState(false);
   const [templateDetailsError, setTemplateDetailsError] = useState('');
 
@@ -162,6 +177,28 @@ function Indlæg({
     return finalTranscript.trim().split(/\s+/).filter(Boolean).length;
   }, [finalTranscript]);
 
+  const formatDateTime = (value) => {
+    if (!value) return '';
+    try {
+      const dateObj =
+        typeof value?.toDate === 'function'
+          ? value.toDate()
+          : typeof value === 'string'
+          ? new Date(value)
+          : value;
+      if (Number.isNaN(dateObj.getTime())) return String(value);
+      return dateObj.toLocaleString('da-DK', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return String(value);
+    }
+  };
+
   const statusClass = useMemo(() => {
     return recordingStatus
       .toLowerCase()
@@ -186,13 +223,54 @@ function Indlæg({
   }, [selectedTemplateKey, templates]);
 
   useEffect(() => {
-    if (initialEntry) {
+    if (activeEntry) {
+      setDate(activeEntry.date || initialDate || '');
+      setContent(activeEntry.content || '');
+      setSelectedTemplateKey(activeEntry.templateKey || '');
+    } else if (initialEntry) {
       setDate(initialEntry.date || initialDate || '');
       setContent(initialEntry.content || '');
+      setSelectedTemplateKey(initialEntry.templateKey || '');
     } else if (initialDate) {
       setDate(initialDate);
     }
-  }, [initialEntry, initialDate]);
+  }, [activeEntry, initialEntry, initialDate]);
+
+  useEffect(() => {
+    const loadRecent = async () => {
+      if (!user?.uid || !clientId) return;
+      setIsLoadingHistory(true);
+      setHistoryError('');
+      try {
+        const entriesRef = collection(db, 'users', user.uid, 'clients', clientId, 'journalEntries');
+        const entriesQuery = query(entriesRef, orderBy('createdAt', 'desc'), limit(10));
+        const snapshot = await getDocs(entriesQuery);
+        const mapped = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data() || {};
+          const createdAt =
+            typeof data.createdAt?.toDate === 'function'
+              ? data.createdAt.toDate()
+              : data.createdAtIso
+              ? new Date(data.createdAtIso)
+              : null;
+          return {
+            id: docSnap.id,
+            title: data.title || data.templateKey || 'Session',
+            date: data.date || createdAt || '',
+            content: data.content || '',
+          };
+        });
+        setRecentEntries(mapped);
+      } catch (error) {
+        console.error('[Indlæg] Failed to load recent entries', error);
+        setHistoryError('Kunne ikke hente seneste sessioner.');
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    loadRecent();
+  }, [user?.uid, clientId]);
 
   const fetchTemplates = useCallback(async () => {
     setTemplatesLoading(true);
@@ -646,7 +724,9 @@ function Indlæg({
     setIsSaving(true);
 
     try {
-      if (initialEntry?.id) {
+      const targetEntry = activeEntry || initialEntry;
+
+      if (targetEntry?.id) {
         // Update existing entry
         const entryRef = doc(
           db,
@@ -655,7 +735,7 @@ function Indlæg({
           'clients',
           clientId,
           'journalEntries',
-          initialEntry.id
+          targetEntry.id
         );
         await updateDoc(entryRef, {
           ...entryPayload,
@@ -663,10 +743,10 @@ function Indlæg({
         });
 
         const savedEntry = {
-          id: initialEntry.id,
+          id: targetEntry.id,
           ...entryPayload,
-          createdAt: initialEntry.createdAt || initialEntry.createdAtIso || nowIso,
-          createdAtIso: initialEntry.createdAtIso || initialEntry.createdAt || nowIso,
+          createdAt: targetEntry.createdAt || targetEntry.createdAtIso || nowIso,
+          createdAtIso: targetEntry.createdAtIso || targetEntry.createdAt || nowIso,
         };
 
         if (typeof onSave === 'function') {
@@ -722,100 +802,126 @@ function Indlæg({
     <div className="indlæg-container">
       <div className="indlæg-layout">
         <div className="indlæg-main-pane">
-          <div className="indlæg-header">
+            <div className="indlæg-header">
             <div className="indlæg-header-top">
               <div className="indlæg-title-block">
                 <h2 className="indlæg-title">{clientName || 'Ukendt klient'}</h2>
                 <span className="indlæg-title-date">{date || '—'}</span>
               </div>
+                {originalEntryRef.current &&
+                  activeEntry?.id &&
+                  originalEntryRef.current?.id &&
+                  activeEntry.id !== originalEntryRef.current.id && (
+                    <button
+                      type="button"
+                      className="indlæg-history-link"
+                      onClick={() => {
+                        setActiveEntry(originalEntryRef.current);
+                        setSelectedTemplateKey(originalEntryRef.current?.templateKey || '');
+                        setDate(originalEntryRef.current?.date || initialDate || '');
+                        setContent(originalEntryRef.current?.content || '');
+                      }}
+                    >
+                      Tilbage til nuværende
+                    </button>
+                  )}
             </div>
 
-            <div className="indlæg-history">
-              <div className="indlæg-history-header">
-                <button
-                  type="button"
-                  className="indlæg-history-toggle"
-                  onClick={() => setIsHistoryOpen((open) => !open)}
-                  aria-expanded={isHistoryOpen}
-                >
-                  <span className="indlæg-label">Seneste sessioner</span>
-                  <span className="indlæg-history-chevron">{isHistoryOpen ? '▾' : '▸'}</span>
-                </button>
-              </div>
-
-              {isHistoryOpen && (
-                <>
-                  {isLoadingHistory && (
-                    <p className="indlæg-history-status">Henter seneste sessioner...</p>
-                  )}
-
-                  {historyError && !isLoadingHistory && (
-                    <p className="indlæg-history-error">{historyError}</p>
-                  )}
-
-                  {!isLoadingHistory && !historyError && recentEntries.length === 0 && (
-                    <p className="indlæg-history-empty">
-                      Ingen tidligere sessioner for denne borger endnu.
-                    </p>
-                  )}
-
-                  {!isLoadingHistory && !historyError && recentEntries.length > 0 && (
-                    <ul className="indlæg-history-list">
-                      {recentEntries.map((entry) => (
-                        <li
-                          key={entry.id}
-                          className="indlæg-history-item"
-                          onClick={() => onOpenEntry && onOpenEntry(entry)}
-                        >
-                          <div className="indlæg-history-item-main">
-                            <span className="indlæg-history-title">
-                              {entry.title || 'Uden titel'}
-                            </span>
-                            {entry.date && (
-                              <span className="indlæg-history-date">{entry.date}</span>
-                            )}
-                          </div>
-                          {entry.content && (
-                            <p className="indlæg-history-snippet">
-                              {String(entry.content).slice(0, 120)}
-                              {String(entry.content).length > 120 ? '…' : ''}
-                            </p>
-                          )}
-                          <span className="indlæg-history-link">Åbn session</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </>
-              )}
-            </div>
           </div>
 
           <div className="indlæg-content">
             <div className="indlæg-workspace">
               <aside className="indlæg-column indlæg-column--left">
                 <div className="indlæg-card">
-                  <div className="indlæg-card-header">
-                    <h3 className="indlæg-card-title">AI værktøjer</h3>
+                  <div className="indlæg-card-header indlæg-card-header--row">
+                    <h3 className="indlæg-card-title">Seneste sessioner</h3>
+                    {true && (
+                      <button
+                        type="button"
+                        className="indlæg-history-link"
+                        onClick={() => {
+                          // Always return to the originally opened entry if it exists
+                          const target =
+                            originalEntryRef.current ||
+                            initialEntry ||
+                            previousEntryRef.current ||
+                            previousDraftRef.current;
+                          if (!target) return;
+
+                          if (target.draft) {
+                            // restore unsaved draft
+                            setActiveEntry(null);
+                            setSelectedTemplateKey(target.templateKey || '');
+                            setDate(target.date || initialDate || '');
+                            setContent(target.content || '');
+                          } else {
+                            setActiveEntry(target);
+                            setSelectedTemplateKey(target?.templateKey || '');
+                            setDate(target?.date || initialDate || '');
+                            setContent(target?.content || '');
+                          }
+                        }}
+                      >
+                        Tilbage til nuværende
+                      </button>
+                    )}
                   </div>
                   <div className="indlæg-card-body">
-                    <div className="indlæg-tool-grid">
-                      <button type="button" className="indlæg-tool-btn" disabled>
-                        Resume generator
-                      </button>
-                      <button type="button" className="indlæg-tool-btn" disabled>
-                        Diagnose forslag
-                      </button>
-                      <button type="button" className="indlæg-tool-btn" disabled>
-                        Journal tjekliste
-                      </button>
-                      <button type="button" className="indlæg-tool-btn" disabled>
-                        Evidens opslag
-                      </button>
-                    </div>
-                    <p className="indlæg-muted">
-                      Flere AI værktøjer kommer snart.
-                    </p>
+                    {isLoadingHistory && (
+                      <p className="indlæg-history-status">Henter seneste sessioner...</p>
+                    )}
+
+                    {historyError && !isLoadingHistory && (
+                      <p className="indlæg-history-error">{historyError}</p>
+                    )}
+
+                    {!isLoadingHistory && !historyError && recentEntries.length === 0 && (
+                      <p className="indlæg-history-empty">
+                        Ingen tidligere sessioner for denne borger endnu.
+                      </p>
+                    )}
+
+                    {!isLoadingHistory && !historyError && recentEntries.length > 0 && (
+                      <ul className="indlæg-history-list">
+                        {recentEntries.map((entry) => (
+                          <li
+                            key={entry.id}
+                            className="indlæg-history-item"
+                            onClick={() => {
+                              // remember where we came from to allow "Tilbage til nuværende"
+                              const current = activeEntry || originalEntryRef.current;
+                              if (current) {
+                                previousEntryRef.current = current;
+                              } else if (!previousDraftRef.current) {
+                                // store the unsaved draft state
+                                previousDraftRef.current = {
+                                  draft: true,
+                                  date,
+                                  content,
+                                  templateKey: selectedTemplateKey,
+                                };
+                              }
+                              setActiveEntry(entry);
+                              setSelectedTemplateKey(entry.templateKey || '');
+                              setDate(entry.date || initialDate || '');
+                              setContent(entry.content || '');
+                            }}
+                          >
+                            <div className="indlæg-history-item-main">
+                              <span className="indlæg-history-title">
+                                {entry.title || 'Uden titel'}
+                              </span>
+                              <span className="indlæg-history-date">
+                                {formatDateTime(entry.date)}
+                              </span>
+                            </div>
+                            <div className="indlæg-history-meta">
+                              <span className="indlæg-history-status-badge">Aktiv</span>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </div>
               </aside>
@@ -867,49 +973,63 @@ function Indlæg({
                 </div>
 
                 <div className="indlæg-card">
-                  <div className="indlæg-card-header">
-                    <h3 className="indlæg-card-title">Valgt skabelon</h3>
-                    {templateSelectionLabel ? (
-                      <span className="indlæg-pill">{templateSelectionLabel}</span>
-                    ) : null}
+                  <div className="indlæg-card-header indlæg-card-header--row">
+                    <h3 className="indlæg-card-title">
+                      Valgt skabelon:{' '}
+                      <span className="indlæg-card-title-value">
+                        {templateSelectionLabel || 'Ingen valgt'}
+                      </span>
+                    </h3>
+                    <button
+                      type="button"
+                      className="indlæg-history-toggle indlæg-card-toggle"
+                      aria-expanded={showTemplateDetails}
+                      onClick={() => setShowTemplateDetails((open) => !open)}
+                    >
+                      <span className="indlæg-card-toggle-icon">
+                        {showTemplateDetails ? '⌃' : '⌄'}
+                      </span>
+                    </button>
                   </div>
-                  <div className="indlæg-card-body">
-                    {templateDetailsLoading && <p className="indlæg-muted">Henter detaljer...</p>}
-                    {templateDetailsError && (
-                      <p className="indlæg-inline-error">{templateDetailsError}</p>
-                    )}
-                    {!selectedTemplateKey && (
-                      <p className="indlæg-muted">Vælg en skabelon for at se sektionerne.</p>
-                    )}
-                    {!templateDetailsLoading && selectedTemplateKey && selectedTemplate && (
-                      <div className="indlæg-template-sections">
-                        {selectedTemplateSections.length === 0 ? (
-                          <p className="indlæg-muted">Skabelonen har ingen sektioner.</p>
-                        ) : (
-                          selectedTemplateSections.map((section) => {
-                            const sectionMeta = section?.sectionsId || section;
-                            const translation = getTranslation(
-                              sectionMeta?.translations,
-                              TEMPLATE_LANGUAGE
-                            );
-                            const sectionName = translation?.name || sectionMeta?.name || 'Sektion';
-                            const sectionDescription =
-                              translation?.description || sectionMeta?.description || '';
-                            return (
-                              <div key={`${sectionMeta?.key}-${section?.sort}`} className="indlæg-template-section">
-                                <div className="indlæg-template-section-title">{sectionName}</div>
-                                {sectionDescription ? (
-                                  <div className="indlæg-template-section-desc">
-                                    {sectionDescription}
-                                  </div>
-                                ) : null}
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  {showTemplateDetails && (
+                    <div className="indlæg-card-body">
+                      {templateDetailsLoading && <p className="indlæg-muted">Henter detaljer...</p>}
+                      {templateDetailsError && (
+                        <p className="indlæg-inline-error">{templateDetailsError}</p>
+                      )}
+                      {!selectedTemplateKey && (
+                        <p className="indlæg-muted">Vælg en skabelon for at se sektionerne.</p>
+                      )}
+                      {!templateDetailsLoading && selectedTemplateKey && selectedTemplate && (
+                        <div className="indlæg-template-sections">
+                          {selectedTemplateSections.length === 0 ? (
+                            <p className="indlæg-muted">Skabelonen har ingen sektioner.</p>
+                          ) : (
+                            selectedTemplateSections.map((section) => {
+                              const sectionMeta = section?.sectionsId || section;
+                              const translation = getTranslation(
+                                sectionMeta?.translations,
+                                TEMPLATE_LANGUAGE
+                              );
+                              const sectionName = translation?.name || sectionMeta?.name || 'Sektion';
+                              const sectionDescription =
+                                translation?.description || sectionMeta?.description || '';
+                              return (
+                                <div key={`${sectionMeta?.key}-${section?.sort}`} className="indlæg-template-section">
+                                  <div className="indlæg-template-section-title">{sectionName}</div>
+                                  {sectionDescription ? (
+                                    <div className="indlæg-template-section-desc">
+                                      {sectionDescription}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="indlæg-card">

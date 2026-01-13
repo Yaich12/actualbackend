@@ -915,6 +915,45 @@
   color: var(--text-primary);
 }
 
+.indlæg-card-title-value {
+  font-weight: 700;
+  color: #2563eb;
+}
+
+.indlæg-card-header--row {
+  gap: 10px;
+}
+
+.indlæg-card-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.indlæg-card-toggle:hover {
+  background: #f8fafc;
+  border-color: #c7d2fe;
+}
+
+.indlæg-card-toggle:active {
+  transform: translateY(1px);
+}
+
+.indlæg-card-toggle-icon {
+  font-size: 20px;
+  line-height: 1;
+  color: #0b1324;
+  font-weight: 700;
+}
+
 .indlæg-card-body {
   padding: 12px 14px;
   display: flex;
