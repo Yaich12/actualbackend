@@ -77,6 +77,10 @@ const getInitialFormData = (mode, initialClient) => {
     email: '',
     telefon: '',
     telefonLand: '+45',
+    paaroerende1: '',
+    paaroerende1Land: '+45',
+    paaroerende2: '',
+    paaroerende2Land: '+45',
     adresse: '',
     adresse2: '',
     postnummer: '',
@@ -88,7 +92,6 @@ const getInitialFormData = (mode, initialClient) => {
     koen: '',
     pronomer: '',
     kundekilde: '',
-    henvistAf: '',
   };
 
   if (mode === 'edit' && initialClient) {
@@ -108,6 +111,10 @@ const getInitialFormData = (mode, initialClient) => {
       email: initialClient.email || '',
       telefon: telefonUdenLand || '',
       telefonLand,
+      paaroerende1: initialClient.paaroerende1 || '',
+      paaroerende1Land: initialClient.paaroerende1Land || '+45',
+      paaroerende2: initialClient.paaroerende2 || '',
+      paaroerende2Land: initialClient.paaroerende2Land || '+45',
       adresse: initialClient.adresse || '',
       adresse2: initialClient.adresse2 || '',
       postnummer: initialClient.postnummer || '',
@@ -118,8 +125,7 @@ const getInitialFormData = (mode, initialClient) => {
       foedselsaar: initialClient.foedselsaar || '',
       koen: initialClient.koen || '',
       pronomer: initialClient.pronomer || '',
-      kundekilde: initialClient.kundekilde || '',
-      henvistAf: initialClient.henvistAf || '',
+      kundekilde: initialClient.clientensoplysninger?.kundekilde || initialClient.kundekilde || '',
     };
   }
 
@@ -145,6 +151,8 @@ function AddKlient({
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingClientensOplysninger, setIsLoadingClientensOplysninger] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [foedselsdagPlaceholder, setFoedselsdagPlaceholder] = useState('DD-MM');
+  const [foedselsaarPlaceholder, setFoedselsaarPlaceholder] = useState('YYYY');
   const { user } = useAuth();
   const isDev = process.env.NODE_ENV !== 'production';
 
@@ -182,6 +190,26 @@ function AddKlient({
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
+    // Handle placeholder fade for birth date fields
+    if (name === 'foedselsdag') {
+      if (value.length === 0) {
+        setFoedselsdagPlaceholder('DD-MM');
+      } else {
+        // Show remaining characters from the start
+        const remainingPlaceholder = 'DD-MM'.slice(value.length);
+        setFoedselsdagPlaceholder(remainingPlaceholder);
+      }
+    } else if (name === 'foedselsaar') {
+      if (value.length === 0) {
+        setFoedselsaarPlaceholder('YYYY');
+      } else {
+        // Show remaining characters from the start
+        const remainingPlaceholder = 'YYYY'.slice(value.length);
+        setFoedselsaarPlaceholder(remainingPlaceholder);
+      }
+    }
+    
     setFormData((prev) => ({
       ...prev,
       ...(name === 'navn'
@@ -201,6 +229,34 @@ function AddKlient({
         : {}),
     }));
   };
+  
+  const handleBirthDateFocus = (field) => {
+    if (field === 'foedselsdag') {
+      if (!formData.foedselsdag) {
+        setFoedselsdagPlaceholder('DD-MM');
+      } else {
+        setFoedselsdagPlaceholder('DD-MM'.slice(formData.foedselsdag.length));
+      }
+    } else if (field === 'foedselsaar') {
+      if (!formData.foedselsaar) {
+        setFoedselsaarPlaceholder('YYYY');
+      } else {
+        setFoedselsaarPlaceholder('YYYY'.slice(formData.foedselsaar.length));
+      }
+    }
+  };
+  
+  const handleBirthDateBlur = (field) => {
+    if (field === 'foedselsdag') {
+      if (!formData.foedselsdag) {
+        setFoedselsdagPlaceholder('DD-MM');
+      }
+    } else if (field === 'foedselsaar') {
+      if (!formData.foedselsaar) {
+        setFoedselsaarPlaceholder('YYYY');
+      }
+    }
+  };
 
   const handleClientensOplysningerChange = (e) => {
     const { name, value } = e.target;
@@ -215,6 +271,9 @@ function AddKlient({
     setShowAddressLine2(Boolean(initialClient?.adresse2));
     setClientensOplysninger(getEmptyClientensOplysninger());
     setSaveError('');
+    // Reset placeholders
+    setFoedselsdagPlaceholder('DD-MM');
+    setFoedselsaarPlaceholder('YYYY');
   }, [mode, initialClient]);
 
   useEffect(() => {
@@ -255,19 +314,45 @@ function AddKlient({
           const telefonUdenLand = telefonValue.startsWith(telefonLand)
             ? telefonValue.slice(telefonLand.length).trim().replace(/^\s+/, '')
             : telefonValue;
+          
+          const paaroerende1Land = data.paaroerende1Land || '+45';
+          const paaroerende1Value = data.paaroerende1 || '';
+          const paaroerende1UdenLand = paaroerende1Value.startsWith(paaroerende1Land)
+            ? paaroerende1Value.slice(paaroerende1Land.length).trim().replace(/^\s+/, '')
+            : paaroerende1Value;
+          
+          const paaroerende2Land = data.paaroerende2Land || '+45';
+          const paaroerende2Value = data.paaroerende2 || '';
+          const paaroerende2UdenLand = paaroerende2Value.startsWith(paaroerende2Land)
+            ? paaroerende2Value.slice(paaroerende2Land.length).trim().replace(/^\s+/, '')
+            : paaroerende2Value;
+          
+          // Split name into first and last name if not already split
+          const nameParts = splitNameParts(data.navn || '');
 
           setFormData({
             navn: data.navn || '',
+            fornavn: data.fornavn || nameParts.fornavn,
+            efternavn: data.efternavn || nameParts.efternavn,
             cpr: data.cpr || '',
             email: data.email || '',
             telefon: telefonUdenLand || '',
             telefonLand,
+            paaroerende1: paaroerende1UdenLand || '',
+            paaroerende1Land,
+            paaroerende2: paaroerende2UdenLand || '',
+            paaroerende2Land,
             adresse: data.adresse || '',
             adresse2: data.adresse2 || '',
             postnummer: data.postnummer || '',
             by: data.by || '',
             land: data.land || 'Danmark',
             status: data.status || 'Aktiv',
+            foedselsdag: data.foedselsdag || '',
+            foedselsaar: data.foedselsaar || '',
+            koen: data.koen || '',
+            pronomer: data.pronomer || '',
+            kundekilde: data.clientensoplysninger?.kundekilde || data.kundekilde || '',
           });
           setShowAddressLine2(Boolean(data.adresse2));
         } else {
@@ -379,9 +464,13 @@ function AddKlient({
 
         if (editView === 'personal') {
           // Save personal information
-          const { telefonLand, telefon, land, ...restFormData } = normalizedFormData;
+          const { telefonLand, telefon, paaroerende1Land, paaroerende1, paaroerende2Land, paaroerende2, land, kundekilde, ...restFormData } = normalizedFormData;
           const telefonLandValue = (telefonLand || '+45').trim();
           const telefonValue = (telefon || '').trim();
+          const paaroerende1LandValue = (paaroerende1Land || '+45').trim();
+          const paaroerende1Value = (paaroerende1 || '').trim();
+          const paaroerende2LandValue = (paaroerende2Land || '+45').trim();
+          const paaroerende2Value = (paaroerende2 || '').trim();
 
           await updateDoc(clientRef, {
             ...restFormData,
@@ -389,7 +478,14 @@ function AddKlient({
             telefonLand: telefonLandValue,
             telefon: telefonValue,
             telefonKomplet: telefonValue ? `${telefonLandValue} ${telefonValue}` : '',
+            paaroerende1Land: paaroerende1LandValue,
+            paaroerende1: paaroerende1Value,
+            paaroerende1Komplet: paaroerende1Value ? `${paaroerende1LandValue} ${paaroerende1Value}` : '',
+            paaroerende2Land: paaroerende2LandValue,
+            paaroerende2: paaroerende2Value,
+            paaroerende2Komplet: paaroerende2Value ? `${paaroerende2LandValue} ${paaroerende2Value}` : '',
             status: formData.status || 'Aktiv',
+            'clientensoplysninger.kundekilde': kundekilde || '',
             updatedAt: serverTimestamp(),
           });
         } else {
@@ -424,9 +520,13 @@ function AddKlient({
 
       const nowIso = new Date().toISOString();
       const ownerIdentifier = deriveUserIdentifier(user);
-      const { telefonLand, telefon, land, ...restFormData } = normalizedFormData;
+      const { telefonLand, telefon, paaroerende1Land, paaroerende1, paaroerende2Land, paaroerende2, land, kundekilde, ...restFormData } = normalizedFormData;
       const telefonLandValue = (telefonLand || '+45').trim();
       const telefonValue = (telefon || '').trim();
+      const paaroerende1LandValue = (paaroerende1Land || '+45').trim();
+      const paaroerende1Value = (paaroerende1 || '').trim();
+      const paaroerende2LandValue = (paaroerende2Land || '+45').trim();
+      const paaroerende2Value = (paaroerende2 || '').trim();
 
       const clientPayload = {
         ...restFormData,
@@ -434,10 +534,19 @@ function AddKlient({
         telefonLand: telefonLandValue,
         telefon: telefonValue,
         telefonKomplet: telefonValue ? `${telefonLandValue} ${telefonValue}` : '',
+        paaroerende1Land: paaroerende1LandValue,
+        paaroerende1: paaroerende1Value,
+        paaroerende1Komplet: paaroerende1Value ? `${paaroerende1LandValue} ${paaroerende1Value}` : '',
+        paaroerende2Land: paaroerende2LandValue,
+        paaroerende2: paaroerende2Value,
+        paaroerende2Komplet: paaroerende2Value ? `${paaroerende2LandValue} ${paaroerende2Value}` : '',
         ownerUid: user.uid,
         ownerEmail: user.email ?? null,
         ownerIdentifier,
         status: formData.status || 'Aktiv',
+        clientensoplysninger: {
+          kundekilde: kundekilde || '',
+        },
         updatedAt: serverTimestamp(),
         ...(mode === 'create'
           ? {
@@ -518,7 +627,7 @@ function AddKlient({
     }
   };
 
-  if (mode === 'create') {
+  if (mode === 'create' || (mode === 'edit' && editView === 'personal')) {
     const initialsSource = `${formData.fornavn || ''} ${formData.efternavn || ''}`.trim() ||
       formData.navn ||
       '?';
@@ -528,6 +637,8 @@ function AddKlient({
       .join('')
       .slice(0, 2)
       .toUpperCase();
+    
+    const isFormDisabled = isSaving || (mode === 'edit' && isLoadingClientensOplysninger);
 
     return (
       <div className="addklient-modal-overlay" onClick={handleCancel}>
@@ -537,20 +648,32 @@ function AddKlient({
         >
           <form className="addklient-form addklient-form-create" onSubmit={handleSubmit}>
             <div className="addklient-create-header">
-              <h2 className="addklient-create-title">Tilføj en ny kunde</h2>
+              <h2 className="addklient-create-title">
+                {mode === 'edit' ? 'Rediger klient' : 'Tilføj en ny kunde'}
+              </h2>
               <div className="addklient-create-actions">
+                {mode === 'edit' && (
+                  <button
+                    type="button"
+                    className="addklient-create-btn addklient-create-btn-danger"
+                    onClick={handleDelete}
+                    disabled={isFormDisabled}
+                  >
+                    Slet klient
+                  </button>
+                )}
                 <button
                   type="button"
                   className="addklient-create-btn addklient-create-btn-secondary"
                   onClick={handleCancel}
-                  disabled={isSaving}
+                  disabled={isFormDisabled}
                 >
                   Luk
                 </button>
                 <button
                   type="submit"
                   className="addklient-create-btn addklient-create-btn-primary"
-                  disabled={isSaving}
+                  disabled={isFormDisabled}
                   aria-busy={isSaving}
                 >
                   {isSaving ? 'Gemmer...' : 'Gem'}
@@ -569,16 +692,6 @@ function AddKlient({
                 <div className="addklient-create-nav-title">Personligt</div>
                 <button type="button" className="addklient-create-nav-item active">
                   Profil
-                </button>
-                <button type="button" className="addklient-create-nav-item">
-                  Adresse
-                </button>
-                <button type="button" className="addklient-create-nav-item">
-                  Nødkontakter
-                </button>
-                <div className="addklient-create-nav-divider" />
-                <button type="button" className="addklient-create-nav-item">
-                  Indstillinger
                 </button>
               </aside>
 
@@ -612,7 +725,7 @@ function AddKlient({
                       className="addklient-input"
                       placeholder="f.eks. Peter"
                       required
-                      disabled={isSaving}
+                      disabled={isFormDisabled}
                     />
                   </div>
                   <div className="addklient-field">
@@ -625,7 +738,7 @@ function AddKlient({
                       onChange={handleChange}
                       className="addklient-input"
                       placeholder="f.eks. Andersen"
-                      disabled={isSaving}
+                      disabled={isFormDisabled}
                     />
                   </div>
                 </div>
@@ -642,7 +755,7 @@ function AddKlient({
                       className="addklient-input"
                       placeholder="example@domain.com"
                       required
-                      disabled={isSaving}
+                      disabled={isFormDisabled}
                     />
                   </div>
                   <div className="addklient-field">
@@ -653,7 +766,7 @@ function AddKlient({
                         value={formData.telefonLand}
                         onChange={handleChange}
                         className="addklient-phone-country"
-                        disabled={isSaving}
+                        disabled={isFormDisabled}
                       >
                         <option value="+45">+45</option>
                         <option value="+46">+46</option>
@@ -668,7 +781,64 @@ function AddKlient({
                         onChange={handleChange}
                         className="addklient-input addklient-phone-input"
                         placeholder="f.eks. +1234 567 890"
-                        disabled={isSaving}
+                        disabled={isFormDisabled}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="addklient-form-grid">
+                  <div className="addklient-field">
+                    <label htmlFor="paaroerende1">Pårørende (valgfrit)</label>
+                    <div className="addklient-phone-group">
+                      <select
+                        name="paaroerende1Land"
+                        value={formData.paaroerende1Land}
+                        onChange={handleChange}
+                        className="addklient-phone-country"
+                        disabled={isFormDisabled}
+                      >
+                        <option value="+45">+45</option>
+                        <option value="+46">+46</option>
+                        <option value="+47">+47</option>
+                        <option value="+358">+358</option>
+                      </select>
+                      <input
+                        type="tel"
+                        id="paaroerende1"
+                        name="paaroerende1"
+                        value={formData.paaroerende1}
+                        onChange={handleChange}
+                        className="addklient-input addklient-phone-input"
+                        placeholder="f.eks. +1234 567 890"
+                        disabled={isFormDisabled}
+                      />
+                    </div>
+                  </div>
+                  <div className="addklient-field">
+                    <label htmlFor="paaroerende2">Pårørende (valgfrit)</label>
+                    <div className="addklient-phone-group">
+                      <select
+                        name="paaroerende2Land"
+                        value={formData.paaroerende2Land}
+                        onChange={handleChange}
+                        className="addklient-phone-country"
+                        disabled={isFormDisabled}
+                      >
+                        <option value="+45">+45</option>
+                        <option value="+46">+46</option>
+                        <option value="+47">+47</option>
+                        <option value="+358">+358</option>
+                      </select>
+                      <input
+                        type="tel"
+                        id="paaroerende2"
+                        name="paaroerende2"
+                        value={formData.paaroerende2}
+                        onChange={handleChange}
+                        className="addklient-input addklient-phone-input"
+                        placeholder="f.eks. +1234 567 890"
+                        disabled={isFormDisabled}
                       />
                     </div>
                   </div>
@@ -684,34 +854,64 @@ function AddKlient({
                       value={formData.cpr}
                       onChange={handleChange}
                       className="addklient-input"
-                      disabled={isSaving}
+                      disabled={isFormDisabled}
                     />
                   </div>
                   <div className="addklient-field">
                     <label htmlFor="foedselsdag">Fødselsdag</label>
-                    <input
-                      type="text"
-                      id="foedselsdag"
-                      name="foedselsdag"
-                      value={formData.foedselsdag}
-                      onChange={handleChange}
-                      className="addklient-input"
-                      placeholder="Dag og måned"
-                      disabled={isSaving}
-                    />
+                    <div className="addklient-input-wrapper">
+                      <input
+                        type="text"
+                        id="foedselsdag"
+                        name="foedselsdag"
+                        value={formData.foedselsdag}
+                        onChange={handleChange}
+                        onFocus={() => handleBirthDateFocus('foedselsdag')}
+                        onBlur={() => handleBirthDateBlur('foedselsdag')}
+                        className="addklient-input"
+                        placeholder=""
+                        disabled={isFormDisabled}
+                        maxLength={5}
+                      />
+                      {foedselsdagPlaceholder && (
+                        <span 
+                          className="addklient-placeholder-overlay"
+                          style={{ 
+                            left: `${12 + (formData.foedselsdag ? formData.foedselsdag.length * 8.4 : 0)}px` 
+                          }}
+                        >
+                          {foedselsdagPlaceholder}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="addklient-field">
                     <label htmlFor="foedselsaar">År</label>
-                    <input
-                      type="text"
-                      id="foedselsaar"
-                      name="foedselsaar"
-                      value={formData.foedselsaar}
-                      onChange={handleChange}
-                      className="addklient-input"
-                      placeholder="År"
-                      disabled={isSaving}
-                    />
+                    <div className="addklient-input-wrapper">
+                      <input
+                        type="text"
+                        id="foedselsaar"
+                        name="foedselsaar"
+                        value={formData.foedselsaar}
+                        onChange={handleChange}
+                        onFocus={() => handleBirthDateFocus('foedselsaar')}
+                        onBlur={() => handleBirthDateBlur('foedselsaar')}
+                        className="addklient-input"
+                        placeholder=""
+                        disabled={isFormDisabled}
+                        maxLength={4}
+                      />
+                      {foedselsaarPlaceholder && (
+                        <span 
+                          className="addklient-placeholder-overlay"
+                          style={{ 
+                            left: `${12 + (formData.foedselsaar ? formData.foedselsaar.length * 8.4 : 0)}px` 
+                          }}
+                        >
+                          {foedselsaarPlaceholder}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -724,7 +924,7 @@ function AddKlient({
                       value={formData.koen}
                       onChange={handleChange}
                       className="addklient-select"
-                      disabled={isSaving}
+                      disabled={isFormDisabled}
                     >
                       <option value="">Vælg en mulighed</option>
                       <option value="kvinde">Kvinde</option>
@@ -741,7 +941,7 @@ function AddKlient({
                       value={formData.pronomer}
                       onChange={handleChange}
                       className="addklient-select"
-                      disabled={isSaving}
+                      disabled={isFormDisabled}
                     >
                       <option value="">Vælg en mulighed</option>
                       <option value="hun-hende">Hun/hende</option>
@@ -787,7 +987,7 @@ function AddKlient({
                         type="button"
                         className="addklient-add-line-btn"
                         onClick={() => setShowAddressLine2(true)}
-                        disabled={isSaving}
+                        disabled={isFormDisabled}
                       >
                         Tilføj 2. linje
                       </button>
@@ -800,7 +1000,7 @@ function AddKlient({
                         onChange={handleChange}
                         className="addklient-input addklient-input-margin-top"
                         placeholder="Adresse 2. linje"
-                        disabled={isSaving}
+                        disabled={isFormDisabled}
                       />
                     )}
                   </div>
@@ -816,7 +1016,7 @@ function AddKlient({
                         value={formData.postnummer}
                         onChange={handleChange}
                         className="addklient-input"
-                        disabled={isSaving}
+                        disabled={isFormDisabled}
                       />
                     </div>
                     <div className="addklient-form-section addklient-form-section-half">
@@ -830,7 +1030,7 @@ function AddKlient({
                         value={formData.by}
                         onChange={handleChange}
                         className="addklient-input"
-                        disabled={isSaving}
+                        disabled={isFormDisabled}
                       />
                     </div>
                   </div>
@@ -850,32 +1050,13 @@ function AddKlient({
                         value={formData.kundekilde}
                         onChange={handleChange}
                         className="addklient-select"
-                        disabled={isSaving}
+                        disabled={isFormDisabled}
                       >
-                        <option value="">Vælg en mulighed</option>
-                        <option value="ind-fra-gaden">Ind fra gaden</option>
-                        <option value="sociale-medier">Sociale medier</option>
-                        <option value="anbefaling">Anbefaling</option>
-                        <option value="annoncer">Annoncer</option>
+                      <option value="">Vælg en mulighed</option>
+                      <option value="Online Booking">Online Booking</option>
+                      <option value="Læge">Læge</option>
+                      <option value="Ind fra gaden">Ind fra gaden</option>
                       </select>
-                    </div>
-                    <div className="addklient-field">
-                      <label htmlFor="henvistAf">Henvist af</label>
-                      <div className="addklient-inline-input">
-                        <input
-                          type="text"
-                          id="henvistAf"
-                          name="henvistAf"
-                          value={formData.henvistAf}
-                          onChange={handleChange}
-                          className="addklient-input"
-                          placeholder="Vælg en kunde"
-                          disabled={isSaving}
-                        />
-                        <button type="button" className="addklient-inline-btn">
-                          Tilføj
-                        </button>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -1332,28 +1513,28 @@ function AddKlient({
           )}
 
           {/* Action Buttons */}
-          <div className="addklient-form-actions">
+          <div className="addklient-create-actions">
             {mode === 'edit' && (
               <button
                 type="button"
-                className="addklient-delete-btn"
+                className="addklient-create-btn addklient-create-btn-danger"
                 onClick={handleDelete}
-                disabled={isSaving}
+                disabled={isSaving || isLoadingClientensOplysninger}
               >
                 Slet klient
               </button>
             )}
             <button
               type="button"
-              className="addklient-cancel-btn"
+              className="addklient-create-btn addklient-create-btn-secondary"
               onClick={handleCancel}
-              disabled={isSaving}
+              disabled={isSaving || (mode === 'edit' && isLoadingClientensOplysninger)}
             >
-              Annuller
+              Luk
             </button>
             <button
               type="submit"
-              className="addklient-save-btn"
+              className="addklient-create-btn addklient-create-btn-primary"
               disabled={isSaving || (mode === 'edit' && isLoadingClientensOplysninger)}
               aria-busy={isSaving}
             >

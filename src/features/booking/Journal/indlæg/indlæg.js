@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import './indlæg.css';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
@@ -106,9 +106,10 @@ function Indlæg({
   onSave,
   onOpenEntry,
   initialDate = '',
+  initialEntry = null, // Existing entry to edit
 }) {
-  const [date, setDate] = useState('14-11-2025');
-  const [content, setContent] = useState('');
+  const [date, setDate] = useState(initialEntry?.date || initialDate || '14-11-2025');
+  const [content, setContent] = useState(initialEntry?.content || '');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
@@ -185,10 +186,13 @@ function Indlæg({
   }, [selectedTemplateKey, templates]);
 
   useEffect(() => {
-    if (initialDate) {
+    if (initialEntry) {
+      setDate(initialEntry.date || initialDate || '');
+      setContent(initialEntry.content || '');
+    } else if (initialDate) {
       setDate(initialDate);
     }
-  }, [initialDate]);
+  }, [initialEntry, initialDate]);
 
   const fetchTemplates = useCallback(async () => {
     setTemplatesLoading(true);
@@ -642,31 +646,62 @@ function Indlæg({
     setIsSaving(true);
 
     try {
-      const entriesCollection = collection(
-        db,
-        'users',
-        user.uid,
-        'clients',
-        clientId,
-        'journalEntries'
-      );
-      const docRef = await addDoc(entriesCollection, {
-        ...entryPayload,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      if (initialEntry?.id) {
+        // Update existing entry
+        const entryRef = doc(
+          db,
+          'users',
+          user.uid,
+          'clients',
+          clientId,
+          'journalEntries',
+          initialEntry.id
+        );
+        await updateDoc(entryRef, {
+          ...entryPayload,
+          updatedAt: serverTimestamp(),
+        });
 
-      const savedEntry = {
-        id: docRef.id,
-        ...entryPayload,
-        createdAt: nowIso,
-      };
+        const savedEntry = {
+          id: initialEntry.id,
+          ...entryPayload,
+          createdAt: initialEntry.createdAt || initialEntry.createdAtIso || nowIso,
+          createdAtIso: initialEntry.createdAtIso || initialEntry.createdAt || nowIso,
+        };
 
-      if (typeof onSave === 'function') {
-        onSave(savedEntry);
+        if (typeof onSave === 'function') {
+          onSave(savedEntry);
+        }
+
+        onClose();
+      } else {
+        // Create new entry
+        const entriesCollection = collection(
+          db,
+          'users',
+          user.uid,
+          'clients',
+          clientId,
+          'journalEntries'
+        );
+        const docRef = await addDoc(entriesCollection, {
+          ...entryPayload,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+
+        const savedEntry = {
+          id: docRef.id,
+          ...entryPayload,
+          createdAt: nowIso,
+        };
+
+        if (typeof onSave === 'function') {
+          onSave(savedEntry);
+        }
+
+        onClose();
       }
-
-      onClose();
     } catch (error) {
       console.error('Failed to save journal entry:', error);
       setSaveError('Kunne ikke gemme indlægget. Prøv igen senere.');

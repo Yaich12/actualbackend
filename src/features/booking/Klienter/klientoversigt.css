@@ -420,13 +420,16 @@
 }
 
 .client-details-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid #d1d5db;
   background: #ffffff;
   color: #111827;
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 600;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   cursor: pointer;
   transition: border-color 0.2s, background-color 0.2s;
 }
@@ -738,6 +741,96 @@
   font-size: 13px;
   color: #374151;
   line-height: 1.5;
+  max-height: 4.5em; /* Approximately 3 lines */
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.client-details-entry-footer {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f3f4f6;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.client-details-read-btn {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.client-details-read-btn:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.client-details-entry-read {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  background: #ffffff;
+}
+
+.client-details-entry-read-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.client-details-entry-read-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.client-details-close-read-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.client-details-close-read-btn:hover {
+  background-color: #f3f4f6;
+  color: #111827;
+}
+
+.client-details-entry-read-content {
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin-bottom: 20px;
+}
+
+.client-details-entry-read-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid #f3f4f6;
 }
 
 .client-details-goals {
@@ -961,4 +1054,192 @@
   .client-details-goal-date-wrapper {
     min-width: 100%;
   }
+}
+
+/* Programs (Behandlingsforløb) Section */
+.client-details-programs {
+  display: grid;
+  gap: 16px;
+}
+
+.client-details-programs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.client-details-programs-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.client-details-programs-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.client-details-programs-content {
+  display: grid;
+  gap: 20px;
+}
+
+.client-details-programs-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.client-details-programs-field {
+  display: grid;
+  gap: 8px;
+}
+
+.client-details-programs-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+.client-details-programs-value {
+  font-size: 14px;
+  color: #111827;
+  line-height: 1.5;
+}
+
+.client-details-programs-text {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.client-details-programs-input {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: #111827;
+  background: #ffffff;
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.client-details-programs-input:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.client-details-programs-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 80px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: #111827;
+  background: #ffffff;
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.client-details-programs-textarea:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.client-details-programs-edit-form {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  background: #ffffff;
+  margin-bottom: 16px;
+}
+
+.client-details-programs-list {
+  display: grid;
+  gap: 16px;
+}
+
+.client-details-programs-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  background: #ffffff;
+  transition: box-shadow 0.2s;
+}
+
+.client-details-programs-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.client-details-programs-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.client-details-programs-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.client-details-programs-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.client-details-programs-card-edit,
+.client-details-programs-card-delete {
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #111827;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.client-details-programs-card-edit:hover {
+  background-color: #f9fafb;
+  border-color: #94a3b8;
+}
+
+.client-details-programs-card-delete {
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.client-details-programs-card-delete:hover {
+  background-color: #fef2f2;
+  border-color: #f87171;
+}
+
+.client-details-programs-card-edit:disabled,
+.client-details-programs-card-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.client-details-programs-card-content {
+  display: grid;
+  gap: 16px;
+}
+
+.client-details-programs-card-grid {
+  display: grid;
+  gap: 16px;
 }

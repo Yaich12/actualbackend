@@ -489,6 +489,21 @@ function Journal({
           setShowHistory(false);
           setHistoryTarget(null);
         }}
+        onOpenEntry={(entry) => {
+          // Close history view and open entry in indlæg page
+          setShowHistory(false);
+          setHistoryTarget(null);
+          if (onCreateJournalEntry) {
+            onCreateJournalEntry({
+              entry: {
+                ...entry,
+                clientId: activeClient?.id,
+                clientName: activeClient?.navn,
+              },
+              client: activeClient,
+            });
+          }
+        }}
       />
     );
   }

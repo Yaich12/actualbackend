@@ -5,13 +5,14 @@ import { getAuth } from 'firebase/auth';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
 
-function SeHistorik({ clientId, clientName, onClose }) {
+function SeHistorik({ clientId, clientName, onClose, onOpenEntry }) {
   const [entries, setEntries] = useState([]);
   const [isLoadingEntries, setIsLoadingEntries] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summaryText, setSummaryText] = useState('');
   const [summaryError, setSummaryError] = useState('');
+  const [readingEntry, setReadingEntry] = useState(null); // Entry being read in detail view
   const { user } = useAuth();
 
   // Format date
@@ -21,29 +22,33 @@ function SeHistorik({ clientId, clientName, onClose }) {
     return `${day}-${month}-${year}`;
   };
 
-  const handleEdit = (entryId) => {
-    // Handle edit functionality
-    console.log('Edit entry:', entryId);
-  };
-
-  const handleStar = (entryId) => {
-    // Handle star functionality
-    console.log('Star entry:', entryId);
-  };
-
-  const handleLock = (entryId) => {
-    // Handle lock functionality
-    console.log('Lock entry:', entryId);
-  };
-
   const handleMoreOptions = (entryId) => {
     // Handle more options
     console.log('More options for entry:', entryId);
   };
 
-  const handleOpenOverview = (entryId) => {
-    // Handle open overview
-    console.log('Open overview for entry:', entryId);
+  const handleOpenNotat = (entry) => {
+    // Open entry in indlæg page for editing
+    if (onOpenEntry) {
+      onOpenEntry(entry);
+    }
+  };
+
+  const handleReadNotat = (entry) => {
+    // Show full entry content in read-only view
+    setReadingEntry(entry);
+  };
+
+  const handleCloseReadNotat = () => {
+    setReadingEntry(null);
+  };
+
+  // Truncate content to a few lines
+  const truncateContent = (content, maxLines = 3) => {
+    if (!content) return '';
+    const lines = content.split('\n');
+    if (lines.length <= maxLines) return content;
+    return lines.slice(0, maxLines).join('\n') + '...';
   };
 
   const handleSummarizePatient = async () => {
@@ -160,6 +165,56 @@ function SeHistorik({ clientId, clientName, onClose }) {
     setIsSummarizing(false);
   }, [clientId]);
 
+  // If reading an entry, show read-only detail view
+  if (readingEntry) {
+    return (
+      <div className="sehistorik-container">
+        <div className="sehistorik-header">
+          <div className="sehistorik-header-top">
+            <div className="sehistorik-title-section">
+              <h2 className="sehistorik-title">Journal</h2>
+              <span className="sehistorik-client-name">{clientName}</span>
+            </div>
+            <div className="sehistorik-header-actions">
+              <button className="sehistorik-close-btn" onClick={handleCloseReadNotat}>✕</button>
+            </div>
+          </div>
+        </div>
+        <div className="sehistorik-content">
+          <div className="sehistorik-entry-detail">
+            <div className="sehistorik-entry-detail-header">
+              <h3 className="sehistorik-entry-detail-title">
+                {formatDate(readingEntry.date)}
+              </h3>
+              <button 
+                className="sehistorik-icon-btn"
+                onClick={() => handleMoreOptions(readingEntry.id)}
+                title="Flere muligheder"
+              >
+                ⋯
+              </button>
+            </div>
+            <div className="sehistorik-entry-detail-content">
+              {readingEntry.content || 'Ingen indhold'}
+            </div>
+            <div className="sehistorik-entry-detail-footer">
+              <button
+                type="button"
+                className="sehistorik-open-overview-btn"
+                onClick={() => {
+                  handleCloseReadNotat();
+                  handleOpenNotat(readingEntry);
+                }}
+              >
+                Åben notat
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="sehistorik-container">
       {/* Header */}
@@ -218,31 +273,10 @@ function SeHistorik({ clientId, clientName, onClose }) {
                 <div className="sehistorik-entry-header">
                   <div className="sehistorik-entry-title-section">
                     <h3 className="sehistorik-entry-title">
-                      {entry.title} {formatDate(entry.date)} {entry.isDraft ? '(kladde)' : ''}
+                      {formatDate(entry.date)}
                     </h3>
                   </div>
                   <div className="sehistorik-entry-actions">
-                    <button 
-                      className={`sehistorik-icon-btn ${entry.isStarred ? 'starred' : ''}`}
-                      onClick={() => handleStar(entry.id)}
-                      title="Markér som favorit"
-                    >
-                      ⭐
-                    </button>
-                    <button 
-                      className={`sehistorik-icon-btn ${entry.isLocked ? 'locked' : ''}`}
-                      onClick={() => handleLock(entry.id)}
-                      title="Lås/oplås indlæg"
-                    >
-                      🔒
-                    </button>
-                    <button 
-                      className="sehistorik-icon-btn"
-                      onClick={() => handleEdit(entry.id)}
-                      title="Rediger"
-                    >
-                      ✏️
-                    </button>
                     <button 
                       className="sehistorik-icon-btn"
                       onClick={() => handleMoreOptions(entry.id)}
@@ -253,14 +287,20 @@ function SeHistorik({ clientId, clientName, onClose }) {
                   </div>
                 </div>
                 <div className="sehistorik-entry-content">
-                  {entry.content}
+                  {truncateContent(entry.content)}
                 </div>
                 <div className="sehistorik-entry-footer">
                   <button 
-                    className="sehistorik-open-overview-btn"
-                    onClick={() => handleOpenOverview(entry.id)}
+                    className="sehistorik-read-btn"
+                    onClick={() => handleReadNotat(entry)}
                   >
-                    Åben oversigt
+                    Læs notat
+                  </button>
+                  <button 
+                    className="sehistorik-open-overview-btn"
+                    onClick={() => handleOpenNotat(entry)}
+                  >
+                    Åben notat
                   </button>
                 </div>
               </div>

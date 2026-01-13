@@ -137,6 +137,23 @@
   background: #1e293b;
 }
 
+.addklient-create-btn-danger {
+  background: #ffffff;
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.addklient-create-btn-danger:hover:enabled {
+  background: #fef2f2;
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.addklient-create-btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .addklient-create-body {
   display: grid;
   grid-template-columns: 220px 1fr;
@@ -409,6 +426,32 @@
 
 .addklient-input::placeholder {
   color: #9ca3af;
+}
+
+.addklient-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.addklient-placeholder-overlay {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #94a3b8;
+  font-size: 14px;
+  user-select: none;
+  white-space: pre;
+  font-family: inherit;
+  line-height: 1;
+  z-index: 1;
+}
+
+.addklient-input-wrapper .addklient-input {
+  position: relative;
+  z-index: 2;
+  background-color: transparent;
 }
 
 .addklient-input-margin-top {

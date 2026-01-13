@@ -10,6 +10,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { useNavigate } from 'react-router-dom';
 import '../bookingpage.css';
 import './klientoversigt.css';
 import AddKlient from './addklient/addklient';
@@ -19,7 +20,7 @@ import { useLanguage } from '../../../LanguageContext';
 import { db } from '../../../firebase';
 import { useUserClients } from './hooks/useUserClients';
 import useAppointments from '../../../hooks/useAppointments';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronLeft } from 'lucide-react';
 
 const getClientInitials = (client) => {
   const source = (client?.navn || client?.email || '').trim();
@@ -37,12 +38,14 @@ const ClientDetails = ({
   onBack,
   onEdit,
   onDelete,
-  onCombine,
   onRequestStatusChange,
   onRequestConsent,
   userId,
+  initialTab: propInitialTab,
+  initialEditForloeb: propInitialEditForloeb,
 }) => {
-  const [activeTab, setActiveTab] = useState('journal');
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState(propInitialTab || 'journal');
   const [goalDraft, setGoalDraft] = useState([]); // Array of { text: string, date: string }
   const [goalError, setGoalError] = useState('');
   const [goalSaving, setGoalSaving] = useState(false);
@@ -52,12 +55,23 @@ const ClientDetails = ({
   const [summaryText, setSummaryText] = useState('');
   const [summaryError, setSummaryError] = useState('');
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [readingJournalEntry, setReadingJournalEntry] = useState(null);
+  const [editingForloebIndex, setEditingForloebIndex] = useState(null); // null = new, number = editing index
+  const [isAddingForloeb, setIsAddingForloeb] = useState(false); // Track if we're in "add" mode
+  const [forloebList, setForloebList] = useState([]); // Array of treatment courses
+  const [forloebDraft, setForloebDraft] = useState({
+    diagnose: '',
+    foersteKonsultation: '',
+    tilknyttetTerapeut: '',
+    startdato: '',
+    forventetSlutdato: '',
+  });
+  const [forloebSaving, setForloebSaving] = useState(false);
+  const [forloebError, setForloebError] = useState('');
   const { appointments = [], loading: appointmentsLoading } = useAppointments(userId || null);
 
   const tabs = [
     { id: 'journal', label: 'Journal' },
-    { id: 'messages', label: 'Beskeder' },
-    { id: 'events', label: 'Begivenheder' },
     { id: 'appointments', label: 'Aftaler' },
     { id: 'invoices', label: 'Fakturaer' },
     { id: 'goals', label: 'Mål' },
@@ -83,6 +97,47 @@ const ClientDetails = ({
     }
     setGoalError('');
   }, [client?.clientensoplysninger?.maalForForloebet, client?.maalForForloebet, client?.id]);
+
+  useEffect(() => {
+    // Load forløbsoplysninger when client changes
+    const forloebData = client?.clientensoplysninger || {};
+    
+    // Support both old format (single object) and new format (array)
+    if (Array.isArray(forloebData.behandlingsforloeb)) {
+      setForloebList(forloebData.behandlingsforloeb);
+    } else if (forloebData.diagnose || forloebData.foersteKonsultation || forloebData.tilknyttetTerapeut || forloebData.startdato || forloebData.forventetSlutdato) {
+      // Migrate old single-object format to array format
+      setForloebList([{
+        diagnose: forloebData.diagnose || '',
+        foersteKonsultation: forloebData.foersteKonsultation || '',
+        tilknyttetTerapeut: forloebData.tilknyttetTerapeut || '',
+        startdato: forloebData.startdato || '',
+        forventetSlutdato: forloebData.forventetSlutdato || '',
+      }]);
+    } else {
+      setForloebList([]);
+    }
+    
+    // Reset draft and editing state
+    setForloebDraft({
+      diagnose: '',
+      foersteKonsultation: '',
+      tilknyttetTerapeut: '',
+      startdato: '',
+      forventetSlutdato: '',
+    });
+    // Start in add mode if prop is true (coming from "Add program details")
+    setEditingForloebIndex(null);
+    setIsAddingForloeb(propInitialEditForloeb || false);
+    setForloebError('');
+  }, [client?.clientensoplysninger, client?.id, propInitialEditForloeb]);
+
+  // Set active tab when prop changes
+  useEffect(() => {
+    if (propInitialTab) {
+      setActiveTab(propInitialTab);
+    }
+  }, [propInitialTab]);
 
   useEffect(() => {
     if (!userId || !client?.id) {
@@ -240,6 +295,129 @@ const ClientDetails = ({
     setGoalDraft(updated);
   };
 
+  const handleSaveForloeb = async () => {
+    if (!userId || !client?.id) {
+      setForloebError('Manglende klient for at gemme forløbsoplysninger.');
+      return;
+    }
+
+    setForloebSaving(true);
+    setForloebError('');
+
+    try {
+      const cleaned = {
+        diagnose: (forloebDraft.diagnose || '').trim(),
+        foersteKonsultation: (forloebDraft.foersteKonsultation || '').trim(),
+        tilknyttetTerapeut: (forloebDraft.tilknyttetTerapeut || '').trim(),
+        startdato: (forloebDraft.startdato || '').trim(),
+        forventetSlutdato: (forloebDraft.forventetSlutdato || '').trim(),
+      };
+
+      let updatedList;
+      if (editingForloebIndex !== null) {
+        // Update existing
+        updatedList = [...forloebList];
+        updatedList[editingForloebIndex] = cleaned;
+      } else {
+        // Add new
+        updatedList = [...forloebList, cleaned];
+      }
+
+      await updateDoc(doc(db, 'users', userId, 'clients', client.id), {
+        'clientensoplysninger.behandlingsforloeb': updatedList,
+        updatedAt: serverTimestamp(),
+      });
+
+      setForloebList(updatedList);
+      setForloebDraft({
+        diagnose: '',
+        foersteKonsultation: '',
+        tilknyttetTerapeut: '',
+        startdato: '',
+        forventetSlutdato: '',
+      });
+      setEditingForloebIndex(null);
+      setIsAddingForloeb(false);
+    } catch (error) {
+      console.error('[ClientDetails] Failed to save forløbsoplysninger', error);
+      setForloebError('Kunne ikke gemme forløbsoplysninger.');
+    } finally {
+      setForloebSaving(false);
+    }
+  };
+
+  const handleCancelForloebEdit = () => {
+    setForloebDraft({
+      diagnose: '',
+      foersteKonsultation: '',
+      tilknyttetTerapeut: '',
+      startdato: '',
+      forventetSlutdato: '',
+    });
+    setEditingForloebIndex(null);
+    setIsAddingForloeb(false);
+    setForloebError('');
+  };
+
+  const handleAddForloeb = () => {
+    setForloebDraft({
+      diagnose: '',
+      foersteKonsultation: '',
+      tilknyttetTerapeut: '',
+      startdato: '',
+      forventetSlutdato: '',
+    });
+    setEditingForloebIndex(null); // null means "adding new"
+    setIsAddingForloeb(true);
+    setForloebError('');
+  };
+
+  const handleEditForloeb = (index) => {
+    const forloeb = forloebList[index];
+    setForloebDraft({
+      diagnose: forloeb.diagnose || '',
+      foersteKonsultation: forloeb.foersteKonsultation || '',
+      tilknyttetTerapeut: forloeb.tilknyttetTerapeut || '',
+      startdato: forloeb.startdato || '',
+      forventetSlutdato: forloeb.forventetSlutdato || '',
+    });
+    setEditingForloebIndex(index);
+    setIsAddingForloeb(false);
+    setForloebError('');
+  };
+
+  const handleDeleteForloeb = async (index) => {
+    if (!userId || !client?.id) {
+      setForloebError('Manglende klient for at slette forløbsoplysninger.');
+      return;
+    }
+
+    if (!window.confirm('Er du sikker på, at du vil slette dette behandlingsforløb?')) {
+      return;
+    }
+
+    setForloebSaving(true);
+    setForloebError('');
+
+    try {
+      const updatedList = forloebList.filter((_, i) => i !== index);
+      await updateDoc(doc(db, 'users', userId, 'clients', client.id), {
+        'clientensoplysninger.behandlingsforloeb': updatedList,
+        updatedAt: serverTimestamp(),
+      });
+
+      setForloebList(updatedList);
+      if (editingForloebIndex === index) {
+        handleCancelForloebEdit();
+      }
+    } catch (error) {
+      console.error('[ClientDetails] Failed to delete forløbsoplysninger', error);
+      setForloebError('Kunne ikke slette forløbsoplysninger.');
+    } finally {
+      setForloebSaving(false);
+    }
+  };
+
   const handleSummarizePatient = async () => {
     if (!client?.id || !userId) {
       setSummaryError('Mangler klient eller bruger.');
@@ -293,7 +471,7 @@ const ClientDetails = ({
     <div className="client-details">
       <div className="client-details-header">
         <button type="button" className="client-details-back" onClick={onBack}>
-          Tilbage
+          <ChevronLeft size={20} />
         </button>
         <div className="client-details-breadcrumb">
           <span>Klienter</span>
@@ -305,9 +483,6 @@ const ClientDetails = ({
       <div className="client-details-actions">
         <button type="button" className="client-details-action primary" onClick={onEdit}>
           Rediger
-        </button>
-        <button type="button" className="client-details-action" onClick={onCombine}>
-          Kombiner klienter
         </button>
         <button type="button" className="client-details-action danger" onClick={onDelete}>
           Slet
@@ -350,23 +525,6 @@ const ClientDetails = ({
             </div>
           </div>
 
-          <div className="client-details-card client-details-card--status">
-            <div className="client-details-status-icon">OK</div>
-            <div className="client-details-status-title">{statusValue}</div>
-            <div className="client-details-status-text">Klientens status</div>
-            <button type="button" className="client-details-link-button" onClick={onRequestStatusChange}>
-              Skift status
-            </button>
-          </div>
-
-          <div className="client-details-card client-details-card--status">
-            <div className="client-details-status-icon secondary">i</div>
-            <div className="client-details-status-title">Samtykke</div>
-            <div className="client-details-status-text">Samtykke ikke indhentet endnu</div>
-            <button type="button" className="client-details-link-button" onClick={onRequestConsent}>
-              Indhent samtykke
-            </button>
-          </div>
         </aside>
 
         <section className="client-details-content">
@@ -425,23 +583,100 @@ const ClientDetails = ({
                     <p>Der er endnu ikke oprettet journalnotater for {client?.navn || 'klienten'}.</p>
                   </div>
                 ) : (
-                  <div className="client-details-list">
-                    {journalEntries.map((entry) => (
-                      <div key={entry.id} className="client-details-entry">
-                        <div className="client-details-entry-title">
-                          {entry.title}
+                  <>
+                    {readingJournalEntry ? (
+                      <div className="client-details-entry-read">
+                        <div className="client-details-entry-read-header">
+                          <h3 className="client-details-entry-read-title">
+                            {formatJournalDate(readingJournalEntry)}
+                          </h3>
+                          <button
+                            type="button"
+                            className="client-details-close-read-btn"
+                            onClick={() => setReadingJournalEntry(null)}
+                          >
+                            ✕
+                          </button>
                         </div>
-                        <div className="client-details-entry-meta">
-                          {formatJournalDate(entry)}
+                        <div className="client-details-entry-read-content">
+                          {readingJournalEntry.content || 'Ingen indhold'}
                         </div>
-                        {entry.content ? (
-                          <div className="client-details-entry-body">
-                            {entry.content}
-                          </div>
-                        ) : null}
+                        <div className="client-details-entry-read-footer">
+                          <button
+                            type="button"
+                            className="client-details-primary-button"
+                            onClick={() => {
+                              setReadingJournalEntry(null);
+                              navigate('/journal', { 
+                                state: { 
+                                  clientId: client?.id,
+                                  clientName: client?.navn,
+                                  entryId: readingJournalEntry.id,
+                                  entry: {
+                                    ...readingJournalEntry,
+                                    clientId: client?.id,
+                                    clientName: client?.navn,
+                                  }
+                                } 
+                              });
+                            }}
+                          >
+                            Åben notat
+                          </button>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    ) : (
+                      <div className="client-details-list">
+                        {journalEntries.map((entry) => (
+                          <div key={entry.id} className="client-details-entry">
+                            <div className="client-details-entry-title">
+                              {formatJournalDate(entry)}
+                            </div>
+                            {entry.content ? (
+                              <div className="client-details-entry-body">
+                                {(() => {
+                                  const content = entry.content || '';
+                                  const lines = content.split('\n');
+                                  const preview = lines.slice(0, 3).join('\n');
+                                  return preview + (lines.length > 3 ? '...' : '');
+                                })()}
+                              </div>
+                            ) : null}
+                            <div className="client-details-entry-footer">
+                              <button
+                                type="button"
+                                className="client-details-read-btn"
+                                onClick={() => setReadingJournalEntry(entry)}
+                              >
+                                Læs notat
+                              </button>
+                              <button
+                                type="button"
+                                className="client-details-primary-button"
+                                onClick={() => {
+                                  // Navigate to journal entry page with entry data
+                                  navigate('/journal', { 
+                                    state: { 
+                                      clientId: client?.id,
+                                      clientName: client?.navn,
+                                      entryId: entry.id,
+                                      entry: {
+                                        ...entry,
+                                        clientId: client?.id,
+                                        clientName: client?.navn,
+                                      }
+                                    } 
+                                  });
+                                }}
+                              >
+                                Åben notat
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             ) : activeTab === 'appointments' ? (
@@ -535,6 +770,206 @@ const ClientDetails = ({
                   {goalSaving ? 'Gemmer...' : 'Gem mål'}
                 </button>
               </div>
+            ) : activeTab === 'programs' ? (
+              <div className="client-details-programs">
+                <div className="client-details-programs-header">
+                  <h3 className="client-details-programs-title">Behandlingsforløb</h3>
+                  {!isAddingForloeb && editingForloebIndex === null ? (
+                    <button
+                      type="button"
+                      className="client-details-add-goal-button"
+                      onClick={handleAddForloeb}
+                    >
+                      + Tilføj behandlingsforløb
+                    </button>
+                  ) : null}
+                </div>
+                {forloebError ? (
+                  <p className="client-details-error">{forloebError}</p>
+                ) : null}
+                
+                {/* Editing form - show when editing (index !== null) or adding new (isAddingForloeb === true) */}
+                {(editingForloebIndex !== null || isAddingForloeb) ? (
+                  <div className="client-details-programs-edit-form">
+                    <div className="client-details-programs-content">
+                      <div className="client-details-programs-grid">
+                        <div className="client-details-programs-field">
+                          <label className="client-details-programs-label">Diagnose</label>
+                          <input
+                            type="text"
+                            className="client-details-programs-input"
+                            value={forloebDraft.diagnose}
+                            onChange={(e) => setForloebDraft({ ...forloebDraft, diagnose: e.target.value })}
+                            placeholder="Indtast diagnose"
+                          />
+                        </div>
+
+                        <div className="client-details-programs-field">
+                          <label className="client-details-programs-label">Førstekonsultation</label>
+                          <textarea
+                            className="client-details-programs-textarea"
+                            rows={3}
+                            value={forloebDraft.foersteKonsultation}
+                            onChange={(e) => setForloebDraft({ ...forloebDraft, foersteKonsultation: e.target.value })}
+                            placeholder="Indtast førstekonsultation"
+                          />
+                        </div>
+
+                        <div className="client-details-programs-field">
+                          <label className="client-details-programs-label">Tilknyttet terapeut</label>
+                          <input
+                            type="text"
+                            className="client-details-programs-input"
+                            value={forloebDraft.tilknyttetTerapeut}
+                            onChange={(e) => setForloebDraft({ ...forloebDraft, tilknyttetTerapeut: e.target.value })}
+                            placeholder="Indtast terapeut"
+                          />
+                        </div>
+
+                        <div className="client-details-programs-field">
+                          <label className="client-details-programs-label">Startdato</label>
+                          <input
+                            type="date"
+                            className="client-details-programs-input"
+                            value={forloebDraft.startdato}
+                            onChange={(e) => setForloebDraft({ ...forloebDraft, startdato: e.target.value })}
+                          />
+                        </div>
+
+                        <div className="client-details-programs-field">
+                          <label className="client-details-programs-label">Forventet slutdato</label>
+                          <input
+                            type="date"
+                            className="client-details-programs-input"
+                            value={forloebDraft.forventetSlutdato}
+                            onChange={(e) => setForloebDraft({ ...forloebDraft, forventetSlutdato: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="client-details-programs-actions">
+                      <button
+                        type="button"
+                        className="client-details-action"
+                        onClick={handleCancelForloebEdit}
+                        disabled={forloebSaving}
+                      >
+                        Annuller
+                      </button>
+                      <button
+                        type="button"
+                        className="client-details-action primary"
+                        onClick={handleSaveForloeb}
+                        disabled={forloebSaving}
+                      >
+                        {forloebSaving ? 'Gemmer...' : 'Gem'}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* List of existing forløb */}
+                {forloebList.length === 0 && !isAddingForloeb && editingForloebIndex === null ? (
+                  <div className="client-details-empty">
+                    <h4>Ingen behandlingsforløb</h4>
+                    <p>Der er endnu ikke registreret behandlingsforløb for {client?.navn || 'klienten'}.</p>
+                  </div>
+                ) : forloebList.length > 0 ? (
+                  <div className="client-details-programs-list">
+                    {forloebList.map((forloeb, index) => {
+                      const formatDate = (dateString) => {
+                        if (!dateString) return '—';
+                        try {
+                          const date = new Date(dateString);
+                          if (isNaN(date.getTime())) return dateString;
+                          return date.toLocaleDateString('da-DK', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                          });
+                        } catch {
+                          return dateString;
+                        }
+                      };
+
+                      return (
+                        <div key={index} className="client-details-programs-card">
+                          <div className="client-details-programs-card-header">
+                            <h4 className="client-details-programs-card-title">
+                              Behandlingsforløb {index + 1}
+                              {forloeb.diagnose && ` - ${forloeb.diagnose}`}
+                            </h4>
+                            <div className="client-details-programs-card-actions">
+                              <button
+                                type="button"
+                                className="client-details-programs-card-edit"
+                                onClick={() => handleEditForloeb(index)}
+                                disabled={editingForloebIndex !== null || forloebSaving}
+                                title="Rediger"
+                              >
+                                Rediger
+                              </button>
+                              <button
+                                type="button"
+                                className="client-details-programs-card-delete"
+                                onClick={() => handleDeleteForloeb(index)}
+                                disabled={editingForloebIndex !== null || forloebSaving}
+                                title="Slet"
+                              >
+                                Slet
+                              </button>
+                            </div>
+                          </div>
+                          <div className="client-details-programs-card-content">
+                            <div className="client-details-programs-card-grid">
+                              <div className="client-details-programs-field">
+                                <label className="client-details-programs-label">Diagnose</label>
+                                <div className="client-details-programs-value">
+                                  {forloeb.diagnose || '—'}
+                                </div>
+                              </div>
+
+                              <div className="client-details-programs-field">
+                                <label className="client-details-programs-label">Førstekonsultation</label>
+                                <div className="client-details-programs-value">
+                                  {forloeb.foersteKonsultation ? (
+                                    <div className="client-details-programs-text">
+                                      {forloeb.foersteKonsultation}
+                                    </div>
+                                  ) : (
+                                    '—'
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="client-details-programs-field">
+                                <label className="client-details-programs-label">Tilknyttet terapeut</label>
+                                <div className="client-details-programs-value">
+                                  {forloeb.tilknyttetTerapeut || '—'}
+                                </div>
+                              </div>
+
+                              <div className="client-details-programs-field">
+                                <label className="client-details-programs-label">Startdato</label>
+                                <div className="client-details-programs-value">
+                                  {formatDate(forloeb.startdato)}
+                                </div>
+                              </div>
+
+                              <div className="client-details-programs-field">
+                                <label className="client-details-programs-label">Forventet slutdato</label>
+                                <div className="client-details-programs-value">
+                                  {formatDate(forloeb.forventetSlutdato)}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
             ) : (
               <div className="client-details-empty">
                 <h4>{tabs.find((tab) => tab.id === activeTab)?.label}</h4>
@@ -567,6 +1002,8 @@ function Klientoversigt() {
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [detailClientId, setDetailClientId] = useState(null);
   const [clientMenuPosition, setClientMenuPosition] = useState({ x: 0, y: 0 });
+  const [initialTab, setInitialTab] = useState(null);
+  const [initialEditForloeb, setInitialEditForloeb] = useState(false);
 
   const handleSort = (column) => {
     if (sortColumn === column) {
@@ -690,8 +1127,9 @@ function Klientoversigt() {
   };
 
   const handleAddForloebInfo = (client) => {
-    setEditView('forloeb');
-    openEditClient(client);
+    setInitialTab('programs');
+    setInitialEditForloeb(true);
+    openClientDetails(client);
     setSelectedClientId(null);
   };
 
@@ -701,11 +1139,10 @@ function Klientoversigt() {
 
   const handleBackToList = () => {
     setDetailClientId(null);
+    setInitialTab(null);
+    setInitialEditForloeb(false);
   };
 
-  const handleCombineClients = () => {
-    alert('Kombiner klienter er ikke klar endnu.');
-  };
 
   const handleCreateJournalEntry = () => {
     alert('Journalindlæg kommer snart.');
@@ -783,10 +1220,11 @@ function Klientoversigt() {
                 onBack={handleBackToList}
                 onEdit={() => handleEditClientInfo(detailClient)}
                 onDelete={handleDeleteFromDetails}
-                onCombine={handleCombineClients}
                 onRequestStatusChange={handleRequestStatusChange}
                 onRequestConsent={handleRequestConsent}
                 userId={user?.uid || null}
+                initialTab={initialTab}
+                initialEditForloeb={initialEditForloeb}
               />
             ) : (
               <>

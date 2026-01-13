@@ -60,6 +60,7 @@ function BookingPage() {
   const [journalEntryClient, setJournalEntryClient] = useState(null);
   const [journalEntryParticipants, setJournalEntryParticipants] = useState([]);
   const [journalEntryDate, setJournalEntryDate] = useState('');
+  const [journalEntryToEdit, setJournalEntryToEdit] = useState(null);
   const [dragState, setDragState] = useState(null); // { mode, appointmentId, dayIndex, startClientX, startClientY, daysRect, columnRect, originalStart, originalEnd, currentStart, currentEnd }
   const [profilePhotoUrl, setProfilePhotoUrl] = useState('');
   const [calendarAddMode, setCalendarAddMode] = useState(false);
@@ -1702,18 +1703,28 @@ function BookingPage() {
     setEditingAppointment(null);
   };
 
-  const handleOpenJournalEntry = () => {
-    if (!derivedSelectedClient) return;
-    setJournalEntryClient(derivedSelectedClient);
-    if (selectedAppointment?.participants) {
-      setJournalEntryParticipants(selectedAppointment.participants);
-    } else {
+  const handleOpenJournalEntry = (payload) => {
+    // Handle opening entry from history
+    if (payload?.entry) {
+      setJournalEntryToEdit(payload.entry);
+      setJournalEntryClient(payload.client || derivedSelectedClient);
+      setJournalEntryDate(payload.entry.date || '');
       setJournalEntryParticipants([]);
-    }
-    if (selectedAppointment?.startDate) {
-      setJournalEntryDate(selectedAppointment.startDate);
     } else {
-      setJournalEntryDate('');
+      // Handle creating new entry
+      if (!derivedSelectedClient) return;
+      setJournalEntryToEdit(null);
+      setJournalEntryClient(derivedSelectedClient);
+      if (selectedAppointment?.participants) {
+        setJournalEntryParticipants(selectedAppointment.participants);
+      } else {
+        setJournalEntryParticipants([]);
+      }
+      if (selectedAppointment?.startDate) {
+        setJournalEntryDate(selectedAppointment.startDate);
+      } else {
+        setJournalEntryDate('');
+      }
     }
     setShowJournalEntryForm(true);
   };
@@ -1723,12 +1734,14 @@ function BookingPage() {
     setShowJournalEntryForm(false);
     setJournalEntryParticipants([]);
     setJournalEntryDate('');
+    setJournalEntryToEdit(null);
   };
 
   const handleCloseJournalEntry = () => {
     setShowJournalEntryForm(false);
     setJournalEntryParticipants([]);
     setJournalEntryDate('');
+    setJournalEntryToEdit(null);
   };
 
   const userIdentity = useMemo(() => {
@@ -2669,6 +2682,7 @@ function BookingPage() {
                 onSave={handleJournalEntrySaved}
                 participants={journalEntryParticipants}
                 initialDate={journalEntryDate}
+                initialEntry={journalEntryToEdit}
               />
             </div>
           ) : (

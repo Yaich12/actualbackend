@@ -25,6 +25,7 @@ const mapDocToClient = (doc) => {
     land: data.land || 'Danmark',
     status: data.status || 'Aktiv',
     maalForForloebet: data.clientensoplysninger?.maalForForloebet || '',
+    clientensoplysninger: data.clientensoplysninger || {}, // Include full clientensoplysninger object
     createdAt: createdAtIso,
   };
 };
