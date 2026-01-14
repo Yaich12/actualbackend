@@ -113,11 +113,23 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const handleCalendarClick = React.useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("booking:calendarClick"));
+      }
+      navigate("/booking");
+    },
+    [navigate]
+  );
+
   const links = [
     {
       label: t("booking.sidebar.calendar", "Kalender"),
       href: "/booking",
       icon: <Calendar className="h-5 w-5 flex-shrink-0" />,
+      onClick: handleCalendarClick,
     },
     {
       label: t("booking.sidebar.clients", "Klienter"),

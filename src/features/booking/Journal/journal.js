@@ -678,16 +678,6 @@ function Journal({
                 >
                   Opret næste aftale
                 </button>
-                <MovingBorderButton
-                  borderRadius="0.75rem"
-                  onClick={handleSuggestNextAppointment}
-                  disabled={isSuggesting}
-                  containerClassName="w-full h-12 text-base disabled:opacity-60 disabled:cursor-not-allowed"
-                  className="bg-white text-slate-900 border-slate-200 font-medium"
-                  borderClassName="bg-[radial-gradient(var(--violet-500)_40%,transparent_60%)]"
-                >
-                  {isSuggesting ? 'Foreslår…' : 'Foreslå næste aftale'}
-                </MovingBorderButton>
                 <button
                   className="journal-action-btn journal-delete-btn"
                   onClick={() => {

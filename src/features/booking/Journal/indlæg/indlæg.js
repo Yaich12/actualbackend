@@ -146,12 +146,17 @@ function Indlæg({
   const [generationError, setGenerationError] = useState('');
   const [generatedDocument, setGeneratedDocument] = useState(null);
 
+  const [transcribeMode, setTranscribeMode] = useState('Live'); // "Live" | "Diktering"
   const [recordingStatus, setRecordingStatus] = useState('Idle');
   const [recordingError, setRecordingError] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [finalTranscript, setFinalTranscript] = useState('');
   const [livePartial, setLivePartial] = useState('');
   const [lastWs, setLastWs] = useState({ type: '—', reason: '' });
+
+  const [dictationStatus, setDictationStatus] = useState('Idle'); // Idle | Recording | Uploading | Transcribing | completed | failed | Error
+  const [dictationError, setDictationError] = useState('');
+  const [dictationText, setDictationText] = useState('');
 
   const wsRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -165,6 +170,11 @@ function Indlæg({
   const awaitingEndRef = useRef(false);
   const cleanupInProgressRef = useRef(false);
 
+  const dictationRecorderRef = useRef(null);
+  const dictationStreamRef = useRef(null);
+  const dictationChunksRef = useRef([]);
+  const dictationStopRequestedRef = useRef(false);
+
   const { user } = useAuth();
 
   const transcriptText = useMemo(() => {
@@ -173,9 +183,13 @@ function Indlæg({
     return finalTranscript || livePartial;
   }, [finalTranscript, livePartial]);
 
+  const activeTranscriptText = useMemo(() => {
+    return transcribeMode === 'Diktering' ? dictationText : transcriptText;
+  }, [dictationText, transcriptText, transcribeMode]);
+
   const wordCount = useMemo(() => {
-    return finalTranscript.trim().split(/\s+/).filter(Boolean).length;
-  }, [finalTranscript]);
+    return activeTranscriptText.trim().split(/\s+/).filter(Boolean).length;
+  }, [activeTranscriptText]);
 
   const formatDateTime = (value) => {
     if (!value) return '';
@@ -200,11 +214,19 @@ function Indlæg({
   };
 
   const statusClass = useMemo(() => {
-    return recordingStatus
+    const displayStatus = transcribeMode === 'Diktering' ? dictationStatus : recordingStatus;
+    return displayStatus
       .toLowerCase()
       .replace(/[^a-z]+/g, '-')
       .replace(/^-+|-+$/g, '');
-  }, [recordingStatus]);
+  }, [dictationStatus, recordingStatus, transcribeMode]);
+
+  const modeStatus = useMemo(
+    () => (transcribeMode === 'Diktering' ? dictationStatus : recordingStatus),
+    [dictationStatus, recordingStatus, transcribeMode]
+  );
+
+  const isDictationMode = transcribeMode === 'Diktering';
 
   const selectedTemplateSections = useMemo(() => {
     if (!selectedTemplate?.templateSections) return [];
@@ -355,7 +377,7 @@ function Indlæg({
   }, [clientId, clientName, interactionId]);
 
   const handleGenerateDocument = useCallback(async () => {
-    if (!transcriptText || !transcriptText.trim()) {
+    if (!activeTranscriptText || !activeTranscriptText.trim()) {
       setGenerationError('Ingen transskription tilgængelig endnu.');
       return;
     }
@@ -374,7 +396,7 @@ function Indlæg({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          transcriptText,
+          transcriptText: activeTranscriptText,
           templateKey: selectedTemplateKey,
           outputLanguage: TEMPLATE_LANGUAGE,
         }),
@@ -400,7 +422,7 @@ function Indlæg({
     } finally {
       setGenerationLoading(false);
     }
-  }, [ensureInteraction, selectedTemplateKey, transcriptText]);
+  }, [activeTranscriptText, ensureInteraction, selectedTemplateKey]);
 
   const cleanupRecording = useCallback((finalStatus = 'Idle') => {
     if (cleanupInProgressRef.current) return;
@@ -441,6 +463,175 @@ function Indlæg({
 
     cleanupInProgressRef.current = false;
   }, []);
+
+  const resetDictationRecording = useCallback((nextStatus = null) => {
+    dictationStopRequestedRef.current = false;
+    dictationChunksRef.current = [];
+    if (typeof nextStatus === 'string') {
+      setDictationStatus(nextStatus);
+    }
+    const recorder = dictationRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      try {
+        recorder.stop();
+      } catch (_) {}
+    }
+    dictationRecorderRef.current = null;
+    if (dictationStreamRef.current) {
+      dictationStreamRef.current.getTracks().forEach((t) => t.stop());
+      dictationStreamRef.current = null;
+    }
+  }, []);
+
+  const uploadDictation = useCallback(
+    async (blob) => {
+      if (!blob || blob.size === 0) {
+        setDictationError('Ingen lyd optaget.');
+        setDictationStatus('Error');
+        return;
+      }
+
+      setDictationStatus('Uploading');
+      try {
+        const formData = new FormData();
+        formData.append('audio', blob, 'dictation.webm');
+        formData.append('language', 'da');
+
+        const response = await fetch('/api/corti/dictate', {
+          method: 'POST',
+          body: formData,
+        });
+
+        setDictationStatus('Transcribing');
+        const raw = await response.text();
+        if (!response.ok) {
+          console.error('[Indlæg] Dictation upload failed (raw):', raw);
+          throw new Error(raw || `Serverfejl (${response.status})`);
+        }
+
+        let data = null;
+        try {
+          data = JSON.parse(raw);
+        } catch (parseErr) {
+          console.error('[Indlæg] Dictation JSON parse failed:', raw);
+          throw new Error('Response was not JSON: ' + raw.slice(0, 120));
+        }
+
+        console.info('[Indlæg] Dictation response:', data);
+
+        const nextText = data?.text || '';
+        setDictationText(nextText);
+        setDictationStatus(data?.status || 'Done');
+        setDictationError(data?.error || '');
+      } catch (error) {
+        console.error('[Indlæg] Dictation upload failed:', error);
+        setDictationError(error?.message || 'Diktering fejlede.');
+        setDictationStatus('Error');
+      }
+    },
+    []
+  );
+
+  const startDictationRecording = useCallback(async () => {
+    if (dictationStatus === 'Recording' || dictationStatus === 'Uploading' || dictationStatus === 'Transcribing') {
+      return;
+    }
+
+    if (!navigator.mediaDevices || typeof window.MediaRecorder === 'undefined') {
+      setDictationError('Din browser understøtter ikke optagelse.');
+      setDictationStatus('Error');
+      return;
+    }
+
+    setDictationError('');
+    resetDictationRecording('Recording');
+    setDictationText('');
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      dictationStreamRef.current = stream;
+
+      const preferred = 'audio/webm;codecs=opus';
+      const options =
+        typeof window !== 'undefined' &&
+        window.MediaRecorder &&
+        window.MediaRecorder.isTypeSupported(preferred)
+          ? { mimeType: preferred }
+          : undefined;
+
+      const recorder = new MediaRecorder(stream, options);
+      dictationRecorderRef.current = recorder;
+      dictationChunksRef.current = [];
+      dictationStopRequestedRef.current = false;
+
+      recorder.ondataavailable = (event) => {
+        if (!event.data || event.data.size === 0) return;
+        dictationChunksRef.current.push(event.data);
+      };
+
+      recorder.onerror = (event) => {
+        const message = event?.error?.message || 'Optagefejl';
+        setDictationError(message);
+        setDictationStatus('Error');
+        resetDictationRecording('Error');
+      };
+
+      recorder.onstop = async () => {
+        const mimeType = recorder.mimeType || 'audio/webm';
+        const blob = new Blob(dictationChunksRef.current, { type: mimeType });
+        dictationChunksRef.current = [];
+        await uploadDictation(blob);
+        resetDictationRecording();
+      };
+
+      recorder.start();
+    } catch (error) {
+      console.error('[Indlæg] Dictation start failed:', error);
+      setDictationError('Kunne ikke få adgang til mikrofonen.');
+      setDictationStatus('Error');
+      resetDictationRecording('Error');
+    }
+  }, [dictationStatus, resetDictationRecording, uploadDictation]);
+
+  const stopDictationRecording = useCallback(() => {
+    if (!dictationRecorderRef.current || dictationStopRequestedRef.current) return;
+    dictationStopRequestedRef.current = true;
+    setDictationStatus('Uploading');
+
+    try {
+      dictationRecorderRef.current.stop();
+    } catch (error) {
+      console.error('[Indlæg] Dictation stop failed:', error);
+      setDictationError('Kunne ikke stoppe optagelsen.');
+      setDictationStatus('Error');
+      resetDictationRecording('Error');
+    }
+  }, [resetDictationRecording]);
+
+  const handleAppendDictationToNote = useCallback(() => {
+    if (!dictationText) return;
+    setContent((prev) => {
+      if (!prev) return dictationText;
+      const trimmed = prev.trim();
+      return trimmed ? `${trimmed}\n\n${dictationText}` : dictationText;
+    });
+  }, [dictationText]);
+
+  const handleReplaceNoteWithDictation = useCallback(() => {
+    if (!dictationText) return;
+    setContent(dictationText);
+  }, [dictationText]);
+
+  useEffect(() => {
+    if (transcribeMode === 'Diktering') {
+      cleanupRecording('Idle');
+      setRecordingError('');
+      setLastWs({ type: '—', reason: '' });
+    } else {
+      resetDictationRecording('Idle');
+      setDictationError('');
+    }
+  }, [cleanupRecording, resetDictationRecording, transcribeMode]);
 
   const startMediaRecorder = useCallback((stream, ws) => {
     if (recorderStartedRef.current) return;
@@ -674,11 +865,21 @@ function Indlæg({
     }
   }, [cleanupRecording, startMediaRecorder]);
 
-  useEffect(() => {
-    return () => {
-      cleanupRecording();
-    };
+  const cleanupTranscribe = useCallback(() => {
+    cleanupRecording('Idle');
   }, [cleanupRecording]);
+
+  const cleanupDictation = useCallback(() => {
+    resetDictationRecording('Idle');
+  }, [resetDictationRecording]);
+
+  useEffect(() => {
+    return () => cleanupTranscribe();
+  }, [cleanupTranscribe]);
+
+  useEffect(() => {
+    return () => cleanupDictation();
+  }, [cleanupDictation]);
 
   const handleSave = async () => {
     if (isSaving) {
@@ -928,6 +1129,37 @@ function Indlæg({
 
               <section className="indlæg-column indlæg-column--center">
                 <div className="indlæg-card">
+                  <div className="indlæg-card-header indlæg-card-header--row">
+                    <h3 className="indlæg-card-title">
+                      {isDictationMode ? 'Diktering' : 'Transskription'}
+                    </h3>
+                    <div
+                      className="indlæg-mode-toggle"
+                      style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}
+                    >
+                      <button
+                        type="button"
+                        className="indlæg-history-link"
+                        style={transcribeMode === 'Live' ? { fontWeight: 700 } : {}}
+                        onClick={() => setTranscribeMode('Live')}
+                      >
+                        Conversation
+                      </button>
+                      <button
+                        type="button"
+                        className="indlæg-history-link"
+                        style={transcribeMode === 'Diktering' ? { fontWeight: 700 } : {}}
+                        onClick={() => setTranscribeMode('Diktering')}
+                      >
+                        Diktering
+                      </button>
+                    </div>
+                    <span className={`indlæg-status-pill indlæg-status-pill--${statusClass}`}>
+                      {modeStatus}
+                    </span>
+                  </div>
+                </div>
+                <div className="indlæg-card">
                   <div className="indlæg-card-header">
                     <h3 className="indlæg-card-title">Skabeloner</h3>
                   </div>
@@ -1098,70 +1330,152 @@ function Indlæg({
               <aside className="indlæg-column indlæg-column--right indlæg-sidePanel">
                 <div className="indlæg-card">
                   <div className="indlæg-card-header">
-                    <h3 className="indlæg-card-title">Live transskription</h3>
+                    <h3 className="indlæg-card-title">
+                      {isDictationMode ? 'Diktering' : 'Transskription'}
+                    </h3>
                     <span className={`indlæg-status-pill indlæg-status-pill--${statusClass}`}>
-                      {recordingStatus}
+                      {modeStatus}
                     </span>
                   </div>
                   <div className="indlæg-card-body">
-                    <div className="indlæg-record-actions">
-                      <button
-                        type="button"
-                        className={`indlæg-mikrofon-btn${isRecording ? ' active' : ''}`}
-                        onClick={() => (isRecording ? stopRecording() : startRecording())}
-                        aria-pressed={isRecording}
-                      >
-                        <span className="indlæg-mikrofon-icon">🎤</span>
-                        {isRecording ? 'Stop' : 'Optag'}
-                      </button>
-                      <button
-                        type="button"
-                        className="indlæg-save-btn"
-                        onClick={handleGenerateDocument}
-                        disabled={
-                          generationLoading ||
-                          !transcriptText.trim() ||
-                          !selectedTemplateKey
-                        }
-                      >
-                        {generationLoading ? 'Skriver notat...' : 'Skriv notat'}
-                      </button>
-                    </div>
+                    {transcribeMode === 'Live' ? (
+                      <>
+                        <div className="indlæg-record-actions">
+                          <button
+                            type="button"
+                            className={`indlæg-mikrofon-btn${isRecording ? ' active' : ''}`}
+                            onClick={() => (isRecording ? stopRecording() : startRecording())}
+                            aria-pressed={isRecording}
+                          >
+                            <span className="indlæg-mikrofon-icon">🎤</span>
+                            {isRecording ? 'Stop' : 'Optag'}
+                          </button>
+                          <button
+                            type="button"
+                            className="indlæg-save-btn"
+                            onClick={handleGenerateDocument}
+                            disabled={
+                              generationLoading ||
+                              !activeTranscriptText.trim() ||
+                              !selectedTemplateKey
+                            }
+                          >
+                            {generationLoading ? 'Skriver notat...' : 'Skriv notat'}
+                          </button>
+                        </div>
 
-                    <div className="indlæg-metrics">
-                      <div className="indlæg-metric">
-                        <span className="indlæg-metric-label">Status</span>
-                        <span className="indlæg-metric-value">{recordingStatus}</span>
-                      </div>
-                      <div className="indlæg-metric">
-                        <span className="indlæg-metric-label">Ord opfanget</span>
-                        <span className="indlæg-metric-value">{wordCount}</span>
-                      </div>
-                    </div>
+                        <div className="indlæg-metrics">
+                          <div className="indlæg-metric">
+                            <span className="indlæg-metric-label">Status</span>
+                            <span className="indlæg-metric-value">{recordingStatus}</span>
+                          </div>
+                          <div className="indlæg-metric">
+                            <span className="indlæg-metric-label">Ord opfanget</span>
+                            <span className="indlæg-metric-value">{wordCount}</span>
+                          </div>
+                        </div>
 
-                    <div className="indlæg-metrics">
-                      <div className="indlæg-metric">
-                        <span className="indlæg-metric-label">Last WS message</span>
-                        <span className="indlæg-metric-value">{lastWs.type || '—'}</span>
-                      </div>
-                      <div className="indlæg-metric">
-                        <span className="indlæg-metric-label">Reason</span>
-                        <span className="indlæg-metric-value">{lastWs.reason || '—'}</span>
-                      </div>
-                    </div>
+                        <div className="indlæg-metrics">
+                          <div className="indlæg-metric">
+                            <span className="indlæg-metric-label">Last WS message</span>
+                            <span className="indlæg-metric-value">{lastWs.type || '—'}</span>
+                          </div>
+                          <div className="indlæg-metric">
+                            <span className="indlæg-metric-label">Reason</span>
+                            <span className="indlæg-metric-value">{lastWs.reason || '—'}</span>
+                          </div>
+                        </div>
 
-                    {recordingError && (
-                      <p className="indlæg-inline-error" role="alert">
-                        {recordingError}
-                      </p>
+                        {recordingError && (
+                          <p className="indlæg-inline-error" role="alert">
+                            {recordingError}
+                          </p>
+                        )}
+
+                        <div className="indlæg-transcript-block">
+                          <div className="indlæg-transcript-title">Live transcript</div>
+                          <div className="indlæg-transcript-box">
+                            {transcriptText || 'Ingen tekst endnu.'}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="indlæg-record-actions">
+                          <button
+                            type="button"
+                            className={`indlæg-mikrofon-btn${dictationStatus === 'Recording' ? ' active' : ''}`}
+                            onClick={() =>
+                              dictationStatus === 'Recording'
+                                ? stopDictationRecording()
+                                : startDictationRecording()
+                            }
+                            aria-pressed={dictationStatus === 'Recording'}
+                            disabled={dictationStatus === 'Uploading' || dictationStatus === 'Transcribing'}
+                          >
+                            <span className="indlæg-mikrofon-icon">🎤</span>
+                            {dictationStatus === 'Recording' ? 'Stop' : 'Optag'}
+                          </button>
+                          <button
+                            type="button"
+                            className="indlæg-save-btn"
+                            onClick={handleGenerateDocument}
+                            disabled={
+                              generationLoading ||
+                              !activeTranscriptText.trim() ||
+                              !selectedTemplateKey ||
+                              dictationStatus === 'Uploading' ||
+                              dictationStatus === 'Transcribing'
+                            }
+                          >
+                            {generationLoading ? 'Skriver notat...' : 'Skriv notat'}
+                          </button>
+                        </div>
+
+                        <div className="indlæg-metrics">
+                          <div className="indlæg-metric">
+                            <span className="indlæg-metric-label">Status</span>
+                            <span className="indlæg-metric-value">{dictationStatus}</span>
+                          </div>
+                          <div className="indlæg-metric">
+                            <span className="indlæg-metric-label">Ord opfanget</span>
+                            <span className="indlæg-metric-value">{wordCount}</span>
+                          </div>
+                        </div>
+
+                        {dictationError && (
+                          <p className="indlæg-inline-error" role="alert">
+                            {dictationError}
+                          </p>
+                        )}
+
+                        <div className="indlæg-transcript-block">
+                          <div className="indlæg-transcript-title">Diktering</div>
+                          <div className="indlæg-transcript-box">
+                            {dictationText || 'Ingen tekst endnu.'}
+                          </div>
+                        </div>
+
+                        {dictationText && (
+                          <div className="indlæg-record-actions">
+                            <button
+                              type="button"
+                              className="indlæg-save-btn"
+                              onClick={handleAppendDictationToNote}
+                            >
+                              Tilføj til notat
+                            </button>
+                            <button
+                              type="button"
+                              className="indlæg-save-btn"
+                              onClick={handleReplaceNoteWithDictation}
+                            >
+                              Erstat notat
+                            </button>
+                          </div>
+                        )}
+                      </>
                     )}
-
-                    <div className="indlæg-transcript-block">
-                      <div className="indlæg-transcript-title">Live transcript</div>
-                      <div className="indlæg-transcript-box">
-                        {transcriptText || 'Ingen tekst endnu.'}
-                      </div>
-                    </div>
 
                     {!selectedTemplateKey && (
                       <p className="indlæg-muted">

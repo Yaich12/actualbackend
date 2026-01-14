@@ -1737,12 +1737,12 @@ function BookingPage() {
     setJournalEntryToEdit(null);
   };
 
-  const handleCloseJournalEntry = () => {
+  const handleCloseJournalEntry = React.useCallback(() => {
     setShowJournalEntryForm(false);
     setJournalEntryParticipants([]);
     setJournalEntryDate('');
     setJournalEntryToEdit(null);
-  };
+  }, []);
 
   const userIdentity = useMemo(() => {
     if (!user) {
@@ -1774,6 +1774,14 @@ function BookingPage() {
       photoURL: user.photoURL || null,
     };
   }, [user]);
+
+  useEffect(() => {
+    const onCalendarClick = () => {
+      handleCloseJournalEntry();
+    };
+    window.addEventListener('booking:calendarClick', onCalendarClick);
+    return () => window.removeEventListener('booking:calendarClick', onCalendarClick);
+  }, [handleCloseJournalEntry]);
 
   const renderMonthView = () => (
     <>
@@ -2518,42 +2526,10 @@ function BookingPage() {
                       </button>
                       {teamMenuOpen && (
                         <div className="team-filter-menu">
-                          <button
-                            type="button"
-                            className={`team-filter-option ${teamFilter === 'all' ? 'active' : ''}`}
-                            onClick={selectAllMembers}
-                          >
-                            👥 {entireTeamLabel}
-                          </button>
-
-                          <div className="team-filter-section">
-                            <div className="team-filter-item">
-                              <span
-                                className="avatar avatar-small"
-                                style={{ backgroundColor: ownerEntry.avatarColor || '#0ea5e9' }}
-                              >
-                                {ownerEntry.avatarUrl ? (
-                                  <img src={ownerEntry.avatarUrl} alt={ownerEntry.name} />
-                                ) : (
-                                  ownerEntry.avatarText || ownerEntry.name?.charAt(0)
-                                )}
-                              </span>
-                              <span>
-                                {ownerEntry.name}{' '}
-                                ({t('booking.calendar.you', 'Dig')})
-                              </span>
-                            </div>
-                          </div>
-
-                          <hr className="team-filter-divider" />
-
                           <div className="team-filter-section header">
                             <span className="section-title">
                               {t('booking.calendar.members', 'Medarbejdere')}
                             </span>
-                            <button type="button" className="clear-link" onClick={clearMembers}>
-                              {t('booking.calendar.clearAll', 'Ryd alle')}
-                            </button>
                           </div>
 
                           <div className="team-filter-list">
@@ -2567,17 +2543,7 @@ function BookingPage() {
                                   onClick={() => toggleMember(member.name)}
                                 >
                                   <span className="checkmark">{checked ? '✔' : ''}</span>
-                                  <span
-                                    className="avatar avatar-small"
-                                    style={{ backgroundColor: member.avatarColor || '#0ea5e9' }}
-                                  >
-                                    {member.avatarUrl ? (
-                                      <img src={member.avatarUrl} alt={member.name} />
-                                    ) : (
-                                      member.avatarText || member.name?.charAt(0)
-                                    )}
-                                  </span>
-                                  <span>{member.name}</span>
+                                <span className="team-filter-name small-text">{member.name}</span>
                                 </button>
                               );
                             })}
@@ -2588,20 +2554,6 @@ function BookingPage() {
                   ) : (
                     <div className="toolbar-pill toolbar-static">{selectedLabel}</div>
                   )}
-                  <button
-                    type="button"
-                    className="toolbar-icon-btn"
-                    aria-label={t('booking.calendar.filters', 'Filtre')}
-                  >
-                    <SlidersHorizontal className="toolbar-icon" />
-                  </button>
-                  <button
-                    type="button"
-                    className="toolbar-icon-btn"
-                    aria-label={t('booking.calendar.freeze', 'Frys')}
-                  >
-                    <Snowflake className="toolbar-icon" />
-                  </button>
                 </div>
                 <div className="calendar-toolbar-group">
                   <button
