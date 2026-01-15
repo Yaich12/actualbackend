@@ -10,6 +10,97 @@
   min-height: 240px;
 }
 
+.indlæg-note-area {
+  position: relative;
+}
+
+.indlæg-note-loader {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.88));
+  backdrop-filter: blur(2px);
+}
+
+.generating-loader-wrapper {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: #0f172a;
+  color: #f8fafc;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.25);
+}
+
+.generating-loader-text {
+  display: inline-flex;
+  gap: 2px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.generating-loader-letter {
+  display: inline-block;
+  animation: generating-loader-letter-anim 1.6s ease-in-out infinite;
+}
+
+.generating-loader-letter:nth-child(1) {
+  animation-delay: 0s;
+}
+.generating-loader-letter:nth-child(2) {
+  animation-delay: 0.05s;
+}
+.generating-loader-letter:nth-child(3) {
+  animation-delay: 0.1s;
+}
+.generating-loader-letter:nth-child(4) {
+  animation-delay: 0.15s;
+}
+.generating-loader-letter:nth-child(5) {
+  animation-delay: 0.2s;
+}
+.generating-loader-letter:nth-child(6) {
+  animation-delay: 0.25s;
+}
+.generating-loader-letter:nth-child(7) {
+  animation-delay: 0.3s;
+}
+.generating-loader-letter:nth-child(8) {
+  animation-delay: 0.35s;
+}
+.generating-loader-letter:nth-child(9) {
+  animation-delay: 0.4s;
+}
+.generating-loader-letter:nth-child(10) {
+  animation-delay: 0.45s;
+}
+
+.generating-loader-bar {
+  position: relative;
+  width: 160px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.25);
+  overflow: hidden;
+}
+
+.generating-loader-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), #fff, rgba(255, 255, 255, 0));
+  animation: generating-loader-bar-anim 1.4s ease-in-out infinite;
+}
+
 .indlæg-textarea--md {
   min-height: 140px;
 }
@@ -849,8 +940,13 @@
 }
 
 .indlæg-content--drawer-open .indlæg-workspace {
-  margin-right: 380px;
-  transition: margin 0.25s ease;
+  margin-right: 480px;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 1.6fr);
+  transition: margin 0.25s ease, grid-template-columns 0.25s ease;
+}
+
+.indlæg-content--drawer-open .indlæg-column--left {
+  display: none;
 }
 
 .indlæg-workspace {
@@ -901,7 +997,7 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: 360px;
+  width: min(520px, 100vw);
   background: var(--bg-surface);
   box-shadow: -12px 0 24px rgba(0, 0, 0, 0.08);
   padding: 20px 16px;
@@ -917,6 +1013,37 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.indlæg-drawer-edge-close {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 36px;
+  height: 48px;
+  border: 1px solid var(--border-subtle);
+  border-right: none;
+  border-radius: 10px 0 0 10px;
+  background: #3b82f6;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: -6px 0 16px rgba(0, 0, 0, 0.08);
+  transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  z-index: 31;
+}
+
+.indlæg-drawer-edge-close:hover {
+  background: #2563eb;
+  box-shadow: -6px 0 20px rgba(0, 0, 0, 0.12);
+}
+
+.indlæg-drawer-edge-close:active {
+  transform: translate(-50%, -50%) translateY(1px);
 }
 
 .indlæg-drawer-close {
@@ -942,6 +1069,165 @@
   box-shadow: none;
 }
 
+.indlæg-card--assistant {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.indlæg-card-body--assistant {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.indlæg-assistant-banner {
+  background: #e8f0ff;
+  border: 1px solid #d9e5ff;
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: #1f2a44;
+}
+
+.indlæg-assistant-banner-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.indlæg-assistant-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.indlæg-assistant-heading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.indlæg-quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.indlæg-quick-action {
+  width: 100%;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #111827;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.indlæg-quick-action:hover {
+  background: #f8fafc;
+  border-color: #d1d5db;
+}
+
+.indlæg-quick-action:active {
+  transform: translateY(1px);
+}
+
+.indlæg-quick-action.is-active {
+  border-color: #c7d2fe;
+  background: #eef2ff;
+}
+
+.indlæg-agent-messages {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.indlæg-agent-message {
+  display: flex;
+}
+
+.indlæg-agent-message--user {
+  justify-content: flex-end;
+}
+
+.indlæg-agent-message--assistant {
+  justify-content: flex-start;
+}
+
+.indlæg-agent-message-bubble {
+  max-width: 100%;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
+}
+
+.indlæg-agent-message--user .indlæg-agent-message-bubble {
+  background: #dfeafe;
+  border-color: #c7d2fe;
+}
+
+.indlæg-agent-message-meta {
+  font-size: 11px;
+  color: #6b7280;
+  margin-bottom: 4px;
+  text-transform: capitalize;
+}
+
+.indlæg-agent-message-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.indlæg-agent-message-text ul {
+  padding-left: 18px;
+  margin: 6px 0;
+}
+
+.indlæg-agent-empty-hint {
+  margin: 0;
+}
+
+.indlæg-agent-input {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  background: var(--bg-surface);
+  border-top: 1px solid #e5e7eb;
+  padding-top: 12px;
+}
+
+.indlæg-agent-input .indlæg-textarea {
+  flex: 1;
+  min-height: 56px;
+  resize: vertical;
+}
+
 .indlæg-selma-launch {
   margin-top: 12px;
 }
@@ -962,6 +1248,10 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.indlæg-mode-gradient-active {
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.08), 0 8px 16px rgba(0, 0, 0, 0.12);
 }
 
 .indlæg-mode-option {

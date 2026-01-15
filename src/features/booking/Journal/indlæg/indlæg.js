@@ -11,6 +11,10 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import './indlæg.css';
+import { RainbowButton } from '../../../../components/ui/rainbow-button';
+import AnimatedGenerateButton from '../../../../components/ui/animated-generate-button-shadcn-tailwind';
+import { GradientButton } from '../../../../components/ui/gradient-button';
+import { QuantumPulseLoader } from '../../../../components/ui/quantum-pulse-loade';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
 
@@ -173,6 +177,7 @@ function Indlæg({
   const [agentMessages, setAgentMessages] = useState([]);
   const [agentInput, setAgentInput] = useState('');
   const [agentChatLoading, setAgentChatLoading] = useState(false);
+  const [activeAgentPreset, setActiveAgentPreset] = useState('');
 
   const wsRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -1276,7 +1281,7 @@ function Indlæg({
                   <div className="indlæg-card-header">
                     <h3 className="indlæg-card-title">Notat (redigerbart)</h3>
                   </div>
-                  <div className="indlæg-card-body">
+                  <div className="indlæg-card-body indlæg-note-area">
                     <textarea
                       className="indlæg-textarea indlæg-textarea--lg"
                       value={content}
@@ -1284,6 +1289,11 @@ function Indlæg({
                       placeholder="Her vises det genererede notat. Du kan redigere frit."
                       rows={12}
                     />
+                    {generationLoading && (
+                      <div className="indlæg-note-loader">
+                        <QuantumPulseLoader />
+                      </div>
+                    )}
                     <div className="indlæg-card-actions">
                       <button
                         type="button"
@@ -1447,24 +1457,22 @@ function Indlæg({
               <aside className="indlæg-column indlæg-column--right indlæg-sidePanel">
                 <div className="indlæg-card">
                   <div className="indlæg-card-body indlæg-mode-options">
-                    <button
+                    <GradientButton
                       type="button"
-                      className={`indlæg-mode-option${transcribeMode === MODE_TRANSCRIBE ? ' active' : ''}`}
+                      className={`w-full${transcribeMode === MODE_TRANSCRIBE ? ' indlæg-mode-gradient-active' : ''}`}
                       onClick={() => handleModeToggle(MODE_TRANSCRIBE)}
                       aria-pressed={transcribeMode === MODE_TRANSCRIBE}
                     >
                       Trankribering
-                    </button>
-                    <button
+                    </GradientButton>
+                    <GradientButton
                       type="button"
-                      className={`indlæg-mode-option${
-                        transcribeMode === MODE_DICTATE ? ' active' : ''
-                      }`}
+                      className={`w-full${transcribeMode === MODE_DICTATE ? ' indlæg-mode-gradient-active' : ''}`}
                       onClick={() => handleModeToggle(MODE_DICTATE)}
                       aria-pressed={transcribeMode === MODE_DICTATE}
                     >
                       Diktering
-                    </button>
+                    </GradientButton>
                   </div>
                 </div>
 
@@ -1485,15 +1493,14 @@ function Indlæg({
                     {transcribeMode === MODE_TRANSCRIBE && (
                       <>
                         <div className="indlæg-record-actions">
-                          <button
+                          <RainbowButton
                             type="button"
                             className={`indlæg-mikrofon-btn${isRecording ? ' active' : ''}`}
                             onClick={() => (isRecording ? stopRecording() : startRecording())}
                             aria-pressed={isRecording}
                           >
-                            <span className="indlæg-mikrofon-icon">🎤</span>
-                            {isRecording ? 'Stop' : 'Optag'}
-                          </button>
+                            {isRecording ? 'Stop' : 'Start konsultation'}
+                          </RainbowButton>
                           <button
                             type="button"
                             className="indlæg-save-btn"
@@ -1510,23 +1517,8 @@ function Indlæg({
 
                         <div className="indlæg-metrics">
                           <div className="indlæg-metric">
-                            <span className="indlæg-metric-label">Status</span>
-                            <span className="indlæg-metric-value">{recordingStatus}</span>
-                          </div>
-                          <div className="indlæg-metric">
                             <span className="indlæg-metric-label">Ord opfanget</span>
                             <span className="indlæg-metric-value">{wordCount}</span>
-                          </div>
-                        </div>
-
-                        <div className="indlæg-metrics">
-                          <div className="indlæg-metric">
-                            <span className="indlæg-metric-label">Last WS message</span>
-                            <span className="indlæg-metric-value">{lastWs.type || '—'}</span>
-                          </div>
-                          <div className="indlæg-metric">
-                            <span className="indlæg-metric-label">Reason</span>
-                            <span className="indlæg-metric-value">{lastWs.reason || '—'}</span>
                           </div>
                         </div>
 
@@ -1548,7 +1540,7 @@ function Indlæg({
                     {transcribeMode === MODE_DICTATE && (
                       <>
                         <div className="indlæg-record-actions">
-                          <button
+                          <RainbowButton
                             type="button"
                             className={`indlæg-mikrofon-btn${dictationStatus === 'Recording' ? ' active' : ''}`}
                             onClick={() =>
@@ -1559,9 +1551,8 @@ function Indlæg({
                             aria-pressed={dictationStatus === 'Recording'}
                             disabled={dictationStatus === 'Uploading' || dictationStatus === 'Transcribing'}
                           >
-                            <span className="indlæg-mikrofon-icon">🎤</span>
-                            {dictationStatus === 'Recording' ? 'Stop' : 'Optag'}
-                          </button>
+                            {dictationStatus === 'Recording' ? 'Stop' : 'Start konsultation'}
+                          </RainbowButton>
                           <button
                             type="button"
                             className="indlæg-save-btn"
@@ -1580,10 +1571,6 @@ function Indlæg({
 
                         <div className="indlæg-metrics">
                           <div className="indlæg-metric">
-                            <span className="indlæg-metric-label">Status</span>
-                            <span className="indlæg-metric-value">{dictationStatus}</span>
-                          </div>
-                          <div className="indlæg-metric">
                             <span className="indlæg-metric-label">Ord opfanget</span>
                             <span className="indlæg-metric-value">{wordCount}</span>
                           </div>
@@ -1595,31 +1582,6 @@ function Indlæg({
                           </p>
                         )}
 
-                        <div className="indlæg-transcript-block">
-                          <div className="indlæg-transcript-title">Diktering</div>
-                          <div className="indlæg-transcript-box">
-                            {dictationText || 'Ingen tekst endnu.'}
-                          </div>
-                        </div>
-
-                        {dictationText && (
-                          <div className="indlæg-record-actions">
-                            <button
-                              type="button"
-                              className="indlæg-save-btn"
-                              onClick={handleAppendDictationToNote}
-                            >
-                              Tilføj til notat
-                            </button>
-                            <button
-                              type="button"
-                              className="indlæg-save-btn"
-                              onClick={handleReplaceNoteWithDictation}
-                            >
-                              Erstat notat
-                            </button>
-                          </div>
-                        )}
                       </>
                     )}
 
@@ -1628,24 +1590,33 @@ function Indlæg({
                         Vælg en skabelon i midten før du skriver notat.
                       </p>
                     )}
-
-                    <div className="indlæg-selma-launch">
-                      <button
-                        type="button"
-                        className="indlæg-save-btn indlæg-selma-btn"
-                        onClick={() => setIsAssistantOpen(true)}
-                        disabled={isAssistantOpen}
-                      >
-                        Selma
-                      </button>
-                    </div>
                   </div>
+                </div>
+
+                <div className="indlæg-selma-launch">
+                  <AnimatedGenerateButton
+                    type="button"
+                    className="indlæg-selma-btn w-full"
+                    labelIdle="Selma"
+                    labelActive="Selma"
+                    onClick={() => setIsAssistantOpen(true)}
+                    disabled={isAssistantOpen}
+                  >
+                  </AnimatedGenerateButton>
                 </div>
               </aside>
             </div>
           </div>
           {isAssistantOpen && (
             <div className="indlæg-assistant-drawer">
+            <button
+              type="button"
+              className="indlæg-drawer-edge-close"
+              onClick={() => setIsAssistantOpen(false)}
+              aria-label="Luk Corti assistent panel"
+            >
+              →
+            </button>
               <div className="indlæg-drawer-header">
                 <h3 className="indlæg-card-title">Corti Assistent</h3>
                 <button
@@ -1658,7 +1629,7 @@ function Indlæg({
                 </button>
               </div>
 
-              <div className="indlæg-card indlæg-card--drawer">
+              <div className="indlæg-card indlæg-card--drawer indlæg-card--assistant">
                 <div className="indlæg-card-header indlæg-card-header--row">
                   <h3 className="indlæg-card-title">Corti Assistent</h3>
                   <span className="indlæg-status-pill indlæg-status-pill--default">
@@ -1671,17 +1642,15 @@ function Indlæg({
                       : 'Agent: ikke klar'}
                   </span>
                 </div>
-                <div className="indlæg-card-body">
-                  <div className="indlæg-form-group" style={{ marginBottom: '0.75rem' }}>
-                    <div
-                      className="indlæg-quick-actions"
-                      style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}
-                    >
+                <div className="indlæg-card-body indlæg-card-body--assistant">
+                  <div className="indlæg-assistant-section">
+                    <p className="indlæg-assistant-heading">Forslag</p>
+                    <div className="indlæg-quick-actions">
                       {['Manglende info', 'Røde flag', 'Objektive tests', 'Plan + HEP'].map((label) => (
                         <button
                           key={label}
                           type="button"
-                          className="indlæg-save-btn"
+                          className={`indlæg-quick-action${activeAgentPreset === label ? ' is-active' : ''}`}
                           onClick={() => {
                             const presets = {
                               'Manglende info':
@@ -1693,6 +1662,7 @@ function Indlæg({
                               'Plan + HEP':
                                 'Ud fra notatet nedenfor: Foreslå en klinisk plan med kort HEP (hjemmeøvelser) og nøglepunkter for patienten.',
                             };
+                            setActiveAgentPreset(label);
                             sendAgentMessage(presets[label] || label);
                           }}
                           disabled={agentChatLoading}
@@ -1703,56 +1673,23 @@ function Indlæg({
                     </div>
                   </div>
 
-                  <div
-                    className="indlæg-agent-messages"
-                    style={{
-                      border: '1px solid #e2e2e2',
-                      borderRadius: '8px',
-                      padding: '0.75rem',
-                      background: '#fafafa',
-                      maxHeight: '260px',
-                      overflowY: 'auto',
-                      marginBottom: '0.75rem',
-                    }}
-                  >
+                  <div className="indlæg-agent-messages">
                     {agentMessages.length === 0 && <p className="indlæg-muted">Ingen beskeder endnu.</p>}
                     {agentMessages.map((msg) => (
                       <div
                         key={`${msg.role}-${msg.ts}`}
-                        className="indlæg-agent-message"
-                        style={{
-                          marginBottom: '0.5rem',
-                          textAlign: msg.role === 'user' ? 'right' : 'left',
-                        }}
+                        className={`indlæg-agent-message indlæg-agent-message--${msg.role === 'user' ? 'user' : 'assistant'}`}
                       >
-                        <div
-                          style={{
-                            display: 'inline-block',
-                            background: msg.role === 'user' ? '#dff3ff' : '#ffffff',
-                            border: '1px solid #e2e2e2',
-                            borderRadius: '8px',
-                            padding: '0.5rem 0.75rem',
-                            maxWidth: '100%',
-                          }}
-                        >
-                          <div
-                            style={{
-                              fontSize: '0.8rem',
-                              color: '#666',
-                              marginBottom: '0.2rem',
-                              textTransform: 'capitalize',
-                            }}
-                          >
-                            {msg.role}
-                          </div>
-                          <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</div>
+                        <div className="indlæg-agent-message-bubble">
+                          <div className="indlæg-agent-message-meta">{msg.role}</div>
+                          <div className="indlæg-agent-message-text">{msg.text}</div>
                         </div>
                       </div>
                     ))}
                   </div>
 
                   {!activeTranscriptText.trim() && (
-                    <p className="indlæg-muted" style={{ marginBottom: '0.5rem' }}>
+                    <p className="indlæg-muted indlæg-agent-empty-hint">
                       Ingen tekst endnu – du kan stadig spørge generelt.
                     </p>
                   )}
@@ -1763,17 +1700,13 @@ function Indlæg({
                     </p>
                   )}
 
-                  <div
-                    className="indlæg-form-group"
-                    style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}
-                  >
+                  <div className="indlæg-agent-input">
                     <textarea
                       className="indlæg-textarea"
                       value={agentInput}
                       onChange={(event) => setAgentInput(event.target.value)}
                       placeholder="Stil et spørgsmål til Corti assistenten..."
                       rows={2}
-                      style={{ flex: 1 }}
                       disabled={agentLoading}
                     />
                     <button
