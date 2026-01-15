@@ -1,8 +1,10 @@
 import React from 'react';
-import { CheckCircle2, MessageCircle, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Globe, Instagram, Send } from 'lucide-react';
 import LandingBuilder from './components/LandingBuilder';
 import BookingFlow from './components/BookingFlow';
 import { useLanguage } from './language/LanguageProvider';
+import './website-builder.css';
+import BookingPaymentFlowHero from './components/BookingPaymentFlowHero';
 
 function WebsiteBuilderPage() {
   const { t, getArray } = useLanguage();
@@ -10,17 +12,39 @@ function WebsiteBuilderPage() {
   const showLiveBuilder = false;
   const importanceBullets = getArray('features.websiteBuilder.whyMatters.bullets', []);
   const aiFeatures = getArray('features.websiteBuilder.ai.features', []);
-  const servicesList = getArray('features.websiteBuilder.design.serviceItems', []);
-  const brandBullets = getArray('features.websiteBuilder.design.sideBullets', []);
-  const growthBullets = getArray('features.websiteBuilder.growth.bullets', []);
+  const getPaymentLogo = (method) => {
+    const name = String(method || '').toLowerCase();
+    if (name.includes('mobile')) {
+      return { src: "/hero-5/MobilePay-1200x627.jpg", alt: "MobilePay" };
+    }
+    if (name.includes('apple')) {
+      return { src: "/hero-5/apple-pay-logo-coopbank.webp", alt: "Apple Pay" };
+    }
+    if (name.includes('visa')) {
+      return { src: "/hero-5/Visa_Grey.avif", alt: "Visa" };
+    }
+    if (name.includes('mastercard')) {
+      return { src: "/hero-5/Mastercard_2019_logo.svg", alt: "Mastercard" };
+    }
+    return { src: "/hero-5/unnamed.jpg", alt: String(method || "Payment") };
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 text-white">
+      <div className="fixed left-4 top-4 z-50">
+        <a
+          href="/"
+          className="inline-flex items-center gap-2 rounded-full bg-white/95 px-4 py-2 text-xs font-semibold text-slate-700 shadow-lg shadow-slate-900/10 ring-1 ring-slate-200 transition hover:bg-white"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          {t('features.websiteBuilder.bookingFlow.actions.back')}
+        </a>
+      </div>
       <section className="bg-white text-slate-900">
         <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-14 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
           <div className="relative">
             <img
-              src="/hero-2/pexels-rdne-7755558.jpg"
+              src="/hero-5/physio-picture.jpg"
               alt={t('features.websiteBuilder.whyMatters.imageAlt')}
               className="h-[320px] w-full rounded-3xl object-cover shadow-2xl shadow-slate-200/60 sm:h-[420px]"
               loading="lazy"
@@ -39,7 +63,7 @@ function WebsiteBuilderPage() {
             <p className="mt-4 max-w-xl text-base text-slate-600">
               {t('features.websiteBuilder.whyMatters.description')}
             </p>
-            <ul className="mt-6 list-disc space-y-3 pl-5 text-sm text-slate-600">
+            <ul className="mt-6 list-disc space-y-2 pl-5 text-sm text-slate-600">
               {importanceBullets.map((item) => (
                 <li key={item}>{item}</li>
               ))}
@@ -62,8 +86,8 @@ function WebsiteBuilderPage() {
             </p>
             <div className="grid gap-4 md:grid-cols-3">
               {aiFeatures.map((feature, index) => {
-                const iconMap = [Sparkles, MessageCircle, ShieldCheck];
-                const Icon = iconMap[index] || Sparkles;
+                const iconMap = [Instagram, Globe, Send];
+                const Icon = iconMap[index] || Globe;
                 return (
                 <div
                   key={feature.title}
@@ -79,107 +103,35 @@ function WebsiteBuilderPage() {
             </div>
           </div>
           <div className="relative">
-            <img
-              src="/hero-2/physio-hero-02.jpg"
-              alt={t('features.websiteBuilder.ai.imageAlt')}
-              className="h-[360px] w-full rounded-[32px] object-cover shadow-2xl shadow-slate-900/60 lg:h-[420px]"
-              loading="lazy"
-            />
-            <div className="absolute bottom-6 right-6 max-w-xs rounded-3xl bg-white/90 p-4 shadow-2xl shadow-slate-900/60">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-2xl bg-slate-900/80 p-1 text-sm font-semibold uppercase tracking-wide text-white">
-                  {brandShort}
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                    {t('features.websiteBuilder.ai.chat.label')}
-                  </p>
-                  <p className="text-sm font-semibold text-slate-900">
-                    {t('features.websiteBuilder.ai.chat.agent')}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-3 space-y-3 text-sm">
-                <div className="rounded-2xl bg-blue-900/90 px-3 py-2 text-slate-50">
-                  <p className="text-xs font-semibold text-blue-200">
-                    {t('features.websiteBuilder.ai.chat.agent')}
-                  </p>
-                  <p>{t('features.websiteBuilder.ai.chat.agentMessage')}</p>
-                </div>
-                <div className="rounded-2xl bg-slate-100/80 px-3 py-2 text-slate-900">
-                  <p className="text-xs font-semibold text-slate-500">
-                    {t('features.websiteBuilder.ai.chat.patient')}
-                  </p>
-                  <p>{t('features.websiteBuilder.ai.chat.patientMessage')}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+            <div className="absolute -inset-8 rounded-[40px] bg-gradient-to-br from-blue-500/10 via-slate-900/0 to-sky-400/10 blur-2xl" aria-hidden="true" />
 
-      <section className="bg-slate-50 text-slate-900">
-        <div className="mx-auto w-full max-w-6xl px-4 py-14">
-          <div className="text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
-              {t('features.websiteBuilder.design.eyebrow')}
-            </p>
-            <h2 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
-              {t('features.websiteBuilder.design.title')}
-            </h2>
-          </div>
-          <div className="mt-10 grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-            <div className="rounded-[36px] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/50">
-              <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                <span>{t('features.websiteBuilder.design.cardLabel')}</span>
-                <span>{t('features.websiteBuilder.design.cardTag')}</span>
-              </div>
-              <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+            <div className="relative mx-auto flex w-full flex-wrap items-center justify-end gap-6">
+              {/* Instagram profile mockup */}
+              <div className="relative z-10 w-[320px] sm:w-[360px]">
                 <img
-                  src="/hero-2/physio-hero-02.jpg"
-                  alt={t('features.websiteBuilder.design.imageAlt')}
-                  className="h-56 w-full rounded-3xl object-cover"
+                  src="/hero-5/insta-profil.jpg"
+                  alt="Instagram-profil mockup"
+                  className="w-full rounded-[28px] shadow-[0_30px_80px_rgba(15,23,42,0.45)]"
                   loading="lazy"
                 />
-                <div>
-                  <h3 className="text-2xl font-semibold text-slate-900">
-                    {t('features.websiteBuilder.design.cardTitle')}
-                  </h3>
-                  <ul className="mt-4 space-y-3 text-sm text-slate-600">
-                    {servicesList.map((service) => (
-                      <li
-                        key={service}
-                        className="flex items-center justify-between border-b border-slate-200 pb-2"
-                      >
-                        {service} <span className="text-slate-400">+</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <button className="mt-5 rounded-full bg-slate-900 px-6 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white">
-                    {t('features.websiteBuilder.design.cardCta')}
-                  </button>
-                </div>
               </div>
-            </div>
-            <div className="rounded-3xl border border-slate-200 bg-white p-6">
-              <h3 className="text-lg font-semibold text-slate-900">
-                {t('features.websiteBuilder.design.sideTitle')}
-              </h3>
-              <p className="mt-3 text-sm text-slate-600">
-                {t('features.websiteBuilder.design.sideDescription')}
-              </p>
-              <ul className="mt-5 list-disc space-y-3 pl-5 text-sm text-slate-600">
-                {brandBullets.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
+
+              {/* Website booking mockup */}
+              <div className="relative z-10 w-[320px] sm:w-[360px]">
+                <img
+                  src="/hero-5/booking-hjemmeside.jpg"
+                  alt="Hjemmeside booking mockup"
+                  className="w-full rounded-[28px] shadow-[0_30px_80px_rgba(15,23,42,0.45)]"
+                  loading="lazy"
+                />
+              </div>
             </div>
           </div>
         </div>
       </section>
 
       <section className="bg-[#eef2fb] text-slate-900">
-        <div className="mx-auto w-full max-w-6xl px-4 py-14">
+        <div className="mx-auto w-full max-w-6xl px-4 py-16">
           <div className="rounded-[40px] bg-white px-6 py-10 shadow-xl shadow-slate-200/60 lg:px-10">
             <div className="grid gap-10 lg:grid-cols-[1fr_1fr] lg:items-center">
               <div>
@@ -192,15 +144,60 @@ function WebsiteBuilderPage() {
                 <p className="mt-4 text-base text-slate-600">
                   {t('features.websiteBuilder.growth.description')}
                 </p>
+
+                {/* Payment method logos (under the "We support..." line) */}
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                  {[
+                    { key: "MobilePay", src: "/hero-5/MobilePay-1200x627.jpg", crop: true },
+                    { key: "Apple Pay", src: "/hero-5/apple-pay-logo-coopbank.webp" },
+                    { key: "Google Pay", src: "/hero-5/unnamed.jpg" },
+                    { key: "Dankort", textOnly: true },
+                    { key: "Visa", src: "/hero-5/Visa_Grey.avif" },
+                    { key: "Mastercard", src: "/hero-5/Mastercard_2019_logo.svg" },
+                  ].map((m) => (
+                    <span
+                      key={m.key}
+                      className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm"
+                    >
+                      {m.textOnly ? (
+                        <span className="px-1 text-[11px] font-extrabold tracking-wide text-slate-700">
+                          DANKORT
+                        </span>
+                      ) : (
+                        <img
+                          src={m.src}
+                          alt={m.key}
+                          className={m.crop ? "h-4 w-10 rounded-sm object-cover object-left" : "h-4 w-auto"}
+                          loading="lazy"
+                        />
+                      )}
+                      <span>{m.key}</span>
+                    </span>
+                  ))}
+                </div>
               </div>
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-                <ul className="list-disc space-y-3 pl-5 text-sm text-slate-600">
-                  {growthBullets.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-                <div className="mt-6 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-700">
-                  {t('features.websiteBuilder.growth.callout')}
+                <h3 className="text-lg font-semibold text-slate-900">
+                  {t('features.websiteBuilder.growth.cardTitle')}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                  {t('features.websiteBuilder.growth.cardDescription')}
+                </p>
+
+                <div className="mt-5 inline-flex items-center gap-3 rounded-full bg-slate-900 px-4 py-2 shadow-lg shadow-slate-900/20">
+                  <img
+                    src="/hero-5/selma-logo-final.jpg"
+                    alt="Selma+"
+                    className="h-5 w-5 rounded-full bg-white p-[3px]"
+                    loading="lazy"
+                  />
+                  <span className="text-sm font-semibold text-white/80">×</span>
+                  <img
+                    src="/hero-5/unnamed.webp"
+                    alt="Stripe"
+                    className="h-5 w-auto"
+                    loading="lazy"
+                  />
                 </div>
               </div>
             </div>
@@ -208,33 +205,7 @@ function WebsiteBuilderPage() {
         </div>
       </section>
 
-      <section className="bg-[#f7f0ff] text-slate-900">
-        <div className="mx-auto w-full max-w-6xl px-4 pb-14 pt-12">
-          <div className="text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
-              {t('features.websiteBuilder.builder.eyebrow')}
-            </p>
-            <h2 className="mt-3 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
-              {t('features.websiteBuilder.builder.title')}
-            </h2>
-            <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700">
-              <CheckCircle2 className="h-4 w-4" />
-              {t('features.websiteBuilder.builder.pill')}
-            </div>
-            <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
-              {t('features.websiteBuilder.builder.description')}
-            </p>
-          </div>
-          <div className="mt-10 flex justify-center">
-            <img
-              src="/hero-2/physio-gallery-01.jpg"
-              alt={t('features.websiteBuilder.builder.imageAlt')}
-              className="h-[320px] w-full max-w-4xl rounded-[32px] object-cover shadow-2xl shadow-slate-200/60 sm:h-[420px]"
-              loading="lazy"
-            />
-          </div>
-        </div>
-      </section>
+      <BookingPaymentFlowHero />
 
       <BookingFlow />
       {showLiveBuilder ? <LandingBuilder /> : null}

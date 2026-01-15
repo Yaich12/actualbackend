@@ -23,11 +23,57 @@ const shouldUseEmulators =
 const useAuthEmulator =
   process.env.REACT_APP_USE_AUTH_EMULATOR === "true";
 
-const firebaseConfig = shouldUseEmulators
+// Debug: log environment variable status
+if (process.env.NODE_ENV === "development") {
+  // eslint-disable-next-line no-console
+  console.log(
+    "[Firebase Debug] REACT_APP_USE_FIREBASE_EMULATORS =",
+    process.env.REACT_APP_USE_FIREBASE_EMULATORS,
+    "→ shouldUseEmulators =",
+    shouldUseEmulators
+  );
+}
+
+const requiredEnv = {
+  REACT_APP_API_KEY: process.env.REACT_APP_API_KEY,
+  REACT_APP_AUTH_DOMAIN: process.env.REACT_APP_AUTH_DOMAIN,
+  REACT_APP_PROJECT_ID: process.env.REACT_APP_PROJECT_ID,
+  REACT_APP_STORAGE_BUCKET: process.env.REACT_APP_STORAGE_BUCKET,
+  REACT_APP_MESSAGING_SENDER_ID: process.env.REACT_APP_MESSAGING_SENDER_ID,
+  REACT_APP_APP_ID: process.env.REACT_APP_APP_ID,
+};
+
+export const firebaseEnvMissingKeys = Object.entries(requiredEnv)
+  .filter(([, value]) => !value)
+  .map(([key]) => key);
+
+export const firebaseConfigured =
+  firebaseEnvMissingKeys.length === 0;
+
+// Export shouldUseEmulators so components can check if emulators are enabled
+export { shouldUseEmulators };
+
+// If the app is missing required cloud env vars, we must NOT crash at import-time.
+// Instead, we fall back to a safe "emulator-style" config so the UI can load and
+// display a helpful setup message.
+const effectiveUseFallbackConfig =
+  shouldUseEmulators || !firebaseConfigured;
+
+if (!firebaseConfigured && !shouldUseEmulators) {
+  // eslint-disable-next-line no-console
+  console.error(
+    `[Firebase] Missing env vars (${firebaseEnvMissingKeys.join(
+      ", "
+    )}). Falling back to local config so the app can render. ` +
+      `Create a .env with the missing REACT_APP_* values (or set REACT_APP_USE_FIREBASE_EMULATORS=true).`
+  );
+}
+
+const firebaseConfig = effectiveUseFallbackConfig
   ? {
-      // Emulator mode: Firebase accepts any API key; keep projectId stable for local data.
-      apiKey: "fake-api-key",
-      authDomain: "localhost",
+      // Fallback/emulator-style mode: Firebase accepts any API key; keep projectId stable for local data.
+      apiKey: process.env.REACT_APP_API_KEY || "fake-api-key",
+      authDomain: process.env.REACT_APP_AUTH_DOMAIN || "localhost",
       projectId: process.env.REACT_APP_PROJECT_ID || "demo-project",
       storageBucket:
         process.env.REACT_APP_STORAGE_BUCKET ||
@@ -47,35 +93,15 @@ const firebaseConfig = shouldUseEmulators
       measurementId: process.env.REACT_APP_MEASUREMENT_ID,
     };
 
-if (!shouldUseEmulators) {
-  const missingKeys = Object.entries({
-    REACT_APP_API_KEY: firebaseConfig.apiKey,
-    REACT_APP_AUTH_DOMAIN: firebaseConfig.authDomain,
-    REACT_APP_PROJECT_ID: firebaseConfig.projectId,
-    REACT_APP_STORAGE_BUCKET: firebaseConfig.storageBucket,
-    REACT_APP_MESSAGING_SENDER_ID: firebaseConfig.messagingSenderId,
-    REACT_APP_APP_ID: firebaseConfig.appId,
-  })
-    .filter(([, value]) => !value)
-    .map(([key]) => key);
-
-  if (missingKeys.length) {
-    throw new Error(
-      `Missing Firebase env vars: ${missingKeys.join(
-        ", "
-      )}. Set them in your .env file.`
-    );
-  }
-}
-
 const FIRESTORE_DATABASE_ID =
   process.env.REACT_APP_FIRESTORE_DB_ID || "actuelbackend12";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app, FIRESTORE_DATABASE_ID);
+// eslint-disable-next-line no-console
 console.log(
-  "[Firebase] Firestore initialized for cloud use (no emulator).",
+  `[Firebase] Firestore initialized (${effectiveUseFallbackConfig ? "fallback-config" : "cloud-config"}).`,
   "Project ID:",
   firebaseConfig.projectId,
   "Database ID:",
@@ -85,17 +111,32 @@ const storage = getStorage(app);
 const googleProvider = new GoogleAuthProvider();
 
 if (shouldUseEmulators) {
-  if (useAuthEmulator) {
-    connectAuthEmulator(auth, "http://localhost:9099", {
-      disableWarnings: true,
-    });
+  try {
+    if (useAuthEmulator) {
+      connectAuthEmulator(auth, "http://localhost:9099", {
+        disableWarnings: true,
+      });
+      // eslint-disable-next-line no-console
+      console.log("[Firebase] Connected to Auth Emulator on port 9099");
+    }
+    connectStorageEmulator(storage, "localhost", 9199);
+    // eslint-disable-next-line no-console
+    console.log("[Firebase] Connected to Storage Emulator on port 9199");
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error(
+      "[Firebase] Failed to connect to emulators. Make sure Firebase emulators are running:",
+      "npm run emulators"
+    );
+    // eslint-disable-next-line no-console
+    console.error("[Firebase] Emulator connection error:", error);
   }
-  connectStorageEmulator(storage, "localhost", 9199);
 }
 
 export {
   auth,
   db,
+  effectiveUseFallbackConfig,
   googleProvider,
   signInWithRedirect,
   sendSignInLinkToEmail,
