@@ -845,6 +845,12 @@
   padding: 4px 20px 24px;
   overflow: visible;
   min-height: 0;
+  position: relative;
+}
+
+.indlæg-content--drawer-open .indlæg-workspace {
+  margin-right: 380px;
+  transition: margin 0.25s ease;
 }
 
 .indlæg-workspace {
@@ -890,12 +896,101 @@
   gap: 12px;
 }
 
+.indlæg-assistant-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 360px;
+  background: var(--bg-surface);
+  box-shadow: -12px 0 24px rgba(0, 0, 0, 0.08);
+  padding: 20px 16px;
+  z-index: 30;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.indlæg-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.indlæg-drawer-close {
+  border: 1px solid var(--border-subtle);
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.indlæg-drawer-close:hover {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+
+.indlæg-drawer-close:active {
+  transform: translateY(1px);
+}
+
+.indlæg-card--drawer {
+  box-shadow: none;
+}
+
+.indlæg-selma-launch {
+  margin-top: 12px;
+}
+
+.indlæg-selma-btn {
+  width: 100%;
+}
+
 .indlæg-card {
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   background: var(--bg-surface);
   box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
   overflow: hidden;
+}
+
+.indlæg-mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.indlæg-mode-option {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease,
+    transform 0.1s ease;
+}
+
+.indlæg-mode-option:hover {
+  background: #f8fafc;
+  border-color: #c7d2fe;
+}
+
+.indlæg-mode-option:active {
+  transform: translateY(1px);
+}
+
+.indlæg-mode-option.active {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .indlæg-card-header {
@@ -1684,6 +1779,11 @@
   color: #b91c1c;
 }
 
+.indlæg-recent-summary {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
 .indlæg-history-list {
   list-style: none;
   padding: 0;
@@ -1691,9 +1791,6 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 220px;
-  overflow-y: auto;
-  padding-right: 4px;
 }
 
 .indlæg-history-item {

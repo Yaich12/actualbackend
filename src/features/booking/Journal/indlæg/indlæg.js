@@ -46,6 +46,9 @@ const buildWsUrl = () => {
   return `${wsBase}/ws/corti/transcribe`;
 };
 
+const backendBase = getBackendHttpBase();
+const apiUrl = (path) => `${backendBase}${path.startsWith('/') ? '' : '/'}${path}`;
+
 const sanitizeIdentifier = (value) =>
   value
     .toLowerCase()
@@ -118,6 +121,10 @@ function Indlæg({
   initialDate = '',
   initialEntry = null, // Existing entry to edit
 }) {
+  const MODE_NONE = 'None';
+  const MODE_TRANSCRIBE = 'Live';
+  const MODE_DICTATE = 'Diktering';
+
   const originalEntryRef = useRef(initialEntry);
   const previousEntryRef = useRef(null);
   // used when user starts a brand new entry (unsaved) and navigates away to a past session
@@ -146,7 +153,8 @@ function Indlæg({
   const [generationError, setGenerationError] = useState('');
   const [generatedDocument, setGeneratedDocument] = useState(null);
 
-  const [transcribeMode, setTranscribeMode] = useState('Live'); // "Live" | "Diktering"
+  const [transcribeMode, setTranscribeMode] = useState(MODE_NONE);
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [recordingStatus, setRecordingStatus] = useState('Idle');
   const [recordingError, setRecordingError] = useState('');
   const [isRecording, setIsRecording] = useState(false);
@@ -157,6 +165,14 @@ function Indlæg({
   const [dictationStatus, setDictationStatus] = useState('Idle'); // Idle | Recording | Uploading | Transcribing | completed | failed | Error
   const [dictationError, setDictationError] = useState('');
   const [dictationText, setDictationText] = useState('');
+
+  const [agentId, setAgentId] = useState('');
+  const [agentReady, setAgentReady] = useState(false);
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [agentError, setAgentError] = useState('');
+  const [agentMessages, setAgentMessages] = useState([]);
+  const [agentInput, setAgentInput] = useState('');
+  const [agentChatLoading, setAgentChatLoading] = useState(false);
 
   const wsRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -184,12 +200,24 @@ function Indlæg({
   }, [finalTranscript, livePartial]);
 
   const activeTranscriptText = useMemo(() => {
-    return transcribeMode === 'Diktering' ? dictationText : transcriptText;
+    if (transcribeMode === MODE_DICTATE) return dictationText;
+    if (transcribeMode === MODE_TRANSCRIBE) return transcriptText;
+    return '';
   }, [dictationText, transcriptText, transcribeMode]);
 
   const wordCount = useMemo(() => {
     return activeTranscriptText.trim().split(/\s+/).filter(Boolean).length;
   }, [activeTranscriptText]);
+
+  const agentContextText = useMemo(() => {
+    const note = (content || '').trim();
+    if (note) return { text: note, source: 'note' };
+    if (generatedDocument?.sections?.length) {
+      return { text: buildDocumentText(generatedDocument.sections), source: 'generated' };
+    }
+    const raw = (activeTranscriptText || '').trim();
+    return { text: raw, source: 'transcript' };
+  }, [content, generatedDocument, activeTranscriptText]);
 
   const formatDateTime = (value) => {
     if (!value) return '';
@@ -214,24 +242,155 @@ function Indlæg({
   };
 
   const statusClass = useMemo(() => {
-    const displayStatus = transcribeMode === 'Diktering' ? dictationStatus : recordingStatus;
-    return displayStatus
-      .toLowerCase()
-      .replace(/[^a-z]+/g, '-')
-      .replace(/^-+|-+$/g, '');
+    if (transcribeMode === MODE_DICTATE) {
+      return dictationStatus.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-+|-+$/g, '');
+    }
+    if (transcribeMode === MODE_TRANSCRIBE) {
+      return recordingStatus.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-+|-+$/g, '');
+    }
+    return 'idle';
   }, [dictationStatus, recordingStatus, transcribeMode]);
 
-  const modeStatus = useMemo(
-    () => (transcribeMode === 'Diktering' ? dictationStatus : recordingStatus),
-    [dictationStatus, recordingStatus, transcribeMode]
-  );
+  const modeStatus = useMemo(() => {
+    if (transcribeMode === MODE_DICTATE) return dictationStatus;
+    if (transcribeMode === MODE_TRANSCRIBE) return recordingStatus;
+    return 'Idle';
+  }, [dictationStatus, recordingStatus, transcribeMode]);
 
-  const isDictationMode = transcribeMode === 'Diktering';
+  const isDictationMode = transcribeMode === MODE_DICTATE;
+  const isWorkspaceModeSelected = transcribeMode !== MODE_NONE;
+
+  const handleModeToggle = (mode) => {
+    setTranscribeMode((prev) => {
+      const next = prev === mode ? MODE_NONE : mode;
+      // Close assistant panel when leaving modes
+      if (next === MODE_NONE) setIsAssistantOpen(false);
+      return next;
+    });
+  };
 
   const selectedTemplateSections = useMemo(() => {
     if (!selectedTemplate?.templateSections) return [];
     return [...selectedTemplate.templateSections].sort((a, b) => (a?.sort ?? 0) - (b?.sort ?? 0));
   }, [selectedTemplate]);
+
+  const initAgent = useCallback(async () => {
+    setAgentLoading(true);
+    setAgentError('');
+    try {
+      const url = apiUrl('/api/agent/init');
+      console.log('[Indlæg] agent init url:', url);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const raw = await response.text();
+      let data = null;
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch (parseErr) {
+        throw new Error(`Agent init parse failed (${response.status}): ${raw.slice(0, 200)}`);
+      }
+      if (!response.ok || !data?.ok || !data?.agentId) {
+        throw new Error(data?.error || raw.slice(0, 200) || `Agent init fejlede (${response.status})`);
+      }
+      setAgentId(data.agentId);
+      setAgentReady(true);
+    } catch (error) {
+      console.error('[Indlæg] Agent init error:', error);
+      setAgentError(error?.message || 'Kunne ikke initialisere agenten.');
+      setAgentReady(false);
+    } finally {
+      setAgentLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    initAgent();
+  }, [initAgent]);
+
+  const sendAgentMessage = useCallback(
+    async (overrideMessage = null) => {
+      const finalMessage = `${overrideMessage ?? agentInput}`.trim();
+      if (!finalMessage) return;
+      if (!agentId) {
+        setAgentError('Agent ikke klar endnu.');
+        return;
+      }
+      const baseText =
+        (content && content.trim()) ||
+        (transcribeMode === 'Diktering' ? dictationText : transcriptText);
+      if (!baseText || !baseText.trim()) {
+        setAgentError('Ingen tekst i notat endnu');
+        return;
+      }
+      const contextSource = (content && content.trim()) ? 'note' : 'transcript';
+      console.log('[AGENT UI] ctx source=', contextSource, 'len=', baseText.length);
+
+      const payload = {
+        agentId,
+        message: finalMessage,
+        templateKey: selectedTemplateKey,
+        contextText: baseText,
+        contextSource: contextSource,
+        sourceText: baseText,
+        mode:
+          transcribeMode === MODE_DICTATE
+            ? 'Diktering'
+            : transcribeMode === MODE_TRANSCRIBE
+            ? 'Trankribering'
+            : 'None',
+        patientName: clientName || '',
+        sessionDate: date || initialDate || '',
+      };
+
+      setAgentError('');
+      setAgentChatLoading(true);
+      setAgentMessages((prev) => [...prev, { role: 'user', text: finalMessage, ts: Date.now() }]);
+
+      try {
+        const response = await fetch(apiUrl('/api/agent/chat'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const raw = await response.text();
+        let data = null;
+        try {
+          data = raw ? JSON.parse(raw) : {};
+        } catch (parseErr) {
+          throw new Error(`Agent chat parse failed (${response.status}): ${raw.slice(0, 200)}`);
+        }
+        if (!response.ok || !data?.ok) {
+          throw new Error(data?.error || raw.slice(0, 200) || `Agent svar fejlede (${response.status})`);
+        }
+        const replyText = data?.text || '(tomt svar fra agent)';
+        if (!data?.text) {
+          setAgentError('Agent returnerede ingen tekst');
+        }
+        setAgentMessages((prev) => [...prev, { role: 'assistant', text: replyText, ts: Date.now() }]);
+      } catch (error) {
+        console.error('[Indlæg] Agent chat error:', error);
+        setAgentError(error?.message || 'Agenten kunne ikke svare.');
+      } finally {
+        setAgentChatLoading(false);
+        setAgentInput('');
+      }
+    },
+    [
+      agentId,
+      agentInput,
+      clientName,
+      date,
+      dictationText,
+      initialDate,
+      selectedTemplateKey,
+      content,
+      transcriptText,
+      transcribeMode,
+    ]
+  );
 
   const selectedTemplateMeta = useMemo(() => {
     if (!selectedTemplateKey) return null;
@@ -298,7 +457,7 @@ function Indlæg({
     setTemplatesLoading(true);
     setTemplatesError('');
     try {
-      const response = await fetch(`/api/corti/templates?lang=${TEMPLATE_LANGUAGE}`);
+      const response = await fetch(apiUrl(`/api/corti/templates?lang=${TEMPLATE_LANGUAGE}`));
       if (!response.ok) {
         const message = await response.text();
         throw new Error(message || `Server ${response.status}`);
@@ -324,7 +483,7 @@ function Indlæg({
     setTemplateDetailsError('');
 
     try {
-      const response = await fetch(`/api/corti/templates/${encodeURIComponent(templateKey)}`);
+      const response = await fetch(apiUrl(`/api/corti/templates/${encodeURIComponent(templateKey)}`));
       if (!response.ok) {
         const message = await response.text();
         throw new Error(message || `Server ${response.status}`);
@@ -353,7 +512,7 @@ function Indlæg({
       return interactionId;
     }
 
-    const response = await fetch('/api/corti/interactions', {
+    const response = await fetch(apiUrl('/api/corti/interactions'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -392,7 +551,7 @@ function Indlæg({
 
     try {
       const resolvedInteractionId = await ensureInteraction();
-      const response = await fetch(`/api/corti/interactions/${resolvedInteractionId}/documents`, {
+      const response = await fetch(apiUrl(`/api/corti/interactions/${resolvedInteractionId}/documents`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -497,7 +656,7 @@ function Indlæg({
         formData.append('audio', blob, 'dictation.webm');
         formData.append('language', 'da');
 
-        const response = await fetch('/api/corti/dictate', {
+        const response = await fetch(apiUrl('/api/corti/dictate'), {
           method: 'POST',
           body: formData,
         });
@@ -623,13 +782,19 @@ function Indlæg({
   }, [dictationText]);
 
   useEffect(() => {
-    if (transcribeMode === 'Diktering') {
+    if (transcribeMode === MODE_DICTATE) {
       cleanupRecording('Idle');
       setRecordingError('');
       setLastWs({ type: '—', reason: '' });
-    } else {
+    } else if (transcribeMode === MODE_TRANSCRIBE) {
       resetDictationRecording('Idle');
       setDictationError('');
+    } else {
+      cleanupRecording('Idle');
+      resetDictationRecording('Idle');
+      setRecordingError('');
+      setDictationError('');
+      setLastWs({ type: '—', reason: '' });
     }
   }, [cleanupRecording, resetDictationRecording, transcribeMode]);
 
@@ -1003,37 +1168,16 @@ function Indlæg({
     <div className="indlæg-container">
       <div className="indlæg-layout">
         <div className="indlæg-main-pane">
-            <div className="indlæg-header">
-            <div className="indlæg-header-top">
-              <div className="indlæg-title-block">
-                <h2 className="indlæg-title">{clientName || 'Ukendt klient'}</h2>
-                <span className="indlæg-title-date">{date || '—'}</span>
-              </div>
-                {originalEntryRef.current &&
-                  activeEntry?.id &&
-                  originalEntryRef.current?.id &&
-                  activeEntry.id !== originalEntryRef.current.id && (
-                    <button
-                      type="button"
-                      className="indlæg-history-link"
-                      onClick={() => {
-                        setActiveEntry(originalEntryRef.current);
-                        setSelectedTemplateKey(originalEntryRef.current?.templateKey || '');
-                        setDate(originalEntryRef.current?.date || initialDate || '');
-                        setContent(originalEntryRef.current?.content || '');
-                      }}
-                    >
-                      Tilbage til nuværende
-                    </button>
-                  )}
-            </div>
-
-          </div>
-
-          <div className="indlæg-content">
+          <div className={`indlæg-content${isAssistantOpen ? ' indlæg-content--drawer-open' : ''}`}>
             <div className="indlæg-workspace">
               <aside className="indlæg-column indlæg-column--left">
                 <div className="indlæg-card">
+                  <div className="indlæg-card-body indlæg-recent-summary">
+                    <div className="indlæg-title-block">
+                      <h2 className="indlæg-title">{clientName || 'Ukendt klient'}</h2>
+                      <span className="indlæg-title-date">{date || '—'}</span>
+                    </div>
+                  </div>
                   <div className="indlæg-card-header indlæg-card-header--row">
                     <h3 className="indlæg-card-title">Seneste sessioner</h3>
                     {true && (
@@ -1127,174 +1271,7 @@ function Indlæg({
                 </div>
               </aside>
 
-              <section className="indlæg-column indlæg-column--center">
-                <div className="indlæg-card">
-                  <div className="indlæg-card-header indlæg-card-header--row">
-                    <h3 className="indlæg-card-title">
-                      {isDictationMode ? 'Diktering' : 'Transskription'}
-                    </h3>
-                    <div
-                      className="indlæg-mode-toggle"
-                      style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}
-                    >
-                      <button
-                        type="button"
-                        className="indlæg-history-link"
-                        style={transcribeMode === 'Live' ? { fontWeight: 700 } : {}}
-                        onClick={() => setTranscribeMode('Live')}
-                      >
-                        Conversation
-                      </button>
-                      <button
-                        type="button"
-                        className="indlæg-history-link"
-                        style={transcribeMode === 'Diktering' ? { fontWeight: 700 } : {}}
-                        onClick={() => setTranscribeMode('Diktering')}
-                      >
-                        Diktering
-                      </button>
-                    </div>
-                    <span className={`indlæg-status-pill indlæg-status-pill--${statusClass}`}>
-                      {modeStatus}
-                    </span>
-                  </div>
-                </div>
-                <div className="indlæg-card">
-                  <div className="indlæg-card-header">
-                    <h3 className="indlæg-card-title">Skabeloner</h3>
-                  </div>
-                  <div className="indlæg-card-body">
-                    {templatesLoading && <p className="indlæg-muted">Henter skabeloner...</p>}
-                    {templatesError && <p className="indlæg-inline-error">{templatesError}</p>}
-                    {!templatesLoading && !templatesError && templates.length === 0 && (
-                      <p className="indlæg-muted">Ingen skabeloner fundet.</p>
-                    )}
-                    <div className="indlæg-form-group">
-                      <label className="indlæg-label" htmlFor="indlaeg-template-select">
-                        Vælg skabelon
-                      </label>
-                      <select
-                        id="indlaeg-template-select"
-                        className="indlæg-input indlæg-template-select"
-                        value={selectedTemplateKey}
-                        onChange={(event) => {
-                          setSelectedTemplateKey(event.target.value);
-                          setGenerationError('');
-                        }}
-                        disabled={templatesLoading || !!templatesError || templates.length === 0}
-                      >
-                        <option value="">Vælg skabelon</option>
-                        {templates.map((template) => {
-                          const translation = getTranslation(
-                            template.translations,
-                            TEMPLATE_LANGUAGE
-                          );
-                          const name = translation?.name || template.name || template.key;
-                          return (
-                            <option key={template.key} value={template.key}>
-                              {name}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      {selectedTemplateMeta?.description ? (
-                        <p className="indlæg-template-help">{selectedTemplateMeta.description}</p>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="indlæg-card">
-                  <div className="indlæg-card-header indlæg-card-header--row">
-                    <h3 className="indlæg-card-title">
-                      Valgt skabelon:{' '}
-                      <span className="indlæg-card-title-value">
-                        {templateSelectionLabel || 'Ingen valgt'}
-                      </span>
-                    </h3>
-                    <button
-                      type="button"
-                      className="indlæg-history-toggle indlæg-card-toggle"
-                      aria-expanded={showTemplateDetails}
-                      onClick={() => setShowTemplateDetails((open) => !open)}
-                    >
-                      <span className="indlæg-card-toggle-icon">
-                        {showTemplateDetails ? '⌃' : '⌄'}
-                      </span>
-                    </button>
-                  </div>
-                  {showTemplateDetails && (
-                    <div className="indlæg-card-body">
-                      {templateDetailsLoading && <p className="indlæg-muted">Henter detaljer...</p>}
-                      {templateDetailsError && (
-                        <p className="indlæg-inline-error">{templateDetailsError}</p>
-                      )}
-                      {!selectedTemplateKey && (
-                        <p className="indlæg-muted">Vælg en skabelon for at se sektionerne.</p>
-                      )}
-                      {!templateDetailsLoading && selectedTemplateKey && selectedTemplate && (
-                        <div className="indlæg-template-sections">
-                          {selectedTemplateSections.length === 0 ? (
-                            <p className="indlæg-muted">Skabelonen har ingen sektioner.</p>
-                          ) : (
-                            selectedTemplateSections.map((section) => {
-                              const sectionMeta = section?.sectionsId || section;
-                              const translation = getTranslation(
-                                sectionMeta?.translations,
-                                TEMPLATE_LANGUAGE
-                              );
-                              const sectionName = translation?.name || sectionMeta?.name || 'Sektion';
-                              const sectionDescription =
-                                translation?.description || sectionMeta?.description || '';
-                              return (
-                                <div key={`${sectionMeta?.key}-${section?.sort}`} className="indlæg-template-section">
-                                  <div className="indlæg-template-section-title">{sectionName}</div>
-                                  {sectionDescription ? (
-                                    <div className="indlæg-template-section-desc">
-                                      {sectionDescription}
-                                    </div>
-                                  ) : null}
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="indlæg-card">
-                  <div className="indlæg-card-header">
-                    <h3 className="indlæg-card-title">Genereret notat</h3>
-                  </div>
-                  <div className="indlæg-card-body">
-                    {generationLoading && <p className="indlæg-muted">Genererer notat...</p>}
-                    {generationError && <p className="indlæg-inline-error">{generationError}</p>}
-                    {!generationLoading && !generationError && !generatedDocument && (
-                      <p className="indlæg-muted">Ingen notat genereret endnu.</p>
-                    )}
-                    {generatedDocument?.sections && Array.isArray(generatedDocument.sections) ? (
-                      <div className="indlæg-generated-sections">
-                        {generatedDocument.sections
-                          .slice()
-                          .sort((a, b) => (a?.sort ?? 0) - (b?.sort ?? 0))
-                          .map((section) => (
-                            <div key={section.key || section.name} className="indlæg-generated-section">
-                              <div className="indlæg-generated-title">{section.name || section.key}</div>
-                              <div className="indlæg-generated-text">{section.text}</div>
-                            </div>
-                          ))}
-                      </div>
-                    ) : null}
-                    {generatedDocument && !generatedDocument?.sections ? (
-                      <pre className="indlæg-generated-raw">
-                        {JSON.stringify(generatedDocument, null, 2)}
-                      </pre>
-                    ) : null}
-                  </div>
-                </div>
-
+              <section className={`indlæg-column indlæg-column--center${isAssistantOpen ? ' indlæg-column--shifted' : ''}`}>
                 <div className="indlæg-card">
                   <div className="indlæg-card-header">
                     <h3 className="indlæg-card-title">Notat (redigerbart)</h3>
@@ -1325,9 +1302,172 @@ function Indlæg({
                     )}
                   </div>
                 </div>
+
+                {isWorkspaceModeSelected && (
+                  <>
+                    <div className="indlæg-card">
+                      <div className="indlæg-card-header">
+                        <h3 className="indlæg-card-title">Skabeloner</h3>
+                      </div>
+                      <div className="indlæg-card-body">
+                        {templatesLoading && <p className="indlæg-muted">Henter skabeloner...</p>}
+                        {templatesError && <p className="indlæg-inline-error">{templatesError}</p>}
+                        {!templatesLoading && !templatesError && templates.length === 0 && (
+                          <p className="indlæg-muted">Ingen skabeloner fundet.</p>
+                        )}
+                        <div className="indlæg-form-group">
+                          <label className="indlæg-label" htmlFor="indlaeg-template-select">
+                            Vælg skabelon
+                          </label>
+                          <select
+                            id="indlaeg-template-select"
+                            className="indlæg-input indlæg-template-select"
+                            value={selectedTemplateKey}
+                            onChange={(event) => {
+                              setSelectedTemplateKey(event.target.value);
+                              setGenerationError('');
+                            }}
+                            disabled={templatesLoading || !!templatesError || templates.length === 0}
+                          >
+                            <option value="">Vælg skabelon</option>
+                            {templates.map((template) => {
+                              const translation = getTranslation(
+                                template.translations,
+                                TEMPLATE_LANGUAGE
+                              );
+                              const name = translation?.name || template.name || template.key;
+                              return (
+                                <option key={template.key} value={template.key}>
+                                  {name}
+                                </option>
+                              );
+                            })}
+                          </select>
+                          {selectedTemplateMeta?.description ? (
+                            <p className="indlæg-template-help">{selectedTemplateMeta.description}</p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="indlæg-card">
+                      <div className="indlæg-card-header indlæg-card-header--row">
+                        <h3 className="indlæg-card-title">
+                          Valgt skabelon:{' '}
+                          <span className="indlæg-card-title-value">
+                            {templateSelectionLabel || 'Ingen valgt'}
+                          </span>
+                        </h3>
+                        <button
+                          type="button"
+                          className="indlæg-history-toggle indlæg-card-toggle"
+                          aria-expanded={showTemplateDetails}
+                          onClick={() => setShowTemplateDetails((open) => !open)}
+                        >
+                          <span className="indlæg-card-toggle-icon">
+                            {showTemplateDetails ? '⌃' : '⌄'}
+                          </span>
+                        </button>
+                      </div>
+                      {showTemplateDetails && (
+                        <div className="indlæg-card-body">
+                          {templateDetailsLoading && <p className="indlæg-muted">Henter detaljer...</p>}
+                          {templateDetailsError && (
+                            <p className="indlæg-inline-error">{templateDetailsError}</p>
+                          )}
+                          {!selectedTemplateKey && (
+                            <p className="indlæg-muted">Vælg en skabelon for at se sektionerne.</p>
+                          )}
+                          {!templateDetailsLoading && selectedTemplateKey && selectedTemplate && (
+                            <div className="indlæg-template-sections">
+                              {selectedTemplateSections.length === 0 ? (
+                                <p className="indlæg-muted">Skabelonen har ingen sektioner.</p>
+                              ) : (
+                                selectedTemplateSections.map((section) => {
+                                  const sectionMeta = section?.sectionsId || section;
+                                  const translation = getTranslation(
+                                    sectionMeta?.translations,
+                                    TEMPLATE_LANGUAGE
+                                  );
+                                  const sectionName = translation?.name || sectionMeta?.name || 'Sektion';
+                                  const sectionDescription =
+                                    translation?.description || sectionMeta?.description || '';
+                                  return (
+                                    <div key={`${sectionMeta?.key}-${section?.sort}`} className="indlæg-template-section">
+                                      <div className="indlæg-template-section-title">{sectionName}</div>
+                                      {sectionDescription ? (
+                                        <div className="indlæg-template-section-desc">
+                                          {sectionDescription}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="indlæg-card">
+                      <div className="indlæg-card-header">
+                        <h3 className="indlæg-card-title">Genereret notat</h3>
+                      </div>
+                      <div className="indlæg-card-body">
+                        {generationLoading && <p className="indlæg-muted">Genererer notat...</p>}
+                        {generationError && <p className="indlæg-inline-error">{generationError}</p>}
+                        {!generationLoading && !generationError && !generatedDocument && (
+                          <p className="indlæg-muted">Ingen notat genereret endnu.</p>
+                        )}
+                        {generatedDocument?.sections && Array.isArray(generatedDocument.sections) ? (
+                          <div className="indlæg-generated-sections">
+                            {generatedDocument.sections
+                              .slice()
+                              .sort((a, b) => (a?.sort ?? 0) - (b?.sort ?? 0))
+                              .map((section) => (
+                                <div key={section.key || section.name} className="indlæg-generated-section">
+                                  <div className="indlæg-generated-title">{section.name || section.key}</div>
+                                  <div className="indlæg-generated-text">{section.text}</div>
+                                </div>
+                              ))}
+                          </div>
+                        ) : null}
+                        {generatedDocument && !generatedDocument?.sections ? (
+                          <pre className="indlæg-generated-raw">
+                            {JSON.stringify(generatedDocument, null, 2)}
+                          </pre>
+                        ) : null}
+                      </div>
+                    </div>
+                  </>
+                )}
               </section>
 
               <aside className="indlæg-column indlæg-column--right indlæg-sidePanel">
+                <div className="indlæg-card">
+                  <div className="indlæg-card-body indlæg-mode-options">
+                    <button
+                      type="button"
+                      className={`indlæg-mode-option${transcribeMode === MODE_TRANSCRIBE ? ' active' : ''}`}
+                      onClick={() => handleModeToggle(MODE_TRANSCRIBE)}
+                      aria-pressed={transcribeMode === MODE_TRANSCRIBE}
+                    >
+                      Trankribering
+                    </button>
+                    <button
+                      type="button"
+                      className={`indlæg-mode-option${
+                        transcribeMode === MODE_DICTATE ? ' active' : ''
+                      }`}
+                      onClick={() => handleModeToggle(MODE_DICTATE)}
+                      aria-pressed={transcribeMode === MODE_DICTATE}
+                    >
+                      Diktering
+                    </button>
+                  </div>
+                </div>
+
                 <div className="indlæg-card">
                   <div className="indlæg-card-header">
                     <h3 className="indlæg-card-title">
@@ -1338,7 +1478,11 @@ function Indlæg({
                     </span>
                   </div>
                   <div className="indlæg-card-body">
-                    {transcribeMode === 'Live' ? (
+                    {transcribeMode === MODE_NONE && (
+                      <p className="indlæg-muted">Vælg en mode for at optage eller transkribere.</p>
+                    )}
+
+                    {transcribeMode === MODE_TRANSCRIBE && (
                       <>
                         <div className="indlæg-record-actions">
                           <button
@@ -1399,7 +1543,9 @@ function Indlæg({
                           </div>
                         </div>
                       </>
-                    ) : (
+                    )}
+
+                    {transcribeMode === MODE_DICTATE && (
                       <>
                         <div className="indlæg-record-actions">
                           <button
@@ -1477,16 +1623,172 @@ function Indlæg({
                       </>
                     )}
 
-                    {!selectedTemplateKey && (
+                    {!selectedTemplateKey && transcribeMode !== MODE_NONE && (
                       <p className="indlæg-muted">
                         Vælg en skabelon i midten før du skriver notat.
                       </p>
                     )}
+
+                    <div className="indlæg-selma-launch">
+                      <button
+                        type="button"
+                        className="indlæg-save-btn indlæg-selma-btn"
+                        onClick={() => setIsAssistantOpen(true)}
+                        disabled={isAssistantOpen}
+                      >
+                        Selma
+                      </button>
+                    </div>
                   </div>
                 </div>
               </aside>
             </div>
           </div>
+          {isAssistantOpen && (
+            <div className="indlæg-assistant-drawer">
+              <div className="indlæg-drawer-header">
+                <h3 className="indlæg-card-title">Corti Assistent</h3>
+                <button
+                  type="button"
+                  className="indlæg-drawer-close"
+                  onClick={() => setIsAssistantOpen(false)}
+                  aria-label="Luk assister"
+                >
+                  →
+                </button>
+              </div>
+
+              <div className="indlæg-card indlæg-card--drawer">
+                <div className="indlæg-card-header indlæg-card-header--row">
+                  <h3 className="indlæg-card-title">Corti Assistent</h3>
+                  <span className="indlæg-status-pill indlæg-status-pill--default">
+                    {agentError
+                      ? 'Agent: fejl'
+                      : agentLoading
+                      ? 'Agent: loader'
+                      : agentReady
+                      ? 'Agent: klar'
+                      : 'Agent: ikke klar'}
+                  </span>
+                </div>
+                <div className="indlæg-card-body">
+                  <div className="indlæg-form-group" style={{ marginBottom: '0.75rem' }}>
+                    <div
+                      className="indlæg-quick-actions"
+                      style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}
+                    >
+                      {['Manglende info', 'Røde flag', 'Objektive tests', 'Plan + HEP'].map((label) => (
+                        <button
+                          key={label}
+                          type="button"
+                          className="indlæg-save-btn"
+                          onClick={() => {
+                            const presets = {
+                              'Manglende info':
+                                'Ud fra notatet nedenfor: Find manglende information i anamnesen og foreslå relevante opfølgende spørgsmål.',
+                              'Røde flag':
+                                'Ud fra notatet nedenfor: Identificér mulige røde flag og hvilke spørgsmål/handlinger der bør følge.',
+                              'Objektive tests':
+                                'Ud fra notatet nedenfor: Foreslå relevante objektive tests og hvad de kan afdække.',
+                              'Plan + HEP':
+                                'Ud fra notatet nedenfor: Foreslå en klinisk plan med kort HEP (hjemmeøvelser) og nøglepunkter for patienten.',
+                            };
+                            sendAgentMessage(presets[label] || label);
+                          }}
+                          disabled={agentChatLoading}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div
+                    className="indlæg-agent-messages"
+                    style={{
+                      border: '1px solid #e2e2e2',
+                      borderRadius: '8px',
+                      padding: '0.75rem',
+                      background: '#fafafa',
+                      maxHeight: '260px',
+                      overflowY: 'auto',
+                      marginBottom: '0.75rem',
+                    }}
+                  >
+                    {agentMessages.length === 0 && <p className="indlæg-muted">Ingen beskeder endnu.</p>}
+                    {agentMessages.map((msg) => (
+                      <div
+                        key={`${msg.role}-${msg.ts}`}
+                        className="indlæg-agent-message"
+                        style={{
+                          marginBottom: '0.5rem',
+                          textAlign: msg.role === 'user' ? 'right' : 'left',
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'inline-block',
+                            background: msg.role === 'user' ? '#dff3ff' : '#ffffff',
+                            border: '1px solid #e2e2e2',
+                            borderRadius: '8px',
+                            padding: '0.5rem 0.75rem',
+                            maxWidth: '100%',
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: '0.8rem',
+                              color: '#666',
+                              marginBottom: '0.2rem',
+                              textTransform: 'capitalize',
+                            }}
+                          >
+                            {msg.role}
+                          </div>
+                          <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {!activeTranscriptText.trim() && (
+                    <p className="indlæg-muted" style={{ marginBottom: '0.5rem' }}>
+                      Ingen tekst endnu – du kan stadig spørge generelt.
+                    </p>
+                  )}
+
+                  {agentError && (
+                    <p className="indlæg-inline-error" role="alert">
+                      {agentError}
+                    </p>
+                  )}
+
+                  <div
+                    className="indlæg-form-group"
+                    style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}
+                  >
+                    <textarea
+                      className="indlæg-textarea"
+                      value={agentInput}
+                      onChange={(event) => setAgentInput(event.target.value)}
+                      placeholder="Stil et spørgsmål til Corti assistenten..."
+                      rows={2}
+                      style={{ flex: 1 }}
+                      disabled={agentLoading}
+                    />
+                    <button
+                      type="button"
+                      className="indlæg-save-btn"
+                      onClick={() => sendAgentMessage()}
+                      disabled={agentLoading || agentChatLoading || !agentInput.trim()}
+                    >
+                      {agentChatLoading ? 'Sender...' : 'Send'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
