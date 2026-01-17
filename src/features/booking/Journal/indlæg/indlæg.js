@@ -15,6 +15,15 @@ import { RainbowButton } from '../../../../components/ui/rainbow-button';
 import AnimatedGenerateButton from '../../../../components/ui/animated-generate-button-shadcn-tailwind';
 import { GradientButton } from '../../../../components/ui/gradient-button';
 import { QuantumPulseLoader } from '../../../../components/ui/quantum-pulse-loade';
+import { Button } from '../../../../components/ui/button';
+import { InteractiveHoverButton } from '../../../../components/ui/interactive-hover-button';
+import {
+  ChatBubble,
+  ChatBubbleAvatar,
+  ChatBubbleMessage,
+} from '../../../../components/ui/chat-bubble';
+import { ChatInput } from '../../../../components/ui/chat-input';
+import { ChatMessageList } from '../../../../components/ui/chat-message-list';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
 
@@ -128,6 +137,11 @@ function Indlæg({
   const MODE_NONE = 'None';
   const MODE_TRANSCRIBE = 'Live';
   const MODE_DICTATE = 'Diktering';
+  const CHAT_AVATARS = {
+    user:
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=64&h=64&q=80&crop=faces&fit=crop',
+    ai: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=64&h=64&q=80&crop=faces&fit=crop',
+  };
 
   const originalEntryRef = useRef(initialEntry);
   const previousEntryRef = useRef(null);
@@ -1277,9 +1291,17 @@ function Indlæg({
               </aside>
 
               <section className={`indlæg-column indlæg-column--center${isAssistantOpen ? ' indlæg-column--shifted' : ''}`}>
-                <div className="indlæg-card">
-                  <div className="indlæg-card-header">
-                    <h3 className="indlæg-card-title">Notat (redigerbart)</h3>
+                <div className="indlæg-card indlæg-card--journal">
+                  <div className="indlæg-card-header indlæg-card-header--journal">
+                    <h3 className="indlæg-card-title font-bold">Journal</h3>
+                    <InteractiveHoverButton
+                      type="button"
+                      text={isSaving ? 'Gemmer...' : 'Gem indlæg'}
+                      className="!w-auto px-5"
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      aria-busy={isSaving}
+                    />
                   </div>
                   <div className="indlæg-card-body indlæg-note-area">
                     <textarea
@@ -1294,17 +1316,6 @@ function Indlæg({
                         <QuantumPulseLoader />
                       </div>
                     )}
-                    <div className="indlæg-card-actions">
-                      <button
-                        type="button"
-                        className="indlæg-save-btn"
-                        onClick={handleSave}
-                        disabled={isSaving}
-                        aria-busy={isSaving}
-                      >
-                        {isSaving ? 'Gemmer...' : 'Gem indlæg'}
-                      </button>
-                    </div>
                     {saveError && (
                       <p className="indlæg-save-error" role="alert">
                         {saveError}
@@ -1315,7 +1326,7 @@ function Indlæg({
 
                 {isWorkspaceModeSelected && (
                   <>
-                    <div className="indlæg-card">
+                    <div className="indlæg-card indlæg-card--templates">
                       <div className="indlæg-card-header">
                         <h3 className="indlæg-card-title">Skabeloner</h3>
                       </div>
@@ -1455,155 +1466,165 @@ function Indlæg({
               </section>
 
               <aside className="indlæg-column indlæg-column--right indlæg-sidePanel">
-                <div className="indlæg-card">
-                  <div className="indlæg-card-body indlæg-mode-options">
-                    <GradientButton
+                <div className="indlæg-sideStack">
+                  <div className="indlæg-card">
+                    <div className="indlæg-card-body indlæg-mode-options">
+                      <GradientButton
+                        type="button"
+                        className={`w-full${transcribeMode === MODE_TRANSCRIBE ? ' indlæg-mode-gradient-active' : ''}`}
+                        onClick={() => handleModeToggle(MODE_TRANSCRIBE)}
+                        aria-pressed={transcribeMode === MODE_TRANSCRIBE}
+                      >
+                        Trankribering
+                      </GradientButton>
+                      <GradientButton
+                        type="button"
+                        className={`w-full${transcribeMode === MODE_DICTATE ? ' indlæg-mode-gradient-active' : ''}`}
+                        onClick={() => handleModeToggle(MODE_DICTATE)}
+                        aria-pressed={transcribeMode === MODE_DICTATE}
+                      >
+                        Diktering
+                      </GradientButton>
+                    </div>
+                  </div>
+
+                  <div className="indlæg-card">
+                    <div className="indlæg-card-header">
+                      <h3 className="indlæg-card-title">
+                        {isDictationMode ? 'Diktering' : 'Transskription'}
+                      </h3>
+                      <span className={`indlæg-status-pill indlæg-status-pill--${statusClass}`}>
+                        {modeStatus}
+                      </span>
+                    </div>
+                    <div className="indlæg-card-body">
+                      {transcribeMode === MODE_NONE && (
+                        <p className="indlæg-muted">Vælg en mode for at optage eller transkribere.</p>
+                      )}
+
+                      {transcribeMode === MODE_TRANSCRIBE && (
+                        <>
+                          <div className="indlæg-record-actions">
+                            <RainbowButton
+                              type="button"
+                              className={`indlæg-mikrofon-btn${isRecording ? ' active' : ''}`}
+                              onClick={() => (isRecording ? stopRecording() : startRecording())}
+                              aria-pressed={isRecording}
+                            >
+                              {isRecording ? 'Stop' : 'Start konsultation'}
+                            </RainbowButton>
+                            <button
+                              type="button"
+                              className="indlæg-save-btn"
+                              onClick={handleGenerateDocument}
+                              disabled={
+                                generationLoading ||
+                                !activeTranscriptText.trim() ||
+                                !selectedTemplateKey
+                              }
+                            >
+                              {generationLoading ? 'Skriver notat...' : 'Skriv notat'}
+                            </button>
+                          </div>
+
+                          <div className="indlæg-metrics">
+                            <div className="indlæg-metric">
+                              <span className="indlæg-metric-label">Ord opfanget</span>
+                              <span className="indlæg-metric-value">{wordCount}</span>
+                            </div>
+                          </div>
+
+                          {recordingError && (
+                            <p className="indlæg-inline-error" role="alert">
+                              {recordingError}
+                            </p>
+                          )}
+                        </>
+                      )}
+
+                      {transcribeMode === MODE_DICTATE && (
+                        <>
+                          <div className="indlæg-record-actions">
+                            <RainbowButton
+                              type="button"
+                              className={`indlæg-mikrofon-btn${dictationStatus === 'Recording' ? ' active' : ''}`}
+                              onClick={() =>
+                                dictationStatus === 'Recording'
+                                  ? stopDictationRecording()
+                                  : startDictationRecording()
+                              }
+                              aria-pressed={dictationStatus === 'Recording'}
+                              disabled={dictationStatus === 'Uploading' || dictationStatus === 'Transcribing'}
+                            >
+                              {dictationStatus === 'Recording' ? 'Stop' : 'Start konsultation'}
+                            </RainbowButton>
+                            <button
+                              type="button"
+                              className="indlæg-save-btn"
+                              onClick={handleGenerateDocument}
+                              disabled={
+                                generationLoading ||
+                                !activeTranscriptText.trim() ||
+                                !selectedTemplateKey ||
+                                dictationStatus === 'Uploading' ||
+                                dictationStatus === 'Transcribing'
+                              }
+                            >
+                              {generationLoading ? 'Skriver notat...' : 'Skriv notat'}
+                            </button>
+                          </div>
+
+                          <div className="indlæg-metrics">
+                            <div className="indlæg-metric">
+                              <span className="indlæg-metric-label">Ord opfanget</span>
+                              <span className="indlæg-metric-value">{wordCount}</span>
+                            </div>
+                          </div>
+
+                          {dictationError && (
+                            <p className="indlæg-inline-error" role="alert">
+                              {dictationError}
+                            </p>
+                          )}
+
+                        </>
+                      )}
+
+                      {!selectedTemplateKey && transcribeMode !== MODE_NONE && (
+                        <p className="indlæg-muted">
+                          Vælg en skabelon i midten før du skriver notat.
+                        </p>
+                      )}
+
+                      {transcribeMode !== MODE_NONE && (
+                        <div className="indlæg-selma-launch indlæg-selma-launch--inline">
+                          <AnimatedGenerateButton
+                            type="button"
+                            className="indlæg-selma-btn w-full"
+                            labelIdle="Selma"
+                            labelActive="Selma"
+                            onClick={() => setIsAssistantOpen(true)}
+                            disabled={isAssistantOpen}
+                          >
+                          </AnimatedGenerateButton>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {transcribeMode === MODE_NONE && (
+                  <div className="indlæg-selma-launch">
+                    <AnimatedGenerateButton
                       type="button"
-                      className={`w-full${transcribeMode === MODE_TRANSCRIBE ? ' indlæg-mode-gradient-active' : ''}`}
-                      onClick={() => handleModeToggle(MODE_TRANSCRIBE)}
-                      aria-pressed={transcribeMode === MODE_TRANSCRIBE}
+                      className="indlæg-selma-btn w-full"
+                      labelIdle="Selma"
+                      labelActive="Selma"
+                      onClick={() => setIsAssistantOpen(true)}
+                      disabled={isAssistantOpen}
                     >
-                      Trankribering
-                    </GradientButton>
-                    <GradientButton
-                      type="button"
-                      className={`w-full${transcribeMode === MODE_DICTATE ? ' indlæg-mode-gradient-active' : ''}`}
-                      onClick={() => handleModeToggle(MODE_DICTATE)}
-                      aria-pressed={transcribeMode === MODE_DICTATE}
-                    >
-                      Diktering
-                    </GradientButton>
+                    </AnimatedGenerateButton>
                   </div>
-                </div>
-
-                <div className="indlæg-card">
-                  <div className="indlæg-card-header">
-                    <h3 className="indlæg-card-title">
-                      {isDictationMode ? 'Diktering' : 'Transskription'}
-                    </h3>
-                    <span className={`indlæg-status-pill indlæg-status-pill--${statusClass}`}>
-                      {modeStatus}
-                    </span>
-                  </div>
-                  <div className="indlæg-card-body">
-                    {transcribeMode === MODE_NONE && (
-                      <p className="indlæg-muted">Vælg en mode for at optage eller transkribere.</p>
-                    )}
-
-                    {transcribeMode === MODE_TRANSCRIBE && (
-                      <>
-                        <div className="indlæg-record-actions">
-                          <RainbowButton
-                            type="button"
-                            className={`indlæg-mikrofon-btn${isRecording ? ' active' : ''}`}
-                            onClick={() => (isRecording ? stopRecording() : startRecording())}
-                            aria-pressed={isRecording}
-                          >
-                            {isRecording ? 'Stop' : 'Start konsultation'}
-                          </RainbowButton>
-                          <button
-                            type="button"
-                            className="indlæg-save-btn"
-                            onClick={handleGenerateDocument}
-                            disabled={
-                              generationLoading ||
-                              !activeTranscriptText.trim() ||
-                              !selectedTemplateKey
-                            }
-                          >
-                            {generationLoading ? 'Skriver notat...' : 'Skriv notat'}
-                          </button>
-                        </div>
-
-                        <div className="indlæg-metrics">
-                          <div className="indlæg-metric">
-                            <span className="indlæg-metric-label">Ord opfanget</span>
-                            <span className="indlæg-metric-value">{wordCount}</span>
-                          </div>
-                        </div>
-
-                        {recordingError && (
-                          <p className="indlæg-inline-error" role="alert">
-                            {recordingError}
-                          </p>
-                        )}
-
-                        <div className="indlæg-transcript-block">
-                          <div className="indlæg-transcript-title">Live transcript</div>
-                          <div className="indlæg-transcript-box">
-                            {transcriptText || 'Ingen tekst endnu.'}
-                          </div>
-                        </div>
-                      </>
-                    )}
-
-                    {transcribeMode === MODE_DICTATE && (
-                      <>
-                        <div className="indlæg-record-actions">
-                          <RainbowButton
-                            type="button"
-                            className={`indlæg-mikrofon-btn${dictationStatus === 'Recording' ? ' active' : ''}`}
-                            onClick={() =>
-                              dictationStatus === 'Recording'
-                                ? stopDictationRecording()
-                                : startDictationRecording()
-                            }
-                            aria-pressed={dictationStatus === 'Recording'}
-                            disabled={dictationStatus === 'Uploading' || dictationStatus === 'Transcribing'}
-                          >
-                            {dictationStatus === 'Recording' ? 'Stop' : 'Start konsultation'}
-                          </RainbowButton>
-                          <button
-                            type="button"
-                            className="indlæg-save-btn"
-                            onClick={handleGenerateDocument}
-                            disabled={
-                              generationLoading ||
-                              !activeTranscriptText.trim() ||
-                              !selectedTemplateKey ||
-                              dictationStatus === 'Uploading' ||
-                              dictationStatus === 'Transcribing'
-                            }
-                          >
-                            {generationLoading ? 'Skriver notat...' : 'Skriv notat'}
-                          </button>
-                        </div>
-
-                        <div className="indlæg-metrics">
-                          <div className="indlæg-metric">
-                            <span className="indlæg-metric-label">Ord opfanget</span>
-                            <span className="indlæg-metric-value">{wordCount}</span>
-                          </div>
-                        </div>
-
-                        {dictationError && (
-                          <p className="indlæg-inline-error" role="alert">
-                            {dictationError}
-                          </p>
-                        )}
-
-                      </>
-                    )}
-
-                    {!selectedTemplateKey && transcribeMode !== MODE_NONE && (
-                      <p className="indlæg-muted">
-                        Vælg en skabelon i midten før du skriver notat.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="indlæg-selma-launch">
-                  <AnimatedGenerateButton
-                    type="button"
-                    className="indlæg-selma-btn w-full"
-                    labelIdle="Selma"
-                    labelActive="Selma"
-                    onClick={() => setIsAssistantOpen(true)}
-                    disabled={isAssistantOpen}
-                  >
-                  </AnimatedGenerateButton>
-                </div>
+                )}
               </aside>
             </div>
           </div>
@@ -1673,26 +1694,55 @@ function Indlæg({
                     </div>
                   </div>
 
-                  <div className="indlæg-agent-messages">
-                    {agentMessages.length === 0 && <p className="indlæg-muted">Ingen beskeder endnu.</p>}
-                    {agentMessages.map((msg) => (
-                      <div
-                        key={`${msg.role}-${msg.ts}`}
-                        className={`indlæg-agent-message indlæg-agent-message--${msg.role === 'user' ? 'user' : 'assistant'}`}
-                      >
-                        <div className="indlæg-agent-message-bubble">
-                          <div className="indlæg-agent-message-meta">{msg.role}</div>
-                          <div className="indlæg-agent-message-text">{msg.text}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <div className="indlæg-agent-chat-panel">
+                    <div className="indlæg-agent-messages">
+                      <ChatMessageList smooth className="indlæg-agent-message-list">
+                        {agentMessages.length === 0 && (
+                          <div className="indlæg-agent-message-empty">
+                            <p className="indlæg-muted">Ingen beskeder endnu.</p>
+                          </div>
+                        )}
+                        {agentMessages.map((msg) => (
+                          <ChatBubble
+                            key={`${msg.role}-${msg.ts}`}
+                            variant={msg.role === 'user' ? 'sent' : 'received'}
+                          >
+                            <ChatBubbleAvatar
+                              src={msg.role === 'user' ? CHAT_AVATARS.user : CHAT_AVATARS.ai}
+                              fallback={msg.role === 'user' ? 'DU' : 'AI'}
+                              className="shadow-sm"
+                            />
+                            <div className="flex flex-col gap-1 max-w-full">
+                              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                {msg.role === 'user' ? 'Dig' : 'Corti'}
+                              </span>
+                              <ChatBubbleMessage variant={msg.role === 'user' ? 'sent' : 'received'}>
+                                {msg.text}
+                              </ChatBubbleMessage>
+                            </div>
+                          </ChatBubble>
+                        ))}
 
-                  {!activeTranscriptText.trim() && (
-                    <p className="indlæg-muted indlæg-agent-empty-hint">
-                      Ingen tekst endnu – du kan stadig spørge generelt.
-                    </p>
-                  )}
+                        {agentChatLoading && (
+                          <ChatBubble variant="received">
+                            <ChatBubbleAvatar src={CHAT_AVATARS.ai} fallback="AI" className="shadow-sm" />
+                            <div className="flex flex-col gap-1 max-w-full">
+                              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                Corti
+                              </span>
+                              <ChatBubbleMessage isLoading />
+                            </div>
+                          </ChatBubble>
+                        )}
+                      </ChatMessageList>
+                    </div>
+
+                    {!activeTranscriptText.trim() && (
+                      <p className="indlæg-muted indlæg-agent-empty-hint">
+                        Ingen tekst endnu – du kan stadig spørge generelt.
+                      </p>
+                    )}
+                  </div>
 
                   {agentError && (
                     <p className="indlæg-inline-error" role="alert">
@@ -1700,23 +1750,24 @@ function Indlæg({
                     </p>
                   )}
 
-                  <div className="indlæg-agent-input">
-                    <textarea
-                      className="indlæg-textarea"
+                  <div className="indlæg-agent-input indlæg-agent-input--modern">
+                    <ChatInput
+                      className="bg-white"
                       value={agentInput}
                       onChange={(event) => setAgentInput(event.target.value)}
                       placeholder="Stil et spørgsmål til Corti assistenten..."
                       rows={2}
                       disabled={agentLoading}
                     />
-                    <button
+                    <Button
                       type="button"
-                      className="indlæg-save-btn"
                       onClick={() => sendAgentMessage()}
                       disabled={agentLoading || agentChatLoading || !agentInput.trim()}
+                      size="sm"
+                      className="shrink-0"
                     >
                       {agentChatLoading ? 'Sender...' : 'Send'}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>

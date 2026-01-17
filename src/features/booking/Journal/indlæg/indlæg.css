@@ -953,7 +953,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 3fr) minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 
 @media (max-width: 1100px) {
@@ -978,6 +978,10 @@
   top: 16px;
   align-self: start;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
 }
 
 @media (max-width: 1100px) {
@@ -990,6 +994,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1;
 }
 
 .indlæg-assistant-drawer {
@@ -1025,8 +1030,11 @@
   border: 1px solid var(--border-subtle);
   border-right: none;
   border-radius: 10px 0 0 10px;
-  background: #3b82f6;
-  color: #fff;
+  background: #ffffff
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><path fill='%23000' d='M502.1 189.1c14.5 10.1 14.5 33.7 0 43.8L198.5 447.4c-17.2 12-41-1.2-41-21.9V319H32c-17.7 0-32-14.3-32-32v-62c0-17.7 14.3-32 32-32h125.5V87.4c0-20.8 23.9-33.9 41-22l303.6 214.7z'/></svg>")
+    no-repeat center center;
+  background-size: 18px 18px;
+  color: transparent;
   font-weight: 800;
   cursor: pointer;
   display: flex;
@@ -1038,7 +1046,6 @@
 }
 
 .indlæg-drawer-edge-close:hover {
-  background: #2563eb;
   box-shadow: -6px 0 20px rgba(0, 0, 0, 0.12);
 }
 
@@ -1048,16 +1055,19 @@
 
 .indlæg-drawer-close {
   border: 1px solid var(--border-subtle);
-  background: #f8fafc;
+  background: #ffffff
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><path fill='%23000' d='M502.1 189.1c14.5 10.1 14.5 33.7 0 43.8L198.5 447.4c-17.2 12-41-1.2-41-21.9V319H32c-17.7 0-32-14.3-32-32v-62c0-17.7 14.3-32 32-32h125.5V87.4c0-20.8 23.9-33.9 41-22l303.6 214.7z'/></svg>")
+    no-repeat center center;
+  background-size: 14px 14px;
   border-radius: 8px;
   padding: 6px 10px;
   cursor: pointer;
   font-weight: 700;
+  color: transparent;
   transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
 }
 
 .indlæg-drawer-close:hover {
-  background: #eef2ff;
   border-color: #c7d2fe;
 }
 
@@ -1149,17 +1159,30 @@
   background: #eef2ff;
 }
 
-.indlæg-agent-messages {
-  flex: 1;
+.indlæg-agent-chat-panel {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+
+.indlæg-agent-messages {
+  flex: 1;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
-  padding: 12px 14px;
   background: #f8fafc;
-  overflow-y: auto;
-  min-height: 0;
+  overflow: hidden;
+  min-height: 240px;
+  box-shadow: inset 0 1px 0 rgba(15, 23, 42, 0.02);
+}
+
+.indlæg-agent-message-list {
+  height: 100%;
+}
+
+.indlæg-agent-message-empty {
+  padding: 12px 14px;
 }
 
 .indlæg-agent-message {
@@ -1228,8 +1251,38 @@
   resize: vertical;
 }
 
+.indlæg-agent-input--modern {
+  position: static;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-top: none;
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.indlæg-agent-input--modern .indlæg-textarea {
+  min-height: 52px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
 .indlæg-selma-launch {
-  margin-top: 12px;
+  margin-top: auto;
+  padding-bottom: 12px;
+}
+
+.indlæg-selma-launch--inline {
+  margin-top: 0;
+  padding-bottom: 0;
+  align-self: flex-start;
+}
+
+.indlæg-selma-launch--inline .indlæg-selma-btn {
+  width: auto;
 }
 
 .indlæg-selma-btn {
@@ -1242,6 +1295,14 @@
   background: var(--bg-surface);
   box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
   overflow: hidden;
+}
+
+.indlæg-card--templates {
+  overflow: visible;
+}
+
+.indlæg-card--templates .indlæg-card-body {
+  padding-bottom: 20px;
 }
 
 .indlæg-mode-options {
@@ -1290,7 +1351,29 @@
   gap: 8px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--border-subtle);
+  border-left: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border-subtle);
   background: linear-gradient(180deg, rgba(59, 130, 246, 0.05), rgba(59, 130, 246, 0));
+}
+
+.indlæg-card--journal .indlæg-card-header--journal {
+  background: #ffffff;
+  border-bottom: none;
+  padding: 16px 18px;
+  min-height: 68px;
+}
+
+.indlæg-card--journal .indlæg-card-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.indlæg-card--journal {
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .indlæg-card-title {
@@ -1344,6 +1427,20 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  border-left: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+}
+
+.indlæg-note-area {
+  flex: 1;
+  min-height: 0;
+}
+
+.indlæg-note-area .indlæg-textarea--lg {
+  flex: 1;
+  min-height: 320px;
+  max-height: calc(100vh - 520px);
+  overflow: auto;
 }
 
 .indlæg-card-actions {
@@ -1390,6 +1487,14 @@
 
 .indlæg-template-select {
   cursor: pointer;
+  height: 46px;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background-color: #ffffff;
+  font-size: 15px;
+  color: #111827;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.04);
 }
 
 .indlæg-template-help {

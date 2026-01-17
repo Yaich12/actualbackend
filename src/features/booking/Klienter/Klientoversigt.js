@@ -56,6 +56,8 @@ const ClientDetails = ({
   const [summaryError, setSummaryError] = useState('');
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [readingJournalEntry, setReadingJournalEntry] = useState(null);
+  const [deletingJournalId, setDeletingJournalId] = useState(null);
+  const [journalActionError, setJournalActionError] = useState('');
   const [editingForloebIndex, setEditingForloebIndex] = useState(null); // null = new, number = editing index
   const [isAddingForloeb, setIsAddingForloeb] = useState(false); // Track if we're in "add" mode
   const [forloebList, setForloebList] = useState([]); // Array of treatment courses
@@ -220,6 +222,27 @@ const ClientDetails = ({
         return dateB - dateA;
       });
   }, [appointments, client]);
+
+  const handleDeleteJournalEntry = async (entryId) => {
+    if (!entryId || !userId || !client?.id) return;
+    const confirmed = window.confirm('Er du sikker på, at du vil slette dette notat?');
+    if (!confirmed) return;
+
+    setJournalActionError('');
+    setDeletingJournalId(entryId);
+    try {
+      const entryRef = doc(db, 'users', userId, 'clients', client.id, 'journalEntries', entryId);
+      await deleteDoc(entryRef);
+      if (readingJournalEntry?.id === entryId) {
+        setReadingJournalEntry(null);
+      }
+    } catch (err) {
+      console.error('[ClientDetails] Failed to delete journal entry', err);
+      setJournalActionError('Kunne ikke slette notatet. Prøv igen.');
+    } finally {
+      setDeletingJournalId(null);
+    }
+  };
 
   const formatAppointmentDate = (appointment) => {
     if (!appointment) return '';
@@ -569,6 +592,11 @@ const ClientDetails = ({
                     )}
                   </div>
                 )}
+                {journalActionError && (
+                  <div className="client-details-summary-error" role="alert">
+                    {journalActionError}
+                  </div>
+                )}
                 {journalLoading ? (
                   <div className="client-details-empty">
                     <p>Henter journalindlæg...</p>
@@ -650,6 +678,14 @@ const ClientDetails = ({
                               >
                                 Læs notat
                               </button>
+                            <button
+                              type="button"
+                              className="client-details-delete-btn"
+                              onClick={() => handleDeleteJournalEntry(entry.id)}
+                              disabled={deletingJournalId === entry.id}
+                            >
+                              {deletingJournalId === entry.id ? 'Sletter…' : 'Slet notat'}
+                            </button>
                               <button
                                 type="button"
                                 className="client-details-primary-button"

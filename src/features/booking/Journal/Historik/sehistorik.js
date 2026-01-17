@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import './sehistorik.css';
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
@@ -13,6 +13,8 @@ function SeHistorik({ clientId, clientName, onClose, onOpenEntry }) {
   const [summaryText, setSummaryText] = useState('');
   const [summaryError, setSummaryError] = useState('');
   const [readingEntry, setReadingEntry] = useState(null); // Entry being read in detail view
+  const [deletingEntryId, setDeletingEntryId] = useState(null);
+  const [entryActionError, setEntryActionError] = useState('');
   const { user } = useAuth();
 
   // Format date
@@ -41,6 +43,24 @@ function SeHistorik({ clientId, clientName, onClose, onOpenEntry }) {
 
   const handleCloseReadNotat = () => {
     setReadingEntry(null);
+  };
+
+  const handleDeleteNotat = async (entry) => {
+    if (!entry?.id || !user?.uid || !clientId) return;
+    const confirmed = window.confirm('Er du sikker på, at du vil slette dette notat?');
+    if (!confirmed) return;
+
+    setEntryActionError('');
+    setDeletingEntryId(entry.id);
+    try {
+      const entryRef = doc(db, 'users', user.uid, 'clients', clientId, 'journalEntries', entry.id);
+      await deleteDoc(entryRef);
+    } catch (err) {
+      console.error('Kunne ikke slette notatet', err);
+      setEntryActionError('Kunne ikke slette notatet. Prøv igen.');
+    } finally {
+      setDeletingEntryId(null);
+    }
   };
 
   // Truncate content to a few lines
@@ -239,6 +259,11 @@ function SeHistorik({ clientId, clientName, onClose, onOpenEntry }) {
 
       {/* Content */}
       <div className="sehistorik-content">
+        {entryActionError && (
+          <div className="sehistorik-summary-error" role="alert">
+            {entryActionError}
+          </div>
+        )}
         {(summaryError || summaryText) && (
           <div className="sehistorik-summary">
             {summaryError && (
@@ -295,6 +320,13 @@ function SeHistorik({ clientId, clientName, onClose, onOpenEntry }) {
                     onClick={() => handleReadNotat(entry)}
                   >
                     Læs notat
+                  </button>
+                  <button
+                    className="sehistorik-delete-btn"
+                    onClick={() => handleDeleteNotat(entry)}
+                    disabled={deletingEntryId === entry.id}
+                  >
+                    {deletingEntryId === entry.id ? 'Sletter…' : 'Slet notat'}
                   </button>
                   <button 
                     className="sehistorik-open-overview-btn"

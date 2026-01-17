@@ -270,6 +270,28 @@
   border-color: #9ca3af;
 }
 
+.sehistorik-delete-btn {
+  padding: 6px 12px;
+  border: 1px solid #ef4444;
+  background-color: #fff1f2;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b91c1c;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sehistorik-delete-btn:hover:not(:disabled) {
+  background-color: #fee2e2;
+  border-color: #dc2626;
+}
+
+.sehistorik-delete-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .sehistorik-open-overview-btn {
   padding: 6px 12px;
   border: 1px solid #2563eb;
