@@ -15,17 +15,13 @@ const cortiRoutes = require('./routes/cortiRoutes');
 const { createCortiTranscribeWss } = require('./ws/cortiTranscribeProxy');
 const { createFactsStreamWss } = require('./ws/factsStreamProxy');
 const { SYSTEM_PROMPT } = require('./cortiAgentSystemPrompt');
-const {
-  createCortiClient,
-  getAccessToken,
-  resolvedCortiEnv,
-  resolvedEnvironment,
-} = require('./cortiAuth');
+const { createCortiClient, getAccessToken, resolvedCortiEnv, resolvedEnvironment } = require('./cortiAuth');
 const cortiClientSingleton = require('./src/corti/cortiClient');
 const {
   getOrCreateClinicalEducationAgent,
   sendClinicalEducationMessage,
 } = require('./src/corti/clinicalEducationAgent');
+const { initAgent, chatWithAgent } = require('./services/cortiAgentService');
 // For facts/insights fetch
 const CORTI_API_BASE =
   resolvedCortiEnv === 'us' ? 'https://api.us.corti.app/v2' : 'https://api.eu.corti.app/v2';
@@ -705,36 +701,10 @@ const extractTextFromTask = (task) => {
   return '';
 };
 
-const agentInitHandler = async (_req, res) => {
+app.post('/api/agent/init', async (_req, res) => {
   try {
-    if (process.env.CORTI_AGENT_ID) {
-      cachedAgentId = process.env.CORTI_AGENT_ID;
-      console.log('[AGENT] created id=%s (env)', cachedAgentId);
-      return res.json({ ok: true, agentId: cachedAgentId });
-    }
-    if (cachedAgentId) {
-      console.log('[AGENT] created id=%s (cache)', cachedAgentId);
-      return res.json({ ok: true, agentId: cachedAgentId });
-    }
-
-    const created = await cortiClientSingleton.agents.create(
-      {
-        name: 'Clinical Education Agent',
-        description:
-          'Accelerate clinical learning with clear, evidence-based explanations grounded in authoritative medical sources.',
-        systemPrompt: SYSTEM_PROMPT,
-        experts: [
-          { name: 'web-search-expert', type: 'reference' },
-          { name: 'amboss-expert', type: 'reference' },
-          { name: 'pubmed-expert', type: 'reference' },
-        ],
-      },
-      { tenantName: process.env.CORTI_TENANT_NAME }
-    );
-    const agentId = resolveAgentIdFromCreate(created);
-    if (!agentId) throw new Error('agentId missing in Corti response');
+    const agentId = await initAgent();
     cachedAgentId = agentId;
-    console.log('[AGENT] created id=%s', agentId);
     return res.json({ ok: true, agentId });
   } catch (error) {
     const status = error?.response?.status || 500;
@@ -742,99 +712,35 @@ const agentInitHandler = async (_req, res) => {
     console.error('[AGENT_INIT] error:', msg);
     return res.status(status).json({ ok: false, error: msg });
   }
-};
+});
 
-const agentChatHandler = async (req, res) => {
+app.post('/api/agent/chat', async (req, res) => {
   try {
-    const {
-      agentId: bodyAgentId,
-      message,
-      mode,
-      templateKey,
-      sourceText,
-      patientName,
-      sessionDate,
-    } = req.body || {};
-
-    const agentId = bodyAgentId || cachedAgentId || process.env.CORTI_AGENT_ID;
-    if (!agentId) {
-      return res.status(400).json({ ok: false, error: 'Missing agentId' });
-    }
-    const msg = `${message || ''}`.trim();
-    const ctx = `${sourceText || ''}`.trim();
-    if (!msg) {
-      return res.status(400).json({ ok: false, error: 'Missing message' });
-    }
+    const { agentId, message, patientName, clientId, notesContext, sourceText, mode } = req.body || {};
+    const ctx = `${sourceText || notesContext || ''}`.trim();
     if (!ctx) {
       return res.status(400).json({ ok: false, error: 'Missing sourceText' });
     }
-
-    const combined = [
-      `Patient: ${patientName || '—'}`,
-      `Dato: ${sessionDate || '—'}`,
-      `Template: ${templateKey || '—'}`,
-      `Mode: ${mode || '—'}`,
-      'Kontekst:',
-      ctx,
-      'Brugerbesked:',
-      msg,
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    const sendResp = await cortiClientSingleton.agents.messageSend(
+    const msgLen = `${message || ''}`.length;
+    console.log('[AGENT_CHAT] lengths ctx=%s msg=%s', ctx.length, msgLen);
+    const resp = await chatWithAgent({
       agentId,
-      {
-        message: {
-          role: 'user',
-          kind: 'message',
-          messageId: crypto.randomUUID(),
-          parts: [{ kind: 'text', text: combined }],
-        },
-      },
-      { tenantName: process.env.CORTI_TENANT_NAME }
-    );
-
-    const taskId =
-      sendResp?.taskId ||
-      sendResp?.task?.id ||
-      sendResp?.id ||
-      sendResp?.task_id ||
-      null;
-    console.log('[AGENT_CHAT] message:', msg.slice(0, 80));
-    console.log('[AGENT_CHAT] sourceText chars:', ctx.length || 0);
-    console.log('[AGENT_CHAT] taskId=%s state=%s', taskId, sendResp?.task?.status?.state || 'unknown');
-
-    let finalText = '';
-    let finalState = sendResp?.task?.status?.state || 'unknown';
-    if (taskId) {
-      const task = await pollTaskUntilDone(cortiClientSingleton, agentId, taskId);
-      finalState = task?.status?.state || 'unknown';
-      finalText = extractTextFromTask(task) || '(tomt svar fra agent)';
-      return res.json({
-        ok: true,
-        text: finalText,
-        taskId,
-        state: finalState,
-      });
-    }
-
-    finalText =
-      extractTextFromTask(sendResp) ||
-      extractAgentResponseText(sendResp) ||
-      '(tomt svar fra agent)';
-    return res.json({ ok: true, text: finalText, taskId: taskId || null, state: finalState });
+      message,
+      patientName,
+      clientId,
+      notesContext,
+      sourceText: ctx,
+      mode,
+    });
+    if (resp?.agentId) cachedAgentId = resp.agentId;
+    return res.json({ ok: true, text: resp.text, agentId: resp.agentId });
   } catch (error) {
     const status = error?.response?.status || 500;
     const msg = error?.message || 'Failed to send agent message';
     console.error('[AGENT_CHAT] error:', msg);
     return res.status(status).json({ ok: false, error: msg });
   }
-};
-
-app.post('/api/agent/init', agentInitHandler);
-app.post('/api/init-agent', agentInitHandler); // alias for legacy frontend
-app.post('/api/agent/chat', agentChatHandler);
+});
 
 app.get('/api/agent/health', (_req, res) => {
   return res.json({ ok: true, cachedAgentId });

@@ -15,15 +15,8 @@ import { RainbowButton } from '../../../../components/ui/rainbow-button';
 import AnimatedGenerateButton from '../../../../components/ui/animated-generate-button-shadcn-tailwind';
 import { GradientButton } from '../../../../components/ui/gradient-button';
 import { QuantumPulseLoader } from '../../../../components/ui/quantum-pulse-loade';
-import { Button } from '../../../../components/ui/button';
 import { InteractiveHoverButton } from '../../../../components/ui/interactive-hover-button';
-import {
-  ChatBubble,
-  ChatBubbleAvatar,
-  ChatBubbleMessage,
-} from '../../../../components/ui/chat-bubble';
-import { ChatInput } from '../../../../components/ui/chat-input';
-import { ChatMessageList } from '../../../../components/ui/chat-message-list';
+import CortiAssistantPanel from '../../components/CortiAssistantPanel';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
 
@@ -1650,127 +1643,54 @@ function Indlæg({
                 </button>
               </div>
 
-              <div className="indlæg-card indlæg-card--drawer indlæg-card--assistant">
-                <div className="indlæg-card-header indlæg-card-header--row">
-                  <h3 className="indlæg-card-title">Corti Assistent</h3>
-                  <span className="indlæg-status-pill indlæg-status-pill--default">
-                    {agentError
-                      ? 'Agent: fejl'
-                      : agentLoading
-                      ? 'Agent: loader'
-                      : agentReady
-                      ? 'Agent: klar'
-                      : 'Agent: ikke klar'}
-                  </span>
-                </div>
-                <div className="indlæg-card-body indlæg-card-body--assistant">
-                  <div className="indlæg-assistant-section">
-                    <p className="indlæg-assistant-heading">Forslag</p>
-                    <div className="indlæg-quick-actions">
-                      {['Manglende info', 'Røde flag', 'Objektive tests', 'Plan + HEP'].map((label) => (
-                        <button
-                          key={label}
-                          type="button"
-                          className={`indlæg-quick-action${activeAgentPreset === label ? ' is-active' : ''}`}
-                          onClick={() => {
-                            const presets = {
-                              'Manglende info':
-                                'Ud fra notatet nedenfor: Find manglende information i anamnesen og foreslå relevante opfølgende spørgsmål.',
-                              'Røde flag':
-                                'Ud fra notatet nedenfor: Identificér mulige røde flag og hvilke spørgsmål/handlinger der bør følge.',
-                              'Objektive tests':
-                                'Ud fra notatet nedenfor: Foreslå relevante objektive tests og hvad de kan afdække.',
-                              'Plan + HEP':
-                                'Ud fra notatet nedenfor: Foreslå en klinisk plan med kort HEP (hjemmeøvelser) og nøglepunkter for patienten.',
-                            };
-                            setActiveAgentPreset(label);
-                            sendAgentMessage(presets[label] || label);
-                          }}
-                          disabled={agentChatLoading}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="indlæg-agent-chat-panel">
-                    <div className="indlæg-agent-messages">
-                      <ChatMessageList smooth className="indlæg-agent-message-list">
-                        {agentMessages.length === 0 && (
-                          <div className="indlæg-agent-message-empty">
-                            <p className="indlæg-muted">Ingen beskeder endnu.</p>
-                          </div>
-                        )}
-                        {agentMessages.map((msg) => (
-                          <ChatBubble
-                            key={`${msg.role}-${msg.ts}`}
-                            variant={msg.role === 'user' ? 'sent' : 'received'}
-                          >
-                            <ChatBubbleAvatar
-                              src={msg.role === 'user' ? CHAT_AVATARS.user : CHAT_AVATARS.ai}
-                              fallback={msg.role === 'user' ? 'DU' : 'AI'}
-                              className="shadow-sm"
-                            />
-                            <div className="flex flex-col gap-1 max-w-full">
-                              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                {msg.role === 'user' ? 'Dig' : 'Corti'}
-                              </span>
-                              <ChatBubbleMessage variant={msg.role === 'user' ? 'sent' : 'received'}>
-                                {msg.text}
-                              </ChatBubbleMessage>
-                            </div>
-                          </ChatBubble>
-                        ))}
-
-                        {agentChatLoading && (
-                          <ChatBubble variant="received">
-                            <ChatBubbleAvatar src={CHAT_AVATARS.ai} fallback="AI" className="shadow-sm" />
-                            <div className="flex flex-col gap-1 max-w-full">
-                              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                Corti
-                              </span>
-                              <ChatBubbleMessage isLoading />
-                            </div>
-                          </ChatBubble>
-                        )}
-                      </ChatMessageList>
-                    </div>
-
-                    {!activeTranscriptText.trim() && (
-                      <p className="indlæg-muted indlæg-agent-empty-hint">
-                        Ingen tekst endnu – du kan stadig spørge generelt.
-                      </p>
-                    )}
-                  </div>
-
-                  {agentError && (
-                    <p className="indlæg-inline-error" role="alert">
-                      {agentError}
-                    </p>
-                  )}
-
-                  <div className="indlæg-agent-input indlæg-agent-input--modern">
-                    <ChatInput
-                      className="bg-white"
-                      value={agentInput}
-                      onChange={(event) => setAgentInput(event.target.value)}
-                      placeholder="Stil et spørgsmål til Corti assistenten..."
-                      rows={2}
-                      disabled={agentLoading}
-                    />
-                    <Button
-                      type="button"
-                      onClick={() => sendAgentMessage()}
-                      disabled={agentLoading || agentChatLoading || !agentInput.trim()}
-                      size="sm"
-                      className="shrink-0"
-                    >
-                      {agentChatLoading ? 'Sender...' : 'Send'}
-                    </Button>
-                  </div>
-                </div>
-              </div>
+              <CortiAssistantPanel
+                statusText={
+                  agentError
+                    ? 'Agent: fejl'
+                    : agentLoading
+                    ? 'Agent: loader'
+                    : agentReady
+                    ? 'Agent: klar'
+                    : 'Agent: ikke klar'
+                }
+                quickActions={[
+                  {
+                    label: 'Manglende info',
+                    message:
+                      'Ud fra notatet nedenfor: Find manglende information i anamnesen og foreslå relevante opfølgende spørgsmål.',
+                  },
+                  {
+                    label: 'Røde flag',
+                    message:
+                      'Ud fra notatet nedenfor: Identificér mulige røde flag og hvilke spørgsmål/handlinger der bør følge.',
+                  },
+                  {
+                    label: 'Objektive tests',
+                    message:
+                      'Ud fra notatet nedenfor: Foreslå relevante objektive tests og hvad de kan afdække.',
+                  },
+                  {
+                    label: 'Plan + HEP',
+                    message:
+                      'Ud fra notatet nedenfor: Foreslå en klinisk plan med kort HEP (hjemmeøvelser) og nøglepunkter for patienten.',
+                  },
+                ]}
+                activeQuickAction={activeAgentPreset}
+                onQuickAction={(label) => setActiveAgentPreset(label)}
+                onSendMessage={(message) => sendAgentMessage(message)}
+                messages={agentMessages}
+                isSending={agentChatLoading}
+                actionsDisabled={agentChatLoading || agentLoading}
+                errorText={agentError}
+                inputValue={agentInput}
+                onInputChange={setAgentInput}
+                inputDisabled={agentLoading}
+                sendDisabled={agentLoading || agentChatLoading || !agentInput.trim()}
+                showEmptyHint={!activeTranscriptText.trim()}
+                emptyHintText="Ingen tekst endnu – du kan stadig spørge generelt."
+                chatAvatars={CHAT_AVATARS}
+                placeholder="Stil et spørgsmål til Corti assistenten..."
+              />
             </div>
           )}
         </div>
