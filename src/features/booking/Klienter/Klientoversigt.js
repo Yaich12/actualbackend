@@ -77,7 +77,7 @@ const ClientDetails = ({
   const [readingJournalEntry, setReadingJournalEntry] = useState(null);
   const [deletingJournalId, setDeletingJournalId] = useState(null);
   const [journalActionError, setJournalActionError] = useState('');
-  const [assistantAgentId, setAssistantAgentId] = useState('');
+  const [assistantAgentIds, setAssistantAgentIds] = useState({});
   const [assistantReady, setAssistantReady] = useState(false);
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [assistantError, setAssistantError] = useState('');
@@ -225,65 +225,13 @@ const ClientDetails = ({
   }, [userId, client?.id]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const initAssistant = async () => {
-      if (!client?.id) {
-        setAssistantAgentId('');
-        setAssistantReady(false);
-        return;
-      }
-
-      setAssistantLoading(true);
-      setAssistantError('');
-      setAssistantReady(false);
-      setAssistantAgentId('');
-
-      try {
-        const response = await fetch(apiUrl('/api/agent/init'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
-        const raw = await response.text();
-        let data = {};
-        try {
-          data = raw ? JSON.parse(raw) : {};
-        } catch (parseErr) {
-          throw new Error(`Agent init parse failed (${response.status}): ${raw.slice(0, 200)}`);
-        }
-
-        if (!response.ok || !data?.ok || !data?.agentId) {
-          throw new Error(data?.error || raw.slice(0, 200) || `Agent init fejlede (${response.status})`);
-        }
-
-        if (cancelled) return;
-        setAssistantAgentId(data.agentId);
-        setAssistantReady(true);
-      } catch (error) {
-        if (cancelled) return;
-        console.error('[ClientDetails] Agent init error:', error);
-        setAssistantError(error?.message || 'Kunne ikke initialisere agenten.');
-        setAssistantReady(false);
-      } finally {
-        if (!cancelled) {
-          setAssistantLoading(false);
-        }
-      }
-    };
-
     setAssistantMessages([]);
     setAssistantActivePreset('');
     setAssistantInput('');
     setAssistantError('');
     setAssistantReady(false);
-    setAssistantAgentId('');
+    setAssistantAgentIds({});
     setIsAssistantOpen(false);
-    initAssistant();
-
-    return () => {
-      cancelled = true;
-    };
   }, [client?.id]);
 
   const normalizeValue = (value) =>
@@ -416,47 +364,177 @@ const ClientDetails = ({
     ? 'AGENT: FEJL'
     : assistantLoading
     ? 'AGENT: LOADER'
-    : assistantReady && assistantAgentId
+    : assistantReady && Object.keys(assistantAgentIds).length
     ? 'AGENT: KLAR'
     : 'AGENT: IKKE KLAR';
 
   const hasNotesContext = Boolean(journalContextText);
 
+  const ensureAssistantAgentId = useCallback(
+    async (agentKey) => {
+      if (!agentKey) return null;
+      if (assistantAgentIds[agentKey]) return assistantAgentIds[agentKey];
+      setAssistantLoading(true);
+      setAssistantError('');
+      try {
+        const response = await fetch(apiUrl(`/api/agents/${encodeURIComponent(agentKey)}/init`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const raw = await response.text();
+        let data = null;
+        try {
+          data = raw ? JSON.parse(raw) : {};
+        } catch (parseErr) {
+          throw new Error(`Agent init parse failed (${response.status}): ${raw.slice(0, 200)}`);
+        }
+
+        if (!response.ok || !data?.ok || !data?.agentId) {
+          throw new Error(data?.error || raw.slice(0, 200) || `Agent init fejlede (${response.status})`);
+        }
+
+        setAssistantAgentIds((prev) => ({ ...prev, [agentKey]: data.agentId }));
+        setAssistantReady(true);
+        console.log('[ClientDetails] agent init ok', agentKey, data.agentId);
+        return data.agentId;
+      } catch (error) {
+        console.error('[ClientDetails] Agent init error:', error);
+        setAssistantError(error?.message || 'Kunne ikke initialisere agenten.');
+        setAssistantReady(false);
+        return null;
+      } finally {
+        setAssistantLoading(false);
+      }
+    },
+    [assistantAgentIds]
+  );
+
+  const sendRehabPlanMessage = useCallback(
+    async (displayMessage = 'Plan + HEP') => {
+      const sourceText = `${journalContextText || ''}`.trim();
+      if (!sourceText) {
+        setAssistantMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            text: 'Ingen tekst fundet – skriv et notat eller indtast tekst først.',
+            ts: Date.now(),
+          },
+        ]);
+        return;
+      }
+
+      setAssistantError('');
+      setAssistantChatLoading(true);
+      setAssistantMessages((prev) => [...prev, { role: 'user', text: displayMessage, ts: Date.now() }]);
+
+      try {
+        await ensureAssistantAgentId('rehab');
+        const response = await fetch(apiUrl('/api/agents/rehab/chat'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceText,
+            question:
+              'Create Plan + HEP based on the notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+          }),
+        });
+
+        const raw = await response.text();
+        let data = null;
+        try {
+          data = raw ? JSON.parse(raw) : {};
+        } catch (parseErr) {
+          throw new Error(`Rehab chat parse failed (${response.status}): ${raw.slice(0, 200)}`);
+        }
+
+        if (!response.ok || !data?.ok) {
+          throw new Error(data?.error || raw.slice(0, 200) || `Rehab svar fejlede (${response.status})`);
+        }
+
+        const replyText = data?.text || '(tomt svar fra agent)';
+        setAssistantMessages((prev) => [...prev, { role: 'assistant', text: replyText, ts: Date.now() }]);
+      } catch (error) {
+        console.error('[ClientDetails] Rehab agent chat error:', error);
+        setAssistantError(error?.message || 'Agenten kunne ikke svare.');
+      } finally {
+        setAssistantChatLoading(false);
+        setAssistantInput('');
+      }
+    },
+    [ensureAssistantAgentId, journalContextText]
+  );
+
+  const ACTION_TO_AGENT = useMemo(
+    () => ({
+      'Manglende info': 'improvement',
+      'Røde flag': 'education',
+      'Objektive tests': 'education',
+      'Plan + HEP': 'rehab',
+      'Opsummér patient': 'education',
+      freeText: 'education',
+    }),
+    []
+  );
+
+  const ACTION_PROMPTS = useMemo(
+    () => ({
+      'Manglende info':
+        'Find missing clinical information in these notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+      'Røde flag':
+        'Identify red flags and escalation criteria based on the notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+      'Objektive tests':
+        'Suggest relevant objective tests based on the notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+      'Opsummér patient':
+        'Summarize this patient’s full history across all notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+    }),
+    []
+  );
+
   const sendAssistantMessage = useCallback(
-    async (overrideMessage = null) => {
+    async (overrideMessage = null, _agentType = null, label) => {
       const finalMessage = `${overrideMessage ?? assistantInput}`.trim();
-      if (!finalMessage) return;
+      if (!finalMessage && label !== 'Plan + HEP') return;
       const isCustomInput = overrideMessage === null || overrideMessage === undefined;
 
       if (isCustomInput) {
         setAssistantActivePreset('');
       }
 
-      if (!assistantAgentId) {
-        setAssistantError('Agent ikke klar endnu.');
+      if (label === 'Plan + HEP') {
+        await sendRehabPlanMessage(label);
         return;
       }
 
-      if (!journalContextText) {
+      const resolvedLabel = label || 'freeText';
+      const agentKey = ACTION_TO_AGENT[resolvedLabel] || 'education';
+      const promptMessage =
+        resolvedLabel === 'freeText' ? finalMessage : ACTION_PROMPTS[resolvedLabel] || finalMessage;
+
+      const sourceText = `${journalContextText || ''}`.trim() || promptMessage;
+      if (!sourceText) {
         setAssistantError('Ingen notater fundet for patienten endnu.');
+        return;
+      }
+
+      const agentId = await ensureAssistantAgentId(agentKey);
+      if (!agentId) {
+        setAssistantError('Agent ikke klar endnu.');
         return;
       }
 
       setAssistantError('');
       setAssistantChatLoading(true);
-      setAssistantMessages((prev) => [...prev, { role: 'user', text: finalMessage, ts: Date.now() }]);
+      setAssistantMessages((prev) => [...prev, { role: 'user', text: promptMessage, ts: Date.now() }]);
 
       try {
-        const response = await fetch(apiUrl('/api/agent/chat'), {
+        const response = await fetch(apiUrl(`/api/agents/${encodeURIComponent(agentKey)}/chat`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            agentId: assistantAgentId,
-            message: finalMessage,
-            patientName: client?.navn || '',
-            clientId: client?.id || '',
-            sourceText: journalContextText,
-            mode: 'PatientOverview',
+            message: promptMessage,
+            sourceText,
           }),
         });
 
@@ -472,7 +550,7 @@ const ClientDetails = ({
           throw new Error(data?.error || raw.slice(0, 200) || `Agent svar fejlede (${response.status})`);
         }
 
-        const replyText = data?.text || '(tomt svar fra agent)';
+        const replyText = data?.reply || data?.text || '(tomt svar fra agent)';
         setAssistantMessages((prev) => [...prev, { role: 'assistant', text: replyText, ts: Date.now() }]);
       } catch (error) {
         console.error('[ClientDetails] Agent chat error:', error);
@@ -482,7 +560,14 @@ const ClientDetails = ({
         setAssistantInput('');
       }
     },
-    [assistantAgentId, assistantInput, client?.id, client?.navn, journalContextText]
+    [
+      ACTION_PROMPTS,
+      ACTION_TO_AGENT,
+      assistantInput,
+      ensureAssistantAgentId,
+      journalContextText,
+      sendRehabPlanMessage,
+    ]
   );
 
   const handleSaveGoals = async () => {
@@ -967,7 +1052,7 @@ const ClientDetails = ({
                       quickActions={assistantQuickActions}
                       activeQuickAction={assistantActivePreset}
                       onQuickAction={(label) => setAssistantActivePreset(label)}
-                      onSendMessage={(message) => sendAssistantMessage(message)}
+                      onSendMessage={sendAssistantMessage}
                       messages={assistantMessages}
                       isSending={assistantChatLoading}
                       actionsDisabled={assistantLoading || assistantChatLoading}

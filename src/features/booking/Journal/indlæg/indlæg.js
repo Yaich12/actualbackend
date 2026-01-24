@@ -15,7 +15,6 @@ import { RainbowButton } from '../../../../components/ui/rainbow-button';
 import AnimatedGenerateButton from '../../../../components/ui/animated-generate-button-shadcn-tailwind';
 import { GradientButton } from '../../../../components/ui/gradient-button';
 import { QuantumPulseLoader } from '../../../../components/ui/quantum-pulse-loade';
-import { InteractiveHoverButton } from '../../../../components/ui/interactive-hover-button';
 import CortiAssistantPanel from '../../components/CortiAssistantPanel';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
@@ -177,7 +176,7 @@ function Indlæg({
   const [dictationError, setDictationError] = useState('');
   const [dictationText, setDictationText] = useState('');
 
-  const [agentId, setAgentId] = useState('');
+  const [agentIds, setAgentIds] = useState({});
   const [agentReady, setAgentReady] = useState(false);
   const [agentLoading, setAgentLoading] = useState(false);
   const [agentError, setAgentError] = useState('');
@@ -286,75 +285,66 @@ function Indlæg({
     return [...selectedTemplate.templateSections].sort((a, b) => (a?.sort ?? 0) - (b?.sort ?? 0));
   }, [selectedTemplate]);
 
-  const initAgent = useCallback(async () => {
-    setAgentLoading(true);
-    setAgentError('');
-    try {
-      const url = apiUrl('/api/agent/init');
-      console.log('[Indlæg] agent init url:', url);
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      const raw = await response.text();
-      let data = null;
+  const ensureAgentId = useCallback(
+    async (agentKey) => {
+      if (!agentKey) return null;
+      if (agentIds[agentKey]) return agentIds[agentKey];
+      setAgentLoading(true);
+      setAgentError('');
       try {
-        data = raw ? JSON.parse(raw) : {};
-      } catch (parseErr) {
-        throw new Error(`Agent init parse failed (${response.status}): ${raw.slice(0, 200)}`);
+        const url = apiUrl(`/api/agents/${encodeURIComponent(agentKey)}/init`);
+        console.log('[Indlæg] agent init', agentKey, url);
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const raw = await response.text();
+        let data = null;
+        try {
+          data = raw ? JSON.parse(raw) : {};
+        } catch (parseErr) {
+          throw new Error(`Agent init parse failed (${response.status}): ${raw.slice(0, 200)}`);
+        }
+        if (!response.ok || !data?.ok || !data?.agentId) {
+          throw new Error(data?.error || raw.slice(0, 200) || `Agent init fejlede (${response.status})`);
+        }
+        setAgentIds((prev) => ({ ...prev, [agentKey]: data.agentId }));
+        setAgentReady(true);
+        console.log('[Indlæg] agent init ok', agentKey, data.agentId);
+        return data.agentId;
+      } catch (error) {
+        console.error('[Indlæg] Agent init error:', error);
+        setAgentError(error?.message || 'Kunne ikke initialisere agenten.');
+        setAgentReady(false);
+        return null;
+      } finally {
+        setAgentLoading(false);
       }
-      if (!response.ok || !data?.ok || !data?.agentId) {
-        throw new Error(data?.error || raw.slice(0, 200) || `Agent init fejlede (${response.status})`);
-      }
-      setAgentId(data.agentId);
-      setAgentReady(true);
-    } catch (error) {
-      console.error('[Indlæg] Agent init error:', error);
-      setAgentError(error?.message || 'Kunne ikke initialisere agenten.');
-      setAgentReady(false);
-    } finally {
-      setAgentLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    initAgent();
-  }, [initAgent]);
+    },
+    [agentIds]
+  );
 
   const sendAgentMessage = useCallback(
-    async (overrideMessage = null) => {
+    async (overrideMessage = null, _overrideAgentType = null, agentKey = 'education') => {
       const finalMessage = `${overrideMessage ?? agentInput}`.trim();
       if (!finalMessage) return;
-      if (!agentId) {
+      const resolvedAgentId = await ensureAgentId(agentKey);
+      if (!resolvedAgentId) {
         setAgentError('Agent ikke klar endnu.');
         return;
       }
       const baseText =
         (content && content.trim()) ||
+        (generatedDocument?.sections?.length ? buildDocumentText(generatedDocument.sections) : '') ||
         (transcribeMode === 'Diktering' ? dictationText : transcriptText);
-      if (!baseText || !baseText.trim()) {
-        setAgentError('Ingen tekst i notat endnu');
-        return;
-      }
-      const contextSource = (content && content.trim()) ? 'note' : 'transcript';
-      console.log('[AGENT UI] ctx source=', contextSource, 'len=', baseText.length);
+      const sourceText = (baseText || '').trim() || finalMessage;
+      const contextSource = (content && content.trim()) ? 'note' : generatedDocument?.sections?.length ? 'generated' : 'transcript';
+      console.log('[AGENT UI] key=', agentKey, 'ctx source=', contextSource, 'len=', sourceText.length);
 
       const payload = {
-        agentId,
         message: finalMessage,
-        templateKey: selectedTemplateKey,
-        contextText: baseText,
-        contextSource: contextSource,
-        sourceText: baseText,
-        mode:
-          transcribeMode === MODE_DICTATE
-            ? 'Diktering'
-            : transcribeMode === MODE_TRANSCRIBE
-            ? 'Trankribering'
-            : 'None',
-        patientName: clientName || '',
-        sessionDate: date || initialDate || '',
+        sourceText: sourceText,
       };
 
       setAgentError('');
@@ -362,7 +352,7 @@ function Indlæg({
       setAgentMessages((prev) => [...prev, { role: 'user', text: finalMessage, ts: Date.now() }]);
 
       try {
-        const response = await fetch(apiUrl('/api/agent/chat'), {
+        const response = await fetch(apiUrl(`/api/agents/${encodeURIComponent(agentKey)}/chat`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -377,8 +367,8 @@ function Indlæg({
         if (!response.ok || !data?.ok) {
           throw new Error(data?.error || raw.slice(0, 200) || `Agent svar fejlede (${response.status})`);
         }
-        const replyText = data?.text || '(tomt svar fra agent)';
-        if (!data?.text) {
+        const replyText = data?.reply || data?.text || '(tomt svar fra agent)';
+        if (!data?.reply && !data?.text) {
           setAgentError('Agent returnerede ingen tekst');
         }
         setAgentMessages((prev) => [...prev, { role: 'assistant', text: replyText, ts: Date.now() }]);
@@ -391,7 +381,6 @@ function Indlæg({
       }
     },
     [
-      agentId,
       agentInput,
       clientName,
       date,
@@ -401,7 +390,122 @@ function Indlæg({
       content,
       transcriptText,
       transcribeMode,
+      generatedDocument,
+      ensureAgentId,
     ]
+  );
+
+  const resolveRehabSourceText = useCallback(() => {
+    const noteText = (content || '').trim();
+    if (noteText) return noteText;
+    if (generatedDocument?.sections?.length) {
+      return buildDocumentText(generatedDocument.sections);
+    }
+    return (activeTranscriptText || '').trim();
+  }, [content, generatedDocument, activeTranscriptText]);
+
+  const sendRehabPlanMessage = useCallback(
+    async (displayMessage = 'Plan + HEP') => {
+      const sourceText = resolveRehabSourceText();
+      if (!sourceText) {
+        setAgentMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            text: 'Ingen tekst fundet – skriv et notat eller indtast tekst først.',
+            ts: Date.now(),
+          },
+        ]);
+        return;
+      }
+
+      setAgentError('');
+      setAgentChatLoading(true);
+      setAgentMessages((prev) => [
+        ...prev,
+        { role: 'user', text: displayMessage, ts: Date.now() },
+      ]);
+
+      try {
+        await ensureAgentId('rehab');
+        const response = await fetch(apiUrl('/api/agents/rehab/chat'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceText,
+            question:
+              'Create Plan + HEP based on the notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+          }),
+        });
+        const raw = await response.text();
+        let data = null;
+        try {
+          data = raw ? JSON.parse(raw) : {};
+        } catch (parseErr) {
+          throw new Error(`Rehab chat parse failed (${response.status}): ${raw.slice(0, 200)}`);
+        }
+        if (!response.ok || !data?.ok) {
+          throw new Error(data?.error || raw.slice(0, 200) || `Rehab svar fejlede (${response.status})`);
+        }
+        const replyText = data?.text || '(tomt svar fra agent)';
+        if (!data?.text) {
+          setAgentError('Agent returnerede ingen tekst');
+        }
+        setAgentMessages((prev) => [
+          ...prev,
+          { role: 'assistant', text: replyText, ts: Date.now() },
+        ]);
+      } catch (error) {
+        console.error('[Indlæg] Rehab agent chat error:', error);
+        setAgentError(error?.message || 'Agenten kunne ikke svare.');
+      } finally {
+        setAgentChatLoading(false);
+        setAgentInput('');
+      }
+    },
+    [ensureAgentId, resolveRehabSourceText]
+  );
+
+  const ACTION_TO_AGENT = useMemo(
+    () => ({
+      'Manglende info': 'improvement',
+      'Røde flag': 'education',
+      'Objektive tests': 'education',
+      'Plan + HEP': 'rehab',
+      'Opsummér patient': 'education',
+      freeText: 'education',
+    }),
+    []
+  );
+
+  const ACTION_PROMPTS = useMemo(
+    () => ({
+      'Manglende info':
+        'Find missing clinical information in these notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+      'Røde flag':
+        'Identify red flags and escalation criteria based on the notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+      'Objektive tests':
+        'Suggest relevant objective tests based on the notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+      'Opsummér patient':
+        'Summarize this patient’s full history across all notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+    }),
+    []
+  );
+
+  const handleAssistantSendMessage = useCallback(
+    (message, agentType, label) => {
+      if (label === 'Plan + HEP') {
+        const displayMessage = label || message || 'Plan + HEP';
+        sendRehabPlanMessage(displayMessage);
+        return;
+      }
+      const resolvedLabel = label || 'freeText';
+      const agentKey = ACTION_TO_AGENT[resolvedLabel] || 'education';
+      const finalMessage =
+        resolvedLabel === 'freeText' ? message : ACTION_PROMPTS[resolvedLabel] || message;
+      sendAgentMessage(finalMessage, agentType, agentKey);
+    },
+    [ACTION_PROMPTS, ACTION_TO_AGENT, sendAgentMessage, sendRehabPlanMessage]
   );
 
   const selectedTemplateMeta = useMemo(() => {
@@ -1183,10 +1287,22 @@ function Indlæg({
           <div className={`indlæg-content${isAssistantOpen ? ' indlæg-content--drawer-open' : ''}`}>
             <div className="indlæg-workspace">
               <aside className="indlæg-column indlæg-column--left">
+                <div className="indlæg-header-actions">
+                  <button
+                    type="button"
+                    className="indlæg-close-btn"
+                    onClick={onClose}
+                    aria-label="Tilbage til bookingkalender"
+                  >
+                    ←
+                  </button>
+                </div>
                 <div className="indlæg-card">
                   <div className="indlæg-card-body indlæg-recent-summary">
                     <div className="indlæg-title-block">
-                      <h2 className="indlæg-title">{clientName || 'Ukendt klient'}</h2>
+                      <h2 className="indlæg-title">
+                        {clientName || 'Ukendt klient'}
+                      </h2>
                       <span className="indlæg-title-date">{date || '—'}</span>
                     </div>
                   </div>
@@ -1287,14 +1403,15 @@ function Indlæg({
                 <div className="indlæg-card indlæg-card--journal">
                   <div className="indlæg-card-header indlæg-card-header--journal">
                     <h3 className="indlæg-card-title font-bold">Journal</h3>
-                    <InteractiveHoverButton
+                    <button
                       type="button"
-                      text={isSaving ? 'Gemmer...' : 'Gem indlæg'}
-                      className="!w-auto px-5"
+                      className="indlæg-action-btn"
                       onClick={handleSave}
                       disabled={isSaving}
                       aria-busy={isSaving}
-                    />
+                    >
+                      {isSaving ? 'Gemmer...' : 'Gem indlæg'}
+                    </button>
                   </div>
                   <div className="indlæg-card-body indlæg-note-area">
                     <textarea
@@ -1627,12 +1744,12 @@ function Indlæg({
               type="button"
               className="indlæg-drawer-edge-close"
               onClick={() => setIsAssistantOpen(false)}
-              aria-label="Luk Corti assistent panel"
+              aria-label="Luk Selma assistent panel"
             >
               →
             </button>
               <div className="indlæg-drawer-header">
-                <h3 className="indlæg-card-title">Corti Assistent</h3>
+                <h3 className="indlæg-card-title">Selma Assistent</h3>
                 <button
                   type="button"
                   className="indlæg-drawer-close"
@@ -1656,28 +1773,29 @@ function Indlæg({
                 quickActions={[
                   {
                     label: 'Manglende info',
+                    agentType: 'improvement',
                     message:
-                      'Ud fra notatet nedenfor: Find manglende information i anamnesen og foreslå relevante opfølgende spørgsmål.',
+                      'Find manglende information i anamnesen og foreslå relevante opfølgende spørgsmål.',
                   },
                   {
                     label: 'Røde flag',
                     message:
-                      'Ud fra notatet nedenfor: Identificér mulige røde flag og hvilke spørgsmål/handlinger der bør følge.',
+                      'Identificér mulige røde flag og hvilke spørgsmål/handlinger der bør følge.',
                   },
                   {
                     label: 'Objektive tests',
                     message:
-                      'Ud fra notatet nedenfor: Foreslå relevante objektive tests og hvad de kan afdække.',
+                      'Foreslå relevante objektive tests og hvad de kan afdække.',
                   },
                   {
                     label: 'Plan + HEP',
                     message:
-                      'Ud fra notatet nedenfor: Foreslå en klinisk plan med kort HEP (hjemmeøvelser) og nøglepunkter for patienten.',
+                      'Foreslå en klinisk plan med kort HEP (hjemmeøvelser) og nøglepunkter for patienten.',
                   },
                 ]}
                 activeQuickAction={activeAgentPreset}
                 onQuickAction={(label) => setActiveAgentPreset(label)}
-                onSendMessage={(message) => sendAgentMessage(message)}
+                onSendMessage={handleAssistantSendMessage}
                 messages={agentMessages}
                 isSending={agentChatLoading}
                 actionsDisabled={agentChatLoading || agentLoading}
@@ -1689,7 +1807,7 @@ function Indlæg({
                 showEmptyHint={!activeTranscriptText.trim()}
                 emptyHintText="Ingen tekst endnu – du kan stadig spørge generelt."
                 chatAvatars={CHAT_AVATARS}
-                placeholder="Stil et spørgsmål til Corti assistenten..."
+                placeholder="Stil et spørgsmål til Selma assistenten..."
               />
             </div>
           )}

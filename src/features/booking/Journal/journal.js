@@ -643,7 +643,6 @@ function Journal({
                   className="journal-create-appointment-btn"
                   onClick={onCreateJournalEntry}
                 >
-                  <span className="journal-create-entry-icon">+</span>
                   Opret indlæg
                 </button>
               )}

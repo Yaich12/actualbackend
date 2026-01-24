@@ -1230,6 +1230,99 @@
   margin: 6px 0;
 }
 
+.indlæg-assistant-markdown h3 {
+  margin: 10px 0 4px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.indlæg-assistant-markdown ul {
+  padding-left: 18px;
+  margin: 6px 0 10px;
+}
+
+.indlæg-assistant-markdown li {
+  margin: 2px 0;
+  line-height: 1.45;
+}
+
+.corti-md h1,
+.corti-md h2,
+.corti-md h3,
+.corti-md h4 {
+  margin: 10px 0 6px;
+  font-weight: 700;
+}
+
+.corti-md p {
+  margin: 4px 0;
+  line-height: 1.45;
+}
+
+.corti-md ul,
+.corti-md ol {
+  margin: 6px 0 10px 18px;
+  padding: 0;
+}
+
+.corti-md li {
+  margin: 3px 0;
+}
+
+.corti-md hr {
+  margin: 10px 0;
+}
+
+.corti-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.corti-accordion-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+
+.corti-accordion-header {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: none;
+  background: #f8fafc;
+  font-weight: 700;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+.corti-accordion-title {
+  flex: 1;
+  font-size: 13px;
+}
+
+.corti-accordion-icon {
+  transition: transform 0.15s ease;
+  font-size: 13px;
+}
+
+.corti-accordion-icon.is-open {
+  transform: rotate(180deg);
+}
+
+.corti-accordion-body {
+  padding: 10px 12px;
+  border-top: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
 .indlæg-agent-empty-hint {
   margin: 0;
 }

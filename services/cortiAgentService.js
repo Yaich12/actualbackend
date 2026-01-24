@@ -9,6 +9,35 @@ const clientSecret = process.env.CORTI_CLIENT_SECRET || process.env.CORTI_CLIENT
 let cachedAgentId = null;
 let cachedClient = null;
 
+const FORMAT_INSTRUCTION = `
+SVARFORMAT (obligatorisk):
+Skriv altid i MARKDOWN med underoverskrifter og bulletpoints.
+Brug disse sektioner (brug kun dem der giver mening):
+
+### Kort opsummering
+- (3-6 bullets)
+
+### Manglende information / spørgsmål til næste gang
+- (3-8 bullets)
+
+### Røde flag (hvad skal jeg være obs på?)
+- (3-6 bullets)
+
+### Objektive tests (forslag)
+- (3-8 bullets)
+
+### Plan + HEP (konkret)
+- (3-8 bullets)
+
+### Næste skridt
+- (3-6 bullets)
+
+Regler:
+- INGEN lange afsnit.
+- Max 2 linjer per bullet.
+- Brug kun Markdown headings og bulletpoints.
+`.trim();
+
 const getClient = () => {
   if (cachedClient) return cachedClient;
   cachedClient = new CortiClient({
@@ -63,7 +92,9 @@ const chatWithAgent = async ({
   sourceText,
   mode,
 }) => {
-  const finalMessage = `${message || ''}`.trim();
+  const userMessage = `${message || ''}`.trim();
+  const formattedMessage = `${FORMAT_INSTRUCTION}\n\nBRUGERENS INPUT:\n${userMessage}`.trim();
+  const finalMessage = formattedMessage;
   if (!finalMessage) throw new Error('Missing message');
 
   const agentToUse = agentId || cachedAgentId || (await initAgent());

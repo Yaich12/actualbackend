@@ -12,11 +12,14 @@ const { CortiClient, CortiError } = require('@corti/sdk');
 const cors = require('cors');
 const OpenAI = require('openai');
 const cortiRoutes = require('./routes/cortiRoutes');
+const agentRegistryRoutes = require('./routes/agentRegistryRoutes');
+const rehabAgentRoutes = require('./routes/rehabAgentRoutes');
 const { createCortiTranscribeWss } = require('./ws/cortiTranscribeProxy');
 const { createFactsStreamWss } = require('./ws/factsStreamProxy');
 const { SYSTEM_PROMPT } = require('./cortiAgentSystemPrompt');
 const { createCortiClient, getAccessToken, resolvedCortiEnv, resolvedEnvironment } = require('./cortiAuth');
 const cortiClientSingleton = require('./src/corti/cortiClient');
+const { getOrCreateAgentId } = require('./server/corti/agentRegistry');
 const {
   getOrCreateClinicalEducationAgent,
   sendClinicalEducationMessage,
@@ -28,7 +31,7 @@ const CORTI_API_BASE =
 const CORTI_AGENT_BASE_URL = 'https://api.eu.corti.app/v2';
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 app.use(
   cors({
     origin: '*',
@@ -37,6 +40,8 @@ app.use(
   })
 );
 app.use('/api/corti', cortiRoutes);
+app.use('/api/agents/rehab', rehabAgentRoutes);
+app.use('/api/agents', agentRegistryRoutes);
 const execFileAsync = util.promisify(execFile);
 
 const getOpenAIClient = () => {
@@ -703,8 +708,8 @@ const extractTextFromTask = (task) => {
 
 app.post('/api/agent/init', async (_req, res) => {
   try {
-    const agentId = await initAgent();
-    cachedAgentId = agentId;
+    const cortiClient = await createCortiClient();
+    const agentId = await getOrCreateAgentId('education', cortiClient);
     return res.json({ ok: true, agentId });
   } catch (error) {
     const status = error?.response?.status || 500;
@@ -716,15 +721,21 @@ app.post('/api/agent/init', async (_req, res) => {
 
 app.post('/api/agent/chat', async (req, res) => {
   try {
-    const { agentId, message, patientName, clientId, notesContext, sourceText, mode } = req.body || {};
+    const { agentId, message, patientName, clientId, notesContext, sourceText, mode, agentType } = req.body || {};
     const ctx = `${sourceText || notesContext || ''}`.trim();
     if (!ctx) {
       return res.status(400).json({ ok: false, error: 'Missing sourceText' });
     }
     const msgLen = `${message || ''}`.length;
     console.log('[AGENT_CHAT] lengths ctx=%s msg=%s', ctx.length, msgLen);
+    let effectiveAgentId = agentId;
+    if (agentType === 'improvement') {
+      const cortiClient = await createCortiClient();
+      effectiveAgentId = await getOrCreateAgentId('improvement', cortiClient);
+    }
+    console.log('[AgentChat] agentType:', agentType, 'effectiveAgentId:', effectiveAgentId);
     const resp = await chatWithAgent({
-      agentId,
+      agentId: effectiveAgentId,
       message,
       patientName,
       clientId,
