@@ -1,0 +1,702 @@
+:root {
+  --flow-bg: #f6f8fc;
+  --flow-ink: #0f172a;
+  --flow-subtle: #64748b;
+  --flow-border: rgba(148, 163, 184, 0.28);
+  --flow-blue: #2563eb;
+  --flow-blue-2: rgba(37, 99, 235, 0.18);
+  --flow-fee: #0ea5e9;
+  --flow-fee-bg: rgba(14, 165, 233, 0.12);
+  --flow-net: #16a34a;
+  --flow-net-bg: rgba(22, 163, 74, 0.12);
+}
+
+.flow-hero {
+  width: 100%;
+  background: var(--flow-bg);
+  padding: 64px 0;
+}
+
+.flow-hero__container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.flow-hero__grid {
+  display: grid;
+  gap: 40px;
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .flow-hero {
+    padding: 88px 0;
+  }
+
+  .flow-hero__grid {
+    grid-template-columns: 1fr 1.05fr;
+    gap: 56px;
+  }
+}
+
+.flow-hero__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.flow-hero__eyebrow {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.78);
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #475569;
+}
+
+.flow-hero__title {
+  font-size: 34px;
+  line-height: 1.12;
+  font-weight: 700;
+  color: var(--flow-ink);
+  letter-spacing: -0.02em;
+}
+
+@media (min-width: 640px) {
+  .flow-hero__title {
+    font-size: 44px;
+  }
+}
+
+.flow-hero__subtitle {
+  max-width: 56ch;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #475569;
+}
+
+.flow-hero__scenario-inline {
+  width: fit-content;
+  margin-top: 4px;
+  margin-bottom: 4px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(255, 255, 255, 0.94);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #0f172a;
+}
+
+.flow-hero__stats {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.flow-hero__stat {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+
+.flow-hero__stat-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.flow-hero__visual {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 560px;
+}
+
+.flow-hero__visual::before {
+  content: "";
+  position: absolute;
+  width: 620px;
+  height: 620px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 26% 28%, rgba(37, 99, 235, 0.14), transparent 55%),
+    radial-gradient(circle at 68% 70%, rgba(59, 130, 246, 0.10), transparent 60%);
+  filter: blur(10px);
+  z-index: 0;
+}
+
+.flow-hero__orbits {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.flow-hero__outer-route {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2; /* above background, below pills */
+}
+
+.flow-hero__outer-path {
+  fill: none;
+  stroke: rgba(15, 23, 42, 0.22);
+  stroke-width: 0.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.flow-hero__outer-dot {
+  fill: rgba(255, 255, 255, 0.95);
+  stroke: rgba(15, 23, 42, 0.24);
+  stroke-width: 0.6;
+}
+
+.flow-hero__outer-dot--patient {
+  stroke: rgba(37, 99, 235, 0.35);
+}
+
+.flow-hero__outer-dot--selma {
+  stroke: rgba(14, 165, 233, 0.45);
+}
+
+.flow-hero__outer-dot--clinic {
+  stroke: rgba(22, 163, 74, 0.35);
+}
+
+.flow-hero__orbits span {
+  position: absolute;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  width: 460px;
+  height: 460px;
+}
+
+.flow-hero__orbits span:nth-child(2) {
+  width: 600px;
+  height: 600px;
+}
+
+.flow-hero__orbits span:nth-child(3) {
+  width: 740px;
+  height: 740px;
+}
+
+.flow-hero__phone {
+  position: relative;
+  width: min(360px, 92vw);
+  border-radius: 46px;
+  background: linear-gradient(160deg, #0b1220, #111c33);
+  padding: 14px;
+  box-shadow:
+    0 44px 86px rgba(15, 23, 42, 0.24),
+    0 18px 40px rgba(37, 99, 235, 0.14);
+  z-index: 2;
+}
+
+.flow-hero__phone::after {
+  content: "";
+  position: absolute;
+  inset: -14px;
+  border-radius: 54px;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(37, 99, 235, 0.22), transparent 46%),
+    radial-gradient(circle at 80% 10%, rgba(14, 165, 233, 0.16), transparent 52%),
+    radial-gradient(circle at 50% 92%, rgba(37, 99, 235, 0.12), transparent 56%);
+  z-index: -1;
+}
+
+.flow-hero__phone-inner {
+  border-radius: 34px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  overflow: hidden;
+}
+
+.flow-map {
+  display: none; /* hide top animation and lines */
+}
+
+/* Outside pills (Patient / Selma+ / Clinic) */
+.flow-hero__pill {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.flow-hero__pill-amount {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--flow-blue);
+  letter-spacing: -0.01em;
+}
+
+.flow-hero__pill-amount--net {
+  color: var(--flow-net);
+}
+
+.flow-hero__pill-amount--fee {
+  color: var(--flow-fee);
+}
+
+.flow-hero__pill-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #475569;
+}
+
+.flow-hero__pill--patient {
+  left: -8px;
+  top: 64%;
+}
+
+.flow-hero__pill--patient::after {
+  content: "";
+  position: absolute;
+  right: -34px;
+  top: 50%;
+  width: 34px;
+  height: 2px;
+  background: rgba(37, 99, 235, 0.55);
+}
+
+.flow-hero__pill--clinic {
+  right: -8px;
+  top: 64%;
+  text-align: right;
+}
+
+.flow-hero__pill--clinic::before {
+  content: "";
+  position: absolute;
+  left: -34px;
+  top: 50%;
+  width: 34px;
+  height: 2px;
+  background: rgba(22, 163, 74, 0.55);
+}
+
+.flow-hero__pill--selma {
+  right: -20px;
+  top: 18%;
+}
+
+.flow-hero__pill--selma::before {
+  content: "";
+  position: absolute;
+  left: -42px;
+  top: 50%;
+  width: 42px;
+  height: 2px;
+  background: rgba(14, 165, 233, 0.55);
+}
+
+/* Phone internals */
+.flow-phone {
+  min-height: 560px;
+  display: grid;
+  grid-template-rows: 1fr auto;
+}
+
+.flow-phone__top {
+  position: relative;
+  padding: 16px 16px 0 16px;
+}
+
+.flow-phone__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 12px 10px;
+}
+
+.flow-phone__brand-logo {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.flow-phone__brand-name {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: #0f172a;
+}
+
+.flow-map {
+  position: relative;
+  margin: 0 10px 10px 10px;
+  border-radius: 26px;
+  background: linear-gradient(160deg, #ffffff 0%, #f3f6ff 60%, #ffffff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  overflow: hidden;
+  height: 320px;
+}
+
+.flow-map__grid {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(transparent 0 0),
+    radial-gradient(circle at 30% 40%, rgba(148, 163, 184, 0.16), transparent 55%),
+    radial-gradient(circle at 65% 65%, rgba(148, 163, 184, 0.12), transparent 58%);
+}
+
+.flow-map__grid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.18) 0 0) left 18% top 0/2px 100% no-repeat,
+    linear-gradient(90deg, rgba(148, 163, 184, 0.12) 0 0) left 44% top 0/2px 100% no-repeat,
+    linear-gradient(90deg, rgba(148, 163, 184, 0.18) 0 0) left 70% top 0/2px 100% no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.18) 0 0) left 0 top 26%/100% 2px no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.12) 0 0) left 0 top 55%/100% 2px no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.18) 0 0) left 0 top 78%/100% 2px no-repeat;
+  opacity: 0.6;
+}
+
+.flow-map__route {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.flow-map__path {
+  fill: none;
+  stroke: rgba(37, 99, 235, 0.9);
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.flow-map__path--soft {
+  stroke: rgba(37, 99, 235, 0.16);
+  stroke-width: 7.5;
+}
+
+.flow-map__branch {
+  fill: none;
+  stroke: rgba(14, 165, 233, 0.22);
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.55;
+}
+
+.flow-map__branch--active {
+  stroke: rgba(14, 165, 233, 0.9);
+  opacity: 1;
+}
+
+.flow-map__marker {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 2px solid rgba(15, 23, 42, 0.7);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.16);
+}
+
+.flow-map__marker--patient {
+  left: 18%;
+  top: 78%;
+  border-color: rgba(37, 99, 235, 0.9);
+}
+
+.flow-map__marker--selma {
+  left: 52%;
+  top: 52%;
+  border-color: rgba(14, 165, 233, 0.9);
+}
+
+.flow-map__marker--clinic {
+  left: 82%;
+  top: 24%;
+  border-color: rgba(22, 163, 74, 0.95);
+}
+
+.flow-map__marker--patient::after,
+.flow-map__marker--clinic::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.12;
+}
+
+.flow-map__amount {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(37, 99, 235, 0.26);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.14);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--flow-blue);
+  letter-spacing: -0.01em;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.flow-map__amount--net {
+  color: var(--flow-net);
+  border-color: rgba(22, 163, 74, 0.28);
+}
+
+.flow-map__fee-badge {
+  position: absolute;
+  right: -10px;
+  top: 34%;
+  transform: translateX(45%);
+  width: 240px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(14, 165, 233, 0.25);
+  box-shadow: 0 24px 46px rgba(15, 23, 42, 0.16);
+}
+
+.flow-map__fee-badge::before {
+  content: "";
+  position: absolute;
+  left: -22px;
+  top: 56%;
+  width: 22px;
+  height: 2px;
+  background: rgba(14, 165, 233, 0.55);
+}
+
+.flow-map__fee-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.flow-map__fee-subtitle {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* Drawer / receipt card */
+.flow-drawer {
+  position: relative;
+  margin: -52px 12px 16px 12px;
+  border-radius: 32px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow:
+    0 36px 70px rgba(15, 23, 42, 0.18),
+    0 10px 26px rgba(15, 23, 42, 0.10);
+  padding: 18px 18px 22px 18px;
+}
+
+.flow-drawer__title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 14px;
+}
+
+.flow-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 18px;
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.flow-progress__step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.flow-progress__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.65);
+}
+
+.flow-progress__step--active .flow-progress__dot {
+  background: var(--flow-blue);
+  box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.12);
+}
+
+.flow-progress__label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.flow-progress__line {
+  flex: 1;
+  height: 2px;
+  background: rgba(37, 99, 235, 0.35);
+  border-radius: 999px;
+}
+
+.flow-progress__line--muted {
+  background: rgba(148, 163, 184, 0.35);
+}
+
+.flow-meta {
+  margin-top: 12px;
+  border-radius: 18px;
+  background: #f8fafc;
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.flow-meta__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 2px;
+}
+
+.flow-meta__label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.flow-meta__value {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.flow-receipt {
+  margin-top: 14px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  padding: 16px;
+}
+
+.flow-receipt__header {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 10px;
+}
+
+.flow-receipt__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+  color: #334155;
+  padding: 8px 0;
+}
+
+.flow-receipt__row--fee {
+  color: #0f172a;
+}
+
+.flow-receipt__row--total {
+  font-size: 16px;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+/* Scenario label near patient */
+.flow-hero__scenario {
+  position: absolute;
+  left: -6px;
+  top: 54%;
+  transform: translate(-10%, -140%);
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #0f172a;
+}
+
+@media (max-width: 1024px) {
+  .flow-hero__orbits span:nth-child(3) {
+    display: none;
+  }
+
+  .flow-hero__pill--patient {
+    left: 6px;
+  }
+
+  .flow-hero__pill--clinic {
+    right: 6px;
+  }
+}
+
+@media (max-width: 768px) {
+  .flow-hero__visual {
+    min-height: 520px;
+  }
+
+  .flow-hero__orbits span {
+    display: none;
+  }
+
+  .flow-hero__pill {
+    display: none;
+  }
+
+  .flow-hero__outer-route {
+    display: none;
+  }
+
+  .flow-map__fee-badge {
+    right: 10px;
+    transform: none;
+    width: 220px;
+  }
+
+  .flow-map__fee-badge::before {
+    display: none;
+  }
+}

@@ -1,0 +1,522 @@
+.payment-flow__visual {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.4rem;
+  padding: 2rem 0 2.5rem;
+  min-height: 680px;
+}
+
+.payment-flow__rings {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 560px;
+  height: 560px;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle,
+    rgba(253, 186, 116, 0.3) 0%,
+    rgba(251, 113, 133, 0.22) 45%,
+    rgba(254, 215, 170, 0.15) 65%,
+    transparent 72%
+  );
+  border: 1px solid rgba(251, 146, 60, 0.35);
+  transform: translate(-50%, -50%);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.payment-flow__rings::before,
+.payment-flow__rings::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+}
+
+.payment-flow__rings::before {
+  inset: 44px;
+  border: 1px solid rgba(249, 115, 22, 0.35);
+}
+
+.payment-flow__rings::after {
+  inset: -44px;
+  border: 1px solid rgba(248, 113, 113, 0.2);
+}
+
+.payment-flow__brand {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.payment-flow__brand-logo {
+  width: 66px;
+  height: 66px;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 18px rgba(248, 113, 113, 0.35));
+}
+
+.payment-flow__brand-name {
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #0f172a;
+}
+
+.payment-flow__fee-badge {
+  position: relative;
+  z-index: 3;
+  padding: 0.75rem 1rem;
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid rgba(251, 146, 60, 0.45);
+  box-shadow: 0 18px 30px rgba(15, 23, 42, 0.12);
+  text-align: center;
+}
+
+.payment-flow__fee-badge::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -12px;
+  transform: translateX(-50%);
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-top: 12px solid #ffffff;
+}
+
+.payment-flow__fee-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.payment-flow__fee-sub {
+  margin-top: 2px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.payment-flow__flow {
+  position: relative;
+  z-index: 2;
+  width: min(100%, 1080px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 340px) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 1.6rem;
+}
+
+.payment-flow__card {
+  position: relative;
+  padding: 0.95rem 1.6rem 1.15rem;
+  border-radius: 24px;
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 20px 34px rgba(15, 23, 42, 0.1);
+  z-index: 2;
+  width: min(320px, 90%);
+  min-width: 260px;
+}
+
+.payment-flow__card--patient {
+  border: 2px solid rgba(59, 130, 246, 0.6);
+  border-left-width: 6px;
+  background: linear-gradient(135deg, rgba(219, 234, 254, 0.7) 0%, #ffffff 58%);
+  box-shadow: 0 28px 42px rgba(59, 130, 246, 0.2);
+  justify-self: start;
+  transform: translateX(-64px);
+  z-index: 5;
+}
+
+.payment-flow__card--clinic {
+  border: 2px solid rgba(34, 197, 94, 0.6);
+  border-left-width: 6px;
+  background: linear-gradient(135deg, rgba(187, 247, 208, 0.7) 0%, #ffffff 58%);
+  box-shadow: 0 28px 42px rgba(34, 197, 94, 0.22);
+  text-align: left;
+  justify-self: end;
+  transform: translateX(64px);
+  z-index: 5;
+}
+
+.payment-flow__card-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #0f172a;
+}
+
+.payment-flow__card-tag {
+  margin: 0.4rem 0 0.7rem;
+  display: inline-flex;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(37, 99, 235, 0.2));
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #1d4ed8;
+}
+
+.payment-flow__card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.4rem;
+}
+
+.payment-flow__card-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.payment-flow__card-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.payment-flow__card-status {
+  margin-top: 0.45rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.22), rgba(59, 130, 246, 0.12));
+  border: 1px solid rgba(37, 99, 235, 0.35);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #0369a1;
+}
+
+.payment-flow__card-amount {
+  margin-top: 0.5rem;
+  font-size: 2rem;
+  font-weight: 800;
+  color: #15803d;
+}
+
+.payment-flow__card-note {
+  margin-top: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.payment-flow__card-check {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #22c55e;
+  color: #ffffff;
+  font-size: 1.1rem;
+  font-weight: 800;
+  box-shadow: 0 12px 22px rgba(34, 197, 94, 0.35);
+}
+
+.payment-flow__phone-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  z-index: 2;
+}
+
+.payment-flow__phone {
+  position: relative;
+  width: min(340px, 88vw);
+  aspect-ratio: 9 / 19;
+  border-radius: 44px;
+  padding: 14px;
+  background: linear-gradient(160deg, #0f172a, #1e293b);
+  box-shadow:
+    0 32px 60px rgba(15, 23, 42, 0.35),
+    0 12px 28px rgba(37, 99, 235, 0.2);
+  z-index: 2;
+}
+
+.payment-flow__screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 32px;
+  background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 10px;
+}
+
+.payment-flow__screen-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 12px 14px 4px;
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.payment-flow__screen-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);
+}
+
+.payment-flow__screen-status {
+  margin-left: auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.payment-flow__calendar {
+  margin: 0 12px;
+  padding: 10px 12px;
+  border-radius: 22px;
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(248, 250, 252, 0.75);
+  display: grid;
+  gap: 8px;
+}
+
+.payment-flow__calendar-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.payment-flow__calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.payment-flow__calendar-slot {
+  display: block;
+  height: 16px;
+  border-radius: 6px;
+  background: #e2e8f0;
+}
+
+.payment-flow__calendar-slot--booked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  height: auto;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #34d399, #22c55e);
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.payment-flow__calendar-confirm {
+  margin: 0 12px 12px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #ecfeff;
+  border: 1px solid rgba(14, 165, 233, 0.25);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.payment-flow__calendar-confirm-icon {
+  width: 14px;
+  height: 14px;
+  color: #0ea5e9;
+}
+
+.payment-flow__receipt {
+  width: min(280px, 85vw);
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 12px 22px rgba(15, 23, 42, 0.08);
+  font-size: 0.72rem;
+  color: #334155;
+}
+
+.payment-flow__receipt-title {
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 6px;
+}
+
+.payment-flow__receipt-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.payment-flow__receipt-line--muted {
+  margin-top: 4px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.payment-flow__receipt-note {
+  margin-top: 4px;
+  text-align: right;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.payment-flow__flow-track {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.payment-flow__flow-track--vertical {
+  display: none;
+}
+
+.payment-flow__flow-path {
+  stroke: url(#payment-flow-line);
+  stroke-width: 6;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 10px 12px rgba(34, 197, 94, 0.25));
+}
+
+.payment-flow__flow-path--vertical {
+  stroke: url(#payment-flow-line-vertical);
+}
+
+.payment-flow__flow-dot circle {
+  fill: #38bdf8;
+  stroke: #0f172a;
+  stroke-width: 2;
+  filter: drop-shadow(0 8px 12px rgba(14, 116, 144, 0.35));
+}
+
+.payment-flow__flow-label {
+  position: absolute;
+  z-index: 3;
+  padding: 0.5rem 0.8rem;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  box-shadow: 0 12px 22px rgba(15, 23, 42, 0.1);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.payment-flow__flow-label--booking {
+  left: 5%;
+  top: 8%;
+  border-color: rgba(96, 165, 250, 0.6);
+  color: #1d4ed8;
+}
+
+.payment-flow__flow-label--payment {
+  right: 6%;
+  bottom: 10%;
+  border-color: rgba(134, 239, 172, 0.7);
+  color: #15803d;
+}
+
+.payment-flow__copy {
+  align-self: start;
+  margin-top: -1.4rem;
+}
+
+@media (max-width: 960px) {
+  .payment-flow__copy {
+    margin-top: 0;
+  }
+
+  .payment-flow__visual {
+    min-height: 0;
+    padding: 1.8rem 0 2rem;
+  }
+
+  .payment-flow__rings {
+    width: 360px;
+    height: 360px;
+  }
+
+  .payment-flow__brand-name {
+    font-size: 1.45rem;
+    letter-spacing: 0.14em;
+  }
+
+  .payment-flow__fee-badge::after {
+    display: none;
+  }
+
+  .payment-flow__flow {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 1.5rem;
+  }
+
+  .payment-flow__card {
+    width: min(320px, 90vw);
+    min-width: 0;
+  }
+
+  .payment-flow__flow-track--horizontal {
+    display: none;
+  }
+
+  .payment-flow__flow-track--vertical {
+    display: block;
+  }
+
+  .payment-flow__flow-label {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .payment-flow__flow-dot {
+    display: none;
+  }
+}

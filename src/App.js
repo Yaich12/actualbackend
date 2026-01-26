@@ -29,6 +29,7 @@ import GettingStartedPlaceholder from './GettingStartedPlaceholder';
 import NotEstablishedPage from './notestablished/notestablished';
 import LaunchPlannerPage from './notestablished/start/start';
 import DigitalFrontPage from './notestablished/digital-front/digital-front';
+import FirebaseEnvNotice from "./components/FirebaseEnvNotice";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();

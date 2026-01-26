@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Activity,
+  ArrowLeft,
   Brain,
   HandHeart,
   HeartPulse,
@@ -66,6 +67,14 @@ const BookingFlow: React.FC = () => {
   const [contactEmail, setContactEmail] = useState('');
   const [contactAddress, setContactAddress] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+  const paymentMethods = [
+    { key: 'MobilePay', src: '/hero-5/MobilePay-1200x627.jpg', crop: true },
+    { key: 'Apple Pay', src: '/hero-5/apple-pay-logo-coopbank.webp' },
+    { key: 'Google Pay', src: '/hero-5/unnamed.jpg' },
+    { key: 'Dankort', textOnly: true },
+    { key: 'Visa', src: '/hero-5/Visa_Grey.avif' },
+    { key: 'Mastercard', src: '/hero-5/Mastercard_2019_logo.svg' },
+  ];
 
   const categories: Category[] = useMemo(() => {
     const items = getArray('features.websiteBuilder.bookingFlow.categories', []);
@@ -181,7 +190,16 @@ const BookingFlow: React.FC = () => {
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4">
         <header className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleBack}
+                disabled={step === 1}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-blue-200 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                {t('features.websiteBuilder.bookingFlow.actions.back')}
+              </button>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
                 {t('features.websiteBuilder.bookingFlow.eyebrow')}
               </p>
@@ -454,7 +472,7 @@ const BookingFlow: React.FC = () => {
                       value={contactName}
                       onChange={(event) => setContactName(event.target.value)}
                       placeholder={t('features.websiteBuilder.bookingFlow.step4.namePlaceholder')}
-                      className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500"
+                      className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
                     />
                   </div>
                   <div>
@@ -465,7 +483,7 @@ const BookingFlow: React.FC = () => {
                       value={contactEmail}
                       onChange={(event) => setContactEmail(event.target.value)}
                       placeholder={t('features.websiteBuilder.bookingFlow.step4.emailPlaceholder')}
-                      className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500"
+                      className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
                     />
                   </div>
                   <div className="sm:col-span-2">
@@ -476,7 +494,7 @@ const BookingFlow: React.FC = () => {
                       value={contactAddress}
                       onChange={(event) => setContactAddress(event.target.value)}
                       placeholder={t('features.websiteBuilder.bookingFlow.step4.addressPlaceholder')}
-                      className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500"
+                      className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
                     />
                   </div>
                   <div>
@@ -487,8 +505,64 @@ const BookingFlow: React.FC = () => {
                       value={contactPhone}
                       onChange={(event) => setContactPhone(event.target.value)}
                       placeholder={t('features.websiteBuilder.bookingFlow.step4.phonePlaceholder')}
-                      className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500"
+                      className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
                     />
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="text-sm font-semibold text-slate-900">
+                      {t('features.websiteBuilder.bookingFlow.step4.payment.title')}
+                    </div>
+                    <div className="inline-flex items-center gap-3 rounded-full bg-slate-900 px-3 py-1.5 shadow-lg shadow-slate-900/20">
+                      <img
+                        src="/hero-5/selma-logo-final.jpg"
+                        alt="Selma+"
+                        className="h-5 w-5 rounded-full bg-white p-[3px]"
+                        loading="lazy"
+                      />
+                      <span className="text-sm font-semibold text-white/80">×</span>
+                      <img
+                        src="/hero-5/unnamed.webp"
+                        alt="Stripe"
+                        className="h-5 w-auto"
+                        loading="lazy"
+                      />
+                    </div>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600">
+                    {t('features.websiteBuilder.bookingFlow.step4.payment.description')}
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    {paymentMethods.map((method) => (
+                      <span
+                        key={method.key}
+                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm"
+                      >
+                        {method.textOnly ? (
+                          <span className="px-1 text-[11px] font-extrabold tracking-wide text-slate-700">
+                            DANKORT
+                          </span>
+                        ) : (
+                          <img
+                            src={method.src}
+                            alt={method.key}
+                            className={method.crop ? 'h-4 w-10 rounded-sm object-cover object-left' : 'h-4 w-auto'}
+                            loading="lazy"
+                          />
+                        )}
+                        <span>{method.key}</span>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700"
+                    >
+                      {t('features.websiteBuilder.bookingFlow.step4.payment.payCta')}
+                    </button>
                   </div>
                 </div>
 

@@ -41,7 +41,7 @@ export const TRANSLATIONS = {
             booking: { title: "Intelligent booking" },
             operations: { title: "Drift & økonomi" },
             copilot: { title: "Selma Copilot" },
-            website: { title: "Klinik-hjemmeside" },
+            website: { title: "Online booking" },
           },
         },
         professions: {
@@ -604,39 +604,41 @@ export const TRANSLATIONS = {
       },
       websiteBuilder: {
         whyMatters: {
-          imageAlt: "Behandler arbejder ved laptop",
+          imageAlt: "Behandler i gang med patient – aftale booket",
           badge: "Aftale booket",
           eyebrow: "Hvorfor det betyder noget",
-          title: "Hvorfor du har brug for en Selma+ bookinghjemmeside",
+          title: "Hvorfor du har brug for online booking til din klinik",
           description:
-            "Patienter vil booke online og komme videre. En Selma+ hjemmeside er bygget til behandlere og kobler direkte til dit bookingsystem, så patienter kan vælge den rigtige ydelse og tid uden at ringe.",
+            "Med Selma+ kan patienter booke selv, mens du behandler. Systemet holder kalenderen opdateret og bekræfter aftalen for dig, så nye bookinger tikker ind uden at forstyrre konsultationen.",
           bullets: [
-            "Vis fuld tilgængelighed eller filtrer efter ydelse.",
-            "Tilføj en tydelig bookingknap, der åbner din Selma+ kalender.",
-            "Fremhæv den rigtige behandling og behandler på hver side.",
-            "Hold booking synlig med banner eller CTA-blok.",
+            "Bookinger tikker ind, mens du behandler – ingen opkald eller afbrydelser.",
+            "Fuld integration med dit bookingsystem, så tider og ydelser altid er synkroniseret.",
+            "Du bestemmer rammerne: arbejdstider, ydelser og regler for hvornår patienter kan booke.",
           ],
         },
         ai: {
-          eyebrow: "Selma+ hjemmeside + AI",
-          title: "Din digitale reception døgnet rundt",
+          eyebrow: "SYNLIGHED & VÆKST",
+          title: "Mød dine patienter, der hvor de er",
           description:
-            "Sig hej til nye patienter når som helst. Din nye Selma+ hjemmeside kommer med en intelligent AI-agent, der svarer på spørgsmål og hjælper patienter med at booke med det samme.",
+            "Dit Selma+ bookinglink er din digitale nøgle. Indsæt det nemt på din Instagram-profil eller integrer det på din nuværende hjemmeside. Gør det let for følgere at blive til faste patienter.",
           features: [
             {
-              title: "Auto-genereret design",
-              description: "Smukke klinikhjemmesider klar på minutter.",
+              title: "Klar på Instagram & SoMe",
+              description:
+                "Indsæt linket i din bio under 'Book tid hos mig'. Konverter følgere til bookinger med ét klik.",
             },
             {
-              title: "Smart AI-agent",
-              description: "Svar på spørgsmål om priser, behandlinger og tider.",
+              title: "Integrer på din side",
+              description:
+                "Har du allerede en hjemmeside? Indsæt linket på en knap, så dine besøgende ryger direkte ind i din kalender.",
             },
             {
-              title: "Gå ikke glip af henvendelser",
-              description: "Fanger bookinger mens du sover eller behandler.",
+              title: "Del linket overalt",
+              description:
+                "Send linket i en SMS, nyhedsbrev eller DM, når patienter spørger. Det har aldrig været nemmere.",
             },
           ],
-          imageAlt: "Selma+ AI-agent lag",
+          imageAlt: "Bookinglink på Instagram og hjemmeside",
           chat: {
             label: "Direkte chat",
             agent: "Selma+ Agent",
@@ -669,20 +671,69 @@ export const TRANSLATIONS = {
           ],
         },
         growth: {
-          eyebrow: "Ét sted at vokse",
-          title: "Udbyg din online tilstedeværelse og kalender på samme tid",
+          eyebrow: "SIKKER BETALING",
+          title: "Tag imod betaling før patienten træder ind ad døren",
           description:
-            "Selma+ forbinder hjemmeside, ydelser og bookinger i ét flow. Patienter får klarhed, og du får færre admin-opgaver og færre no-shows.",
-          bullets: [
-            "Lad patienter booke uden at forlade hjemmesiden.",
-            "Vis tilgængelighed på tværs af team og lokationer.",
-            "Tag depositum eller betaling direkte i Selma+.",
-            "Automatiske påmindelser så patienter møder op.",
-          ],
-          callout: "Booking er altid koblet til Selma+ så du har kontrollen.",
+            "Gennem vores samarbejde med Stripe kan du tilbyde dine patienter at betale med det samme. Vi understøtter alle favoritterne: MobilePay, Apple Pay, Google Pay samt Dankort, Visa og Mastercard.",
+          cardTitle: "Minimer udeblivelser",
+          cardDescription:
+            "Forudbetaling forpligter. Ved at lade patienten betale ved booking, undgår du 'no-shows' og sikrer, at din tid altid er betalt.",
+          methods: ["MobilePay", "Apple Pay", "Visa", "Mastercard"],
+          stripeNote: "Powered by Stripe",
+        },
+        paymentFlow: {
+          eyebrow: "Betalingsflow",
+          title: "Se hvordan booking og betaling lander i klinikken",
+          description:
+            "Patienten betaler {amount} {currency}. Selma+ trækker et transaktionsgebyr på {fee} {currency} ({percent}%), og resten lander hos klinikken.",
+          stats: {
+            patientPays: "Patient betaler {amount} {currency}",
+            selmaFee: "Selma+ transaktionsgebyr ({percent}%): {fee} {currency}",
+            clinicReceives: "Klinik modtager {net} {currency}",
+          },
+          labels: {
+            scenario: "Scenario",
+            patient: "Patient",
+            selma: "Selma+",
+            clinic: "Klinik",
+            fee: "Selma+ transaktionsgebyr {percent}%: {fee} {currency}",
+          },
+          brandAlt: "Selma+ logo",
+          feeBadge: {
+            title: "Selma+ transaktionsgebyr ({percent}%): {fee} {currency}",
+            subtitle: "Til Selma+",
+          },
+          patient: {
+            title: "Patient",
+            tag: "Online booking: din klinik",
+            timeLabel: "Tid",
+            timeValue: "Tirsdag kl. 10:00",
+            priceLabel: "Pris",
+            status: "Booket og sendt direkte til kalenderen",
+          },
+          clinic: {
+            title: "Klinik modtager",
+            note: "Overført direkte til klinikken",
+          },
+          flow: {
+            bookingLabel: "Booking sendes direkte til dit bookingsystem",
+            paymentLabel: "Betaling {amount} {currency}",
+          },
+          phone: {
+            systemLabel: "Bookingsystem",
+            systemStatus: "Ledigt",
+            calendarTitle: "Ledige tider",
+            slotLabel: "Ledig tid",
+            slotValue: "10:00",
+            confirmed: "Booking lagt i kalenderen",
+            receiptTitle: "Booking betalt",
+            totalLabel: "Betaling",
+            feeLabel: "Selma+ transaktionsgebyr ({percent}%)",
+            feeNote: "Til Selma+",
+          },
         },
         builder: {
-          eyebrow: "Klinik-hjemmeside",
+          eyebrow: "Online booking",
           title: "Din professionelle klinik-side. Klar på få minutter.",
           pill: "100% integreret: Bookinger lander direkte i din kalender.",
           description:
@@ -811,8 +862,14 @@ export const TRANSLATIONS = {
             addressPlaceholder: "Gade, postnummer, by",
             phoneLabel: "Telefonnummer",
             phonePlaceholder: "+45 12 34 56 78",
+            payment: {
+              title: "Betal sikkert med Stripe",
+              description:
+                "Betalingen gennemføres ved booking, så din tid er sikret. Vi understøtter MobilePay, Apple Pay, Google Pay, Dankort, Visa og Mastercard.",
+              payCta: "Gå til betaling",
+            },
             smsCta: "Send SMS-kode",
-            smsHint: "Vi sender en kort kode til {phone}.",
+            smsHint: "Vi sender en bekræftelsesbesked til {phone}.",
             phoneFallback: "dit nummer",
             confirmCta: "Bekræft booking",
             confirmHint: "Vi sender en bekræftelse til {email}.",
@@ -849,7 +906,7 @@ export const TRANSLATIONS = {
             description:
               "Indtast dine oplysninger nedenfor, og se hvordan patienterne vil møde dig online.",
           },
-          eyebrow: "Klinik-hjemmeside",
+          eyebrow: "Online booking",
           titlePrefix: "Se din",
           titleHighlight: "fremtidige klinikside",
           titleSuffix: "live",
@@ -864,7 +921,7 @@ export const TRANSLATIONS = {
             primary:
               "Du kan uploade dine egne billeder. Hvis du ikke har dem klar, kan vi generere billeder for dig.",
             secondary:
-              "Forhåndsvisningen er kun et udkast. Den endelige klinik-hjemmeside bliver færdiggjort af professionelle webbyggere.",
+              "Forhåndsvisningen er kun et udkast. Den endelige online booking side bliver færdiggjort af professionelle webbyggere.",
           },
           badges: {
             restored: "Udkast gendannet",
@@ -918,7 +975,7 @@ export const TRANSLATIONS = {
         },
         preview: {
           draft: {
-            title: "Udkast til klinik-hjemmeside",
+            title: "Udkast til online booking",
             description:
               "Har du egne billeder, kan du indsætte dem direkte. Hvis du ikke har billeder klar, kan Selma+ generere dem for dig.",
             note: "Det færdige resultat bliver udarbejdet af professionelle webbyggere.",
@@ -1779,39 +1836,41 @@ export const TRANSLATIONS = {
       },
       websiteBuilder: {
         whyMatters: {
-          imageAlt: "Clinician working on a laptop",
+          imageAlt: "Clinician treating a patient – appointment booked",
           badge: "Appointment booked",
           eyebrow: "Why it matters",
           title: "Why you need a Selma+ booking website",
           description:
-            "Patients want to book online and move on. A Selma+ website connects directly to your booking system so patients can choose the right service and time without calling your clinic.",
+            "With Selma+, patients can book on their own while you stay focused on treatment. The system keeps your calendar in sync and confirms appointments so new bookings roll in without interrupting the session.",
           bullets: [
-            "Show full availability or filter by appointment type.",
-            "Add a clear booking button that opens your Selma+ schedule.",
-            "Highlight the right treatment and practitioner on every page.",
-            "Keep booking visible with a banner or call-to-action block.",
+            "Bookings roll in while you treat—no calls or interruptions.",
+            "Full integration with your booking system keeps services and slots synced.",
+            "You set the rules: working hours, services, and when patients can book.",
           ],
         },
         ai: {
-          eyebrow: "Selma+ website + AI",
-          title: "Your 24/7 digital receptionist",
+          eyebrow: "VISIBILITY & GROWTH",
+          title: "Meet patients where they are",
           description:
-            "Say hello to new patients anytime. Your Selma+ website comes with an AI agent that answers questions and helps patients book instantly.",
+            "Your Selma+ booking link is your digital key. Add it to your Instagram bio or embed it on your existing website. Make it effortless for followers to become recurring patients.",
           features: [
             {
-              title: "Auto-generated design",
-              description: "Beautiful clinic websites ready in minutes.",
+              title: "Ready for Instagram & social",
+              description:
+                "Add the link in your bio under 'Book with me'. Convert followers to bookings in one tap.",
             },
             {
-              title: "Smart AI agent",
-              description: "Answers questions about prices, treatments, and availability.",
+              title: "Embed on your site",
+              description:
+                "Already have a website? Put the link behind a button so visitors jump straight into your calendar.",
             },
             {
-              title: "Never miss a lead",
-              description: "Captures bookings while you sleep or treat patients.",
+              title: "Share it anywhere",
+              description:
+                "Send the link via SMS, newsletter, or DM when patients ask. It’s never been easier.",
             },
           ],
-          imageAlt: "Selma+ AI agent overlay",
+          imageAlt: "Booking link on Instagram and website",
           chat: {
             label: "Live chat",
             agent: "Selma+ Agent",
@@ -1844,17 +1903,66 @@ export const TRANSLATIONS = {
           ],
         },
         growth: {
-          eyebrow: "One place to grow",
-          title: "Grow your online presence and your calendar together",
+          eyebrow: "SECURE PAYMENTS",
+          title: "Get paid before the patient walks through the door",
           description:
-            "Selma+ connects your website, services, and bookings in one flow. Patients get clarity, while you get fewer admin tasks and fewer no-shows.",
-          bullets: [
-            "Let patients book without leaving your website.",
-            "Surface availability across your team and locations.",
-            "Collect deposits or payments directly in Selma+.",
-            "Automate reminders so patients show up prepared.",
-          ],
-          callout: "Booking stays connected to Selma+ so you stay in control.",
+            "Through our partnership with Stripe, patients can pay instantly at booking. We support the favorites: MobilePay, Apple Pay, Google Pay, plus Dankort, Visa, and Mastercard.",
+          cardTitle: "Reduce no-shows",
+          cardDescription:
+            "Prepayment creates commitment. When patients pay at booking, you avoid no-shows and make sure your time is always paid for.",
+          methods: ["MobilePay", "Apple Pay", "Visa", "Mastercard"],
+          stripeNote: "Powered by Stripe",
+        },
+        paymentFlow: {
+          eyebrow: "Payment flow",
+          title: "See how booking and payment land in your clinic",
+          description:
+            "The patient pays {amount} {currency}. Selma+ takes a transaction fee of {fee} {currency} ({percent}%), and the rest goes to the clinic.",
+          stats: {
+            patientPays: "Patient pays {amount} {currency}",
+            selmaFee: "Selma+ transaction fee ({percent}%): {fee} {currency}",
+            clinicReceives: "Clinic receives {net} {currency}",
+          },
+          labels: {
+            scenario: "Scenario",
+            patient: "Patient",
+            selma: "Selma+",
+            clinic: "Clinic",
+            fee: "Selma+ transaction fee {percent}%: {fee} {currency}",
+          },
+          brandAlt: "Selma+ logo",
+          feeBadge: {
+            title: "Selma+ transaction fee ({percent}%): {fee} {currency}",
+            subtitle: "To Selma+",
+          },
+          patient: {
+            title: "Patient",
+            tag: "Online booking: your clinic",
+            timeLabel: "Time",
+            timeValue: "Tuesday at 10:00",
+            priceLabel: "Price",
+            status: "Booked and sent straight to the calendar",
+          },
+          clinic: {
+            title: "Clinic receives",
+            note: "Transferred directly to the clinic",
+          },
+          flow: {
+            bookingLabel: "Booking sent straight into your system",
+            paymentLabel: "Payment {amount} {currency}",
+          },
+          phone: {
+            systemLabel: "Booking system",
+            systemStatus: "Available",
+            calendarTitle: "Open slots",
+            slotLabel: "Open slot",
+            slotValue: "10:00",
+            confirmed: "Booking added to the calendar",
+            receiptTitle: "Booking paid",
+            totalLabel: "Payment",
+            feeLabel: "Selma+ transaction fee ({percent}%)",
+            feeNote: "To Selma+",
+          },
         },
         builder: {
           eyebrow: "Clinic website",
@@ -1985,8 +2093,14 @@ export const TRANSLATIONS = {
             addressPlaceholder: "Street, postal code, city",
             phoneLabel: "Phone number",
             phonePlaceholder: "+1 555 123 4567",
+            payment: {
+              title: "Secure payment with Stripe",
+              description:
+                "Payment is completed at booking so your time is secured. We support MobilePay, Apple Pay, Google Pay, Dankort, Visa, and Mastercard.",
+              payCta: "Go to payment",
+            },
             smsCta: "Send SMS code",
-            smsHint: "We'll send a short code to {phone}.",
+            smsHint: "We'll send a confirmation message to {phone}.",
             phoneFallback: "your number",
             confirmCta: "Confirm booking",
             confirmHint: "We'll send a confirmation to {email}.",
