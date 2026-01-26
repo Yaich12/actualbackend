@@ -504,6 +504,83 @@
   align-items: start;
 }
 
+.client-details-body--assistant-open {
+  grid-template-columns: 1fr;
+  margin-right: 520px;
+  transition: grid-template-columns 0.25s ease, margin-right 0.25s ease;
+}
+
+.client-details-body--assistant-open .client-details-sidebar {
+  display: none;
+}
+
+.client-details-body--assistant-open .client-details-journal-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.client-details-body--assistant-open .client-details-assistant-column {
+  display: none;
+}
+
+.client-details-journal-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.client-details-journal-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.client-details-assistant-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.client-details-assistant-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 0;
+  max-height: 620px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.client-details-assistant-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.client-details-assistant-card .indlæg-card {
+  border: none;
+  box-shadow: none;
+  max-height: 580px;
+}
+
+.client-details-assistant-card .indlæg-card-body--assistant {
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.client-details-assistant-trigger {
+  margin: 0;
+}
+
+@media (max-width: 1100px) {
+  .client-details-journal-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .client-details-sidebar {
   display: flex;
   flex-direction: column;
@@ -772,6 +849,28 @@
 .client-details-read-btn:hover {
   background-color: #f9fafb;
   border-color: #9ca3af;
+}
+
+.client-details-delete-btn {
+  padding: 6px 12px;
+  border: 1px solid #ef4444;
+  background-color: #fff1f2;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b91c1c;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.client-details-delete-btn:hover:not(:disabled) {
+  background-color: #fee2e2;
+  border-color: #dc2626;
+}
+
+.client-details-delete-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .client-details-entry-read {
@@ -1242,4 +1341,12 @@
 .client-details-programs-card-grid {
   display: grid;
   gap: 16px;
+}
+
+.client-details-assistant-panel {
+  margin-top: 12px;
+}
+
+.client-details-assistant-panel .indlæg-card {
+  width: 100%;
 }

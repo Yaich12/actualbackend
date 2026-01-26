@@ -12,20 +12,26 @@ const { CortiClient, CortiError } = require('@corti/sdk');
 const cors = require('cors');
 const OpenAI = require('openai');
 const cortiRoutes = require('./routes/cortiRoutes');
+const agentRegistryRoutes = require('./routes/agentRegistryRoutes');
+const rehabAgentRoutes = require('./routes/rehabAgentRoutes');
 const { createCortiTranscribeWss } = require('./ws/cortiTranscribeProxy');
 const { createFactsStreamWss } = require('./ws/factsStreamProxy');
+const { SYSTEM_PROMPT } = require('./cortiAgentSystemPrompt');
+const { createCortiClient, getAccessToken, resolvedCortiEnv, resolvedEnvironment } = require('./cortiAuth');
+const cortiClientSingleton = require('./src/corti/cortiClient');
+const { getOrCreateAgentId } = require('./server/corti/agentRegistry');
 const {
-  createCortiClient,
-  getAccessToken,
-  resolvedCortiEnv,
-  resolvedEnvironment,
-} = require('./cortiAuth');
+  getOrCreateClinicalEducationAgent,
+  sendClinicalEducationMessage,
+} = require('./src/corti/clinicalEducationAgent');
+const { initAgent, chatWithAgent } = require('./services/cortiAgentService');
 // For facts/insights fetch
 const CORTI_API_BASE =
   resolvedCortiEnv === 'us' ? 'https://api.us.corti.app/v2' : 'https://api.eu.corti.app/v2';
+const CORTI_AGENT_BASE_URL = 'https://api.eu.corti.app/v2';
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 app.use(
   cors({
     origin: '*',
@@ -34,6 +40,8 @@ app.use(
   })
 );
 app.use('/api/corti', cortiRoutes);
+app.use('/api/agents/rehab', rehabAgentRoutes);
+app.use('/api/agents', agentRegistryRoutes);
 const execFileAsync = util.promisify(execFile);
 
 const getOpenAIClient = () => {
@@ -62,8 +70,8 @@ Din opgave er at assistere behandleren med journalføring, opsummering og faglig
 3. **Sikkerhed (Red Flags):**
    - Vær opmærksom på 'Røde Flag' i begge lejre (f.eks. Cauda Equina syndrom ved rygsmerter ELLER selvmordsrisiko ved depression). Hvis du spotter disse, skal du markere dem tydeligt til behandleren.
 
-4. **Sprog:**
-   - Brug korrekt dansk fagterminologi. Tillad latin for anatomiske begreber (f.eks. 'm. trapezius', 'columna').
+4. **Language:**
+   - Respond in the OUTPUT_LANGUAGE provided by the user.
 
 Du må ikke stille diagnoser, kun komme med fagligt funderede forslag til journalnotatet.`;
 
@@ -611,56 +619,153 @@ app.post('/api/facts-stream/init', async (req, res) => {
 });
 
 // --- Agent endpoints ---
-// Initialize agent (create once and reuse)
-app.post('/api/init-agent', async (req, res) => {
-  try {
-    console.info('Init-agent: starting');
-    if (process.env.CORTI_AGENT_ID) {
-      cachedAgentId = process.env.CORTI_AGENT_ID;
-      return res.json({ agentId: cachedAgentId });
+const buildCortiHeaders = (accessToken) => ({
+  Authorization: `Bearer ${accessToken}`,
+  'Content-Type': 'application/json',
+  ...(process.env.CORTI_TENANT_NAME ? { 'Tenant-Name': process.env.CORTI_TENANT_NAME } : {}),
+});
+
+const parseAgentIdFromResponse = (resp) => {
+  const body = resp?.data || {};
+  let agentId =
+    body.id ||
+    body.agentId ||
+    body.agent_id ||
+    body.agent?.id ||
+    body.agent?.agentId;
+
+  if (!agentId && resp?.headers) {
+    const loc = resp.headers.location || resp.headers.Location;
+    if (loc && typeof loc === 'string') {
+      const parts = loc.split('/').filter(Boolean);
+      agentId = parts[parts.length - 1];
     }
-    const token = await getAccessToken();
-    console.info('Init-agent: token acquired');
-    if (cachedAgentId) {
-      return res.json({ agentId: cachedAgentId });
-    }
-    const systemPrompt = req.body?.systemPrompt || DEFAULT_AGENT_PROMPT;
-    let agentId = null;
-    // Try to list existing agents first
-    try {
-      const agents = await listCortiAgents(token);
-      if (Array.isArray(agents) && agents.length > 0) {
-        const first = agents.find((a) => a.id) || agents[0];
-        agentId = first?.id;
-        console.info('Init-agent: using existing agentId from list', agentId);
-      }
-    } catch (listErr) {
-      console.error('List agents failed (continuing to create):', listErr.message || listErr);
-    }
-    // If none found, try create
-    if (!agentId) {
-      const createdId = await createCortiAgent(token, systemPrompt);
-      if (createdId) {
-        agentId = createdId;
-        console.info('Init-agent: created agentId', agentId);
-      } else {
-        throw new Error('No agentId returned from create');
-      }
-    }
-    if (!agentId || `${agentId}`.trim() === '') {
-      throw new Error('AgentId empty after create/list');
-    }
-    cachedAgentId = agentId;
-    return res.json({ agentId });
-  } catch (error) {
-    console.error('Init agent error:', error?.response?.data || error);
-    return res
-      .status(error?.response?.status || 500)
-      .json({
-        error: error?.message || 'Failed to init agent',
-        details: error?.response?.data || error?.stack || error,
-      });
   }
+
+  return agentId;
+};
+
+const extractAgentResponseText = (data) => {
+  const candidateParts =
+    data?.task?.status?.message?.parts ||
+    data?.message?.parts ||
+    data?.parts ||
+    [];
+  if (Array.isArray(candidateParts) && candidateParts.length) {
+    const textPart = candidateParts.find((p) => p?.kind === 'text') || candidateParts[0];
+    if (textPart?.text) return textPart.text;
+    const joined = candidateParts.map((p) => p?.text || '').filter(Boolean).join('\n').trim();
+    if (joined) return joined;
+  }
+  return (
+    data?.task?.status?.message?.text ||
+    data?.message?.text ||
+    data?.text ||
+    '(tomt svar fra agent)'
+  );
+};
+
+const resolveAgentIdFromCreate = (created) =>
+  created?.id || created?.data?.id || created?.agent?.id || created?.agentId || null;
+
+const pollTaskUntilDone = async (client, agentId, taskId, maxTries = 30, delayMs = 500) => {
+  for (let attempt = 0; attempt < maxTries; attempt += 1) {
+    const task = await client.agents.getTask(agentId, taskId, {
+      tenantName: process.env.CORTI_TENANT_NAME,
+    });
+    const state = task?.status?.state || task?.state;
+    if (state === 'completed' || state === 'failed') {
+      return task;
+    }
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  throw new Error('Task polling timed out');
+};
+
+const extractTextFromTask = (task) => {
+  if (!task) return '';
+  if (Array.isArray(task?.artifacts) && task.artifacts.length) {
+    for (let i = task.artifacts.length - 1; i >= 0; i -= 1) {
+      const art = task.artifacts[i];
+      const parts = art?.parts || [];
+      const textPart = Array.isArray(parts) ? parts.find((p) => p?.kind === 'text' && p?.text) : null;
+      if (textPart?.text) return textPart.text;
+      const joined = parts.map((p) => p?.text || '').filter(Boolean).join('\n').trim();
+      if (joined) return joined;
+    }
+  }
+  if (Array.isArray(task?.history)) {
+    for (let i = task.history.length - 1; i >= 0; i -= 1) {
+      const h = task.history[i];
+      if (h?.message?.role === 'assistant' && Array.isArray(h?.message?.parts)) {
+        const t = h.message.parts.find((p) => p?.kind === 'text' && p?.text)?.text;
+        if (t) return t;
+      }
+    }
+  }
+  return '';
+};
+
+app.post('/api/agent/init', async (_req, res) => {
+  try {
+    const cortiClient = await createCortiClient();
+    const agentId = await getOrCreateAgentId('education', cortiClient);
+    return res.json({ ok: true, agentId });
+  } catch (error) {
+    const status = error?.response?.status || 500;
+    const msg = error?.message || 'Failed to init agent';
+    console.error('[AGENT_INIT] error:', msg);
+    return res.status(status).json({ ok: false, error: msg });
+  }
+});
+
+app.post('/api/agent/chat', async (req, res) => {
+  try {
+    const {
+      agentId,
+      message,
+      patientName,
+      clientId,
+      notesContext,
+      sourceText,
+      mode,
+      agentType,
+      preferredLanguage,
+    } = req.body || {};
+    const ctx = `${sourceText || notesContext || ''}`.trim();
+    if (!ctx) {
+      return res.status(400).json({ ok: false, error: 'Missing sourceText' });
+    }
+    const msgLen = `${message || ''}`.length;
+    console.log('[AGENT_CHAT] lengths ctx=%s msg=%s', ctx.length, msgLen);
+    let effectiveAgentId = agentId;
+    if (agentType === 'improvement') {
+      const cortiClient = await createCortiClient();
+      effectiveAgentId = await getOrCreateAgentId('improvement', cortiClient);
+    }
+    console.log('[AgentChat] agentType:', agentType, 'effectiveAgentId:', effectiveAgentId);
+    const resp = await chatWithAgent({
+      agentId: effectiveAgentId,
+      message,
+      patientName,
+      clientId,
+      notesContext,
+      sourceText: ctx,
+      mode,
+      preferredLanguage,
+    });
+    if (resp?.agentId) cachedAgentId = resp.agentId;
+    return res.json({ ok: true, text: resp.text, agentId: resp.agentId });
+  } catch (error) {
+    const status = error?.response?.status || 500;
+    const msg = error?.message || 'Failed to send agent message';
+    console.error('[AGENT_CHAT] error:', msg);
+    return res.status(status).json({ ok: false, error: msg });
+  }
+});
+
+app.get('/api/agent/health', (_req, res) => {
+  return res.json({ ok: true, cachedAgentId });
 });
 
 app.options('/api/builder/generate', (req, res) => {
@@ -1034,37 +1139,9 @@ app.post('/api/builder/chat', async (req, res) => {
   }
 });
 
-// Chat with agent
+// Chat with agent (deprecated)
 app.post('/api/chat', async (req, res) => {
-  try {
-    const { message, agentId: incomingAgentId, clientId, clientName, clientSummary } = req.body || {};
-    if (!message || typeof message !== 'string') {
-      return res.status(400).json({ error: 'Missing message' });
-    }
-    const token = await getAccessToken();
-    const agentId = incomingAgentId || cachedAgentId;
-    if (!agentId) {
-      return res.status(400).json({ error: 'Agent not initialized' });
-    }
-    const contextLines = [];
-    if (clientId || clientName) {
-      contextLines.push(`Kontekst: Klient ${clientName || ''} (ID: ${clientId || 'ukendt'})`);
-    }
-    if (clientSummary) {
-      contextLines.push(`Seneste noter/historik: ${clientSummary}`);
-    } else {
-      contextLines.push('Historik fra backend ikke vedhæftet i denne version.');
-    }
-    const finalText = contextLines.length ? `${contextLines.join('\n')}\n\n${message}` : message;
-
-    const reply = await sendAgentMessage(token, agentId, finalText);
-    return res.json({ agentId, text: reply.text, raw: reply.raw });
-  } catch (error) {
-    console.error('Chat error:', error?.response?.data || error);
-    return res
-      .status(error?.response?.status || 500)
-      .json({ error: error?.message || 'Failed to send chat', details: error?.response?.data });
-  }
+  return res.status(410).json({ error: 'Use /api/agent/chat' });
 });
 
 const PORT = process.env.PORT || 4000;

@@ -21,24 +21,6 @@ const navSections = [
     heading: 'Personligt',
     items: [
       { key: 'Profil', label: 'Profil' },
-      { key: 'Adresser', label: 'Adresser' },
-      { key: 'Nødkontakter', label: 'Nødkontakter' },
-    ],
-  },
-  {
-    heading: 'Arbejdsområde',
-    items: [
-      { key: 'Tjenester', label: 'Tjenester', count: 3 },
-      { key: 'Placeringer', label: 'Placeringer', count: 1 },
-      { key: 'Indstillinger', label: 'Indstillinger' },
-    ],
-  },
-  {
-    heading: 'Betal',
-    items: [
-      { key: 'Lønninger', label: 'Lønninger og timesedler' },
-      { key: 'Provisioner', label: 'Provisioner' },
-      { key: 'Lønkørsler', label: 'Lønkørsler' },
     ],
   },
 ];

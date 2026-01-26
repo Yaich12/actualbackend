@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   collection,
   deleteDoc,
@@ -21,6 +21,8 @@ import { db } from '../../../firebase';
 import { useUserClients } from './hooks/useUserClients';
 import useAppointments from '../../../hooks/useAppointments';
 import { ChevronDown, ChevronLeft } from 'lucide-react';
+import AnimatedGenerateButton from '../../../components/ui/animated-generate-button-shadcn-tailwind';
+import CortiAssistantPanel from '../components/CortiAssistantPanel';
 
 const getClientInitials = (client) => {
   const source = (client?.navn || client?.email || '').trim();
@@ -32,6 +34,23 @@ const getClientInitials = (client) => {
     .slice(0, 2)
     .toUpperCase();
 };
+
+const getBackendHttpBase = () => {
+  const envBase = process.env.REACT_APP_BACKEND_URL;
+  if (envBase && typeof envBase === 'string') {
+    return envBase.replace(/\/+$/, '');
+  }
+
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname === 'localhost') return 'http://localhost:4000';
+    return window.location.origin;
+  }
+
+  return 'http://localhost:4000';
+};
+
+const backendBase = getBackendHttpBase();
+const apiUrl = (path) => `${backendBase}${path.startsWith('/') ? '' : '/'}${path}`;
 
 const ClientDetails = ({
   client,
@@ -56,6 +75,18 @@ const ClientDetails = ({
   const [summaryError, setSummaryError] = useState('');
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [readingJournalEntry, setReadingJournalEntry] = useState(null);
+  const [deletingJournalId, setDeletingJournalId] = useState(null);
+  const [journalActionError, setJournalActionError] = useState('');
+  const [assistantAgentIds, setAssistantAgentIds] = useState({});
+  const [assistantReady, setAssistantReady] = useState(false);
+  const [assistantLoading, setAssistantLoading] = useState(false);
+  const [assistantError, setAssistantError] = useState('');
+  const [assistantMessages, setAssistantMessages] = useState([]);
+  const [assistantInput, setAssistantInput] = useState('');
+  const [assistantChatLoading, setAssistantChatLoading] = useState(false);
+  const [assistantActivePreset, setAssistantActivePreset] = useState('');
+  const assistantPanelRef = useRef(null);
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [editingForloebIndex, setEditingForloebIndex] = useState(null); // null = new, number = editing index
   const [isAddingForloeb, setIsAddingForloeb] = useState(false); // Track if we're in "add" mode
   const [forloebList, setForloebList] = useState([]); // Array of treatment courses
@@ -193,6 +224,16 @@ const ClientDetails = ({
     return () => unsubscribe();
   }, [userId, client?.id]);
 
+  useEffect(() => {
+    setAssistantMessages([]);
+    setAssistantActivePreset('');
+    setAssistantInput('');
+    setAssistantError('');
+    setAssistantReady(false);
+    setAssistantAgentIds({});
+    setIsAssistantOpen(false);
+  }, [client?.id]);
+
   const normalizeValue = (value) =>
     typeof value === 'string' ? value.trim().toLowerCase() : '';
 
@@ -220,6 +261,42 @@ const ClientDetails = ({
         return dateB - dateA;
       });
   }, [appointments, client]);
+
+  const assistantQuickActions = useMemo(
+    () => [
+      { label: 'Manglende info', message: 'Manglende info' },
+      { label: 'Røde flag', message: 'Røde flag' },
+      { label: 'Objektive tests', message: 'Objektive tests' },
+      { label: 'Plan + HEP', message: 'Plan + HEP' },
+      {
+        label: 'Opsummér patient',
+        message:
+          'Opsummér patientens samlede forløb ud fra journalerne. Skriv: Problem, udvikling over tid, vigtigste fund, hvad der er prøvet, hvad der virker, næste fokus og hvad jeg skal spørge ind til næste gang.',
+      },
+    ],
+    []
+  );
+
+  const handleDeleteJournalEntry = async (entryId) => {
+    if (!entryId || !userId || !client?.id) return;
+    const confirmed = window.confirm('Er du sikker på, at du vil slette dette notat?');
+    if (!confirmed) return;
+
+    setJournalActionError('');
+    setDeletingJournalId(entryId);
+    try {
+      const entryRef = doc(db, 'users', userId, 'clients', client.id, 'journalEntries', entryId);
+      await deleteDoc(entryRef);
+      if (readingJournalEntry?.id === entryId) {
+        setReadingJournalEntry(null);
+      }
+    } catch (err) {
+      console.error('[ClientDetails] Failed to delete journal entry', err);
+      setJournalActionError('Kunne ikke slette notatet. Prøv igen.');
+    } finally {
+      setDeletingJournalId(null);
+    }
+  };
 
   const formatAppointmentDate = (appointment) => {
     if (!appointment) return '';
@@ -249,6 +326,249 @@ const ClientDetails = ({
     }
     return '';
   };
+
+  const buildJournalContextText = useCallback(
+    (entries = []) => {
+      if (!Array.isArray(entries) || entries.length === 0) return '';
+      const latest = entries.slice(0, 15);
+      const parts = [];
+      let totalLength = 0;
+      const MAX_CHARS = 25000;
+
+      for (const entry of latest) {
+        const title = entry?.title || 'Journalnotat';
+        const dateText = formatJournalDate(entry) || 'Ukendt dato';
+        const content = (entry?.content || '').trim();
+        const block = `### ${dateText} - ${title}\n${content}\n\n---\n\n`;
+        const nextLength = totalLength + block.length;
+        if (nextLength > MAX_CHARS) {
+          const remaining = MAX_CHARS - totalLength;
+          if (remaining > 0) parts.push(block.slice(0, remaining));
+          break;
+        }
+        parts.push(block);
+        totalLength = nextLength;
+      }
+
+      return parts.join('').trim();
+    },
+    [formatJournalDate]
+  );
+
+  const journalContextText = useMemo(
+    () => buildJournalContextText(journalEntries),
+    [buildJournalContextText, journalEntries]
+  );
+
+  const assistantStatusText = assistantError
+    ? 'AGENT: FEJL'
+    : assistantLoading
+    ? 'AGENT: LOADER'
+    : assistantReady && Object.keys(assistantAgentIds).length
+    ? 'AGENT: KLAR'
+    : 'AGENT: IKKE KLAR';
+
+  const hasNotesContext = Boolean(journalContextText);
+
+  const ensureAssistantAgentId = useCallback(
+    async (agentKey) => {
+      if (!agentKey) return null;
+      if (assistantAgentIds[agentKey]) return assistantAgentIds[agentKey];
+      setAssistantLoading(true);
+      setAssistantError('');
+      try {
+        const response = await fetch(apiUrl(`/api/agents/${encodeURIComponent(agentKey)}/init`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const raw = await response.text();
+        let data = null;
+        try {
+          data = raw ? JSON.parse(raw) : {};
+        } catch (parseErr) {
+          throw new Error(`Agent init parse failed (${response.status}): ${raw.slice(0, 200)}`);
+        }
+
+        if (!response.ok || !data?.ok || !data?.agentId) {
+          throw new Error(data?.error || raw.slice(0, 200) || `Agent init fejlede (${response.status})`);
+        }
+
+        setAssistantAgentIds((prev) => ({ ...prev, [agentKey]: data.agentId }));
+        setAssistantReady(true);
+        console.log('[ClientDetails] agent init ok', agentKey, data.agentId);
+        return data.agentId;
+      } catch (error) {
+        console.error('[ClientDetails] Agent init error:', error);
+        setAssistantError(error?.message || 'Kunne ikke initialisere agenten.');
+        setAssistantReady(false);
+        return null;
+      } finally {
+        setAssistantLoading(false);
+      }
+    },
+    [assistantAgentIds]
+  );
+
+  const sendRehabPlanMessage = useCallback(
+    async (displayMessage = 'Plan + HEP') => {
+      const sourceText = `${journalContextText || ''}`.trim();
+      if (!sourceText) {
+        setAssistantMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            text: 'Ingen tekst fundet – skriv et notat eller indtast tekst først.',
+            ts: Date.now(),
+          },
+        ]);
+        return;
+      }
+
+      setAssistantError('');
+      setAssistantChatLoading(true);
+      setAssistantMessages((prev) => [...prev, { role: 'user', text: displayMessage, ts: Date.now() }]);
+
+      try {
+        await ensureAssistantAgentId('rehab');
+        const response = await fetch(apiUrl('/api/agents/rehab/chat'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceText,
+            question:
+              'Create Plan + HEP based on the notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+          }),
+        });
+
+        const raw = await response.text();
+        let data = null;
+        try {
+          data = raw ? JSON.parse(raw) : {};
+        } catch (parseErr) {
+          throw new Error(`Rehab chat parse failed (${response.status}): ${raw.slice(0, 200)}`);
+        }
+
+        if (!response.ok || !data?.ok) {
+          throw new Error(data?.error || raw.slice(0, 200) || `Rehab svar fejlede (${response.status})`);
+        }
+
+        const replyText = data?.text || '(tomt svar fra agent)';
+        setAssistantMessages((prev) => [...prev, { role: 'assistant', text: replyText, ts: Date.now() }]);
+      } catch (error) {
+        console.error('[ClientDetails] Rehab agent chat error:', error);
+        setAssistantError(error?.message || 'Agenten kunne ikke svare.');
+      } finally {
+        setAssistantChatLoading(false);
+        setAssistantInput('');
+      }
+    },
+    [ensureAssistantAgentId, journalContextText]
+  );
+
+  const ACTION_TO_AGENT = useMemo(
+    () => ({
+      'Manglende info': 'improvement',
+      'Røde flag': 'education',
+      'Objektive tests': 'education',
+      'Plan + HEP': 'rehab',
+      'Opsummér patient': 'education',
+      freeText: 'education',
+    }),
+    []
+  );
+
+  const ACTION_PROMPTS = useMemo(
+    () => ({
+      'Manglende info':
+        'Find missing clinical information in these notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+      'Røde flag':
+        'Identify red flags and escalation criteria based on the notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+      'Objektive tests':
+        'Suggest relevant objective tests based on the notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+      'Opsummér patient':
+        'Summarize this patient’s full history across all notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+    }),
+    []
+  );
+
+  const sendAssistantMessage = useCallback(
+    async (overrideMessage = null, _agentType = null, label) => {
+      const finalMessage = `${overrideMessage ?? assistantInput}`.trim();
+      if (!finalMessage && label !== 'Plan + HEP') return;
+      const isCustomInput = overrideMessage === null || overrideMessage === undefined;
+
+      if (isCustomInput) {
+        setAssistantActivePreset('');
+      }
+
+      if (label === 'Plan + HEP') {
+        await sendRehabPlanMessage(label);
+        return;
+      }
+
+      const resolvedLabel = label || 'freeText';
+      const agentKey = ACTION_TO_AGENT[resolvedLabel] || 'education';
+      const promptMessage =
+        resolvedLabel === 'freeText' ? finalMessage : ACTION_PROMPTS[resolvedLabel] || finalMessage;
+
+      const sourceText = `${journalContextText || ''}`.trim() || promptMessage;
+      if (!sourceText) {
+        setAssistantError('Ingen notater fundet for patienten endnu.');
+        return;
+      }
+
+      const agentId = await ensureAssistantAgentId(agentKey);
+      if (!agentId) {
+        setAssistantError('Agent ikke klar endnu.');
+        return;
+      }
+
+      setAssistantError('');
+      setAssistantChatLoading(true);
+      setAssistantMessages((prev) => [...prev, { role: 'user', text: promptMessage, ts: Date.now() }]);
+
+      try {
+        const response = await fetch(apiUrl(`/api/agents/${encodeURIComponent(agentKey)}/chat`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: promptMessage,
+            sourceText,
+          }),
+        });
+
+        const raw = await response.text();
+        let data = null;
+        try {
+          data = raw ? JSON.parse(raw) : {};
+        } catch (parseErr) {
+          throw new Error(`Agent chat parse failed (${response.status}): ${raw.slice(0, 200)}`);
+        }
+
+        if (!response.ok || !data?.ok) {
+          throw new Error(data?.error || raw.slice(0, 200) || `Agent svar fejlede (${response.status})`);
+        }
+
+        const replyText = data?.reply || data?.text || '(tomt svar fra agent)';
+        setAssistantMessages((prev) => [...prev, { role: 'assistant', text: replyText, ts: Date.now() }]);
+      } catch (error) {
+        console.error('[ClientDetails] Agent chat error:', error);
+        setAssistantError(error?.message || 'Agenten kunne ikke svare.');
+      } finally {
+        setAssistantChatLoading(false);
+        setAssistantInput('');
+      }
+    },
+    [
+      ACTION_PROMPTS,
+      ACTION_TO_AGENT,
+      assistantInput,
+      ensureAssistantAgentId,
+      journalContextText,
+      sendRehabPlanMessage,
+    ]
+  );
 
   const handleSaveGoals = async () => {
     if (!userId || !client?.id) {
@@ -467,6 +787,12 @@ const ClientDetails = ({
     }
   };
 
+  const scrollToAssistantPanel = () => {
+    if (assistantPanelRef.current) {
+      assistantPanelRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   return (
     <div className="client-details">
       <div className="client-details-header">
@@ -489,7 +815,11 @@ const ClientDetails = ({
         </button>
       </div>
 
-      <div className="client-details-body">
+      <div
+        className={`client-details-body${
+          isAssistantOpen && activeTab === 'journal' ? ' client-details-body--assistant-open' : ''
+        }`}
+      >
         <aside className="client-details-sidebar">
           <div className="client-details-card client-details-card--profile">
             <div className="client-details-avatar">{getClientInitials(client)}</div>
@@ -544,124 +874,84 @@ const ClientDetails = ({
           <div className="client-details-panel">
             {activeTab === 'journal' ? (
               <>
-                <div className="client-details-toolbar">
-                  <button
-                    type="button"
-                    className="client-details-primary-button"
-                    onClick={handleSummarizePatient}
-                    disabled={isSummarizing}
-                  >
-                    {isSummarizing ? 'Opsummerer…' : 'Opsummér patient'}
-                  </button>
-                </div>
-                {(summaryError || summaryText) && (
-                  <div className="client-details-summary">
-                    {summaryError && (
+                <div className="client-details-journal-grid">
+                  <div className="client-details-journal-main">
+                    <div className="client-details-toolbar">
+                      <AnimatedGenerateButton
+                        type="button"
+                        className="indlæg-selma-btn"
+                        labelIdle="Selma"
+                        labelActive="Selma"
+                        onClick={() => setIsAssistantOpen((prev) => !prev)}
+                        disabled={assistantLoading}
+                      >
+                      </AnimatedGenerateButton>
+                    </div>
+                    {(summaryError || summaryText) && (
+                      <div className="client-details-summary">
+                        {summaryError && (
+                          <div className="client-details-summary-error" role="alert">
+                            {summaryError}
+                          </div>
+                        )}
+                        {summaryText && (
+                          <div className="client-details-summary-card">
+                            <h3>Opsummering af journal</h3>
+                            <pre>{summaryText}</pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {journalActionError && (
                       <div className="client-details-summary-error" role="alert">
-                        {summaryError}
+                        {journalActionError}
                       </div>
                     )}
-                    {summaryText && (
-                      <div className="client-details-summary-card">
-                        <h3>Opsummering af journal</h3>
-                        <pre>{summaryText}</pre>
+                    {journalLoading ? (
+                      <div className="client-details-empty">
+                        <p>Henter journalindlæg...</p>
                       </div>
-                    )}
-                  </div>
-                )}
-                {journalLoading ? (
-                  <div className="client-details-empty">
-                    <p>Henter journalindlæg...</p>
-                  </div>
-                ) : journalError ? (
-                  <div className="client-details-empty">
-                    <p>{journalError}</p>
-                  </div>
-                ) : journalEntries.length === 0 ? (
-                  <div className="client-details-empty">
-                    <h4>Ingen journalindlæg endnu</h4>
-                    <p>Der er endnu ikke oprettet journalnotater for {client?.navn || 'klienten'}.</p>
-                  </div>
-                ) : (
-                  <>
-                    {readingJournalEntry ? (
-                      <div className="client-details-entry-read">
-                        <div className="client-details-entry-read-header">
-                          <h3 className="client-details-entry-read-title">
-                            {formatJournalDate(readingJournalEntry)}
-                          </h3>
-                          <button
-                            type="button"
-                            className="client-details-close-read-btn"
-                            onClick={() => setReadingJournalEntry(null)}
-                          >
-                            ✕
-                          </button>
-                        </div>
-                        <div className="client-details-entry-read-content">
-                          {readingJournalEntry.content || 'Ingen indhold'}
-                        </div>
-                        <div className="client-details-entry-read-footer">
-                          <button
-                            type="button"
-                            className="client-details-primary-button"
-                            onClick={() => {
-                              setReadingJournalEntry(null);
-                              navigate('/journal', { 
-                                state: { 
-                                  clientId: client?.id,
-                                  clientName: client?.navn,
-                                  entryId: readingJournalEntry.id,
-                                  entry: {
-                                    ...readingJournalEntry,
-                                    clientId: client?.id,
-                                    clientName: client?.navn,
-                                  }
-                                } 
-                              });
-                            }}
-                          >
-                            Åben notat
-                          </button>
-                        </div>
+                    ) : journalError ? (
+                      <div className="client-details-empty">
+                        <p>{journalError}</p>
+                      </div>
+                    ) : journalEntries.length === 0 ? (
+                      <div className="client-details-empty">
+                        <h4>Ingen journalindlæg endnu</h4>
+                        <p>Der er endnu ikke oprettet journalnotater for {client?.navn || 'klienten'}.</p>
                       </div>
                     ) : (
-                      <div className="client-details-list">
-                        {journalEntries.map((entry) => (
-                          <div key={entry.id} className="client-details-entry">
-                            <div className="client-details-entry-title">
-                              {formatJournalDate(entry)}
-                            </div>
-                            {entry.content ? (
-                              <div className="client-details-entry-body">
-                                {(() => {
-                                  const content = entry.content || '';
-                                  const lines = content.split('\n');
-                                  const preview = lines.slice(0, 3).join('\n');
-                                  return preview + (lines.length > 3 ? '...' : '');
-                                })()}
-                              </div>
-                            ) : null}
-                            <div className="client-details-entry-footer">
+                      <>
+                        {readingJournalEntry ? (
+                          <div className="client-details-entry-read">
+                            <div className="client-details-entry-read-header">
+                              <h3 className="client-details-entry-read-title">
+                                {formatJournalDate(readingJournalEntry)}
+                              </h3>
                               <button
                                 type="button"
-                                className="client-details-read-btn"
-                                onClick={() => setReadingJournalEntry(entry)}
+                                className="client-details-close-read-btn"
+                                onClick={() => setReadingJournalEntry(null)}
                               >
-                                Læs notat
+                                ✕
                               </button>
+                            </div>
+                            <div className="client-details-entry-read-content">
+                              {readingJournalEntry.content || 'Ingen indhold'}
+                            </div>
+                            <div className="client-details-entry-read-footer">
                               <button
                                 type="button"
                                 className="client-details-primary-button"
                                 onClick={() => {
-                                  // Navigate to journal entry page with entry data
+                                  setReadingJournalEntry(null);
                                   navigate('/journal', { 
                                     state: { 
                                       clientId: client?.id,
                                       clientName: client?.navn,
-                                      entryId: entry.id,
+                                      entryId: readingJournalEntry.id,
                                       entry: {
-                                        ...entry,
+                                        ...readingJournalEntry,
                                         clientId: client?.id,
                                         clientName: client?.navn,
                                       }
@@ -673,10 +963,109 @@ const ClientDetails = ({
                               </button>
                             </div>
                           </div>
-                        ))}
-                      </div>
+                        ) : (
+                          <div className="client-details-list">
+                            {journalEntries.map((entry) => (
+                              <div key={entry.id} className="client-details-entry">
+                                <div className="client-details-entry-title">
+                                  {formatJournalDate(entry)}
+                                </div>
+                                {entry.content ? (
+                                  <div className="client-details-entry-body">
+                                    {(() => {
+                                      const content = entry.content || '';
+                                      const lines = content.split('\n');
+                                      const preview = lines.slice(0, 3).join('\n');
+                                      return preview + (lines.length > 3 ? '...' : '');
+                                    })()}
+                                  </div>
+                                ) : null}
+                                <div className="client-details-entry-footer">
+                                  <button
+                                    type="button"
+                                    className="client-details-read-btn"
+                                    onClick={() => setReadingJournalEntry(entry)}
+                                  >
+                                    Læs notat
+                                  </button>
+                                <button
+                                  type="button"
+                                  className="client-details-delete-btn"
+                                  onClick={() => handleDeleteJournalEntry(entry.id)}
+                                  disabled={deletingJournalId === entry.id}
+                                >
+                                  {deletingJournalId === entry.id ? 'Sletter…' : 'Slet notat'}
+                                </button>
+                                  <button
+                                    type="button"
+                                    className="client-details-primary-button"
+                                    onClick={() => {
+                                      // Navigate to journal entry page with entry data
+                                      navigate('/journal', { 
+                                        state: { 
+                                          clientId: client?.id,
+                                          clientName: client?.navn,
+                                          entryId: entry.id,
+                                          entry: {
+                                            ...entry,
+                                            clientId: client?.id,
+                                            clientName: client?.navn,
+                                          }
+                                        } 
+                                      });
+                                    }}
+                                  >
+                                    Åben notat
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
                     )}
-                  </>
+                  </div>
+                </div>
+                {isAssistantOpen && (
+                  <div className="indlæg-assistant-drawer">
+                    <button
+                      type="button"
+                      className="indlæg-drawer-edge-close"
+                      onClick={() => setIsAssistantOpen(false)}
+                      aria-label="Luk Corti assistent panel"
+                    >
+                      →
+                    </button>
+                    <div className="indlæg-drawer-header">
+                      <h3 className="indlæg-card-title">Corti Assistent</h3>
+                      <button
+                        type="button"
+                        className="indlæg-drawer-close"
+                        onClick={() => setIsAssistantOpen(false)}
+                        aria-label="Luk assister"
+                      >
+                        →
+                      </button>
+                    </div>
+                    <CortiAssistantPanel
+                      statusText={assistantStatusText}
+                      quickActions={assistantQuickActions}
+                      activeQuickAction={assistantActivePreset}
+                      onQuickAction={(label) => setAssistantActivePreset(label)}
+                      onSendMessage={sendAssistantMessage}
+                      messages={assistantMessages}
+                      isSending={assistantChatLoading}
+                      actionsDisabled={assistantLoading || assistantChatLoading}
+                      errorText={assistantError}
+                      inputValue={assistantInput}
+                      onInputChange={setAssistantInput}
+                      inputDisabled={assistantLoading}
+                      sendDisabled={assistantLoading || assistantChatLoading || !assistantInput.trim()}
+                      showEmptyHint={!hasNotesContext}
+                      emptyHintText="Ingen noter endnu – du kan stadig spørge generelt."
+                      placeholder="Stil et spørgsmål til Corti assistenten..."
+                    />
+                  </div>
                 )}
               </>
             ) : activeTab === 'appointments' ? (

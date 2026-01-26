@@ -113,11 +113,23 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const handleCalendarClick = React.useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("booking:calendarClick"));
+      }
+      navigate("/booking");
+    },
+    [navigate]
+  );
+
   const links = [
     {
       label: t("booking.sidebar.calendar", "Kalender"),
       href: "/booking",
       icon: <Calendar className="h-5 w-5 flex-shrink-0" />,
+      onClick: handleCalendarClick,
     },
     {
       label: t("booking.sidebar.clients", "Klienter"),
@@ -270,8 +282,8 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
                     S+
                   </div>
                   {open && (
-                    <div className="flex flex-col text-left text-xs text-slate-100">
-                      <span className="font-medium">{clinicOverviewLabel}</span>
+                    <div className="flex flex-col text-left text-base text-white">
+                      <span className="font-semibold">{clinicOverviewLabel}</span>
                     </div>
                   )}
                 </button>
@@ -292,17 +304,17 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
                           ...link,
                           icon: React.cloneElement(link.icon as any, {
                             className:
-                              "h-5 w-5 flex-shrink-0 " +
+                              "h-6 w-6 flex-shrink-0 " +
                               (isActive
                                 ? "text-slate-900"
-                                : "text-slate-200 group-hover/sidebar:text-white"),
+                                : "text-white group-hover/sidebar:text-white"),
                           }),
                         }}
                         className={cn(
-                          "rounded-xl px-2",
+                          "rounded-xl px-2 text-base font-semibold",
                           isActive
                             ? "bg-white text-slate-900 shadow-sm"
-                            : "text-slate-200 hover:bg-white/10"
+                            : "text-white hover:bg-white/15"
                         )}
                       />
                     );
@@ -316,7 +328,7 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
                     label: t("booking.sidebar.logout", "Log ud"),
                     href: "/",
                     icon: (
-                      <LogOut className="h-5 w-5 flex-shrink-0 text-slate-200 group-hover/sidebar:text-white" />
+                      <LogOut className="h-6 w-6 flex-shrink-0 text-white group-hover/sidebar:text-white" />
                     ),
                     onClick: async (e) => {
                       e.preventDefault();
@@ -329,7 +341,7 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
                       }
                     },
                   }}
-                  className="rounded-xl px-2 text-slate-200 hover:bg-white/10 text-left"
+                  className="rounded-xl px-2 text-base text-white hover:bg-white/15 text-left"
                 />
               </div>
             </SidebarBody>

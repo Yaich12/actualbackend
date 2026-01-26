@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 
 const DEFAULT_LABELS = {
   title: 'FactsR™',
-  poweredBy: 'Drevet af Corti',
+  poweredBy: 'Drevet af Selma',
   groupFallback: 'Andet',
   status: {
     connecting: 'Forbinder…',

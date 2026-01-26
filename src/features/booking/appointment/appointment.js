@@ -84,6 +84,7 @@ function AppointmentForm({
 
   const startDropdownRef = useRef(null);
   const endDropdownRef = useRef(null);
+  const datePickerRef = useRef(null);
 
   const timeSlots = useMemo(() => {
     const times = [];
@@ -174,6 +175,10 @@ function AppointmentForm({
     setEndDate(startDate);
   }, [selectedServiceId, startTime, mode, timeSlots, startDate]);
 
+  useEffect(() => {
+    setEndDate((prev) => (prev === startDate ? prev : startDate));
+  }, [startDate]);
+
   const parseDateStr = (dateStr) => {
     const parsed = parseDateString(dateStr);
     if (!parsed) return null;
@@ -207,6 +212,15 @@ function AppointmentForm({
     }
     return results;
   };
+
+  const startDateNativeValue = useMemo(() => {
+    const parsed = parseDateStr(startDate);
+    if (!parsed) return '';
+    const yyyy = parsed.getFullYear().toString().padStart(4, '0');
+    const mm = (parsed.getMonth() + 1).toString().padStart(2, '0');
+    const dd = parsed.getDate().toString().padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }, [startDate]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -322,19 +336,72 @@ function AppointmentForm({
       </div>
 
       <form className="appointment-form" onSubmit={handleSubmit}>
-        {/* Start and End Date/Time */}
+        {/* Date and Time */}
         <div className="form-section">
           <div className="datetime-row">
             <div className="datetime-group">
-              <label className="form-label">Start tidspunkt</label>
+              <label className="form-label">Dato</label>
               <div className="datetime-inputs">
                 <input
                   type="text"
                   className="date-input"
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setEndDate(e.target.value);
+                  }}
                   placeholder="dd-mm-yyyy"
                 />
+                <div className="date-picker-inline">
+                  <input
+                    ref={datePickerRef}
+                    type="date"
+                    value={startDateNativeValue}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) return;
+                      const [yyyy, mm, dd] = val.split('-').map((v) => Number(v));
+                      const dateObj = new Date(yyyy, (mm || 1) - 1, dd || 1);
+                      const formatted = formatDateStr(dateObj);
+                      setStartDate(formatted);
+                      setEndDate(formatted);
+                    }}
+                    className="hidden-native-date"
+                    style={{
+                      position: 'absolute',
+                      opacity: 0,
+                      pointerEvents: 'none',
+                      width: 0,
+                      height: 0,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="date-picker-trigger"
+                    onClick={() => {
+                      if (datePickerRef.current) {
+                        if (typeof datePickerRef.current.showPicker === 'function') {
+                          datePickerRef.current.showPicker();
+                        } else {
+                          datePickerRef.current.focus();
+                          datePickerRef.current.click();
+                        }
+                      }
+                    }}
+                    aria-label="Vælg dato"
+                    title="Vælg dato"
+                  >
+                    📅
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="datetime-row">
+            <div className="datetime-group">
+              <label className="form-label">Start tidspunkt</label>
+              <div className="datetime-inputs">
                 <div
                   className={`time-input-wrapper ${showStartDropdown ? 'open' : ''}`}
                   ref={startDropdownRef}
@@ -375,13 +442,6 @@ function AppointmentForm({
             <div className="datetime-group">
               <label className="form-label">Slut tidspunkt</label>
               <div className="datetime-inputs">
-                <input
-                  type="text"
-                  className="date-input"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  placeholder="dd-mm-yyyy"
-                />
                 <div
                   className={`time-input-wrapper ${showEndDropdown ? 'open' : ''}`}
                   ref={endDropdownRef}

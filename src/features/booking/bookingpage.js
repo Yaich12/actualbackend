@@ -16,6 +16,7 @@ import { formatServiceDuration } from '../../utils/serviceLabels';
 import { useUserClients } from './Klienter/hooks/useUserClients';
 import { useUserServices } from './Ydelser/hooks/useUserServices';
 import Dropdown from './dropdown/dropdown';
+import { EventTimeTooltip, useEventTimeTooltip } from '../../components/calendar/EventTimeTooltip';
 import {
   ChevronDown,
   ChevronLeft,
@@ -75,6 +76,7 @@ function BookingPage() {
   const [serviceQuery, setServiceQuery] = useState('');
   const [clientQuery, setClientQuery] = useState('');
   const [hoverSlot, setHoverSlot] = useState(null);
+  const eventTimeTooltip = useEventTimeTooltip();
   const isDev = process.env.NODE_ENV !== 'production';
   const ownerNameFallback = useMemo(
     () =>
@@ -1129,6 +1131,7 @@ function BookingPage() {
 
     try {
       await handleCreateAppointment(payload);
+      setCalendarAddMode(false);
       if (isDev) {
         console.log('[BookingPage] Calendar appointment saved');
       }
@@ -1737,12 +1740,17 @@ function BookingPage() {
     setJournalEntryToEdit(null);
   };
 
-  const handleCloseJournalEntry = () => {
+  const handleCloseJournalEntry = React.useCallback(() => {
     setShowJournalEntryForm(false);
     setJournalEntryParticipants([]);
     setJournalEntryDate('');
     setJournalEntryToEdit(null);
-  };
+    setSelectedAppointment(null);
+    setEditingAppointment(null);
+    setSelectedClientId(null);
+    setSelectedClientFallback(null);
+    setNextAppointmentTemplate(null);
+  }, []);
 
   const userIdentity = useMemo(() => {
     if (!user) {
@@ -1774,6 +1782,14 @@ function BookingPage() {
       photoURL: user.photoURL || null,
     };
   }, [user]);
+
+  useEffect(() => {
+    const onCalendarClick = () => {
+      handleCloseJournalEntry();
+    };
+    window.addEventListener('booking:calendarClick', onCalendarClick);
+    return () => window.removeEventListener('booking:calendarClick', onCalendarClick);
+  }, [handleCloseJournalEntry]);
 
   const renderMonthView = () => (
     <>
@@ -1826,32 +1842,42 @@ function BookingPage() {
                     <span className="day-number">{day.day}</span>
                     {dayAppointments.length > 0 && (
                       <div className="day-appointments">
-                        {dayAppointments.map((appointment) => (
-                          <span
-                            key={appointment.id}
-                            className={`day-appointment-chip service-type-${deriveServiceType(appointment)}`}
-                            onClick={() => handleAppointmentClick(appointment)}
-                            title={(() => {
-                              const names = participantNames(appointment);
-                              return names.length ? names.join(', ') : '';
-                            })()}
-                            style={{
-                              cursor: 'pointer',
-                              ...(appointment.color ? getSoftColorStyle(appointment.color) : {}),
-                            }}
-                          >
-                            {getServiceLabel(appointment)}{' '}
-                            {(() => {
-                              const names = participantNames(appointment);
-                              if (names.length > 1) {
-                                return renderNamesPreview(names);
+                        {dayAppointments.map((appointment) => {
+                          const { startDate, endDate } = parseAppointmentDateTimes(appointment);
+                          return (
+                            <span
+                              key={appointment.id}
+                              className={`day-appointment-chip service-type-${deriveServiceType(appointment)}`}
+                              onClick={() => handleAppointmentClick(appointment)}
+                              onMouseEnter={(event) =>
+                                eventTimeTooltip.show(event, startDate, endDate || startDate)
                               }
-                              return appointment.client
-                                ? `– ${appointment.client.split(' ')[0]}`
-                                : `– ${appointmentFallback}`;
-                            })()}
-                          </span>
-                        ))}
+                              onMouseMove={(event) =>
+                                eventTimeTooltip.show(event, startDate, endDate || startDate)
+                              }
+                              onMouseLeave={eventTimeTooltip.hide}
+                              title={(() => {
+                                const names = participantNames(appointment);
+                                return names.length ? names.join(', ') : '';
+                              })()}
+                              style={{
+                                cursor: 'pointer',
+                                ...(appointment.color ? getSoftColorStyle(appointment.color) : {}),
+                              }}
+                            >
+                              {getServiceLabel(appointment)}{' '}
+                              {(() => {
+                                const names = participantNames(appointment);
+                                if (names.length > 1) {
+                                  return renderNamesPreview(names);
+                                }
+                                return appointment.client
+                                  ? `– ${appointment.client.split(' ')[0]}`
+                                  : `– ${appointmentFallback}`;
+                              })()}
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -2075,6 +2101,13 @@ function BookingPage() {
                               ...style,
                               ...(first.color ? getSoftColorStyle(first.color) : {}),
                             }}
+                            onMouseEnter={(event) =>
+                              eventTimeTooltip.show(event, group.start, group.end || group.start)
+                            }
+                            onMouseMove={(event) =>
+                              eventTimeTooltip.show(event, group.start, group.end || group.start)
+                            }
+                            onMouseLeave={eventTimeTooltip.hide}
                           >
                             <div
                               className="time-grid-event-resize-handle resize-handle-top"
@@ -2189,7 +2222,7 @@ function BookingPage() {
     return (
       <div
         className="time-grid-day-body"
-        style={{ height: `${VISIBLE_HOURS * HOUR_HEIGHT}px` }}
+        style={{ height: `${VISIBLE_HOURS * hourHeight}px` }}
         onMouseMove={
           calendarAddMode
             ? (event) => handleSlotHover(event, dayDate, memberName)
@@ -2243,6 +2276,13 @@ function BookingPage() {
                 ...style,
                 ...(first.color ? getSoftColorStyle(first.color) : {}),
               }}
+              onMouseEnter={(event) =>
+                eventTimeTooltip.show(event, group.start, group.end || group.start)
+              }
+              onMouseMove={(event) =>
+                eventTimeTooltip.show(event, group.start, group.end || group.start)
+              }
+              onMouseLeave={eventTimeTooltip.hide}
               onClick={() => handleAppointmentClick(first)}
             >
               <div className="time-grid-event-inner">
@@ -2518,42 +2558,10 @@ function BookingPage() {
                       </button>
                       {teamMenuOpen && (
                         <div className="team-filter-menu">
-                          <button
-                            type="button"
-                            className={`team-filter-option ${teamFilter === 'all' ? 'active' : ''}`}
-                            onClick={selectAllMembers}
-                          >
-                            👥 {entireTeamLabel}
-                          </button>
-
-                          <div className="team-filter-section">
-                            <div className="team-filter-item">
-                              <span
-                                className="avatar avatar-small"
-                                style={{ backgroundColor: ownerEntry.avatarColor || '#0ea5e9' }}
-                              >
-                                {ownerEntry.avatarUrl ? (
-                                  <img src={ownerEntry.avatarUrl} alt={ownerEntry.name} />
-                                ) : (
-                                  ownerEntry.avatarText || ownerEntry.name?.charAt(0)
-                                )}
-                              </span>
-                              <span>
-                                {ownerEntry.name}{' '}
-                                ({t('booking.calendar.you', 'Dig')})
-                              </span>
-                            </div>
-                          </div>
-
-                          <hr className="team-filter-divider" />
-
                           <div className="team-filter-section header">
                             <span className="section-title">
                               {t('booking.calendar.members', 'Medarbejdere')}
                             </span>
-                            <button type="button" className="clear-link" onClick={clearMembers}>
-                              {t('booking.calendar.clearAll', 'Ryd alle')}
-                            </button>
                           </div>
 
                           <div className="team-filter-list">
@@ -2567,17 +2575,7 @@ function BookingPage() {
                                   onClick={() => toggleMember(member.name)}
                                 >
                                   <span className="checkmark">{checked ? '✔' : ''}</span>
-                                  <span
-                                    className="avatar avatar-small"
-                                    style={{ backgroundColor: member.avatarColor || '#0ea5e9' }}
-                                  >
-                                    {member.avatarUrl ? (
-                                      <img src={member.avatarUrl} alt={member.name} />
-                                    ) : (
-                                      member.avatarText || member.name?.charAt(0)
-                                    )}
-                                  </span>
-                                  <span>{member.name}</span>
+                                <span className="team-filter-name small-text">{member.name}</span>
                                 </button>
                               );
                             })}
@@ -2588,20 +2586,6 @@ function BookingPage() {
                   ) : (
                     <div className="toolbar-pill toolbar-static">{selectedLabel}</div>
                   )}
-                  <button
-                    type="button"
-                    className="toolbar-icon-btn"
-                    aria-label={t('booking.calendar.filters', 'Filtre')}
-                  >
-                    <SlidersHorizontal className="toolbar-icon" />
-                  </button>
-                  <button
-                    type="button"
-                    className="toolbar-icon-btn"
-                    aria-label={t('booking.calendar.freeze', 'Frys')}
-                  >
-                    <Snowflake className="toolbar-icon" />
-                  </button>
                 </div>
                 <div className="calendar-toolbar-group">
                   <button
@@ -3012,6 +2996,7 @@ function BookingPage() {
           />
         )}
       </div>
+      <EventTimeTooltip tooltip={eventTimeTooltip.tooltip} />
     </BookingSidebarLayout>
   );
 }

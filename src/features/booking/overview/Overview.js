@@ -621,9 +621,6 @@ function Overview() {
               )}
             </p>
           </div>
-          <button type="button" className="overview-pill">
-            {t("booking.overview.period.last7", "Seneste 7 dage")}
-          </button>
         </div>
 
         <div className="overview-grid overview-grid--top">

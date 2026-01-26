@@ -71,7 +71,7 @@ export const SidebarLink = ({ link, className }: SidebarLinkProps) => {
       to={link.href}
       onClick={link.onClick}
       className={cn(
-        "group flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-white",
+        "group flex items-center gap-3 rounded-md px-2 py-2 text-base font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-white",
         className
       )}
     >
@@ -86,7 +86,7 @@ export const SidebarLink = ({ link, className }: SidebarLinkProps) => {
             animate={{ opacity: 1, width: "auto" }}
             exit={{ opacity: 0, width: 0 }}
             transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="whitespace-pre text-sm font-medium text-neutral-700 dark:text-neutral-100"
+            className="whitespace-pre text-base font-semibold text-inherit"
           >
             {link.label}
           </motion.span>
