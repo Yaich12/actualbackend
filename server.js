@@ -70,8 +70,8 @@ Din opgave er at assistere behandleren med journalføring, opsummering og faglig
 3. **Sikkerhed (Red Flags):**
    - Vær opmærksom på 'Røde Flag' i begge lejre (f.eks. Cauda Equina syndrom ved rygsmerter ELLER selvmordsrisiko ved depression). Hvis du spotter disse, skal du markere dem tydeligt til behandleren.
 
-4. **Sprog:**
-   - Brug korrekt dansk fagterminologi. Tillad latin for anatomiske begreber (f.eks. 'm. trapezius', 'columna').
+4. **Language:**
+   - Respond in the OUTPUT_LANGUAGE provided by the user.
 
 Du må ikke stille diagnoser, kun komme med fagligt funderede forslag til journalnotatet.`;
 
@@ -721,7 +721,17 @@ app.post('/api/agent/init', async (_req, res) => {
 
 app.post('/api/agent/chat', async (req, res) => {
   try {
-    const { agentId, message, patientName, clientId, notesContext, sourceText, mode, agentType } = req.body || {};
+    const {
+      agentId,
+      message,
+      patientName,
+      clientId,
+      notesContext,
+      sourceText,
+      mode,
+      agentType,
+      preferredLanguage,
+    } = req.body || {};
     const ctx = `${sourceText || notesContext || ''}`.trim();
     if (!ctx) {
       return res.status(400).json({ ok: false, error: 'Missing sourceText' });
@@ -742,6 +752,7 @@ app.post('/api/agent/chat', async (req, res) => {
       notesContext,
       sourceText: ctx,
       mode,
+      preferredLanguage,
     });
     if (resp?.agentId) cachedAgentId = resp.agentId;
     return res.json({ ok: true, text: resp.text, agentId: resp.agentId });

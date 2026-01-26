@@ -3,6 +3,10 @@ import { db } from '../firebase';
 
 const getLanguageFromData = (data) => {
   if (!data) return null;
+  const preferred = data.preferredLanguage;
+  if (typeof preferred === 'string' && preferred.trim()) {
+    return preferred.trim();
+  }
   const settingsLanguage = data.settings?.language;
   if (typeof settingsLanguage === 'string' && settingsLanguage.trim()) {
     return settingsLanguage.trim();
@@ -26,7 +30,7 @@ export const setUserLanguage = async (uid, language) => {
   await setDoc(
     doc(db, 'users', uid),
     {
-      settings: { language: resolved },
+      preferredLanguage: resolved,
     },
     { merge: true }
   );

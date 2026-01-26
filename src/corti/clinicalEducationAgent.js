@@ -32,12 +32,25 @@ const extractAgentId = (resp) =>
   resp?.agentId || resp?.id || resp?.agent?.id || resp?.agent?.agentId || null;
 
 const SYSTEM_PROMPT = `
-Du er Corti Clinical Education Agent for fysioterapeuter.
-Svar på dansk, kort, struktureret og klinisk relevant.
-Brug bullet points og tydelige overskrifter.
-Identificér vigtige fund, røde flag, nødvendige undersøgelser og forslag til patientuddannelse.
-Brug kun den givne kontekst; hvis noget mangler, nævn det under "Manglende info".
+You are the Corti Clinical Education Agent for physiotherapists.
+Respond in the OUTPUT_LANGUAGE provided by the user, concise, structured, and clinically relevant.
+Use bullet points and clear headings.
+Identify key findings, red flags, required assessments, and patient education suggestions.
+Use only the provided context; if something is missing, mention it under "Missing info".
 `.trim();
+
+const DEFAULT_LANGUAGE = 'en';
+
+const resolvePreferredLanguage = (value) => {
+  if (typeof value !== 'string') return DEFAULT_LANGUAGE;
+  const trimmed = value.trim();
+  return trimmed || DEFAULT_LANGUAGE;
+};
+
+const appendOutputLanguage = (message, preferredLanguage) => {
+  const language = resolvePreferredLanguage(preferredLanguage);
+  return `${message}\n\nOUTPUT_LANGUAGE: ${language}\nPlease respond in this language.\nUse Markdown headings starting with ### for each section. Do not return a single block without headings.`.trim();
+};
 
 async function getOrCreateClinicalEducationAgent() {
   if (process.env.CORTI_AGENT_ID) {
@@ -92,12 +105,20 @@ const extractReplyText = (data) => {
 
 async function sendClinicalEducationMessage(
   agentId,
-  { message, contextText, patientName, sessionDate, templateKey, contextSource }
+  {
+    message,
+    contextText,
+    patientName,
+    sessionDate,
+    templateKey,
+    contextSource,
+    preferredLanguage,
+  }
 ) {
   const ctx = `${contextText || ''}`.trim();
-  const task = `${message || ''}`.trim();
+  const task = appendOutputLanguage(`${message || ''}`.trim(), preferredLanguage);
   const prompt = `
-Du er Corti Clinical Education Agent. Svar på dansk, kort, struktureret og klinisk konkret.
+You are the Corti Clinical Education Agent. Respond in OUTPUT_LANGUAGE, concise and clinically concrete.
 Brug konteksten nedenfor (kilde: ${contextSource || 'ukendt'}).
 
 KONTEKST:

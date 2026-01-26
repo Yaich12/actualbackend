@@ -10,6 +10,7 @@ import { ChatInput } from '../../../components/ui/chat-input';
 import { ChatMessageList } from '../../../components/ui/chat-message-list';
 import { Button } from '../../../components/ui/button';
 import '../Journal/indlæg/indlæg.css';
+import { useLanguage } from '../../../LanguageContext';
 
 const DEFAULT_AVATARS = {
   user:
@@ -17,40 +18,62 @@ const DEFAULT_AVATARS = {
   ai: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=64&h=64&q=80&crop=faces&fit=crop',
 };
 
-const parseMarkdownSections = (text) => {
-  const lines = `${text || ''}`.split(/\r?\n/);
+export const parseAssistantSections = (markdownText, fallbackTitle = 'Answer') => {
+  const lines = `${markdownText || ''}`.split(/\r?\n/);
   const sections = [];
   let current = null;
+
+  const flushCurrent = () => {
+    if (!current) return;
+    const content = current.content.trim();
+    sections.push({
+      title: current.title || fallbackTitle,
+      content,
+    });
+  };
 
   lines.forEach((line) => {
     const headingMatch = line.match(/^###\s+(.*)/);
     if (headingMatch) {
-      if (current) sections.push(current);
-      current = { title: headingMatch[1].trim(), body: '' };
-    } else {
-      if (!current) {
-        current = { title: '', body: line };
-      } else {
-        current.body += `${current.body ? '\n' : ''}${line}`;
-      }
+      flushCurrent();
+      current = { title: headingMatch[1].trim(), content: '' };
+      return;
     }
+    if (!current) {
+      current = { title: '', content: line };
+      return;
+    }
+    current.content += `${current.content ? '\n' : ''}${line}`;
   });
 
-  if (current) sections.push(current);
+  flushCurrent();
 
-  if (sections.length === 0 || !sections.some((s) => s.title)) {
-    return [{ title: 'Svar', body: `${text || ''}`.trim() }];
+  if (!sections.length) {
+    return [
+      {
+        title: fallbackTitle,
+        content: `${markdownText || ''}`.trim(),
+      },
+    ];
+  }
+
+  if (!sections.some((section) => section.title && section.title !== fallbackTitle)) {
+    return [
+      {
+        title: fallbackTitle,
+        content: `${markdownText || ''}`.trim(),
+      },
+    ];
   }
 
   return sections;
 };
 
-const AssistantAccordionResponse = ({ text }) => {
-  const sections = React.useMemo(() => parseMarkdownSections(text), [text]);
+const AssistantAccordionResponse = ({ sections }) => {
   const [openStates, setOpenStates] = React.useState([]);
 
   React.useEffect(() => {
-    setOpenStates(sections.map((_, idx) => idx === 0));
+    setOpenStates(sections.map(() => false));
   }, [sections]);
 
   const toggle = (idx) => {
@@ -68,7 +91,7 @@ const AssistantAccordionResponse = ({ text }) => {
             aria-expanded={openStates[idx]}
           >
             <span className="corti-accordion-title">
-              {section.title || 'Svar'}
+              {section.title}
             </span>
             <span
               className={`corti-accordion-icon${openStates[idx] ? ' is-open' : ''}`}
@@ -80,7 +103,7 @@ const AssistantAccordionResponse = ({ text }) => {
           {openStates[idx] && (
             <div className="corti-accordion-body corti-md">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {section.body || ''}
+                {section.content || ''}
               </ReactMarkdown>
             </div>
           )}
@@ -91,7 +114,7 @@ const AssistantAccordionResponse = ({ text }) => {
 };
 
 function CortiAssistantPanel({
-  title = 'Selma Assistent',
+  title = '',
   statusText = '',
   quickActions = [],
   activeQuickAction = '',
@@ -105,13 +128,25 @@ function CortiAssistantPanel({
   onInputChange,
   inputDisabled = false,
   sendDisabled,
-  placeholder = 'Stil et spørgsmål til Selma assistenten...',
-  emptyMessageText = 'Ingen beskeder endnu.',
+  placeholder = '',
+  emptyMessageText = '',
   showEmptyHint = false,
-  emptyHintText = 'Ingen tekst endnu – du kan stadig spørge generelt.',
+  emptyHintText = '',
   chatAvatars = DEFAULT_AVATARS,
   className = '',
 }) {
+  const { t } = useLanguage();
+  const resolvedTitle = title || t('indlaeg.assistantTitle', 'Selma Assistant');
+  const resolvedPlaceholder =
+    placeholder || t('indlaeg.assistantPlaceholder', 'Ask Selma assistant a question...');
+  const resolvedEmptyMessage =
+    emptyMessageText || t('assistant.noMessages', 'No messages yet.');
+  const resolvedEmptyHint =
+    emptyHintText || t('indlaeg.emptyHint', 'No text yet — you can still ask generally.');
+  const userLabel = t('assistant.youLabel', 'You');
+  const selmaLabel = t('assistant.selmaLabel', 'Selma');
+  const userFallback = userLabel.slice(0, 2).toUpperCase();
+  const selmaFallback = selmaLabel.slice(0, 2).toUpperCase();
   const effectiveSendDisabled =
     typeof sendDisabled === 'boolean'
       ? sendDisabled
@@ -120,7 +155,7 @@ function CortiAssistantPanel({
   return (
     <div className={`indlæg-card indlæg-card--drawer indlæg-card--assistant ${className}`.trim()}>
       <div className="indlæg-card-header indlæg-card-header--row">
-        <h3 className="indlæg-card-title">{title}</h3>
+        <h3 className="indlæg-card-title">{resolvedTitle}</h3>
         {statusText ? (
           <span className="indlæg-status-pill indlæg-status-pill--default">{statusText}</span>
         ) : null}
@@ -129,22 +164,29 @@ function CortiAssistantPanel({
       <div className="indlæg-card-body indlæg-card-body--assistant">
         {quickActions?.length ? (
           <div className="indlæg-assistant-section">
-            <p className="indlæg-assistant-heading">Forslag</p>
+            <p className="indlæg-assistant-heading">
+              {t('assistant.suggestions', 'Suggestions')}
+            </p>
             <div className="indlæg-quick-actions">
-              {quickActions.map(({ label, message, agentType }) => (
+              {quickActions.map(({ id, label, message, agentType }) => {
+                const actionKey = id || label;
+                return (
                 <button
-                  key={label}
+                  key={actionKey}
                   type="button"
-                  className={`indlæg-quick-action${activeQuickAction === label ? ' is-active' : ''}`}
+                  className={`indlæg-quick-action${
+                    activeQuickAction === actionKey ? ' is-active' : ''
+                  }`}
                   onClick={() => {
-                    onQuickAction?.(label);
-                    onSendMessage?.(message ?? label, agentType, label);
+                    onQuickAction?.(actionKey);
+                    onSendMessage?.(message ?? label, agentType, actionKey);
                   }}
                   disabled={actionsDisabled}
                 >
                   {label}
                 </button>
-              ))}
+                );
+              })}
             </div>
           </div>
         ) : null}
@@ -154,7 +196,7 @@ function CortiAssistantPanel({
             <ChatMessageList smooth className="indlæg-agent-message-list">
               {(!messages || messages.length === 0) && (
                 <div className="indlæg-agent-message-empty">
-                  <p className="indlæg-muted">{emptyMessageText}</p>
+                  <p className="indlæg-muted">{resolvedEmptyMessage}</p>
                 </div>
               )}
 
@@ -165,16 +207,18 @@ function CortiAssistantPanel({
                 >
                   <ChatBubbleAvatar
                     src={msg.role === 'user' ? chatAvatars.user : chatAvatars.ai}
-                    fallback={msg.role === 'user' ? 'DU' : 'AI'}
+                  fallback={msg.role === 'user' ? userFallback : selmaFallback}
                     className="shadow-sm"
                   />
                   <div className="flex flex-col gap-1 max-w-full">
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                      {msg.role === 'user' ? 'Dig' : 'Selma'}
+                      {msg.role === 'user' ? userLabel : selmaLabel}
                     </span>
                     <ChatBubbleMessage variant={msg.role === 'user' ? 'sent' : 'received'}>
-                      {msg.role === 'assistant' ? (
-                        <AssistantAccordionResponse text={msg.text} />
+                      {msg.role === 'assistant' && Array.isArray(msg.sections) ? (
+                        <AssistantAccordionResponse sections={msg.sections} />
+                      ) : msg.role === 'assistant' ? (
+                        msg.text
                       ) : (
                         msg.text
                       )}
@@ -185,10 +229,10 @@ function CortiAssistantPanel({
 
               {isSending && (
                 <ChatBubble variant="received">
-                  <ChatBubbleAvatar src={chatAvatars.ai} fallback="AI" className="shadow-sm" />
+                  <ChatBubbleAvatar src={chatAvatars.ai} fallback={selmaFallback} className="shadow-sm" />
                   <div className="flex flex-col gap-1 max-w-full">
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                      Selma
+                      {selmaLabel}
                     </span>
                     <ChatBubbleMessage isLoading />
                   </div>
@@ -198,7 +242,7 @@ function CortiAssistantPanel({
           </div>
 
           {showEmptyHint ? (
-            <p className="indlæg-muted indlæg-agent-empty-hint">{emptyHintText}</p>
+            <p className="indlæg-muted indlæg-agent-empty-hint">{resolvedEmptyHint}</p>
           ) : null}
         </div>
 
@@ -213,7 +257,7 @@ function CortiAssistantPanel({
             className="bg-white"
             value={inputValue}
             onChange={(event) => onInputChange?.(event.target.value)}
-            placeholder={placeholder}
+            placeholder={resolvedPlaceholder}
             rows={2}
             disabled={inputDisabled}
           />
@@ -224,7 +268,9 @@ function CortiAssistantPanel({
             size="sm"
             className="shrink-0"
           >
-            {isSending ? 'Sender...' : 'Send'}
+            {isSending
+              ? t('assistant.sending', 'Sending...')
+              : t('assistant.send', 'Send')}
           </Button>
         </div>
       </div>

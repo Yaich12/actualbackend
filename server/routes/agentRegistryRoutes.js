@@ -4,6 +4,18 @@ const { createCortiClient } = require('../../cortiAuth');
 const { extractTextFromTask, getOrCreateAgentId, resolveAgentConfig } = require('../corti/agentRegistry');
 
 const router = express.Router();
+const DEFAULT_LANGUAGE = 'en';
+
+const resolvePreferredLanguage = (value) => {
+  if (typeof value !== 'string') return DEFAULT_LANGUAGE;
+  const trimmed = value.trim();
+  return trimmed || DEFAULT_LANGUAGE;
+};
+
+const appendOutputLanguage = (message, preferredLanguage) => {
+  const language = resolvePreferredLanguage(preferredLanguage);
+  return `${message}\n\nOUTPUT_LANGUAGE: ${language}\nPlease respond in this language.\nUse Markdown headings starting with ### for each section. Do not return a single block without headings.`.trim();
+};
 
 router.post('/:key/init', async (req, res) => {
   try {
@@ -32,7 +44,7 @@ router.post('/:key/chat', async (req, res) => {
     if (!resolveAgentConfig(key)) {
       return res.status(404).json({ ok: false, error: 'Unknown agent key' });
     }
-    const { message, sourceText } = req.body || {};
+    const { message, sourceText, preferredLanguage } = req.body || {};
     const finalMessage = `${message || ''}`.trim();
     if (!finalMessage) {
       return res.status(400).json({ ok: false, error: 'Missing message' });
@@ -49,7 +61,7 @@ ${ctx}
 >>>
 
 REQUEST:
-${finalMessage}
+${appendOutputLanguage(finalMessage, preferredLanguage)}
 `.trim();
 
     const payload = {

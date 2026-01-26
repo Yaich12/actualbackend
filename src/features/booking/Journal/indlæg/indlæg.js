@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   addDoc,
   collection,
@@ -15,11 +16,25 @@ import { RainbowButton } from '../../../../components/ui/rainbow-button';
 import AnimatedGenerateButton from '../../../../components/ui/animated-generate-button-shadcn-tailwind';
 import { GradientButton } from '../../../../components/ui/gradient-button';
 import { QuantumPulseLoader } from '../../../../components/ui/quantum-pulse-loade';
-import CortiAssistantPanel from '../../components/CortiAssistantPanel';
+import CortiAssistantPanel, { parseAssistantSections } from '../../components/CortiAssistantPanel';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
+import { useLanguage } from '../../../../LanguageContext';
 
-const TEMPLATE_LANGUAGE = 'da';
+const DEFAULT_LANGUAGE = 'en';
+const HEADING_INSTRUCTION =
+  'Use Markdown headings starting with ### for each section. Do not return a single block without headings.';
+const TRANSCRIPTION_LOCALES = {
+  en: 'en-US',
+  da: 'da-DK',
+  ar: 'ar',
+  sv: 'sv-SE',
+  no: 'nb-NO',
+  fr: 'fr-FR',
+  de: 'de-DE',
+  pt: 'pt-PT',
+  it: 'it-IT',
+};
 
 const getBackendHttpBase = () => {
   const envBase = process.env.REACT_APP_BACKEND_URL;
@@ -99,7 +114,7 @@ const getTranslation = (translations, lang) => {
   );
 };
 
-const buildDocumentText = (sections) => {
+const buildDocumentText = (sections, fallbackHeading = 'Section') => {
   if (!Array.isArray(sections) || sections.length === 0) {
     return '';
   }
@@ -107,7 +122,7 @@ const buildDocumentText = (sections) => {
   return [...sections]
     .sort((a, b) => (a?.sort ?? 0) - (b?.sort ?? 0))
     .map((section) => {
-      const heading = section?.name || section?.key || 'Sektion';
+      const heading = section?.name || section?.key || fallbackHeading;
       const text = String(section?.text || '').trim();
       if (!heading && !text) return '';
       if (!text) return heading;
@@ -126,9 +141,27 @@ function Indlæg({
   initialDate = '',
   initialEntry = null, // Existing entry to edit
 }) {
-  const MODE_NONE = 'None';
-  const MODE_TRANSCRIBE = 'Live';
-  const MODE_DICTATE = 'Diktering';
+  const MODE_NONE = 'none';
+  const MODE_TRANSCRIBE = 'transcribe';
+  const MODE_DICTATE = 'dictate';
+  const RECORDING_STATUS = {
+    idle: 'idle',
+    requestingMic: 'requestingMic',
+    connecting: 'connecting',
+    config: 'config',
+    listening: 'listening',
+    flushing: 'flushing',
+    ended: 'ended',
+    error: 'error',
+  };
+  const DICTATION_STATUS = {
+    idle: 'idle',
+    recording: 'recording',
+    uploading: 'uploading',
+    transcribing: 'transcribing',
+    done: 'done',
+    error: 'error',
+  };
   const CHAT_AVATARS = {
     user:
       'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=64&h=64&q=80&crop=faces&fit=crop',
@@ -154,7 +187,7 @@ function Indlæg({
   const [templatesError, setTemplatesError] = useState('');
   const [selectedTemplateKey, setSelectedTemplateKey] = useState(initialEntry?.templateKey || '');
   const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [showTemplateDetails, setShowTemplateDetails] = useState(true);
+  const [isTemplateSheetOpen, setIsTemplateSheetOpen] = useState(false);
   const [templateDetailsLoading, setTemplateDetailsLoading] = useState(false);
   const [templateDetailsError, setTemplateDetailsError] = useState('');
 
@@ -165,14 +198,14 @@ function Indlæg({
 
   const [transcribeMode, setTranscribeMode] = useState(MODE_NONE);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
-  const [recordingStatus, setRecordingStatus] = useState('Idle');
+  const [recordingStatus, setRecordingStatus] = useState(RECORDING_STATUS.idle);
   const [recordingError, setRecordingError] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [finalTranscript, setFinalTranscript] = useState('');
   const [livePartial, setLivePartial] = useState('');
   const [lastWs, setLastWs] = useState({ type: '—', reason: '' });
 
-  const [dictationStatus, setDictationStatus] = useState('Idle'); // Idle | Recording | Uploading | Transcribing | completed | failed | Error
+  const [dictationStatus, setDictationStatus] = useState(DICTATION_STATUS.idle);
   const [dictationError, setDictationError] = useState('');
   const [dictationText, setDictationText] = useState('');
 
@@ -203,6 +236,13 @@ function Indlæg({
   const dictationStopRequestedRef = useRef(false);
 
   const { user } = useAuth();
+  const { preferredLanguage, locale, t } = useLanguage();
+  const resolvedLanguage = preferredLanguage || DEFAULT_LANGUAGE;
+  const templateLanguage = resolvedLanguage;
+  const transcriptionLocale = useMemo(
+    () => TRANSCRIPTION_LOCALES[resolvedLanguage] || TRANSCRIPTION_LOCALES[DEFAULT_LANGUAGE],
+    [resolvedLanguage]
+  );
 
   const transcriptText = useMemo(() => {
     if (!finalTranscript && !livePartial) return '';
@@ -224,11 +264,17 @@ function Indlæg({
     const note = (content || '').trim();
     if (note) return { text: note, source: 'note' };
     if (generatedDocument?.sections?.length) {
-      return { text: buildDocumentText(generatedDocument.sections), source: 'generated' };
+      return {
+        text: buildDocumentText(
+          generatedDocument.sections,
+          t('indlaeg.sectionFallback', 'Section')
+        ),
+        source: 'generated',
+      };
     }
     const raw = (activeTranscriptText || '').trim();
     return { text: raw, source: 'transcript' };
-  }, [content, generatedDocument, activeTranscriptText]);
+  }, [content, generatedDocument, activeTranscriptText, t]);
 
   const formatDateTime = (value) => {
     if (!value) return '';
@@ -240,7 +286,7 @@ function Indlæg({
           ? new Date(value)
           : value;
       if (Number.isNaN(dateObj.getTime())) return String(value);
-      return dateObj.toLocaleString('da-DK', {
+      return dateObj.toLocaleString(locale || TRANSCRIPTION_LOCALES[DEFAULT_LANGUAGE], {
         day: 'numeric',
         month: 'long',
         year: 'numeric',
@@ -253,20 +299,25 @@ function Indlæg({
   };
 
   const statusClass = useMemo(() => {
-    if (transcribeMode === MODE_DICTATE) {
-      return dictationStatus.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-+|-+$/g, '');
-    }
-    if (transcribeMode === MODE_TRANSCRIBE) {
-      return recordingStatus.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-+|-+$/g, '');
-    }
-    return 'idle';
-  }, [dictationStatus, recordingStatus, transcribeMode]);
+    const rawStatus =
+      transcribeMode === MODE_DICTATE
+        ? dictationStatus
+        : transcribeMode === MODE_TRANSCRIBE
+        ? recordingStatus
+        : RECORDING_STATUS.idle;
+    return rawStatus.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
+  }, [dictationStatus, recordingStatus, transcribeMode, RECORDING_STATUS.idle]);
 
-  const modeStatus = useMemo(() => {
+  const modeStatusKey = useMemo(() => {
     if (transcribeMode === MODE_DICTATE) return dictationStatus;
     if (transcribeMode === MODE_TRANSCRIBE) return recordingStatus;
-    return 'Idle';
-  }, [dictationStatus, recordingStatus, transcribeMode]);
+    return RECORDING_STATUS.idle;
+  }, [dictationStatus, recordingStatus, transcribeMode, RECORDING_STATUS.idle]);
+
+  const modeStatusLabel = useMemo(
+    () => t(`indlaeg.status.${modeStatusKey}`, modeStatusKey),
+    [modeStatusKey, t]
+  );
 
   const isDictationMode = transcribeMode === MODE_DICTATE;
   const isWorkspaceModeSelected = transcribeMode !== MODE_NONE;
@@ -315,14 +366,14 @@ function Indlæg({
         return data.agentId;
       } catch (error) {
         console.error('[Indlæg] Agent init error:', error);
-        setAgentError(error?.message || 'Kunne ikke initialisere agenten.');
+        setAgentError(error?.message || t('indlaeg.errors.agentInitFailed', 'Could not init agent.'));
         setAgentReady(false);
         return null;
       } finally {
         setAgentLoading(false);
       }
     },
-    [agentIds]
+    [agentIds, t]
   );
 
   const sendAgentMessage = useCallback(
@@ -331,20 +382,21 @@ function Indlæg({
       if (!finalMessage) return;
       const resolvedAgentId = await ensureAgentId(agentKey);
       if (!resolvedAgentId) {
-        setAgentError('Agent ikke klar endnu.');
+        setAgentError(t('indlaeg.errors.agentNotReady', 'Agent not ready.'));
         return;
       }
       const baseText =
         (content && content.trim()) ||
         (generatedDocument?.sections?.length ? buildDocumentText(generatedDocument.sections) : '') ||
-        (transcribeMode === 'Diktering' ? dictationText : transcriptText);
+        (transcribeMode === MODE_DICTATE ? dictationText : transcriptText);
       const sourceText = (baseText || '').trim() || finalMessage;
       const contextSource = (content && content.trim()) ? 'note' : generatedDocument?.sections?.length ? 'generated' : 'transcript';
       console.log('[AGENT UI] key=', agentKey, 'ctx source=', contextSource, 'len=', sourceText.length);
 
       const payload = {
-        message: finalMessage,
+        message: `${finalMessage}\n\n${HEADING_INSTRUCTION}`.trim(),
         sourceText: sourceText,
+        preferredLanguage: resolvedLanguage,
       };
 
       setAgentError('');
@@ -369,12 +421,19 @@ function Indlæg({
         }
         const replyText = data?.reply || data?.text || '(tomt svar fra agent)';
         if (!data?.reply && !data?.text) {
-          setAgentError('Agent returnerede ingen tekst');
+          setAgentError(t('indlaeg.errors.agentNoText', 'Agent returned no text.'));
         }
-        setAgentMessages((prev) => [...prev, { role: 'assistant', text: replyText, ts: Date.now() }]);
+        const sections = parseAssistantSections(
+          replyText,
+          t('assistant.replyTitle', 'Answer')
+        );
+        setAgentMessages((prev) => [
+          ...prev,
+          { role: 'assistant', text: replyText, sections, ts: Date.now() },
+        ]);
       } catch (error) {
         console.error('[Indlæg] Agent chat error:', error);
-        setAgentError(error?.message || 'Agenten kunne ikke svare.');
+        setAgentError(error?.message || t('indlaeg.errors.agentFailed', 'Agent failed.'));
       } finally {
         setAgentChatLoading(false);
         setAgentInput('');
@@ -392,6 +451,8 @@ function Indlæg({
       transcribeMode,
       generatedDocument,
       ensureAgentId,
+      resolvedLanguage,
+      t,
     ]
   );
 
@@ -399,31 +460,45 @@ function Indlæg({
     const noteText = (content || '').trim();
     if (noteText) return noteText;
     if (generatedDocument?.sections?.length) {
-      return buildDocumentText(generatedDocument.sections);
+      return buildDocumentText(
+        generatedDocument.sections,
+        t('indlaeg.sectionFallback', 'Section')
+      );
     }
     return (activeTranscriptText || '').trim();
-  }, [content, generatedDocument, activeTranscriptText]);
+  }, [content, generatedDocument, activeTranscriptText, t]);
 
   const sendRehabPlanMessage = useCallback(
-    async (displayMessage = 'Plan + HEP') => {
+    async (displayMessage) => {
       const sourceText = resolveRehabSourceText();
       if (!sourceText) {
         setAgentMessages((prev) => [
           ...prev,
           {
             role: 'assistant',
-            text: 'Ingen tekst fundet – skriv et notat eller indtast tekst først.',
+            text: t(
+              'indlaeg.errors.rehabNoText',
+              'No text found — write a note or enter text first.'
+            ),
             ts: Date.now(),
           },
         ]);
         return;
       }
 
+      const resolvedDisplayMessage =
+        displayMessage || t('actions.planHep', 'Plan + HEP');
+      const questionPrompt = t(
+        'prompts.planHep',
+        'Create a clinical plan with a short HEP (home exercises) and key patient points.'
+      );
+      const questionWithStructure = `${questionPrompt}\n\n${HEADING_INSTRUCTION}`.trim();
+
       setAgentError('');
       setAgentChatLoading(true);
       setAgentMessages((prev) => [
         ...prev,
-        { role: 'user', text: displayMessage, ts: Date.now() },
+        { role: 'user', text: resolvedDisplayMessage, ts: Date.now() },
       ]);
 
       try {
@@ -433,8 +508,8 @@ function Indlæg({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             sourceText,
-            question:
-              'Create Plan + HEP based on the notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+            question: questionWithStructure,
+            preferredLanguage: resolvedLanguage,
           }),
         });
         const raw = await response.text();
@@ -449,30 +524,34 @@ function Indlæg({
         }
         const replyText = data?.text || '(tomt svar fra agent)';
         if (!data?.text) {
-          setAgentError('Agent returnerede ingen tekst');
+          setAgentError(t('indlaeg.errors.agentNoText', 'Agent returned no text.'));
         }
+        const sections = parseAssistantSections(
+          replyText,
+          t('assistant.replyTitle', 'Answer')
+        );
         setAgentMessages((prev) => [
           ...prev,
-          { role: 'assistant', text: replyText, ts: Date.now() },
+          { role: 'assistant', text: replyText, sections, ts: Date.now() },
         ]);
       } catch (error) {
         console.error('[Indlæg] Rehab agent chat error:', error);
-        setAgentError(error?.message || 'Agenten kunne ikke svare.');
+        setAgentError(error?.message || t('indlaeg.errors.agentFailed', 'Agent failed.'));
       } finally {
         setAgentChatLoading(false);
         setAgentInput('');
       }
     },
-    [ensureAgentId, resolveRehabSourceText]
+    [ensureAgentId, resolveRehabSourceText, resolvedLanguage, t]
   );
 
   const ACTION_TO_AGENT = useMemo(
     () => ({
-      'Manglende info': 'improvement',
-      'Røde flag': 'education',
-      'Objektive tests': 'education',
-      'Plan + HEP': 'rehab',
-      'Opsummér patient': 'education',
+      missingInfo: 'improvement',
+      redFlags: 'education',
+      objectiveTests: 'education',
+      planHep: 'rehab',
+      summarizePatient: 'education',
       freeText: 'education',
     }),
     []
@@ -480,44 +559,51 @@ function Indlæg({
 
   const ACTION_PROMPTS = useMemo(
     () => ({
-      'Manglende info':
-        'Find missing clinical information in these notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
-      'Røde flag':
-        'Identify red flags and escalation criteria based on the notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
-      'Objektive tests':
-        'Suggest relevant objective tests based on the notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
-      'Opsummér patient':
-        'Summarize this patient’s full history across all notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+      missingInfo: t(
+        'prompts.missingInfo',
+        'Find missing clinical information in the history and suggest relevant follow-up questions.'
+      ),
+      redFlags: t(
+        'prompts.redFlags',
+        'Identify possible red flags and what questions/actions should follow.'
+      ),
+      objectiveTests: t(
+        'prompts.objectiveTests',
+        'Suggest relevant objective tests and what they can reveal.'
+      ),
+      summarizePatient: t(
+        'prompts.summarizePatient',
+        'Summarize this patient’s full history across all notes.'
+      ),
     }),
-    []
+    [t]
   );
 
   const handleAssistantSendMessage = useCallback(
-    (message, agentType, label) => {
-      if (label === 'Plan + HEP') {
-        const displayMessage = label || message || 'Plan + HEP';
-        sendRehabPlanMessage(displayMessage);
+    (message, agentType, actionId) => {
+      const resolvedAction = actionId || 'freeText';
+      if (resolvedAction === 'planHep') {
+        sendRehabPlanMessage(t('actions.planHep', 'Plan + HEP'));
         return;
       }
-      const resolvedLabel = label || 'freeText';
-      const agentKey = ACTION_TO_AGENT[resolvedLabel] || 'education';
+      const agentKey = ACTION_TO_AGENT[resolvedAction] || 'education';
       const finalMessage =
-        resolvedLabel === 'freeText' ? message : ACTION_PROMPTS[resolvedLabel] || message;
+        resolvedAction === 'freeText' ? message : ACTION_PROMPTS[resolvedAction] || message;
       sendAgentMessage(finalMessage, agentType, agentKey);
     },
-    [ACTION_PROMPTS, ACTION_TO_AGENT, sendAgentMessage, sendRehabPlanMessage]
+    [ACTION_PROMPTS, ACTION_TO_AGENT, sendAgentMessage, sendRehabPlanMessage, t]
   );
 
   const selectedTemplateMeta = useMemo(() => {
     if (!selectedTemplateKey) return null;
     const match = templates.find((template) => template.key === selectedTemplateKey);
     if (!match) return null;
-    const translation = getTranslation(match.translations, TEMPLATE_LANGUAGE);
+    const translation = getTranslation(match.translations, templateLanguage);
     return {
       name: translation?.name || match.name || match.key || '',
       description: translation?.description || match.description || '',
     };
-  }, [selectedTemplateKey, templates]);
+  }, [selectedTemplateKey, templateLanguage, templates]);
 
   useEffect(() => {
     if (activeEntry) {
@@ -552,7 +638,8 @@ function Indlæg({
               : null;
           return {
             id: docSnap.id,
-            title: data.title || data.templateKey || 'Session',
+            title:
+              data.title || data.templateKey || t('indlaeg.session', 'Session'),
             date: data.date || createdAt || '',
             content: data.content || '',
           };
@@ -560,20 +647,20 @@ function Indlæg({
         setRecentEntries(mapped);
       } catch (error) {
         console.error('[Indlæg] Failed to load recent entries', error);
-        setHistoryError('Kunne ikke hente seneste sessioner.');
+        setHistoryError(t('indlaeg.historyError', 'Could not load recent sessions.'));
       } finally {
         setIsLoadingHistory(false);
       }
     };
 
     loadRecent();
-  }, [user?.uid, clientId]);
+  }, [user?.uid, clientId, t]);
 
   const fetchTemplates = useCallback(async () => {
     setTemplatesLoading(true);
     setTemplatesError('');
     try {
-      const response = await fetch(apiUrl(`/api/corti/templates?lang=${TEMPLATE_LANGUAGE}`));
+      const response = await fetch(apiUrl(`/api/corti/templates?lang=${templateLanguage}`));
       if (!response.ok) {
         const message = await response.text();
         throw new Error(message || `Server ${response.status}`);
@@ -583,11 +670,11 @@ function Indlæg({
       setTemplates(items);
     } catch (error) {
       console.error('Template fetch failed:', error);
-      setTemplatesError('Kunne ikke hente skabeloner. Prøv igen senere.');
+      setTemplatesError(t('indlaeg.templatesError', 'Could not load templates.'));
     } finally {
       setTemplatesLoading(false);
     }
-  }, []);
+  }, [t, templateLanguage]);
 
   const fetchTemplateDetails = useCallback(async (templateKey) => {
     if (!templateKey) {
@@ -608,12 +695,12 @@ function Indlæg({
       setSelectedTemplate(data || null);
     } catch (error) {
       console.error('Template detail fetch failed:', error);
-      setTemplateDetailsError('Kunne ikke hente skabelondetaljer.');
+      setTemplateDetailsError(t('indlaeg.errors.templateDetailsFailed', 'Could not load template details.'));
       setSelectedTemplate(null);
     } finally {
       setTemplateDetailsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchTemplates();
@@ -622,6 +709,26 @@ function Indlæg({
   useEffect(() => {
     fetchTemplateDetails(selectedTemplateKey);
   }, [fetchTemplateDetails, selectedTemplateKey]);
+
+  useEffect(() => {
+    if (!isTemplateSheetOpen) return;
+    const handleKeydown = (event) => {
+      if (event.key === 'Escape') {
+        setIsTemplateSheetOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
+  }, [isTemplateSheetOpen]);
+
+  useEffect(() => {
+    if (!isTemplateSheetOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isTemplateSheetOpen]);
 
   const ensureInteraction = useCallback(async () => {
     if (interactionId) {
@@ -632,7 +739,9 @@ function Indlæg({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: clientName ? `Journal: ${clientName}` : 'Journal session',
+        title: clientName
+          ? `${t('indlaeg.title', 'Journal')}: ${clientName}`
+          : t('indlaeg.session', 'Session'),
         encounterIdentifier: clientId ? `journal-${clientId}-${Date.now()}` : `journal-${Date.now()}`,
       }),
     });
@@ -649,16 +758,16 @@ function Indlæg({
 
     setInteractionId(data.interactionId);
     return data.interactionId;
-  }, [clientId, clientName, interactionId]);
+  }, [clientId, clientName, interactionId, t]);
 
   const handleGenerateDocument = useCallback(async () => {
     if (!activeTranscriptText || !activeTranscriptText.trim()) {
-      setGenerationError('Ingen transskription tilgængelig endnu.');
+      setGenerationError(t('indlaeg.errors.generationNoTranscript', 'No transcription available yet.'));
       return;
     }
 
     if (!selectedTemplateKey) {
-      setGenerationError('Vælg en skabelon før du skriver notat.');
+      setGenerationError(t('indlaeg.errors.generationNeedTemplate', 'Select a template before writing a note.'));
       return;
     }
 
@@ -673,7 +782,7 @@ function Indlæg({
         body: JSON.stringify({
           transcriptText: activeTranscriptText,
           templateKey: selectedTemplateKey,
-          outputLanguage: TEMPLATE_LANGUAGE,
+          outputLanguage: resolvedLanguage,
         }),
       });
 
@@ -693,19 +802,19 @@ function Indlæg({
       }
     } catch (error) {
       console.error('Document generation failed:', error);
-      setGenerationError('Kunne ikke generere notat. Prøv igen.');
+      setGenerationError(t('indlaeg.errors.generationFailed', 'Could not generate note.'));
     } finally {
       setGenerationLoading(false);
     }
-  }, [activeTranscriptText, ensureInteraction, selectedTemplateKey]);
+  }, [activeTranscriptText, ensureInteraction, resolvedLanguage, selectedTemplateKey, t]);
 
-  const cleanupRecording = useCallback((finalStatus = 'Idle') => {
+  const cleanupRecording = useCallback((finalStatus = RECORDING_STATUS.idle) => {
     if (cleanupInProgressRef.current) return;
     cleanupInProgressRef.current = true;
 
     isRecordingRef.current = false;
     isStartingRef.current = false;
-    if (finalStatus !== 'Ended') {
+    if (finalStatus !== RECORDING_STATUS.ended) {
       isStoppingRef.current = false;
     }
     setIsRecording(false);
@@ -737,7 +846,7 @@ function Indlæg({
     wsRef.current = null;
 
     cleanupInProgressRef.current = false;
-  }, []);
+  }, [RECORDING_STATUS.ended, RECORDING_STATUS.idle]);
 
   const resetDictationRecording = useCallback((nextStatus = null) => {
     dictationStopRequestedRef.current = false;
@@ -761,23 +870,23 @@ function Indlæg({
   const uploadDictation = useCallback(
     async (blob) => {
       if (!blob || blob.size === 0) {
-        setDictationError('Ingen lyd optaget.');
-        setDictationStatus('Error');
+        setDictationError(t('indlaeg.errors.dictationNoAudio', 'No audio recorded.'));
+        setDictationStatus(DICTATION_STATUS.error);
         return;
       }
 
-      setDictationStatus('Uploading');
+      setDictationStatus(DICTATION_STATUS.uploading);
       try {
         const formData = new FormData();
         formData.append('audio', blob, 'dictation.webm');
-        formData.append('language', 'da');
+        formData.append('language', transcriptionLocale);
 
         const response = await fetch(apiUrl('/api/corti/dictate'), {
           method: 'POST',
           body: formData,
         });
 
-        setDictationStatus('Transcribing');
+        setDictationStatus(DICTATION_STATUS.transcribing);
         const raw = await response.text();
         if (!response.ok) {
           console.error('[Indlæg] Dictation upload failed (raw):', raw);
@@ -796,30 +905,44 @@ function Indlæg({
 
         const nextText = data?.text || '';
         setDictationText(nextText);
-        setDictationStatus(data?.status || 'Done');
+        const normalizedStatus =
+          data?.status === 'completed' || data?.status === 'done'
+            ? DICTATION_STATUS.done
+            : data?.status === 'failed' || data?.status === 'error'
+            ? DICTATION_STATUS.error
+            : data?.status === 'transcribing'
+            ? DICTATION_STATUS.transcribing
+            : data?.status === 'uploading'
+            ? DICTATION_STATUS.uploading
+            : DICTATION_STATUS.done;
+        setDictationStatus(normalizedStatus);
         setDictationError(data?.error || '');
       } catch (error) {
         console.error('[Indlæg] Dictation upload failed:', error);
-        setDictationError(error?.message || 'Diktering fejlede.');
-        setDictationStatus('Error');
+        setDictationError(error?.message || t('indlaeg.errors.dictationFailed', 'Dictation failed.'));
+        setDictationStatus(DICTATION_STATUS.error);
       }
     },
-    []
+    [DICTATION_STATUS.done, DICTATION_STATUS.error, DICTATION_STATUS.transcribing, DICTATION_STATUS.uploading, t, transcriptionLocale]
   );
 
   const startDictationRecording = useCallback(async () => {
-    if (dictationStatus === 'Recording' || dictationStatus === 'Uploading' || dictationStatus === 'Transcribing') {
+    if (
+      dictationStatus === DICTATION_STATUS.recording ||
+      dictationStatus === DICTATION_STATUS.uploading ||
+      dictationStatus === DICTATION_STATUS.transcribing
+    ) {
       return;
     }
 
     if (!navigator.mediaDevices || typeof window.MediaRecorder === 'undefined') {
-      setDictationError('Din browser understøtter ikke optagelse.');
-      setDictationStatus('Error');
+      setDictationError(t('indlaeg.errors.dictationBrowserUnsupported', 'Recording not supported.'));
+      setDictationStatus(DICTATION_STATUS.error);
       return;
     }
 
     setDictationError('');
-    resetDictationRecording('Recording');
+    resetDictationRecording(DICTATION_STATUS.recording);
     setDictationText('');
 
     try {
@@ -845,10 +968,10 @@ function Indlæg({
       };
 
       recorder.onerror = (event) => {
-        const message = event?.error?.message || 'Optagefejl';
+        const message = event?.error?.message || t('indlaeg.status.error', 'Error');
         setDictationError(message);
-        setDictationStatus('Error');
-        resetDictationRecording('Error');
+        setDictationStatus(DICTATION_STATUS.error);
+        resetDictationRecording(DICTATION_STATUS.error);
       };
 
       recorder.onstop = async () => {
@@ -862,26 +985,26 @@ function Indlæg({
       recorder.start();
     } catch (error) {
       console.error('[Indlæg] Dictation start failed:', error);
-      setDictationError('Kunne ikke få adgang til mikrofonen.');
-      setDictationStatus('Error');
-      resetDictationRecording('Error');
+      setDictationError(t('indlaeg.errors.dictationMicAccess', 'Could not access microphone.'));
+      setDictationStatus(DICTATION_STATUS.error);
+      resetDictationRecording(DICTATION_STATUS.error);
     }
-  }, [dictationStatus, resetDictationRecording, uploadDictation]);
+  }, [DICTATION_STATUS.error, DICTATION_STATUS.recording, DICTATION_STATUS.transcribing, DICTATION_STATUS.uploading, dictationStatus, resetDictationRecording, t, uploadDictation]);
 
   const stopDictationRecording = useCallback(() => {
     if (!dictationRecorderRef.current || dictationStopRequestedRef.current) return;
     dictationStopRequestedRef.current = true;
-    setDictationStatus('Uploading');
+    setDictationStatus(DICTATION_STATUS.uploading);
 
     try {
       dictationRecorderRef.current.stop();
     } catch (error) {
       console.error('[Indlæg] Dictation stop failed:', error);
-      setDictationError('Kunne ikke stoppe optagelsen.');
-      setDictationStatus('Error');
-      resetDictationRecording('Error');
+      setDictationError(t('indlaeg.errors.dictationStopFailed', 'Could not stop recording.'));
+      setDictationStatus(DICTATION_STATUS.error);
+      resetDictationRecording(DICTATION_STATUS.error);
     }
-  }, [resetDictationRecording]);
+  }, [DICTATION_STATUS.error, DICTATION_STATUS.uploading, resetDictationRecording, t]);
 
   const handleAppendDictationToNote = useCallback(() => {
     if (!dictationText) return;
@@ -899,20 +1022,26 @@ function Indlæg({
 
   useEffect(() => {
     if (transcribeMode === MODE_DICTATE) {
-      cleanupRecording('Idle');
+      cleanupRecording(RECORDING_STATUS.idle);
       setRecordingError('');
       setLastWs({ type: '—', reason: '' });
     } else if (transcribeMode === MODE_TRANSCRIBE) {
-      resetDictationRecording('Idle');
+      resetDictationRecording(DICTATION_STATUS.idle);
       setDictationError('');
     } else {
-      cleanupRecording('Idle');
-      resetDictationRecording('Idle');
+      cleanupRecording(RECORDING_STATUS.idle);
+      resetDictationRecording(DICTATION_STATUS.idle);
       setRecordingError('');
       setDictationError('');
       setLastWs({ type: '—', reason: '' });
     }
-  }, [cleanupRecording, resetDictationRecording, transcribeMode]);
+  }, [
+    DICTATION_STATUS.idle,
+    RECORDING_STATUS.idle,
+    cleanupRecording,
+    resetDictationRecording,
+    transcribeMode,
+  ]);
 
   const startMediaRecorder = useCallback((stream, ws) => {
     if (recorderStartedRef.current) return;
@@ -949,7 +1078,7 @@ function Indlæg({
     isStoppingRef.current = true;
     isRecordingRef.current = false;
     setIsRecording(false);
-    setRecordingStatus('Flushing');
+    setRecordingStatus(RECORDING_STATUS.flushing);
 
     const recorder = mediaRecorderRef.current;
     if (recorder && recorder.state !== 'inactive') {
@@ -973,10 +1102,10 @@ function Indlæg({
         ws.send(JSON.stringify({ type: 'flush' }));
       } catch (_) {}
     } else {
-      cleanupRecording('Ended');
+      cleanupRecording(RECORDING_STATUS.ended);
       isStoppingRef.current = false;
     }
-  }, [cleanupRecording]);
+  }, [RECORDING_STATUS.ended, RECORDING_STATUS.flushing, cleanupRecording]);
 
   const startRecording = useCallback(async () => {
     if (isStartingRef.current || isRecordingRef.current || isStoppingRef.current) {
@@ -986,7 +1115,7 @@ function Indlæg({
     isStoppingRef.current = false;
 
     setRecordingError('');
-    setRecordingStatus('Requesting mic…');
+    setRecordingStatus(RECORDING_STATUS.requestingMic);
     setLastWs({ type: '—', reason: '' });
     setFinalTranscript('');
     setLivePartial('');
@@ -996,21 +1125,21 @@ function Indlæg({
     awaitingEndRef.current = false;
 
     if (!navigator.mediaDevices || typeof window.MediaRecorder === 'undefined') {
-      setRecordingError('Din browser understøtter ikke optagelse.');
-      cleanupRecording('Error');
+      setRecordingError(t('indlaeg.errors.recordingBrowserUnsupported', 'Recording not supported.'));
+      cleanupRecording(RECORDING_STATUS.error);
       return;
     }
 
     const wsUrl = buildWsUrl();
     if (!wsUrl) {
-      setRecordingError('Manglende transskriptionsforbindelse.');
-      cleanupRecording('Error');
+      setRecordingError(t('indlaeg.errors.recordingMissingConnection', 'Missing transcription connection.'));
+      cleanupRecording(RECORDING_STATUS.error);
       return;
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      setRecordingStatus('Connecting…');
+      setRecordingStatus(RECORDING_STATUS.connecting);
 
       const ws = new WebSocket(wsUrl);
       ws.binaryType = 'arraybuffer';
@@ -1026,11 +1155,11 @@ function Indlæg({
           return;
         }
         console.log('[UI] WS OPEN');
-        setRecordingStatus('Config');
+        setRecordingStatus(RECORDING_STATUS.config);
         const configMessage = {
           type: 'config',
           configuration: {
-            primaryLanguage: 'da',
+            primaryLanguage: transcriptionLocale,
             automaticPunctuation: true,
           },
         };
@@ -1069,16 +1198,16 @@ function Indlæg({
 
         if (message?.type === 'CONFIG_ACCEPTED') {
           configAcceptedRef.current = true;
-          setRecordingStatus('Listening');
+          setRecordingStatus(RECORDING_STATUS.listening);
           startMediaRecorder(stream, ws);
           return;
         }
 
         if (message?.type === 'CONFIG_TIMEOUT' || message?.type === 'CONFIG_DENIED') {
           const reason = messageReason || 'No reason';
-          setRecordingStatus('Error');
+          setRecordingStatus(RECORDING_STATUS.error);
           setRecordingError(`${message.type}: ${reason}`);
-          cleanupRecording('Error');
+          cleanupRecording(RECORDING_STATUS.error);
           return;
         }
 
@@ -1094,7 +1223,7 @@ function Indlæg({
         }
 
         if (message?.type === 'ended' || message?.type === 'ENDED') {
-          cleanupRecording('Ended');
+          cleanupRecording(RECORDING_STATUS.ended);
           return;
         }
 
@@ -1112,47 +1241,47 @@ function Indlæg({
 
         if (message?.type === 'error') {
           const details = messageReason || 'No reason';
-          setRecordingStatus('Error');
+          setRecordingStatus(RECORDING_STATUS.error);
           setRecordingError(`error: ${details}`);
-          cleanupRecording('Error');
+          cleanupRecording(RECORDING_STATUS.error);
         }
       };
 
       ws.onerror = () => {
-        setRecordingStatus('Error');
-        setRecordingError('WebSocket error');
-        cleanupRecording('Error');
+        setRecordingStatus(RECORDING_STATUS.error);
+        setRecordingError(t('indlaeg.errors.recordingWebsocketError', 'WebSocket error'));
+        cleanupRecording(RECORDING_STATUS.error);
       };
 
       ws.onclose = (evt) => {
         if (!isStoppingRef.current) {
-          setRecordingStatus('Error');
+          setRecordingStatus(RECORDING_STATUS.error);
           setRecordingError(`WS closed: code=${evt.code} reason=${evt.reason || ''}`.trim());
-          cleanupRecording('Error');
+          cleanupRecording(RECORDING_STATUS.error);
           return;
         }
 
-        setRecordingStatus('Ended');
-        cleanupRecording('Ended');
+        setRecordingStatus(RECORDING_STATUS.ended);
+        cleanupRecording(RECORDING_STATUS.ended);
         isStoppingRef.current = false;
       };
     } catch (error) {
       console.error('Microphone error:', error);
-      setRecordingStatus('Error');
-      setRecordingError('Kunne ikke få adgang til mikrofonen.');
-      cleanupRecording('Error');
+      setRecordingStatus(RECORDING_STATUS.error);
+      setRecordingError(t('indlaeg.errors.recordingMicAccess', 'Could not access microphone.'));
+      cleanupRecording(RECORDING_STATUS.error);
     } finally {
       isStartingRef.current = false;
     }
-  }, [cleanupRecording, startMediaRecorder]);
+  }, [RECORDING_STATUS, cleanupRecording, startMediaRecorder, t, transcriptionLocale]);
 
   const cleanupTranscribe = useCallback(() => {
-    cleanupRecording('Idle');
-  }, [cleanupRecording]);
+    cleanupRecording(RECORDING_STATUS.idle);
+  }, [RECORDING_STATUS.idle, cleanupRecording]);
 
   const cleanupDictation = useCallback(() => {
-    resetDictationRecording('Idle');
-  }, [resetDictationRecording]);
+    resetDictationRecording(DICTATION_STATUS.idle);
+  }, [DICTATION_STATUS.idle, resetDictationRecording]);
 
   useEffect(() => {
     return () => cleanupTranscribe();
@@ -1170,12 +1299,17 @@ function Indlæg({
     setSaveError('');
 
     if (!user) {
-      setSaveError('Du skal være logget ind for at gemme indlæg.');
+      setSaveError(t('indlaeg.errors.mustBeLoggedIn', 'You must be logged in to save.'));
       return;
     }
 
     if (!clientId) {
-      setSaveError('Manglende klient-id – kunne ikke knytte indlægget til en klient.');
+      setSaveError(
+        t(
+          'indlaeg.errors.missingClientId',
+          'Missing client id — could not attach the entry to a client.'
+        )
+      );
       return;
     }
 
@@ -1184,7 +1318,8 @@ function Indlæg({
     const templateTitle =
       typeof selectedTemplate?.name === 'string' ? selectedTemplate.name.trim() : '';
     const fallbackTitle =
-      [clientName, date].filter(Boolean).join(' - ') || 'Journalnotat';
+      [clientName, date].filter(Boolean).join(' - ') ||
+      t('indlaeg.journalNote', 'Journal note');
     const resolvedTitle = templateTitle || fallbackTitle;
 
     const entryPayload = {
@@ -1266,7 +1401,7 @@ function Indlæg({
       }
     } catch (error) {
       console.error('Failed to save journal entry:', error);
-      setSaveError('Kunne ikke gemme indlægget. Prøv igen senere.');
+      setSaveError(t('indlaeg.errors.saveFailed', 'Could not save entry.'));
     } finally {
       setIsSaving(false);
     }
@@ -1274,11 +1409,69 @@ function Indlæg({
 
   const templateSelectionLabel = useMemo(() => {
     if (selectedTemplate) {
-      const translation = getTranslation(selectedTemplate.translations, TEMPLATE_LANGUAGE);
+      const translation = getTranslation(selectedTemplate.translations, templateLanguage);
       return translation?.name || selectedTemplate?.name || selectedTemplate?.key || '';
     }
     return selectedTemplateMeta?.name || '';
-  }, [selectedTemplate, selectedTemplateMeta]);
+  }, [selectedTemplate, selectedTemplateMeta, templateLanguage]);
+
+  const assistantStatusText = useMemo(() => {
+    if (agentError) return t('indlaeg.agentStatus.error', 'Agent: error');
+    if (agentLoading) return t('indlaeg.agentStatus.loading', 'Agent: loading');
+    if (agentReady) return t('indlaeg.agentStatus.ready', 'Agent: ready');
+    return t('indlaeg.agentStatus.notReady', 'Agent: not ready');
+  }, [agentError, agentLoading, agentReady, t]);
+
+  const assistantQuickActions = useMemo(
+    () => [
+      {
+        id: 'missingInfo',
+        label: t('actions.missingInfo', 'Missing info'),
+        agentType: 'improvement',
+        message: t(
+          'prompts.missingInfo',
+          'Find missing clinical information in the history and suggest relevant follow-up questions.'
+        ),
+      },
+      {
+        id: 'redFlags',
+        label: t('actions.redFlags', 'Red flags'),
+        agentType: 'education',
+        message: t(
+          'prompts.redFlags',
+          'Identify possible red flags and what questions/actions should follow.'
+        ),
+      },
+      {
+        id: 'objectiveTests',
+        label: t('actions.objectiveTests', 'Objective tests'),
+        agentType: 'education',
+        message: t(
+          'prompts.objectiveTests',
+          'Suggest relevant objective tests and what they can reveal.'
+        ),
+      },
+      {
+        id: 'planHep',
+        label: t('actions.planHep', 'Plan + HEP'),
+        agentType: 'rehab',
+        message: t(
+          'prompts.planHep',
+          'Propose a clinical plan with a short HEP (home exercises) and key patient points.'
+        ),
+      },
+      {
+        id: 'summarizePatient',
+        label: t('actions.summarizePatient', 'Summarize patient'),
+        agentType: 'education',
+        message: t(
+          'prompts.summarizePatient',
+          'Summarize this patient’s full history across all notes.'
+        ),
+      },
+    ],
+    [t]
+  );
 
   return (
     <div className="indlæg-container">
@@ -1292,7 +1485,7 @@ function Indlæg({
                     type="button"
                     className="indlæg-close-btn"
                     onClick={onClose}
-                    aria-label="Tilbage til bookingkalender"
+                    aria-label={t('indlaeg.backToCalendar', 'Back to booking calendar')}
                   >
                     ←
                   </button>
@@ -1301,13 +1494,15 @@ function Indlæg({
                   <div className="indlæg-card-body indlæg-recent-summary">
                     <div className="indlæg-title-block">
                       <h2 className="indlæg-title">
-                        {clientName || 'Ukendt klient'}
+                        {clientName || t('indlaeg.unknownClient', 'Unknown client')}
                       </h2>
                       <span className="indlæg-title-date">{date || '—'}</span>
                     </div>
                   </div>
                   <div className="indlæg-card-header indlæg-card-header--row">
-                    <h3 className="indlæg-card-title">Seneste sessioner</h3>
+                    <h3 className="indlæg-card-title">
+                      {t('indlaeg.recentSessions', 'Recent sessions')}
+                    </h3>
                     {true && (
                       <button
                         type="button"
@@ -1335,13 +1530,15 @@ function Indlæg({
                           }
                         }}
                       >
-                        Tilbage til nuværende
+                        {t('indlaeg.backToCurrent', 'Back to current')}
                       </button>
                     )}
                   </div>
                   <div className="indlæg-card-body">
                     {isLoadingHistory && (
-                      <p className="indlæg-history-status">Henter seneste sessioner...</p>
+                      <p className="indlæg-history-status">
+                        {t('indlaeg.loadingSessions', 'Loading recent sessions...')}
+                      </p>
                     )}
 
                     {historyError && !isLoadingHistory && (
@@ -1350,7 +1547,7 @@ function Indlæg({
 
                     {!isLoadingHistory && !historyError && recentEntries.length === 0 && (
                       <p className="indlæg-history-empty">
-                        Ingen tidligere sessioner for denne borger endnu.
+                        {t('indlaeg.noSessions', 'No previous sessions for this client yet.')}
                       </p>
                     )}
 
@@ -1382,14 +1579,16 @@ function Indlæg({
                           >
                             <div className="indlæg-history-item-main">
                               <span className="indlæg-history-title">
-                                {entry.title || 'Uden titel'}
+                                {entry.title || t('indlaeg.untitled', 'Untitled')}
                               </span>
                               <span className="indlæg-history-date">
                                 {formatDateTime(entry.date)}
                               </span>
                             </div>
                             <div className="indlæg-history-meta">
-                              <span className="indlæg-history-status-badge">Aktiv</span>
+                              <span className="indlæg-history-status-badge">
+                                {t('indlaeg.active', 'Active')}
+                              </span>
                             </div>
                           </li>
                         ))}
@@ -1402,7 +1601,9 @@ function Indlæg({
               <section className={`indlæg-column indlæg-column--center${isAssistantOpen ? ' indlæg-column--shifted' : ''}`}>
                 <div className="indlæg-card indlæg-card--journal">
                   <div className="indlæg-card-header indlæg-card-header--journal">
-                    <h3 className="indlæg-card-title font-bold">Journal</h3>
+                    <h3 className="indlæg-card-title font-bold">
+                      {t('indlaeg.title', 'Journal')}
+                    </h3>
                     <button
                       type="button"
                       className="indlæg-action-btn"
@@ -1410,7 +1611,9 @@ function Indlæg({
                       disabled={isSaving}
                       aria-busy={isSaving}
                     >
-                      {isSaving ? 'Gemmer...' : 'Gem indlæg'}
+                      {isSaving
+                        ? t('indlaeg.saving', 'Saving...')
+                        : t('indlaeg.saveEntry', 'Save entry')}
                     </button>
                   </div>
                   <div className="indlæg-card-body indlæg-note-area">
@@ -1418,7 +1621,10 @@ function Indlæg({
                       className="indlæg-textarea indlæg-textarea--lg"
                       value={content}
                       onChange={(event) => setContent(event.target.value)}
-                      placeholder="Her vises det genererede notat. Du kan redigere frit."
+                      placeholder={t(
+                        'indlaeg.generatedNotePlaceholder',
+                        'The generated note appears here. You can edit freely.'
+                      )}
                       rows={12}
                     />
                     {generationLoading && (
@@ -1438,17 +1644,25 @@ function Indlæg({
                   <>
                     <div className="indlæg-card indlæg-card--templates">
                       <div className="indlæg-card-header">
-                        <h3 className="indlæg-card-title">Skabeloner</h3>
+                        <h3 className="indlæg-card-title">
+                          {t('indlaeg.templates', 'Templates')}
+                        </h3>
                       </div>
                       <div className="indlæg-card-body">
-                        {templatesLoading && <p className="indlæg-muted">Henter skabeloner...</p>}
+                        {templatesLoading && (
+                          <p className="indlæg-muted">
+                            {t('indlaeg.loadingTemplates', 'Loading templates...')}
+                          </p>
+                        )}
                         {templatesError && <p className="indlæg-inline-error">{templatesError}</p>}
                         {!templatesLoading && !templatesError && templates.length === 0 && (
-                          <p className="indlæg-muted">Ingen skabeloner fundet.</p>
+                          <p className="indlæg-muted">
+                            {t('indlaeg.templatesEmpty', 'No templates found.')}
+                          </p>
                         )}
                         <div className="indlæg-form-group">
                           <label className="indlæg-label" htmlFor="indlaeg-template-select">
-                            Vælg skabelon
+                            {t('indlaeg.selectTemplate', 'Select template')}
                           </label>
                           <select
                             id="indlaeg-template-select"
@@ -1460,11 +1674,13 @@ function Indlæg({
                             }}
                             disabled={templatesLoading || !!templatesError || templates.length === 0}
                           >
-                            <option value="">Vælg skabelon</option>
+                            <option value="">
+                              {t('indlaeg.selectTemplatePlaceholder', 'Select template')}
+                            </option>
                             {templates.map((template) => {
                               const translation = getTranslation(
                                 template.translations,
-                                TEMPLATE_LANGUAGE
+                                templateLanguage
                               );
                               const name = translation?.name || template.name || template.key;
                               return (
@@ -1482,74 +1698,40 @@ function Indlæg({
                     </div>
 
                     <div className="indlæg-card">
-                      <div className="indlæg-card-header indlæg-card-header--row">
+                      <button
+                        type="button"
+                        className="indlæg-card-header indlæg-card-header--row indlæg-template-trigger"
+                        onClick={() => setIsTemplateSheetOpen(true)}
+                        aria-haspopup="dialog"
+                        aria-expanded={isTemplateSheetOpen}
+                      >
                         <h3 className="indlæg-card-title">
-                          Valgt skabelon:{' '}
+                          {t('indlaeg.selectedTemplate', 'Selected template')}:{' '}
                           <span className="indlæg-card-title-value">
-                            {templateSelectionLabel || 'Ingen valgt'}
+                            {templateSelectionLabel || t('indlaeg.noneSelected', 'None selected')}
                           </span>
                         </h3>
-                        <button
-                          type="button"
-                          className="indlæg-history-toggle indlæg-card-toggle"
-                          aria-expanded={showTemplateDetails}
-                          onClick={() => setShowTemplateDetails((open) => !open)}
-                        >
-                          <span className="indlæg-card-toggle-icon">
-                            {showTemplateDetails ? '⌃' : '⌄'}
-                          </span>
-                        </button>
-                      </div>
-                      {showTemplateDetails && (
-                        <div className="indlæg-card-body">
-                          {templateDetailsLoading && <p className="indlæg-muted">Henter detaljer...</p>}
-                          {templateDetailsError && (
-                            <p className="indlæg-inline-error">{templateDetailsError}</p>
-                          )}
-                          {!selectedTemplateKey && (
-                            <p className="indlæg-muted">Vælg en skabelon for at se sektionerne.</p>
-                          )}
-                          {!templateDetailsLoading && selectedTemplateKey && selectedTemplate && (
-                            <div className="indlæg-template-sections">
-                              {selectedTemplateSections.length === 0 ? (
-                                <p className="indlæg-muted">Skabelonen har ingen sektioner.</p>
-                              ) : (
-                                selectedTemplateSections.map((section) => {
-                                  const sectionMeta = section?.sectionsId || section;
-                                  const translation = getTranslation(
-                                    sectionMeta?.translations,
-                                    TEMPLATE_LANGUAGE
-                                  );
-                                  const sectionName = translation?.name || sectionMeta?.name || 'Sektion';
-                                  const sectionDescription =
-                                    translation?.description || sectionMeta?.description || '';
-                                  return (
-                                    <div key={`${sectionMeta?.key}-${section?.sort}`} className="indlæg-template-section">
-                                      <div className="indlæg-template-section-title">{sectionName}</div>
-                                      {sectionDescription ? (
-                                        <div className="indlæg-template-section-desc">
-                                          {sectionDescription}
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  );
-                                })
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                        <span className="indlæg-template-trigger-icon">⌃</span>
+                      </button>
                     </div>
 
                     <div className="indlæg-card">
                       <div className="indlæg-card-header">
-                        <h3 className="indlæg-card-title">Genereret notat</h3>
+                        <h3 className="indlæg-card-title">
+                          {t('indlaeg.generatedNote', 'Generated note')}
+                        </h3>
                       </div>
                       <div className="indlæg-card-body">
-                        {generationLoading && <p className="indlæg-muted">Genererer notat...</p>}
+                        {generationLoading && (
+                          <p className="indlæg-muted">
+                            {t('indlaeg.generatingNote', 'Generating note...')}
+                          </p>
+                        )}
                         {generationError && <p className="indlæg-inline-error">{generationError}</p>}
                         {!generationLoading && !generationError && !generatedDocument && (
-                          <p className="indlæg-muted">Ingen notat genereret endnu.</p>
+                          <p className="indlæg-muted">
+                            {t('indlaeg.noNoteYet', 'No note generated yet.')}
+                          </p>
                         )}
                         {generatedDocument?.sections && Array.isArray(generatedDocument.sections) ? (
                           <div className="indlæg-generated-sections">
@@ -1585,7 +1767,7 @@ function Indlæg({
                         onClick={() => handleModeToggle(MODE_TRANSCRIBE)}
                         aria-pressed={transcribeMode === MODE_TRANSCRIBE}
                       >
-                        Trankribering
+                        {t('indlaeg.transcription', 'Transcription')}
                       </GradientButton>
                       <GradientButton
                         type="button"
@@ -1593,7 +1775,7 @@ function Indlæg({
                         onClick={() => handleModeToggle(MODE_DICTATE)}
                         aria-pressed={transcribeMode === MODE_DICTATE}
                       >
-                        Diktering
+                        {t('indlaeg.dictation', 'Dictation')}
                       </GradientButton>
                     </div>
                   </div>
@@ -1601,15 +1783,19 @@ function Indlæg({
                   <div className="indlæg-card">
                     <div className="indlæg-card-header">
                       <h3 className="indlæg-card-title">
-                        {isDictationMode ? 'Diktering' : 'Transskription'}
+                        {isDictationMode
+                          ? t('indlaeg.dictation', 'Dictation')
+                          : t('indlaeg.transcription', 'Transcription')}
                       </h3>
                       <span className={`indlæg-status-pill indlæg-status-pill--${statusClass}`}>
-                        {modeStatus}
+                        {modeStatusLabel}
                       </span>
                     </div>
                     <div className="indlæg-card-body">
                       {transcribeMode === MODE_NONE && (
-                        <p className="indlæg-muted">Vælg en mode for at optage eller transkribere.</p>
+                        <p className="indlæg-muted">
+                          {t('indlaeg.chooseMode', 'Choose a mode to record or transcribe.')}
+                        </p>
                       )}
 
                       {transcribeMode === MODE_TRANSCRIBE && (
@@ -1621,7 +1807,9 @@ function Indlæg({
                               onClick={() => (isRecording ? stopRecording() : startRecording())}
                               aria-pressed={isRecording}
                             >
-                              {isRecording ? 'Stop' : 'Start konsultation'}
+                              {isRecording
+                                ? t('indlaeg.stop', 'Stop')
+                                : t('indlaeg.startConsultation', 'Start consultation')}
                             </RainbowButton>
                             <button
                               type="button"
@@ -1633,13 +1821,17 @@ function Indlæg({
                                 !selectedTemplateKey
                               }
                             >
-                              {generationLoading ? 'Skriver notat...' : 'Skriv notat'}
+                              {generationLoading
+                                ? t('indlaeg.writingNote', 'Writing note...')
+                                : t('indlaeg.writeNote', 'Write note')}
                             </button>
                           </div>
 
                           <div className="indlæg-metrics">
                             <div className="indlæg-metric">
-                              <span className="indlæg-metric-label">Ord opfanget</span>
+                              <span className="indlæg-metric-label">
+                                {t('indlaeg.wordsCaptured', 'Words captured')}
+                              </span>
                               <span className="indlæg-metric-value">{wordCount}</span>
                             </div>
                           </div>
@@ -1657,16 +1849,23 @@ function Indlæg({
                           <div className="indlæg-record-actions">
                             <RainbowButton
                               type="button"
-                              className={`indlæg-mikrofon-btn${dictationStatus === 'Recording' ? ' active' : ''}`}
+                              className={`indlæg-mikrofon-btn${
+                                dictationStatus === DICTATION_STATUS.recording ? ' active' : ''
+                              }`}
                               onClick={() =>
-                                dictationStatus === 'Recording'
+                                dictationStatus === DICTATION_STATUS.recording
                                   ? stopDictationRecording()
                                   : startDictationRecording()
                               }
-                              aria-pressed={dictationStatus === 'Recording'}
-                              disabled={dictationStatus === 'Uploading' || dictationStatus === 'Transcribing'}
+                              aria-pressed={dictationStatus === DICTATION_STATUS.recording}
+                              disabled={
+                                dictationStatus === DICTATION_STATUS.uploading ||
+                                dictationStatus === DICTATION_STATUS.transcribing
+                              }
                             >
-                              {dictationStatus === 'Recording' ? 'Stop' : 'Start konsultation'}
+                              {dictationStatus === DICTATION_STATUS.recording
+                                ? t('indlaeg.stop', 'Stop')
+                                : t('indlaeg.startConsultation', 'Start consultation')}
                             </RainbowButton>
                             <button
                               type="button"
@@ -1676,17 +1875,21 @@ function Indlæg({
                                 generationLoading ||
                                 !activeTranscriptText.trim() ||
                                 !selectedTemplateKey ||
-                                dictationStatus === 'Uploading' ||
-                                dictationStatus === 'Transcribing'
+                                dictationStatus === DICTATION_STATUS.uploading ||
+                                dictationStatus === DICTATION_STATUS.transcribing
                               }
                             >
-                              {generationLoading ? 'Skriver notat...' : 'Skriv notat'}
+                              {generationLoading
+                                ? t('indlaeg.writingNote', 'Writing note...')
+                                : t('indlaeg.writeNote', 'Write note')}
                             </button>
                           </div>
 
                           <div className="indlæg-metrics">
                             <div className="indlæg-metric">
-                              <span className="indlæg-metric-label">Ord opfanget</span>
+                              <span className="indlæg-metric-label">
+                                {t('indlaeg.wordsCaptured', 'Words captured')}
+                              </span>
                               <span className="indlæg-metric-value">{wordCount}</span>
                             </div>
                           </div>
@@ -1702,7 +1905,10 @@ function Indlæg({
 
                       {!selectedTemplateKey && transcribeMode !== MODE_NONE && (
                         <p className="indlæg-muted">
-                          Vælg en skabelon i midten før du skriver notat.
+                          {t(
+                            'indlaeg.selectTemplateHint',
+                            'Select a template in the middle before writing a note.'
+                          )}
                         </p>
                       )}
 
@@ -1744,57 +1950,29 @@ function Indlæg({
               type="button"
               className="indlæg-drawer-edge-close"
               onClick={() => setIsAssistantOpen(false)}
-              aria-label="Luk Selma assistent panel"
+              aria-label={t('indlaeg.assistantClose', 'Close Selma assistant panel')}
             >
               →
             </button>
               <div className="indlæg-drawer-header">
-                <h3 className="indlæg-card-title">Selma Assistent</h3>
+                <h3 className="indlæg-card-title">
+                  {t('indlaeg.assistantTitle', 'Selma Assistant')}
+                </h3>
                 <button
                   type="button"
                   className="indlæg-drawer-close"
                   onClick={() => setIsAssistantOpen(false)}
-                  aria-label="Luk assister"
+                  aria-label={t('indlaeg.assistantCloseShort', 'Close assistant')}
                 >
                   →
                 </button>
               </div>
 
               <CortiAssistantPanel
-                statusText={
-                  agentError
-                    ? 'Agent: fejl'
-                    : agentLoading
-                    ? 'Agent: loader'
-                    : agentReady
-                    ? 'Agent: klar'
-                    : 'Agent: ikke klar'
-                }
-                quickActions={[
-                  {
-                    label: 'Manglende info',
-                    agentType: 'improvement',
-                    message:
-                      'Find manglende information i anamnesen og foreslå relevante opfølgende spørgsmål.',
-                  },
-                  {
-                    label: 'Røde flag',
-                    message:
-                      'Identificér mulige røde flag og hvilke spørgsmål/handlinger der bør følge.',
-                  },
-                  {
-                    label: 'Objektive tests',
-                    message:
-                      'Foreslå relevante objektive tests og hvad de kan afdække.',
-                  },
-                  {
-                    label: 'Plan + HEP',
-                    message:
-                      'Foreslå en klinisk plan med kort HEP (hjemmeøvelser) og nøglepunkter for patienten.',
-                  },
-                ]}
+                statusText={assistantStatusText}
+                quickActions={assistantQuickActions}
                 activeQuickAction={activeAgentPreset}
-                onQuickAction={(label) => setActiveAgentPreset(label)}
+                onQuickAction={(actionId) => setActiveAgentPreset(actionId)}
                 onSendMessage={handleAssistantSendMessage}
                 messages={agentMessages}
                 isSending={agentChatLoading}
@@ -1805,12 +1983,110 @@ function Indlæg({
                 inputDisabled={agentLoading}
                 sendDisabled={agentLoading || agentChatLoading || !agentInput.trim()}
                 showEmptyHint={!activeTranscriptText.trim()}
-                emptyHintText="Ingen tekst endnu – du kan stadig spørge generelt."
+                emptyHintText={t('indlaeg.emptyHint', 'No text yet — you can still ask generally.')}
                 chatAvatars={CHAT_AVATARS}
-                placeholder="Stil et spørgsmål til Selma assistenten..."
+                placeholder={t(
+                  'indlaeg.assistantPlaceholder',
+                  'Ask Selma assistant a question...'
+                )}
               />
             </div>
           )}
+          {isTemplateSheetOpen &&
+            createPortal(
+              <>
+                <div
+                  className="indlæg-template-sheet-overlay"
+                  role="presentation"
+                  onClick={() => setIsTemplateSheetOpen(false)}
+                />
+                <div
+                  className="indlæg-template-sheet-modal"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={t('indlaeg.templateSheetLabel', 'Selected template')}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="indlæg-template-sheet">
+                    <div className="indlæg-template-sheet-header">
+                      <div className="indlæg-template-sheet-title">
+                        <h3 className="indlæg-card-title">
+                          {templateSelectionLabel ||
+                            t('indlaeg.templateNoneSelected', 'No template selected')}
+                        </h3>
+                        {selectedTemplateMeta?.description ? (
+                          <p className="indlæg-template-sheet-subtitle">
+                            {selectedTemplateMeta.description}
+                          </p>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        className="indlæg-template-sheet-close"
+                        onClick={() => setIsTemplateSheetOpen(false)}
+                        aria-label={t('indlaeg.closeTemplate', 'Close template')}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="indlæg-template-sheet-body">
+                      {templateDetailsLoading && (
+                        <p className="indlæg-muted">
+                          {t('indlaeg.templateDetailsLoading', 'Loading details...')}
+                        </p>
+                      )}
+                      {templateDetailsError && (
+                        <p className="indlæg-inline-error">{templateDetailsError}</p>
+                      )}
+                      {!selectedTemplateKey && (
+                        <p className="indlæg-muted">
+                          {t('indlaeg.templateDetailsEmpty', 'Select a template to see sections.')}
+                        </p>
+                      )}
+                      {!templateDetailsLoading && selectedTemplateKey && selectedTemplate && (
+                        <div className="indlæg-template-sections">
+                          {selectedTemplateSections.length === 0 ? (
+                            <p className="indlæg-muted">
+                              {t('indlaeg.templateNoSections', 'Template has no sections.')}
+                            </p>
+                          ) : (
+                            selectedTemplateSections.map((section) => {
+                              const sectionMeta = section?.sectionsId || section;
+                              const translation = getTranslation(
+                                sectionMeta?.translations,
+                                templateLanguage
+                              );
+                              const sectionName =
+                                translation?.name ||
+                                sectionMeta?.name ||
+                                t('indlaeg.sectionFallback', 'Section');
+                              const sectionDescription =
+                                translation?.description || sectionMeta?.description || '';
+                              return (
+                                <div
+                                  key={`${sectionMeta?.key}-${section?.sort}`}
+                                  className="indlæg-template-section"
+                                >
+                                  <div className="indlæg-template-section-title">
+                                    {sectionName}
+                                  </div>
+                                  {sectionDescription ? (
+                                    <div className="indlæg-template-section-desc">
+                                      {sectionDescription}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>,
+              document.body
+            )}
         </div>
       </div>
     </div>

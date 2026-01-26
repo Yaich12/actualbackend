@@ -56,8 +56,6 @@ Step 4: Quality checks
 - Ensure it’s realistic, clinic-friendly, and actionable
 - Keep output concise and structured with headings
 
-Output format (MANDATORY)
-Return the answer in Danish.
 
 Use this exact structure:
 

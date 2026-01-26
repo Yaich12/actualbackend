@@ -79,7 +79,7 @@ A non-compliant query example that must be avoided: "Would you agree the patient
 </query_guidelines>
 
 <principles>
-Prioritize accuracy and compliance over reimbursement optimization. Be explicit and conservative in your assessments. Prefer stating that no applicable evidence was found over making weak inferences. Use English only. Maintain a complete audit trail so that every conclusion can be traced back to specific evidence in the chart excerpt.
+Prioritize accuracy and compliance over reimbursement optimization. Be explicit and conservative in your assessments. Prefer stating that no applicable evidence was found over making weak inferences. Maintain a complete audit trail so that every conclusion can be traced back to specific evidence in the chart excerpt.
 </principles>`;
 
 const AGENTS = {

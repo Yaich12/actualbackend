@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import { useAuth } from './AuthContext';
 import { setUserLanguage, subscribeUserLanguage } from './firebase/userSettings';
+import { translations as UI_TRANSLATIONS } from './i18n/translations';
 import en from './translations/en.json';
 import da from './translations/da.json';
 import ar from './translations/ar.json';
@@ -18,13 +19,14 @@ import de from './translations/de.json';
 import pt from './translations/pt.json';
 import it from './translations/it.json';
 
-const LANGUAGE_STORAGE_KEY = 'selma_language';
-const DEFAULT_LANGUAGE = 'da';
+const LANGUAGE_STORAGE_KEY = 'preferredLanguage';
+const LEGACY_LANGUAGE_STORAGE_KEY = 'selma_language';
+const DEFAULT_LANGUAGE = 'en';
 
 export const LANGUAGE_OPTIONS = [
   { code: 'en', label: 'English' },
   { code: 'da', label: 'Dansk' },
-  { code: 'ar', label: 'عربى' },
+  { code: 'ar', label: 'عربي' },
   { code: 'sv', label: 'Svenska' },
   { code: 'no', label: 'Norsk' },
   { code: 'fr', label: 'Français' },
@@ -76,12 +78,38 @@ const applyInterpolation = (value, vars) => {
   });
 };
 
+const mergeTranslations = (base, extra) => {
+  if (!base && !extra) return {};
+  if (!base) return extra || {};
+  if (!extra) return base || {};
+  const merged = Array.isArray(base) ? [...base] : { ...base };
+  Object.keys(extra).forEach((key) => {
+    const baseValue = base?.[key];
+    const extraValue = extra?.[key];
+    if (
+      baseValue &&
+      extraValue &&
+      typeof baseValue === 'object' &&
+      typeof extraValue === 'object' &&
+      !Array.isArray(baseValue) &&
+      !Array.isArray(extraValue)
+    ) {
+      merged[key] = mergeTranslations(baseValue, extraValue);
+      return;
+    }
+    merged[key] = extraValue;
+  });
+  return merged;
+};
+
 const LanguageContext = createContext({
   language: DEFAULT_LANGUAGE,
+  preferredLanguage: DEFAULT_LANGUAGE,
   locale: LANGUAGE_LOCALES[DEFAULT_LANGUAGE],
   isRtl: false,
   languageOptions: LANGUAGE_OPTIONS,
   setLanguage: (_lang, _options) => Promise.resolve(),
+  setPreferredLanguage: (_lang, _options) => Promise.resolve(),
   t: (_key, _fallback, _vars) => '',
   getArray: (_key, _fallback = []) => [],
 });
@@ -92,7 +120,9 @@ export const LanguageProvider = ({ children }) => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    const stored =
+      window.localStorage.getItem(LANGUAGE_STORAGE_KEY) ||
+      window.localStorage.getItem(LEGACY_LANGUAGE_STORAGE_KEY);
     const resolvedStored = resolveLanguage(stored);
     if (resolvedStored) {
       setLanguageState(resolvedStored);
@@ -133,12 +163,13 @@ export const LanguageProvider = ({ children }) => {
     [user?.uid]
   );
 
-  const setLanguage = useCallback(
+  const setPreferredLanguage = useCallback(
     async (nextLang, options = {}) => {
       const resolved = resolveLanguage(nextLang) || DEFAULT_LANGUAGE;
       setLanguageState(resolved);
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(LANGUAGE_STORAGE_KEY, resolved);
+        window.localStorage.removeItem(LEGACY_LANGUAGE_STORAGE_KEY);
       }
       if (options.persist !== false && user?.uid) {
         try {
@@ -151,10 +182,17 @@ export const LanguageProvider = ({ children }) => {
     [persistLanguage, user?.uid]
   );
 
-  const translations = useMemo(
-    () => TRANSLATIONS[language] || TRANSLATIONS[DEFAULT_LANGUAGE] || {},
-    [language]
-  );
+  const translations = useMemo(() => {
+    const base = TRANSLATIONS[language] || TRANSLATIONS[DEFAULT_LANGUAGE] || {};
+    const extras = UI_TRANSLATIONS[language] || UI_TRANSLATIONS[DEFAULT_LANGUAGE] || {};
+    return mergeTranslations(base, extras);
+  }, [language]);
+
+  const fallbackTranslations = useMemo(() => {
+    const base = TRANSLATIONS[DEFAULT_LANGUAGE] || {};
+    const extras = UI_TRANSLATIONS[DEFAULT_LANGUAGE] || {};
+    return mergeTranslations(base, extras);
+  }, []);
 
   const t = useCallback(
     (key, fallback, vars) => {
@@ -162,33 +200,41 @@ export const LanguageProvider = ({ children }) => {
       if (typeof value === 'string') {
         return applyInterpolation(value, vars);
       }
+      const fallbackValue = getTranslationValue(fallbackTranslations, key);
+      if (typeof fallbackValue === 'string') {
+        return applyInterpolation(fallbackValue, vars);
+      }
       if (typeof fallback === 'string') {
         return applyInterpolation(fallback, vars);
       }
       return key;
     },
-    [translations]
+    [fallbackTranslations, translations]
   );
 
   const getArray = useCallback(
     (key, fallback = []) => {
       const value = getTranslationValue(translations, key);
-      return Array.isArray(value) ? value : fallback;
+      if (Array.isArray(value)) return value;
+      const fallbackValue = getTranslationValue(fallbackTranslations, key);
+      return Array.isArray(fallbackValue) ? fallbackValue : fallback;
     },
-    [translations]
+    [fallbackTranslations, translations]
   );
 
   const value = useMemo(
     () => ({
       language,
+      preferredLanguage: language,
       locale: LANGUAGE_LOCALES[language] || LANGUAGE_LOCALES[DEFAULT_LANGUAGE],
       isRtl: language === 'ar',
       languageOptions: LANGUAGE_OPTIONS,
-      setLanguage,
+      setLanguage: setPreferredLanguage,
+      setPreferredLanguage,
       t,
       getArray,
     }),
-    [getArray, language, setLanguage, t]
+    [getArray, language, setPreferredLanguage, t]
   );
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;

@@ -36,7 +36,7 @@ function UserSettings() {
   const { user, updateUserProfile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { language, setLanguage, languageOptions, t } = useLanguage();
+  const { language, preferredLanguage, setPreferredLanguage, languageOptions, t } = useLanguage();
   const resolveSectionFromPath = (pathname) => {
     if (pathname.startsWith('/settings/transfer')) {
       return 'transfer';
@@ -327,6 +327,7 @@ function UserSettings() {
         categories: category ? [category] : [],
         address,
         workHours: buildWorkHoursPayload(workHours),
+        preferredLanguage: preferredLanguage || language,
         updatedAt: serverTimestamp(),
       };
 
@@ -828,7 +829,7 @@ function UserSettings() {
                             className="usersettings-input"
                             value={language}
                             onChange={(e) => {
-                              void setLanguage(e.target.value);
+                              void setPreferredLanguage(e.target.value, { persist: false });
                             }}
                           >
                             {languageOptions.map((option) => (

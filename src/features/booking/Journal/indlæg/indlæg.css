@@ -206,6 +206,137 @@
   padding-top: 0;
 }
 
+.indlæg-template-trigger {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  gap: 12px;
+  transition: background 0.2s ease;
+  padding: 0 18px 24px;
+  min-height: 68px;
+}
+
+.indlæg-template-trigger:hover {
+  background: var(--bg-subtle);
+}
+
+.indlæg-template-trigger:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: -2px;
+}
+
+.indlæg-template-trigger-icon {
+  font-size: 16px;
+  color: var(--text-muted);
+  transform: rotate(180deg);
+}
+
+.indlæg-template-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(7, 12, 20, 0.25);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: indlæg-sheet-fade 0.18s ease;
+}
+
+.indlæg-template-sheet-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 32px 16px 24px;
+  pointer-events: none;
+}
+
+.indlæg-template-sheet {
+  width: min(960px, 100%);
+  max-height: 80vh;
+  background: var(--bg-surface);
+  border-radius: 24px 24px 12px 12px;
+  box-shadow: 0 -20px 40px rgba(15, 23, 42, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: indlæg-sheet-rise 0.22s ease;
+  pointer-events: auto;
+}
+
+.indlæg-template-sheet-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px 12px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.indlæg-template-sheet-title {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.indlæg-template-sheet-subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.indlæg-template-sheet-close {
+  border: none;
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.indlæg-template-sheet-close:hover {
+  background: var(--bg-strong);
+  transform: translateY(-1px);
+}
+
+.indlæg-template-sheet-body {
+  padding: 18px 22px 24px;
+  overflow-y: auto;
+}
+
+@keyframes indlæg-sheet-rise {
+  from {
+    transform: translateY(12px);
+    opacity: 0.95;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes indlæg-sheet-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .indlæg-layout {
   display: flex;
   flex: 1;

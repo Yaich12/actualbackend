@@ -4,6 +4,18 @@ const { createCortiClient } = require('../../cortiAuth');
 const { extractTextFromTask, getOrCreateAgentId } = require('../corti/agentRegistry');
 
 const router = express.Router();
+const DEFAULT_LANGUAGE = 'en';
+
+const resolvePreferredLanguage = (value) => {
+  if (typeof value !== 'string') return DEFAULT_LANGUAGE;
+  const trimmed = value.trim();
+  return trimmed || DEFAULT_LANGUAGE;
+};
+
+const appendOutputLanguage = (message, preferredLanguage) => {
+  const language = resolvePreferredLanguage(preferredLanguage);
+  return `${message}\n\nOUTPUT_LANGUAGE: ${language}\nPlease respond in this language.\nUse Markdown headings starting with ### for each section. Do not return a single block without headings.`.trim();
+};
 
 
 router.get('/ping', (_req, res) => {
@@ -25,7 +37,7 @@ router.post('/init', async (_req, res) => {
 
 router.post('/chat', async (req, res) => {
   try {
-    const { sourceText, question } = req.body || {};
+    const { sourceText, question, preferredLanguage } = req.body || {};
     const ctx = `${sourceText || ''}`.trim();
     if (!ctx) {
       return res.status(400).json({ ok: false, error: 'Missing sourceText' });
@@ -42,7 +54,7 @@ ${ctx}
 >>>
 
 REQUEST:
-${task}
+${appendOutputLanguage(task, preferredLanguage)}
 `.trim();
 
     const payload = {
