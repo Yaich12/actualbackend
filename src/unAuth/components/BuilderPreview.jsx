@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "../../components/ui/button";
 import ClinicHeroTemplate from "./ClinicHeroTemplate";
 import { useLanguage } from "../language/LanguageProvider";
+import { getPublicAssetUrl } from "../../utils/publicAssets";
 
 const PreviewImage = ({ src, alt, className, fallbackSrc }) => {
   const handleError = (e) => {
@@ -234,7 +235,8 @@ function BuilderPreview({ config }) {
   const trustBullets = Array.isArray(config?.trust?.bullets) ? config.trust.bullets : [];
   const theme = config?.theme || {};
   const navLinks = Array.isArray(config?.nav?.links) ? config.nav.links : navFallback;
-  const heroImageUrl = config?.hero?.imageUrl || "/hero-2/pexels-cottonbro-7581072.jpg";
+  const heroImageUrl =
+    config?.hero?.imageUrl || getPublicAssetUrl("hero-2/pexels-cottonbro-7581072.jpg");
   const heroAlt = config?.hero?.imageAlt || t("features.websiteBuilder.preview.hero.imageAlt");
   const primaryCta = config?.hero?.ctaPrimary || config?.hero?.ctaText || t("features.websiteBuilder.preview.hero.ctaPrimary");
   const secondaryCta = config?.hero?.ctaSecondary || t("features.websiteBuilder.preview.hero.ctaSecondary");
@@ -243,7 +245,7 @@ function BuilderPreview({ config }) {
   const aboutBullets = Array.isArray(about.bullets) ? about.bullets : [];
   const gallery = config?.gallery || {};
   const galleryImages = Array.isArray(gallery.images) ? gallery.images : [];
-  const safeFallbackHero = "/hero-2/pexels-cottonbro-7581072.jpg";
+  const safeFallbackHero = getPublicAssetUrl("hero-2/pexels-cottonbro-7581072.jpg");
   const secondaryHeroImageUrl =
     galleryImages[0]?.url || about.photoUrl || heroImageUrl || safeFallbackHero;
   const heroStats =
@@ -324,7 +326,7 @@ function BuilderPreview({ config }) {
               <div className="overflow-hidden rounded-3xl border border-black/10 bg-white/70 p-2 shadow-sm">
                 <PreviewImage
                   src={about.photoUrl}
-                  fallbackSrc="/hero-2/pexels-yankrukov-5793991.jpg"
+                  fallbackSrc={getPublicAssetUrl("hero-2/pexels-yankrukov-5793991.jpg")}
                   alt={
                     about?.name
                       ? t("features.websiteBuilder.preview.about.photoAltNamed", { name: about.name })

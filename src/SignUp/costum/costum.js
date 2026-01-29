@@ -11,23 +11,24 @@ import {
   createDefaultWorkHours,
   getWorkHoursValidation,
 } from '../../utils/workHours';
+import { getPublicAssetUrl } from '../../utils/publicAssets';
 import './costum.css';
 
 const CATEGORY_CARDS = [
   {
     value: 'Physiotherapist',
     fallbackLabel: 'Physiotherapist',
-    image: '/hero-3/pexels-cottonbro-3998012.jpg',
+    image: getPublicAssetUrl('hero-3/pexels-cottonbro-3998012.jpg'),
   },
   {
     value: 'Osteopath',
     fallbackLabel: 'Osteopath',
-    image: encodeURI('/hero-3/pexels-karola-g-4506208.jpg'),
+    image: getPublicAssetUrl('hero-3/pexels-karola-g-4506208.jpg'),
   },
   {
     value: 'Chiropractor',
     fallbackLabel: 'Chiropractor',
-    image: '/hero-3/pexels-yankrukov-5793798-1.jpg',
+    image: getPublicAssetUrl('hero-3/pexels-yankrukov-5793798-1.jpg'),
   },
 ];
 

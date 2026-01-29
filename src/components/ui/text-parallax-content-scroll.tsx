@@ -6,6 +6,7 @@ import { motion, useScroll, useTransform } from 'framer-motion'
 import { Sparkles, X } from 'lucide-react'
 
 import Preview from '../../unAuth/components/preview'
+import { getPublicAssetUrl } from '../../utils/publicAssets'
 import { useLanguage } from '../../unAuth/language/LanguageProvider'
 
 const IMG_PADDING = 12
@@ -32,7 +33,7 @@ export const TextParallaxContentExample = () => {
   return (
     <div className="bg-white">
       <TextParallaxContent
-        imgUrl="/hero-2/pexels-yankrukov-5793904.jpg"
+        imgUrl={getPublicAssetUrl('hero-2/pexels-yankrukov-5793904.jpg')}
         subheading={t('landing.parallax.sections.collaborate.subheading')}
         heading={t('landing.parallax.sections.collaborate.heading')}
       />
@@ -42,7 +43,7 @@ export const TextParallaxContentExample = () => {
       </div>
 
       <TextParallaxContent
-        imgUrl="/hero-2/pexels-shkrabaanthony-5217852.jpg"
+        imgUrl={getPublicAssetUrl('hero-2/pexels-shkrabaanthony-5217852.jpg')}
         subheading={t('landing.parallax.sections.quality.subheading')}
         heading={t('landing.parallax.sections.quality.heading')}
       />

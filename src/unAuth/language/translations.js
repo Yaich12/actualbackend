@@ -1,3 +1,5 @@
+import { getPublicAssetUrl } from "../../utils/publicAssets";
+
 export const TRANSLATIONS = {
   da: {
     navbar: {
@@ -164,21 +166,21 @@ export const TRANSLATIONS = {
             title: "Sikker klinikdata i EU",
             text:
               "Alt data i Selma+ gemmes på sikre servere i EU og behandles efter GDPR. Journaler, aftaler og personoplysninger er krypteret både under overførsel og i hvile. Adgang styres med sikre logins og rollebaserede rettigheder, så kun de rette personer ser det nødvendige. Du ejer altid dine data og kan få dem udleveret eller slettet.",
-            image: "/hero-2/pexels-eberhardgross-1743364.jpg",
+            image: getPublicAssetUrl("hero-2/pexels-eberhardgross-1743364.jpg"),
             alt: "Sikker lagring af klinikdata i EU",
           },
           {
             title: "Mere nærvær i konsultationen",
             text:
               "Selma+ gør det lettere at være til stede med patienten i stedet for skærmen. Noter fanges via skabeloner, genveje og evt. tale-til-tekst, så dokumentationen ikke stjæler samtalen. Systemet strukturerer informationen og kan efterfølgende opsummere forløbet, så du hurtigt får overblik.",
-            image: "/hero-2/pexels-shkrabaanthony-5217850.jpg",
+            image: getPublicAssetUrl("hero-2/pexels-shkrabaanthony-5217850.jpg"),
             alt: "Mere nærvær i konsultationen",
           },
           {
             title: "Overblik uden administrationskaos",
             text:
               "Med Selma+ slipper du for administrations-kaos og får et system, der arbejder for dig. Aftaler, påmindelser, journaler og nøgletal samles ét sted og opdateres automatisk. Platformen hjælper dig med at holde styr på udviklingen i patienternes forløb og kan inspirere til næste faglige skridt.",
-            image: "/hero-2/pexels-thirdman-5060985.jpg",
+            image: getPublicAssetUrl("hero-2/pexels-thirdman-5060985.jpg"),
             alt: "Samlet overblik og mindre administration",
           },
         ],
@@ -815,19 +817,19 @@ export const TRANSLATIONS = {
               id: "practitioner-1",
               name: "Anna Madsen",
               title: "Senior behandler",
-              avatar: "/hero-2/physio-hero-01.jpg",
+              avatar: getPublicAssetUrl("hero-2/physio-hero-01.jpg"),
             },
             {
               id: "practitioner-2",
               name: "Jonas Kragh",
               title: "Fysioterapeut",
-              avatar: "/hero-2/physio-hero-02.jpg",
+              avatar: getPublicAssetUrl("hero-2/physio-hero-02.jpg"),
             },
             {
               id: "practitioner-3",
               name: "Maria Lyng",
               title: "Osteopat",
-              avatar: "/hero-2/physio-hero-03.jpg",
+              avatar: getPublicAssetUrl("hero-2/physio-hero-03.jpg"),
             },
           ],
           step1: {
@@ -1401,21 +1403,21 @@ export const TRANSLATIONS = {
             title: "Secure clinic data in the EU",
             text:
               "All data in Selma+ is stored on secure servers in the EU and processed under GDPR. Records, appointments, and personal data are encrypted both in transit and at rest. Access is controlled with secure logins and role-based permissions, so only the right people see what they need. You always own your data and can export or delete it. In short: clinic data in one place, safe and compliant.",
-            image: "/hero-2/pexels-eberhardgross-1743364.jpg",
+            image: getPublicAssetUrl("hero-2/pexels-eberhardgross-1743364.jpg"),
             alt: "Secure clinic data storage in the EU",
           },
           {
             title: "More presence in the consultation",
             text:
               "Selma+ makes it easier to stay present with the patient instead of the screen. Notes are captured via templates, shortcuts, and optional speech-to-text, so documentation does not steal the conversation. The system structures the information and can summarize the course afterward, so you get a quick overview. You spend less energy on the keyboard and more on listening, examining, and explaining - without compromising clinical quality.",
-            image: "/hero-2/pexels-shkrabaanthony-5217850.jpg",
+            image: getPublicAssetUrl("hero-2/pexels-shkrabaanthony-5217850.jpg"),
             alt: "More presence in the consultation",
           },
           {
             title: "Overview without admin chaos",
             text:
               "With Selma+, you avoid admin chaos and get a system that works for you. Appointments, reminders, records, and key metrics are gathered in one place and updated automatically. The platform helps you track patient progress and can suggest the next clinical step. You save time, reduce errors, and get better decision support so you can focus on what matters most: delivering the best possible care.",
-            image: "/hero-2/pexels-thirdman-5060985.jpg",
+            image: getPublicAssetUrl("hero-2/pexels-thirdman-5060985.jpg"),
             alt: "Unified overview and less administration",
           },
         ],
@@ -2047,19 +2049,19 @@ export const TRANSLATIONS = {
               id: "practitioner-1",
               name: "Anna Madsen",
               title: "Senior clinician",
-              avatar: "/hero-2/physio-hero-01.jpg",
+              avatar: getPublicAssetUrl("hero-2/physio-hero-01.jpg"),
             },
             {
               id: "practitioner-2",
               name: "Jonas Kragh",
               title: "Physiotherapist",
-              avatar: "/hero-2/physio-hero-02.jpg",
+              avatar: getPublicAssetUrl("hero-2/physio-hero-02.jpg"),
             },
             {
               id: "practitioner-3",
               name: "Maria Lyng",
               title: "Osteopath",
-              avatar: "/hero-2/physio-hero-03.jpg",
+              avatar: getPublicAssetUrl("hero-2/physio-hero-03.jpg"),
             },
           ],
           step1: {

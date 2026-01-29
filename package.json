@@ -44,6 +44,7 @@
     "recharts": "^3.5.1",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.4.0",
+    "uri-js": "^4.4.1",
     "web-vitals": "^2.1.4",
     "ws": "^8.18.3"
   },
@@ -54,7 +55,8 @@
     "test": "./node_modules/.bin/react-scripts test",
     "eject": "./node_modules/.bin/react-scripts eject",
     "server": "node server.js",
-    "emulators": "firebase emulators:start"
+    "emulators": "firebase emulators:start",
+    "upload:assets": "node scripts/uploadPublicAssetsToStorage.mjs"
   },
   "proxy": "http://localhost:4000",
   "eslintConfig": {
@@ -76,6 +78,7 @@
     ]
   },
   "devDependencies": {
+    "@google-cloud/storage": "^7.17.1",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",

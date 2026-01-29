@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLanguage } from "../language/LanguageProvider";
+import { getPublicAssetUrl } from "../../utils/publicAssets";
 import "./frontpage.css";
 
 const clips = [
-  "/hero/4489829-uhd_3840_2160_25fps.mp4",
-  "/hero/5793441-uhd_3840_2160_25fps.mp4",
-  "/hero/5793444-uhd_3840_2160_25fps.mp4",
-  "/hero/6111110-uhd_3840_2160_25fps.mp4",
+  getPublicAssetUrl("hero/4489829-uhd_3840_2160_25fps.mp4"),
+  getPublicAssetUrl("hero/5793441-uhd_3840_2160_25fps.mp4"),
+  getPublicAssetUrl("hero/5793444-uhd_3840_2160_25fps.mp4"),
+  getPublicAssetUrl("hero/6111110-uhd_3840_2160_25fps.mp4"),
 ];
 
 const HERO_VIDEO_EVENT = "landing-hero-video-change";

@@ -21,6 +21,7 @@ import {
   peekPostAuthRedirectTarget,
   setPostAuthRedirectTarget,
 } from "../utils/postAuthRedirect";
+import { getPublicAssetUrl } from "../utils/publicAssets";
 import { useLanguage } from "../unAuth/language/LanguageProvider";
 import "./SignUp.css";
 
@@ -382,7 +383,7 @@ function SignUp() {
           </Link>
         </div>
         <SignInPage
-          heroImageSrc="/hero/pexels-yankrukov-5794028.jpg"
+          heroImageSrc={getPublicAssetUrl("hero/pexels-yankrukov-5794028.jpg")}
           testimonials={[]}
           onSignIn={handleEmailPasswordSignIn}
           onGoogleSignIn={handleGoogleSignIn}

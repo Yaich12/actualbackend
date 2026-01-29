@@ -2,6 +2,7 @@ import React from "react";
 import { Calendar, ArrowRight, Phone } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { useLanguage } from "../language/LanguageProvider";
+import { getPublicAssetUrl } from "../../utils/publicAssets";
 
 interface HeroStat {
   value: string;
@@ -61,8 +62,8 @@ const ClinicHeroTemplate: React.FC<ClinicHeroProps> = ({
   supportingText,
   primaryButtonText,
   secondaryButtonText,
-  imageUrl = "/hero-2/pexels-cottonbro-7581072.jpg",
-  secondaryImageUrl = "/hero-2/pexels-yankrukov-5793991.jpg",
+  imageUrl = getPublicAssetUrl("hero-2/pexels-cottonbro-7581072.jpg"),
+  secondaryImageUrl = getPublicAssetUrl("hero-2/pexels-yankrukov-5793991.jpg"),
   imageAlt,
   secondaryImageAlt,
   badgeText,
@@ -184,7 +185,7 @@ const ClinicHeroTemplate: React.FC<ClinicHeroProps> = ({
               <div className="absolute right-0 top-0 h-3/5 w-4/5 overflow-hidden rounded-3xl border-4 border-white shadow-2xl transition-transform duration-500 hover:scale-[1.02]">
                 <ImageWithFallback
                   src={imageUrl}
-                  fallbackSrc="/hero-2/pexels-cottonbro-7581072.jpg"
+                  fallbackSrc={getPublicAssetUrl("hero-2/pexels-cottonbro-7581072.jpg")}
                   alt={resolvedImageAlt}
                   className="h-full w-full object-cover"
                 />
@@ -194,7 +195,7 @@ const ClinicHeroTemplate: React.FC<ClinicHeroProps> = ({
               <div className="absolute bottom-0 left-0 h-2/5 w-3/5 overflow-hidden rounded-3xl border-4 border-white shadow-xl transition-transform duration-500 hover:scale-[1.02]">
                 <ImageWithFallback
                   src={secondaryImageUrl}
-                  fallbackSrc="/hero-2/pexels-yankrukov-5793991.jpg"
+                  fallbackSrc={getPublicAssetUrl("hero-2/pexels-yankrukov-5793991.jpg")}
                   alt={resolvedSecondaryImageAlt}
                   className="h-full w-full object-cover"
                 />

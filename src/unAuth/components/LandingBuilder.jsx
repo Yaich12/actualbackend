@@ -4,6 +4,7 @@ import { Label } from "../../components/ui/label";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { setPostAuthRedirectTarget } from "../../utils/postAuthRedirect";
+import { getPublicAssetUrl } from "../../utils/publicAssets";
 import { useAuth } from "../../AuthContext";
 import BuilderPreview from "./BuilderPreview";
 import { useLanguage } from "../language/LanguageProvider";
@@ -58,7 +59,7 @@ const defaultDraft = {
   targetAudience: "",
   approach: "",
   languages: "",
-  practitionerPhotoUrl: "/hero-2/pexels-yankrukov-5793991.jpg",
+  practitionerPhotoUrl: getPublicAssetUrl("hero-2/pexels-yankrukov-5793991.jpg"),
   aboutBullets: ["", "", ""],
 };
 
@@ -69,7 +70,9 @@ const migrateBuilderConfigImages = (config, labels = {}) => {
 
   const profession = `${config?.profession || ""}`.toLowerCase();
   const isPsych = profession.includes("psykolog") || profession.includes("terapi") || profession.includes("coach");
-  const isLocalAsset = (url) => typeof url === "string" && url.startsWith("/hero-2/");
+  const isLocalAsset = (url) =>
+    typeof url === "string" &&
+    (url.startsWith("/hero-2/") || url.includes("public%2Fhero-2%2F"));
   const hasCustomGallery = Array.isArray(config?.gallery?.images)
     ? config.gallery.images.some((img) => img?.url && !isLocalAsset(img.url))
     : false;
@@ -77,13 +80,25 @@ const migrateBuilderConfigImages = (config, labels = {}) => {
   const next = { ...config };
 
   if (isPsych && (!next?.hero?.imageUrl || isLocalAsset(next.hero.imageUrl)) && !hasCustomGallery) {
-    next.hero = { ...(next.hero || {}), imageUrl: "/hero-2/psych-hero-01.jpg" };
+    next.hero = {
+      ...(next.hero || {}),
+      imageUrl: getPublicAssetUrl("hero-2/psych-hero-01.jpg"),
+    };
     next.gallery = {
       ...(next.gallery || {}),
       images: [
-        { url: "/hero-2/psych-gallery-01.jpg", alt: labels.psychGalleryAlt1 || "" },
-        { url: "/hero-2/psych-gallery-02.jpg", alt: labels.psychGalleryAlt2 || "" },
-        { url: "/hero-2/psych-gallery-03.jpg", alt: labels.psychGalleryAlt3 || "" },
+        {
+          url: getPublicAssetUrl("hero-2/psych-gallery-01.jpg"),
+          alt: labels.psychGalleryAlt1 || "",
+        },
+        {
+          url: getPublicAssetUrl("hero-2/psych-gallery-02.jpg"),
+          alt: labels.psychGalleryAlt2 || "",
+        },
+        {
+          url: getPublicAssetUrl("hero-2/psych-gallery-03.jpg"),
+          alt: labels.psychGalleryAlt3 || "",
+        },
       ],
     };
   }
@@ -170,7 +185,7 @@ function LandingBuilder({
 
 const persistConfig = (nextConfig) => {
   if (typeof window === "undefined") return;
-  const fallbackUrl = "/hero-2/pexels-cottonbro-7581072.jpg";
+  const fallbackUrl = getPublicAssetUrl("hero-2/pexels-cottonbro-7581072.jpg");
   const sanitizeUrl = (url, fallbackValue = fallbackUrl) =>
     typeof url === "string" && url.startsWith("data:") ? fallbackValue : (url || fallbackValue);
   const sanitizedConfig = nextConfig && typeof nextConfig === "object"

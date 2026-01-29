@@ -30,6 +30,22 @@ const CORTI_API_BASE =
   resolvedCortiEnv === 'us' ? 'https://api.us.corti.app/v2' : 'https://api.eu.corti.app/v2';
 const CORTI_AGENT_BASE_URL = 'https://api.eu.corti.app/v2';
 
+const getPublicAssetUrl = (relativePath) => {
+  const trimmedPath = `${relativePath || ''}`.replace(/^\/+/, '');
+  const bucket =
+    process.env.REACT_APP_FIREBASE_STORAGE_BUCKET ||
+    process.env.FIREBASE_STORAGE_BUCKET;
+
+  if (!bucket) {
+    return `/${trimmedPath}`;
+  }
+
+  const fullPath = `public/${trimmedPath}`;
+  return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(
+    fullPath
+  )}?alt=media`;
+};
+
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 app.use(
@@ -170,31 +186,35 @@ const generateOpenAiImageUrl = async (prompt) => {
 
 const selectBuilderHeroImage = (profession = '') => {
   const p = `${profession}`.toLowerCase();
-  if (p.includes('psykolog') || p.includes('terapi') || p.includes('coach')) return '/hero-2/psych-hero-01.jpg';
-  if (p.includes('fysio') || p.includes('fysioter')) return '/hero-2/physio-hero-02.jpg';
-  return '/hero-2/pexels-cottonbro-7581072.jpg';
+  if (p.includes('psykolog') || p.includes('terapi') || p.includes('coach')) {
+    return getPublicAssetUrl('hero-2/psych-hero-01.jpg');
+  }
+  if (p.includes('fysio') || p.includes('fysioter')) {
+    return getPublicAssetUrl('hero-2/physio-hero-02.jpg');
+  }
+  return getPublicAssetUrl('hero-2/pexels-cottonbro-7581072.jpg');
 };
 
 const selectBuilderGalleryImages = (profession = '') => {
   const p = `${profession}`.toLowerCase();
   if (p.includes('psykolog') || p.includes('terapi') || p.includes('coach')) {
     return [
-      { url: '/hero-2/psych-gallery-01.jpg', alt: 'Roligt terapirum' },
-      { url: '/hero-2/psych-gallery-02.jpg', alt: 'Samtalerum' },
-      { url: '/hero-2/psych-gallery-03.jpg', alt: 'Stemningsbillede fra klinikken' },
+      { url: getPublicAssetUrl('hero-2/psych-gallery-01.jpg'), alt: 'Roligt terapirum' },
+      { url: getPublicAssetUrl('hero-2/psych-gallery-02.jpg'), alt: 'Samtalerum' },
+      { url: getPublicAssetUrl('hero-2/psych-gallery-03.jpg'), alt: 'Stemningsbillede fra klinikken' },
     ];
   }
   if (p.includes('fysio') || p.includes('fysioter')) {
     return [
-      { url: '/hero-2/physio-gallery-02.jpg', alt: 'Behandling' },
-      { url: '/hero-2/physio-gallery-03.jpg', alt: 'Klinikmiljø' },
-      { url: '/hero-2/physio-gallery-01.jpg', alt: 'Træning og vejledning' },
+      { url: getPublicAssetUrl('hero-2/physio-gallery-02.jpg'), alt: 'Behandling' },
+      { url: getPublicAssetUrl('hero-2/physio-gallery-03.jpg'), alt: 'Klinikmiljø' },
+      { url: getPublicAssetUrl('hero-2/physio-gallery-01.jpg'), alt: 'Træning og vejledning' },
     ];
   }
   return [
-    { url: '/hero-2/pexels-cottonbro-7581072.jpg', alt: 'Klinikmiljø' },
-    { url: '/hero-2/pexels-thirdman-5060985.jpg', alt: 'Stemningsbillede' },
-    { url: '/hero-2/pexels-eberhardgross-1743364.jpg', alt: 'Rolig stemning' },
+    { url: getPublicAssetUrl('hero-2/pexels-cottonbro-7581072.jpg'), alt: 'Klinikmiljø' },
+    { url: getPublicAssetUrl('hero-2/pexels-thirdman-5060985.jpg'), alt: 'Stemningsbillede' },
+    { url: getPublicAssetUrl('hero-2/pexels-eberhardgross-1743364.jpg'), alt: 'Rolig stemning' },
   ];
 };
 
@@ -812,7 +832,8 @@ app.post('/api/builder/generate', async (req, res) => {
     const hasCustomPractitionerPhoto =
       `${practitionerPhotoUrl}`.trim() &&
       !`${practitionerPhotoUrl}`.trim().startsWith('data:') &&
-      !`${practitionerPhotoUrl}`.trim().startsWith('/hero-2/');
+      !`${practitionerPhotoUrl}`.trim().startsWith('/hero-2/') &&
+      !`${practitionerPhotoUrl}`.trim().includes('public%2Fhero-2%2F');
 
     const fallbackHeroImageUrl = selectBuilderHeroImage(profession);
     const fallbackGalleryImages = selectBuilderGalleryImages(profession);
@@ -848,7 +869,9 @@ app.post('/api/builder/generate', async (req, res) => {
 
     const finalAboutPhotoUrl = hasCustomPractitionerPhoto
       ? `${practitionerPhotoUrl}`.trim()
-      : `${practitionerPhotoUrl}`.trim() || finalHeroImageUrl || '/hero-2/pexels-yankrukov-5793991.jpg';
+      : `${practitionerPhotoUrl}`.trim() ||
+        finalHeroImageUrl ||
+        getPublicAssetUrl('hero-2/pexels-yankrukov-5793991.jpg');
 
     const fallbackConfig = {
       version: 1,

@@ -22,6 +22,20 @@ npm run server
 npm start
 ```
 
+## Public assets (Firebase Storage)
+
+Frontend reads `REACT_APP_FIREBASE_STORAGE_BUCKET` (fallback `FIREBASE_STORAGE_BUCKET`) to build public asset URLs.
+
+Upload large hero assets to Firebase Storage (served from `public/` in Storage):
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/key.json"
+export FIREBASE_STORAGE_BUCKET="actualbackend-3b454.appspot.com"
+npm run upload:assets
+npm run build
+npx firebase-tools@latest deploy --only hosting
+```
+
 ## Firebase Functions (Python)
 
 If you deploy the Python Cloud Functions, the Firebase CLI expects a virtual environment inside `functions/`.
