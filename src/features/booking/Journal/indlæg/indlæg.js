@@ -188,6 +188,7 @@ function Indlæg({
   const [selectedTemplateKey, setSelectedTemplateKey] = useState(initialEntry?.templateKey || '');
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [isTemplateSheetOpen, setIsTemplateSheetOpen] = useState(false);
+  const [isGeneratedSheetOpen, setIsGeneratedSheetOpen] = useState(false);
   const [templateDetailsLoading, setTemplateDetailsLoading] = useState(false);
   const [templateDetailsError, setTemplateDetailsError] = useState('');
 
@@ -711,24 +712,25 @@ function Indlæg({
   }, [fetchTemplateDetails, selectedTemplateKey]);
 
   useEffect(() => {
-    if (!isTemplateSheetOpen) return;
+    if (!isTemplateSheetOpen && !isGeneratedSheetOpen) return;
     const handleKeydown = (event) => {
       if (event.key === 'Escape') {
         setIsTemplateSheetOpen(false);
+        setIsGeneratedSheetOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeydown);
     return () => window.removeEventListener('keydown', handleKeydown);
-  }, [isTemplateSheetOpen]);
+  }, [isGeneratedSheetOpen, isTemplateSheetOpen]);
 
   useEffect(() => {
-    if (!isTemplateSheetOpen) return;
+    if (!isTemplateSheetOpen && !isGeneratedSheetOpen) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [isTemplateSheetOpen]);
+  }, [isGeneratedSheetOpen, isTemplateSheetOpen]);
 
   const ensureInteraction = useCallback(async () => {
     if (interactionId) {
@@ -1415,12 +1417,36 @@ function Indlæg({
     return selectedTemplateMeta?.name || '';
   }, [selectedTemplate, selectedTemplateMeta, templateLanguage]);
 
+  const generatedDocumentText = useMemo(() => {
+    if (generatedDocument?.sections?.length) {
+      return buildDocumentText(generatedDocument.sections);
+    }
+    if (generatedDocument) {
+      return JSON.stringify(generatedDocument, null, 2);
+    }
+    return '';
+  }, [generatedDocument]);
+
+  const handleCopyGenerated = useCallback(async () => {
+    if (!generatedDocumentText) return;
+    try {
+      await navigator.clipboard.writeText(generatedDocumentText);
+    } catch (error) {
+      console.error('Failed to copy generated note:', error);
+    }
+  }, [generatedDocumentText]);
+
   const assistantStatusText = useMemo(() => {
     if (agentError) return t('indlaeg.agentStatus.error', 'Agent: error');
     if (agentLoading) return t('indlaeg.agentStatus.loading', 'Agent: loading');
     if (agentReady) return t('indlaeg.agentStatus.ready', 'Agent: ready');
     return t('indlaeg.agentStatus.notReady', 'Agent: not ready');
   }, [agentError, agentLoading, agentReady, t]);
+
+  const isTranscriptionProcessing = recordingStatus === RECORDING_STATUS.flushing;
+  const isDictationProcessing =
+    dictationStatus === DICTATION_STATUS.uploading ||
+    dictationStatus === DICTATION_STATUS.transcribing;
 
   const assistantQuickActions = useMemo(
     () => [
@@ -1711,16 +1737,21 @@ function Indlæg({
                             {templateSelectionLabel || t('indlaeg.noneSelected', 'None selected')}
                           </span>
                         </h3>
-                        <span className="indlæg-template-trigger-icon">⌃</span>
                       </button>
                     </div>
 
                     <div className="indlæg-card">
-                      <div className="indlæg-card-header">
+                      <button
+                        type="button"
+                        className="indlæg-card-header indlæg-card-header--row indlæg-template-trigger"
+                        onClick={() => setIsGeneratedSheetOpen(true)}
+                        aria-haspopup="dialog"
+                        aria-expanded={isGeneratedSheetOpen}
+                      >
                         <h3 className="indlæg-card-title">
                           {t('indlaeg.generatedNote', 'Generated note')}
                         </h3>
-                      </div>
+                      </button>
                       <div className="indlæg-card-body">
                         {generationLoading && (
                           <p className="indlæg-muted">
@@ -1733,24 +1764,11 @@ function Indlæg({
                             {t('indlaeg.noNoteYet', 'No note generated yet.')}
                           </p>
                         )}
-                        {generatedDocument?.sections && Array.isArray(generatedDocument.sections) ? (
-                          <div className="indlæg-generated-sections">
-                            {generatedDocument.sections
-                              .slice()
-                              .sort((a, b) => (a?.sort ?? 0) - (b?.sort ?? 0))
-                              .map((section) => (
-                                <div key={section.key || section.name} className="indlæg-generated-section">
-                                  <div className="indlæg-generated-title">{section.name || section.key}</div>
-                                  <div className="indlæg-generated-text">{section.text}</div>
-                                </div>
-                              ))}
-                          </div>
-                        ) : null}
-                        {generatedDocument && !generatedDocument?.sections ? (
-                          <pre className="indlæg-generated-raw">
-                            {JSON.stringify(generatedDocument, null, 2)}
-                          </pre>
-                        ) : null}
+                        {!generationLoading && !generationError && generatedDocument && (
+                          <p className="indlæg-muted">
+                            {t('indlaeg.openGeneratedNote', 'Open generated note')}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </>
@@ -1801,16 +1819,31 @@ function Indlæg({
                       {transcribeMode === MODE_TRANSCRIBE && (
                         <>
                           <div className="indlæg-record-actions">
-                            <RainbowButton
-                              type="button"
-                              className={`indlæg-mikrofon-btn${isRecording ? ' active' : ''}`}
-                              onClick={() => (isRecording ? stopRecording() : startRecording())}
-                              aria-pressed={isRecording}
-                            >
-                              {isRecording
-                                ? t('indlaeg.stop', 'Stop')
-                                : t('indlaeg.startConsultation', 'Start consultation')}
-                            </RainbowButton>
+                            {isTranscriptionProcessing ? (
+                              <div className="indlæg-processing-card" role="status" aria-live="polite">
+                                <div className="indlæg-processing-loader">
+                                  <span className="indlæg-processing-label">loading</span>
+                                  <div className="indlæg-processing-words">
+                                    <span className="indlæg-processing-word">Symptom</span>
+                                    <span className="indlæg-processing-word">Diagnose</span>
+                                    <span className="indlæg-processing-word">Trauma</span>
+                                    <span className="indlæg-processing-word">Patient</span>
+                                    <span className="indlæg-processing-word">History</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <RainbowButton
+                                type="button"
+                                className={`indlæg-mikrofon-btn${isRecording ? ' active' : ''}`}
+                                onClick={() => (isRecording ? stopRecording() : startRecording())}
+                                aria-pressed={isRecording}
+                              >
+                                {isRecording
+                                  ? t('indlaeg.stop', 'Stop')
+                                  : t('indlaeg.startConsultation', 'Start consultation')}
+                              </RainbowButton>
+                            )}
                             <button
                               type="button"
                               className="indlæg-save-btn"
@@ -1847,26 +1880,41 @@ function Indlæg({
                       {transcribeMode === MODE_DICTATE && (
                         <>
                           <div className="indlæg-record-actions">
-                            <RainbowButton
-                              type="button"
-                              className={`indlæg-mikrofon-btn${
-                                dictationStatus === DICTATION_STATUS.recording ? ' active' : ''
-                              }`}
-                              onClick={() =>
-                                dictationStatus === DICTATION_STATUS.recording
-                                  ? stopDictationRecording()
-                                  : startDictationRecording()
-                              }
-                              aria-pressed={dictationStatus === DICTATION_STATUS.recording}
-                              disabled={
-                                dictationStatus === DICTATION_STATUS.uploading ||
-                                dictationStatus === DICTATION_STATUS.transcribing
-                              }
-                            >
-                              {dictationStatus === DICTATION_STATUS.recording
-                                ? t('indlaeg.stop', 'Stop')
-                                : t('indlaeg.startConsultation', 'Start consultation')}
-                            </RainbowButton>
+                            {isDictationProcessing ? (
+                              <div className="indlæg-processing-card" role="status" aria-live="polite">
+                                <div className="indlæg-processing-loader">
+                                  <span className="indlæg-processing-label">loading</span>
+                                  <div className="indlæg-processing-words">
+                                    <span className="indlæg-processing-word">Symptom</span>
+                                    <span className="indlæg-processing-word">Diagnose</span>
+                                    <span className="indlæg-processing-word">Trauma</span>
+                                    <span className="indlæg-processing-word">Patient</span>
+                                    <span className="indlæg-processing-word">History</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <RainbowButton
+                                type="button"
+                                className={`indlæg-mikrofon-btn${
+                                  dictationStatus === DICTATION_STATUS.recording ? ' active' : ''
+                                }`}
+                                onClick={() =>
+                                  dictationStatus === DICTATION_STATUS.recording
+                                    ? stopDictationRecording()
+                                    : startDictationRecording()
+                                }
+                                aria-pressed={dictationStatus === DICTATION_STATUS.recording}
+                                disabled={
+                                  dictationStatus === DICTATION_STATUS.uploading ||
+                                  dictationStatus === DICTATION_STATUS.transcribing
+                                }
+                              >
+                                {dictationStatus === DICTATION_STATUS.recording
+                                  ? t('indlaeg.stop', 'Stop')
+                                  : t('indlaeg.startConsultation', 'Start consultation')}
+                              </RainbowButton>
+                            )}
                             <button
                               type="button"
                               className="indlæg-save-btn"
@@ -1948,11 +1996,54 @@ function Indlæg({
             <div className="indlæg-assistant-drawer">
             <button
               type="button"
-              className="indlæg-drawer-edge-close"
+              className="indlæg-drawer-edge-close indlæg-drawer-edge-close--selma"
               onClick={() => setIsAssistantOpen(false)}
               aria-label={t('indlaeg.assistantClose', 'Close Selma assistant panel')}
             >
-              →
+              <span className="indlæg-dot-arrow" aria-hidden="true">
+                <span className="indlæg-dot-line indlæg-dot-line--one">
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                </span>
+                <span className="indlæg-dot-line indlæg-dot-line--two">
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                </span>
+                <span className="indlæg-dot-line indlæg-dot-line--three">
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                </span>
+                <span className="indlæg-dot-line indlæg-dot-line--four">
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                </span>
+                <span className="indlæg-dot-line indlæg-dot-line--five">
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                </span>
+                <span className="indlæg-dot-line indlæg-dot-line--six">
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                </span>
+                <span className="indlæg-dot-line indlæg-dot-line--seven">
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                  <span className="indlæg-dot-round" />
+                </span>
+              </span>
             </button>
               <div className="indlæg-drawer-header">
                 <h3 className="indlæg-card-title">
@@ -2081,6 +2172,83 @@ function Indlæg({
                           )}
                         </div>
                       )}
+                    </div>
+                  </div>
+                </div>
+              </>,
+              document.body
+            )}
+          {isGeneratedSheetOpen &&
+            createPortal(
+              <>
+                <div
+                  className="indlæg-template-sheet-overlay"
+                  role="presentation"
+                  onClick={() => setIsGeneratedSheetOpen(false)}
+                />
+                <div
+                  className="indlæg-template-sheet-modal"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={t('indlaeg.generatedSheetLabel', 'Generated note')}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="indlæg-template-sheet">
+                    <div className="indlæg-template-sheet-header">
+                      <div className="indlæg-template-sheet-title">
+                        <h3 className="indlæg-card-title">
+                          {t('indlaeg.generatedNote', 'Generated note')}
+                        </h3>
+                      </div>
+                      <div className="indlæg-template-sheet-actions">
+                        <button
+                          type="button"
+                          className="indlæg-action-btn"
+                          onClick={handleCopyGenerated}
+                          disabled={!generatedDocumentText}
+                        >
+                          {t('indlaeg.copyGenerated', 'Copy')}
+                        </button>
+                        <button
+                          type="button"
+                          className="indlæg-template-sheet-close"
+                          onClick={() => setIsGeneratedSheetOpen(false)}
+                          aria-label={t('indlaeg.closeGenerated', 'Close generated note')}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                    <div className="indlæg-template-sheet-body">
+                      {generationLoading && (
+                        <p className="indlæg-muted">
+                          {t('indlaeg.generatingNote', 'Generating note...')}
+                        </p>
+                      )}
+                      {generationError && <p className="indlæg-inline-error">{generationError}</p>}
+                      {!generationLoading && !generationError && !generatedDocument && (
+                        <p className="indlæg-muted">
+                          {t('indlaeg.noNoteYet', 'No note generated yet.')}
+                        </p>
+                      )}
+                      {generatedDocument?.sections && Array.isArray(generatedDocument.sections) ? (
+                        <div className="indlæg-generated-sections">
+                          {generatedDocument.sections
+                            .slice()
+                            .sort((a, b) => (a?.sort ?? 0) - (b?.sort ?? 0))
+                            .map((section) => (
+                              <div key={section.key || section.name} className="indlæg-generated-section">
+                                <div className="indlæg-generated-title">{section.name || section.key}</div>
+                                <div className="indlæg-generated-text">{section.text}</div>
+                              </div>
+                            ))}
+                        </div>
+                      ) : null}
+                      {generatedDocument && !generatedDocument?.sections ? (
+                        <pre className="indlæg-generated-raw">
+                          {JSON.stringify(generatedDocument, null, 2)}
+                        </pre>
+                      ) : null}
                     </div>
                   </div>
                 </div>

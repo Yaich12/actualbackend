@@ -214,8 +214,9 @@
   cursor: pointer;
   gap: 12px;
   transition: background 0.2s ease;
-  padding: 0 18px 24px;
+  padding: 8px 18px 16px;
   min-height: 68px;
+  align-items: flex-start;
 }
 
 .indlæg-template-trigger:hover {
@@ -257,7 +258,7 @@
 .indlæg-template-sheet {
   width: min(960px, 100%);
   max-height: 80vh;
-  background: var(--bg-surface);
+  background: #ffffff;
   border-radius: 24px 24px 12px 12px;
   box-shadow: 0 -20px 40px rgba(15, 23, 42, 0.25);
   display: flex;
@@ -278,6 +279,12 @@
   padding: 18px 22px 12px;
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border-subtle);
+}
+
+.indlæg-template-sheet-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .indlæg-template-sheet-title {
@@ -1176,6 +1183,79 @@
   z-index: 31;
 }
 
+.indlæg-drawer-edge-close--selma {
+  width: 46px;
+  height: auto;
+  border: none;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.indlæg-drawer-edge-close--selma:hover {
+  animation: indlæg-dot-move 2s infinite ease;
+}
+
+@keyframes indlæg-dot-move {
+  0% {
+    transform: translate(-50%, -50%) translateX(0);
+  }
+
+  50% {
+    transform: translate(-50%, -50%) translateX(20px);
+  }
+
+  100% {
+    transform: translate(-50%, -50%) translateX(0);
+  }
+}
+
+.indlæg-dot-arrow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+
+.indlæg-dot-line {
+  display: flex;
+  gap: 2px;
+}
+
+.indlæg-dot-round {
+  width: 3px;
+  height: 3px;
+  background: #3da9fc;
+  border-radius: 50%;
+}
+
+.indlæg-dot-line--two {
+  transform: translateX(6px);
+}
+
+.indlæg-dot-line--three {
+  transform: translateX(12px);
+}
+
+.indlæg-dot-line--four {
+  transform: translateX(18px);
+}
+
+.indlæg-dot-line--five {
+  transform: translateX(12px);
+}
+
+.indlæg-dot-line--six {
+  transform: translateX(6px);
+}
+
 .indlæg-drawer-edge-close:hover {
   box-shadow: -6px 0 20px rgba(0, 0, 0, 0.12);
 }
@@ -1536,7 +1616,9 @@
 }
 
 .indlæg-mode-gradient-active {
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.08), 0 8px 16px rgba(0, 0, 0, 0.12);
+  box-shadow:
+    0 0 0 2px rgba(236, 72, 153, 0.85),
+    0 10px 18px rgba(15, 23, 42, 0.25);
 }
 
 .indlæg-mode-option {
@@ -1598,6 +1680,11 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+.indlæg-card--journal .indlæg-card-body {
+  flex: 1;
+  min-height: 0;
 }
 
 .indlæg-card-title {
@@ -1662,8 +1749,9 @@
 
 .indlæg-note-area .indlæg-textarea--lg {
   flex: 1;
-  min-height: 320px;
-  max-height: calc(100vh - 520px);
+  height: 100%;
+  min-height: 0;
+  max-height: none;
   overflow: auto;
 }
 
@@ -1840,6 +1928,94 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.indlæg-processing-card {
+  --bg-color: #111111;
+  background-color: var(--bg-color);
+  width: 100%;
+  padding: 10px 20px;
+  border-radius: 6px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+.indlæg-processing-loader {
+  color: rgb(124, 124, 124);
+  font-family: "Poppins", sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  box-sizing: content-box;
+  display: flex;
+  border-radius: 8px;
+  align-items: center;
+  gap: 8px;
+}
+
+.indlæg-processing-label {
+  text-transform: lowercase;
+}
+
+.indlæg-processing-words {
+  overflow: hidden;
+  position: relative;
+  height: 20px;
+}
+
+.indlæg-processing-words::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    var(--bg-color) 10%,
+    transparent 30%,
+    transparent 70%,
+    var(--bg-color) 90%
+  );
+  z-index: 2;
+}
+
+.indlæg-processing-word {
+  display: block;
+  height: 100%;
+  padding-left: 6px;
+  color: #956afa;
+  animation: indlæg-processing-spin 4s infinite;
+}
+
+@keyframes indlæg-processing-spin {
+  10% {
+    transform: translateY(-102%);
+  }
+
+  25% {
+    transform: translateY(-100%);
+  }
+
+  35% {
+    transform: translateY(-202%);
+  }
+
+  50% {
+    transform: translateY(-200%);
+  }
+
+  60% {
+    transform: translateY(-302%);
+  }
+
+  75% {
+    transform: translateY(-300%);
+  }
+
+  85% {
+    transform: translateY(-402%);
+  }
+
+  100% {
+    transform: translateY(-400%);
+  }
 }
 
 .indlæg-metrics {

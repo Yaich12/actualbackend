@@ -627,6 +627,14 @@ function Journal({
         {(onCreateJournalEntry || selectedAppointment) && (
           <div className="journal-section">
             <div className="journal-create-actions">
+              {onCreateJournalEntry && (
+                <button
+                  className="journal-create-appointment-btn"
+                  onClick={onCreateJournalEntry}
+                >
+                  Opret indlæg
+                </button>
+              )}
               {selectedAppointment && (
                 <button
                   className="journal-action-btn"
@@ -638,14 +646,6 @@ function Journal({
                   Se journal
                 </button>
               )}
-              {onCreateJournalEntry && (
-                <button
-                  className="journal-create-appointment-btn"
-                  onClick={onCreateJournalEntry}
-                >
-                  Opret indlæg
-                </button>
-              )}
             </div>
           </div>
         )}
@@ -654,18 +654,8 @@ function Journal({
         {selectedAppointment && (
           <>
             <div className="journal-section journal-appointment-section">
-              <div className="journal-appointment-actions">
-                <button
-                  className="journal-action-btn"
-                  onClick={() => {
-                    if (onEditAppointment && selectedAppointment) {
-                      onEditAppointment(selectedAppointment);
-                    }
-                  }}
-                >
-                  Rediger aftale
-                </button>
-                <button
+            <div className="journal-appointment-actions">
+              <button
                   className="journal-action-btn"
                   onClick={() => {
                     if (!onCreateAppointment) return;
