@@ -77,6 +77,9 @@ function JournalPage() {
         onSave={handleJournalEntrySaved}
         initialDate={journalEntryData?.date || ''}
         initialEntry={journalEntryData}
+        appointmentId={
+          journalEntryData?.appointmentId || journalEntryData?.appointment?.id || null
+        }
       />
     );
   }

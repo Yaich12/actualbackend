@@ -22,6 +22,13 @@ npm run server
 npm start
 ```
 
+## Dictation language vs platform language
+
+The platform UI language does not force dictation language. Users can choose a dedicated
+"Dictation language" in Settings (Auto / specific locale). The value is stored in
+`users/{uid}.settings.dictationLanguage` and the backend normalizes + whitelists the
+requested locale before calling Corti, with an automatic fallback to `en-US`.
+
 ## Public assets (Firebase Storage)
 
 Frontend reads `REACT_APP_FIREBASE_STORAGE_BUCKET` (fallback `FIREBASE_STORAGE_BUCKET`) to build public asset URLs.

@@ -3,88 +3,19 @@
 import { Card, CardContent, CardHeader } from "components/ui/card";
 import { TimelineContent } from "components/ui/timeline-animation";
 import { VerticalCutReveal } from "components/ui/vertical-cut-reveal";
-import { cn } from "lib/utils";
 import NumberFlow from "@number-flow/react";
 import { CheckCheck } from "lucide-react";
-import { motion } from "motion/react";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { useLanguage } from "../../unAuth/language/LanguageProvider";
 
 const PLAN_CONFIG = [
-  { id: "starter", price: 12, yearlyPrice: 99, buttonVariant: "outline" as const },
-  { id: "business", price: 48, yearlyPrice: 399, buttonVariant: "default" as const, popular: true },
-  { id: "enterprise", price: 96, yearlyPrice: 899, buttonVariant: "outline" as const },
+  { id: "starter", price: 29, buttonVariant: "outline" as const },
+  { id: "business", price: 49, buttonVariant: "default" as const, popular: true },
+  { id: "enterprise", price: null, buttonVariant: "outline" as const },
 ];
-
-const PricingSwitch = ({
-  onSwitch,
-  className,
-  labels,
-}: {
-  onSwitch: (value: string) => void;
-  className?: string;
-  labels: { monthly: string; yearly: string; savings: string };
-}) => {
-  const [selected, setSelected] = useState("0");
-
-  const handleSwitch = (value: string) => {
-    setSelected(value);
-    onSwitch(value);
-  };
-
-  return (
-    <div className={cn("flex justify-center", className)}>
-      <div className="relative z-10 mx-auto flex w-fit rounded-xl bg-neutral-50 border border-gray-200 p-1">
-        <button
-          onClick={() => handleSwitch("0")}
-          className={cn(
-            "relative z-10 w-fit cursor-pointer h-12 rounded-xl sm:px-6 px-3 sm:py-2 py-1 font-medium transition-colors sm:text-base text-sm",
-            selected === "0"
-              ? "text-white"
-              : "text-muted-foreground hover:text-black"
-          )}
-        >
-          {selected === "0" && (
-            <motion.span
-              layoutId={"switch"}
-              className="absolute top-0 left-0 h-12 w-full rounded-xl border-4 shadow-sm shadow-orange-600 border-orange-600 bg-gradient-to-t from-orange-500 via-orange-400 to-orange-600"
-              transition={{ type: "spring", stiffness: 500, damping: 30 }}
-            />
-          )}
-          <span className="relative">{labels.monthly}</span>
-        </button>
-
-        <button
-          onClick={() => handleSwitch("1")}
-          className={cn(
-            "relative z-10 w-fit cursor-pointer h-12 flex-shrink-0 rounded-xl sm:px-6 px-3 sm:py-2 py-1 font-medium transition-colors sm:text-base text-sm",
-            selected === "1"
-              ? "text-white"
-              : "text-muted-foreground hover:text-black"
-          )}
-        >
-          {selected === "1" && (
-            <motion.span
-              layoutId={"switch"}
-              className="absolute top-0 left-0 h-12 w-full rounded-xl border-4 shadow-sm shadow-orange-600 border-orange-600 bg-gradient-to-t from-orange-500 via-orange-400 to-orange-600"
-              transition={{ type: "spring", stiffness: 500, damping: 30 }}
-            />
-          )}
-          <span className="relative flex items-center gap-2">
-            {labels.yearly}
-            <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-medium text-black">
-              {labels.savings}
-            </span>
-          </span>
-        </button>
-      </div>
-    </div>
-  );
-};
 
 export default function PricingSection5() {
   const { t, getArray } = useLanguage();
-  const [isYearly, setIsYearly] = useState(false);
   const pricingRef = useRef<HTMLDivElement>(null);
   const plans = PLAN_CONFIG.map((plan) => ({
     ...plan,
@@ -110,9 +41,6 @@ export default function PricingSection5() {
       opacity: 0,
     },
   };
-
-  const togglePricingPeriod = (value: string) =>
-    setIsYearly(Number.parseInt(value, 10) === 1);
 
   return (
     <div className="px-4 pt-20 min-h-screen max-w-7xl mx-auto relative" ref={pricingRef}>
@@ -145,22 +73,6 @@ export default function PricingSection5() {
           {t("pricing.description")}
         </TimelineContent>
 
-        <TimelineContent
-          as="div"
-          animationNum={1}
-          timelineRef={pricingRef}
-          customVariants={revealVariants}
-        >
-          <PricingSwitch
-            onSwitch={togglePricingPeriod}
-            className="w-fit"
-            labels={{
-              monthly: t("pricing.switch.monthly"),
-              yearly: t("pricing.switch.yearly"),
-              savings: t("pricing.switch.savings"),
-            }}
-          />
-        </TimelineContent>
       </article>
 
       <div className="grid md:grid-cols-3 gap-4 py-6">
@@ -194,19 +106,25 @@ export default function PricingSection5() {
                   {plan.description}
                 </p>
                 <div className="flex items-baseline">
-                  <span className="text-4xl font-semibold text-gray-900">
-                    $
-                    <NumberFlow
-                      format={{
-                        currency: "USD",
-                      }}
-                      value={isYearly ? plan.yearlyPrice : plan.price}
-                      className="text-4xl font-semibold"
-                    />
-                  </span>
-                  <span className="text-gray-600 ml-1">
-                    /{isYearly ? t("pricing.labels.year") : t("pricing.labels.month")}
-                  </span>
+                  {plan.price === null ? (
+                    <span className="text-4xl font-semibold text-gray-900">
+                      {t("pricing.labels.contactForPrice")}
+                    </span>
+                  ) : (
+                    <>
+                      <span className="text-4xl font-semibold text-gray-900">
+                        $
+                        <NumberFlow
+                          format={{
+                            currency: "USD",
+                          }}
+                          value={plan.price}
+                          className="text-4xl font-semibold"
+                        />
+                      </span>
+                      <span className="text-gray-600 ml-1">/{t("pricing.labels.month")}</span>
+                    </>
+                  )}
                 </div>
               </CardHeader>
 

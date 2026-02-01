@@ -8,7 +8,7 @@ import {
 } from '../../../components/ui/chat-bubble';
 import { ChatInput } from '../../../components/ui/chat-input';
 import { ChatMessageList } from '../../../components/ui/chat-message-list';
-import { Button } from '../../../components/ui/button';
+import AnimatedGenerateButton from '../../../components/ui/animated-generate-button-shadcn-tailwind';
 import '../Journal/indlæg/indlæg.css';
 import { useLanguage } from '../../../LanguageContext';
 
@@ -134,6 +134,7 @@ function CortiAssistantPanel({
   emptyHintText = '',
   chatAvatars = DEFAULT_AVATARS,
   className = '',
+  onClose,
 }) {
   const { t } = useLanguage();
   const resolvedTitle = title || t('indlaeg.assistantTitle', 'Selma Assistant');
@@ -156,7 +157,16 @@ function CortiAssistantPanel({
     <div className={`indlæg-card indlæg-card--drawer indlæg-card--assistant ${className}`.trim()}>
       <div className="indlæg-card-header indlæg-card-header--row">
         <h3 className="indlæg-card-title">{resolvedTitle}</h3>
-        {statusText ? (
+        {onClose ? (
+          <button
+            type="button"
+            className="indlæg-assistant-close"
+            onClick={onClose}
+            aria-label={t('indlaeg.assistantCloseShort', 'Close assistant')}
+          >
+            ✕
+          </button>
+        ) : statusText ? (
           <span className="indlæg-status-pill indlæg-status-pill--default">{statusText}</span>
         ) : null}
       </div>
@@ -261,17 +271,18 @@ function CortiAssistantPanel({
             rows={2}
             disabled={inputDisabled}
           />
-          <Button
-            type="button"
-            onClick={() => onSendMessage?.()}
-            disabled={effectiveSendDisabled}
-            size="sm"
-            className="shrink-0"
-          >
-            {isSending
-              ? t('assistant.sending', 'Sending...')
-              : t('assistant.send', 'Send')}
-          </Button>
+          <div className="indlæg-agent-send">
+            <AnimatedGenerateButton
+              type="button"
+              className="indlæg-selma-btn w-full"
+              labelIdle={t('assistant.send', 'Send')}
+              labelActive={t('assistant.sending', 'Sending...')}
+              generating={isSending}
+              onClick={() => onSendMessage?.()}
+              disabled={effectiveSendDisabled}
+              ariaLabel={t('assistant.send', 'Send')}
+            />
+          </div>
         </div>
       </div>
     </div>

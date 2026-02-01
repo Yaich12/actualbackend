@@ -1322,6 +1322,26 @@
   line-height: 1.5;
 }
 
+.indlæg-assistant-close {
+  border: none;
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.indlæg-assistant-close:hover {
+  background: var(--bg-strong);
+  transform: translateY(-1px);
+}
+
 .indlæg-assistant-section {
   display: flex;
   flex-direction: column;
@@ -1558,8 +1578,9 @@
 .indlæg-agent-input--modern {
   position: static;
   display: flex;
-  align-items: flex-end;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
   background: #ffffff;
   border: 1px solid #e5e7eb;
   border-top: none;
@@ -1572,6 +1593,17 @@
   min-height: 52px;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
+  width: 100%;
+}
+
+.indlæg-agent-send {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.indlæg-agent-send .indlæg-selma-btn {
+  width: auto;
 }
 
 .indlæg-selma-launch {
@@ -1680,11 +1712,13 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  position: relative;
 }
 
 .indlæg-card--journal .indlæg-card-body {
   flex: 1;
   min-height: 0;
+  padding-bottom: 30px;
 }
 
 .indlæg-card-title {
@@ -1745,6 +1779,7 @@
 .indlæg-note-area {
   flex: 1;
   min-height: 0;
+  position: relative;
 }
 
 .indlæg-note-area .indlæg-textarea--lg {
@@ -1753,6 +1788,33 @@
   min-height: 0;
   max-height: none;
   overflow: auto;
+  margin-bottom: 26px;
+}
+
+.indlæg-journal-resize-handle {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  width: 44px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: ns-resize;
+  user-select: none;
+  z-index: 2;
+  touch-action: none;
+}
+
+.indlæg-journal-resize-handle:hover {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
 }
 
 .indlæg-card-actions {

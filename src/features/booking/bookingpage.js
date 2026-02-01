@@ -2667,6 +2667,9 @@ function BookingPage() {
                 participants={journalEntryParticipants}
                 initialDate={journalEntryDate}
                 initialEntry={journalEntryToEdit}
+                appointmentId={
+                  journalEntryToEdit?.appointmentId || selectedAppointment?.id || null
+                }
               />
             </div>
           ) : (

@@ -5,6 +5,12 @@ const fs = require('fs');
 const util = require('util');
 const { execFile } = require('child_process');
 const { createCortiClient } = require('../cortiAuth');
+const {
+  CORTI_FALLBACK,
+  normalizeToCortiLocale,
+  pickCortiLocale,
+  isCortiLocaleSupported,
+} = require('../server/utils/cortiLanguages');
 
 const router = express.Router();
 const uploadDir = path.join(__dirname, '..', 'uploads');
@@ -131,7 +137,17 @@ router.post('/dictate', upload, async (req, res) => {
     return res.status(400).json({ error: 'No audio file provided' });
   }
 
-  const language = req.body?.language || 'da';
+  const rawDictationLanguage =
+    req.body?.dictationLanguage || req.body?.language || req.body?.locale || req.body?.lang || '';
+  const uiLocale = req.body?.uiLocale || '';
+  const browserLocale = req.body?.browserLocale || '';
+  const suggestedLocale = req.body?.suggestedLocale || '';
+  const userSelectedLocale =
+    rawDictationLanguage && rawDictationLanguage !== 'auto' ? rawDictationLanguage : null;
+  let chosenLanguage = pickCortiLocale({ uiLocale, userSelectedLocale, browserLocale });
+  if (suggestedLocale && isCortiLocaleSupported(suggestedLocale)) {
+    chosenLanguage = normalizeToCortiLocale(suggestedLocale);
+  }
   const encounterIdentifier = req.body?.encounterIdentifier || `dictate-${Date.now()}`;
   const encounterTitle = req.body?.title || incomingFile.originalname || 'Dictation';
   const filePath = incomingFile.path;
@@ -153,6 +169,12 @@ router.post('/dictate', upload, async (req, res) => {
   }
 
   try {
+    console.log('[corti] dictate language', {
+      raw: rawDictationLanguage,
+      uiLocale,
+      browserLocale,
+      chosen: chosenLanguage,
+    });
     const interaction = await cortiClient.interactions.create(
       {
         encounter: {
@@ -187,15 +209,40 @@ router.post('/dictate', upload, async (req, res) => {
 
     await wait(1200);
 
-    const transcriptResponse = await cortiClient.transcripts.create(
-      interactionId,
-      {
-        recordingId,
-        primaryLanguage: language,
-        isDictation: true,
-      },
-      { tenantName: process.env.CORTI_TENANT_NAME }
-    );
+    const getErrorDetail = (err) =>
+      err?.details?.detail || err?.response?.data?.detail || err?.message || 'Unknown error';
+    const createTranscript = async (languageToUse) =>
+      cortiClient.transcripts.create(
+        interactionId,
+        {
+          recordingId,
+          primaryLanguage: languageToUse,
+          isDictation: true,
+        },
+        { tenantName: process.env.CORTI_TENANT_NAME }
+      );
+
+    let transcriptResponse;
+    try {
+      transcriptResponse = await createTranscript(chosenLanguage);
+    } catch (error) {
+      const status = error?.status || error?.response?.status || 500;
+      const detail = getErrorDetail(error);
+      if (
+        status === 400 &&
+        /unsupported language/i.test(detail) &&
+        chosenLanguage !== CORTI_FALLBACK
+      ) {
+        console.warn('[corti] unsupported language, retry fallback', {
+          chosen: chosenLanguage,
+          fallback: CORTI_FALLBACK,
+        });
+        chosenLanguage = CORTI_FALLBACK;
+        transcriptResponse = await createTranscript(CORTI_FALLBACK);
+      } else {
+        throw error;
+      }
+    }
 
     const transcriptId = transcriptResponse?.id || transcriptResponse?.transcriptId;
     console.info(`[DICTATE] transcriptId=${transcriptId}`);
@@ -238,9 +285,15 @@ router.post('/dictate', upload, async (req, res) => {
     });
   } catch (error) {
     console.error('Corti dictation error:', error?.response?.data || error);
-    return res.status(500).json({
-      error: error?.message || 'Dictation failed',
-      details: error?.response?.data || error?.body || error?.stack || null,
+    const status = error?.status || error?.response?.status || 500;
+    const detail =
+      error?.details?.detail ||
+      error?.response?.data?.detail ||
+      error?.message ||
+      'Unknown error';
+    return res.status(status).json({
+      error: detail,
+      details: error?.details || error?.response?.data || null,
     });
   } finally {
     fs.promises

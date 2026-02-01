@@ -17,6 +17,7 @@ import {
   getWorkHoursValidation,
   resolveWorkHours,
 } from '../../utils/workHours';
+import { CORTI_LANGS, getCortiLanguageLabel } from '../../utils/cortiLanguages';
 
 const THEME_STORAGE_KEY = 'selma_theme_mode';
 const NIGHT_START_HOUR = 18; // 18:00
@@ -64,6 +65,8 @@ function UserSettings() {
   const [audioRetention, setAudioRetention] = useState('30d');
   const [transcriptRetention, setTranscriptRetention] = useState('30d');
   const [agentCommsRetention, setAgentCommsRetention] = useState('30d');
+  const [dictationLanguage, setDictationLanguage] = useState('auto');
+  const [settingsSnapshot, setSettingsSnapshot] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [isAvatarUploading, setIsAvatarUploading] = useState(false);
   const [isClaimingSlug, setIsClaimingSlug] = useState(false);
@@ -107,6 +110,10 @@ function UserSettings() {
     }),
     [t]
   );
+  const dictationLanguageOptions = useMemo(
+    () => CORTI_LANGS.map((locale) => ({ value: locale, label: getCortiLanguageLabel(locale) })),
+    []
+  );
 
   const applyTheme = (mode) => {
     let resolvedMode = mode;
@@ -139,6 +146,7 @@ function UserSettings() {
         const snap = await getDoc(ref);
         if (snap.exists()) {
           const data = snap.data();
+          setSettingsSnapshot(data.settings || {});
           setFullName(data.displayName || user.displayName || '');
           setEmail(data.email || user.email || '');
           setClinicName(data.clinicName || '');
@@ -161,12 +169,18 @@ function UserSettings() {
             '';
           setCurrency(loadedCurrency);
           setWorkHours(resolveWorkHours(data));
+          const storedDictationLanguage =
+            typeof data.settings?.dictationLanguage === 'string' && data.settings.dictationLanguage.trim()
+              ? data.settings.dictationLanguage.trim()
+              : 'auto';
+          setDictationLanguage(storedDictationLanguage);
           if (data.themeMode === 'light' || data.themeMode === 'dark' || data.themeMode === 'system') {
             setColorMode(data.themeMode);
             applyTheme(data.themeMode);
             localStorage.setItem(THEME_STORAGE_KEY, data.themeMode);
           }
         } else {
+          setSettingsSnapshot({});
           setFullName(user.displayName || '');
           setEmail(user.email || '');
           setClinicName('');
@@ -181,6 +195,7 @@ function UserSettings() {
           setAddress('');
           setCurrency('');
           setWorkHours(createDefaultWorkHours());
+          setDictationLanguage('auto');
         }
       } catch (error) {
         console.error('[UserSettings] Failed to load profile', error);
@@ -219,6 +234,10 @@ function UserSettings() {
 
     loadAiSettings();
   }, [user?.uid]);
+
+  useEffect(() => {
+    setSettingsSnapshot((prev) => ({ ...prev, dictationLanguage }));
+  }, [dictationLanguage]);
 
   const handleSaveAiSettings = async () => {
     if (!user?.uid) return;
@@ -328,6 +347,10 @@ function UserSettings() {
         address,
         workHours: buildWorkHoursPayload(workHours),
         preferredLanguage: preferredLanguage || language,
+        settings: {
+          ...settingsSnapshot,
+          dictationLanguage: dictationLanguage || 'auto',
+        },
         updatedAt: serverTimestamp(),
       };
 
@@ -834,6 +857,25 @@ function UserSettings() {
                           >
                             {languageOptions.map((option) => (
                               <option key={option.code} value={option.code}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="usersettings-section">
+                          <label className="usersettings-label">
+                            {t('settings.language.dictationLabel', 'Dictation language')}
+                          </label>
+                          <select
+                            className="usersettings-input"
+                            value={dictationLanguage}
+                            onChange={(e) => setDictationLanguage(e.target.value)}
+                          >
+                            <option value="auto">
+                              {t('settings.language.dictationAuto', 'Auto (recommended)')}
+                            </option>
+                            {dictationLanguageOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
                                 {option.label}
                               </option>
                             ))}

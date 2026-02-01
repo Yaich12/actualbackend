@@ -1,14 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
   limit,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
 } from 'firebase/firestore';
 import './indlæg.css';
@@ -20,6 +23,10 @@ import CortiAssistantPanel, { parseAssistantSections } from '../../components/Co
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
 import { useLanguage } from '../../../../LanguageContext';
+import {
+  CORTI_FALLBACK,
+  pickCortiLocale,
+} from '../../../../utils/cortiLanguages';
 
 const DEFAULT_LANGUAGE = 'en';
 const HEADING_INSTRUCTION =
@@ -140,6 +147,7 @@ function Indlæg({
   onOpenEntry,
   initialDate = '',
   initialEntry = null, // Existing entry to edit
+  appointmentId = null,
 }) {
   const MODE_NONE = 'none';
   const MODE_TRANSCRIBE = 'transcribe';
@@ -209,6 +217,7 @@ function Indlæg({
   const [dictationStatus, setDictationStatus] = useState(DICTATION_STATUS.idle);
   const [dictationError, setDictationError] = useState('');
   const [dictationText, setDictationText] = useState('');
+  const [dictationLanguage, setDictationLanguage] = useState('auto');
 
   const [agentIds, setAgentIds] = useState({});
   const [agentReady, setAgentReady] = useState(false);
@@ -218,10 +227,15 @@ function Indlæg({
   const [agentInput, setAgentInput] = useState('');
   const [agentChatLoading, setAgentChatLoading] = useState(false);
   const [activeAgentPreset, setActiveAgentPreset] = useState('');
+  const [expandedNoteHeight, setExpandedNoteHeight] = useState(null);
+  const [manualNoteHeight, setManualNoteHeight] = useState(null);
+  const [isManualNoteResize, setIsManualNoteResize] = useState(false);
 
   const wsRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const mediaStreamRef = useRef(null);
+  const noteTextareaRef = useRef(null);
+  const noteBaseHeightRef = useRef(null);
   const isRecordingRef = useRef(false);
   const isStartingRef = useRef(false);
   const isStoppingRef = useRef(false);
@@ -237,7 +251,7 @@ function Indlæg({
   const dictationStopRequestedRef = useRef(false);
 
   const { user } = useAuth();
-  const { preferredLanguage, locale, t } = useLanguage();
+  const { language, preferredLanguage, locale, t } = useLanguage();
   const resolvedLanguage = preferredLanguage || DEFAULT_LANGUAGE;
   const templateLanguage = resolvedLanguage;
   const transcriptionLocale = useMemo(
@@ -377,6 +391,95 @@ function Indlæg({
     [agentIds, t]
   );
 
+  const resolvedAppointmentId = useMemo(
+    () =>
+      appointmentId ||
+      initialEntry?.appointmentId ||
+      initialEntry?.appointment?.id ||
+      null,
+    [appointmentId, initialEntry]
+  );
+
+  const getAssistantMessagesRef = useCallback(() => {
+    if (!user?.uid || !resolvedAppointmentId) {
+      return null;
+    }
+    return collection(
+      db,
+      'users',
+      user.uid,
+      'appointments',
+      resolvedAppointmentId,
+      'assistantChats'
+    );
+  }, [resolvedAppointmentId, user?.uid]);
+
+  const appendAssistantMessage = useCallback(
+    async (message) => {
+      setAgentMessages((prev) => [...prev, message]);
+      const messagesRef = getAssistantMessagesRef();
+      if (!messagesRef) return;
+      try {
+        await addDoc(messagesRef, {
+          ...message,
+          createdAt: serverTimestamp(),
+        });
+      } catch (error) {
+        console.error('[Indlæg] Failed to persist assistant message:', error);
+      }
+    },
+    [getAssistantMessagesRef]
+  );
+
+  const updateNoteHeight = useCallback(() => {
+    if (isManualNoteResize) return;
+    const textarea = noteTextareaRef.current;
+    if (!textarea) return;
+    const currentHeight = textarea.clientHeight;
+    if (!noteBaseHeightRef.current || expandedNoteHeight === null) {
+      noteBaseHeightRef.current = currentHeight;
+    }
+    const baseHeight = noteBaseHeightRef.current || currentHeight;
+    const isOverflowing = textarea.scrollHeight > baseHeight + 4;
+    if (isOverflowing) {
+      setExpandedNoteHeight(Math.ceil(baseHeight * 1.5));
+    } else {
+      noteBaseHeightRef.current = currentHeight;
+      setExpandedNoteHeight(null);
+    }
+  }, [expandedNoteHeight, isManualNoteResize]);
+
+  const handleNoteResizeStart = useCallback(
+    (event) => {
+      event.preventDefault();
+      if (event.currentTarget?.setPointerCapture && event.pointerId != null) {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }
+      const textarea = noteTextareaRef.current;
+      if (!textarea) return;
+      setIsManualNoteResize(true);
+      const startY = event.clientY ?? 0;
+      const startHeight = textarea.offsetHeight;
+
+      const handleMove = (moveEvent) => {
+        const clientY = moveEvent.clientY ?? startY;
+        const delta = clientY - startY;
+        const nextHeight = Math.max(220, startHeight + delta);
+        setManualNoteHeight(nextHeight);
+      };
+
+      const handleUp = () => {
+        window.removeEventListener('pointermove', handleMove);
+        window.removeEventListener('pointerup', handleUp);
+      };
+
+      window.addEventListener('pointermove', handleMove);
+      window.addEventListener('pointerup', handleUp);
+    },
+    []
+  );
+
+
   const sendAgentMessage = useCallback(
     async (overrideMessage = null, _overrideAgentType = null, agentKey = 'education') => {
       const finalMessage = `${overrideMessage ?? agentInput}`.trim();
@@ -402,7 +505,11 @@ function Indlæg({
 
       setAgentError('');
       setAgentChatLoading(true);
-      setAgentMessages((prev) => [...prev, { role: 'user', text: finalMessage, ts: Date.now() }]);
+      await appendAssistantMessage({
+        role: 'user',
+        text: finalMessage,
+        ts: Date.now(),
+      });
 
       try {
         const response = await fetch(apiUrl(`/api/agents/${encodeURIComponent(agentKey)}/chat`), {
@@ -428,10 +535,12 @@ function Indlæg({
           replyText,
           t('assistant.replyTitle', 'Answer')
         );
-        setAgentMessages((prev) => [
-          ...prev,
-          { role: 'assistant', text: replyText, sections, ts: Date.now() },
-        ]);
+        await appendAssistantMessage({
+          role: 'assistant',
+          text: replyText,
+          sections,
+          ts: Date.now(),
+        });
       } catch (error) {
         console.error('[Indlæg] Agent chat error:', error);
         setAgentError(error?.message || t('indlaeg.errors.agentFailed', 'Agent failed.'));
@@ -452,6 +561,7 @@ function Indlæg({
       transcribeMode,
       generatedDocument,
       ensureAgentId,
+      appendAssistantMessage,
       resolvedLanguage,
       t,
     ]
@@ -473,17 +583,14 @@ function Indlæg({
     async (displayMessage) => {
       const sourceText = resolveRehabSourceText();
       if (!sourceText) {
-        setAgentMessages((prev) => [
-          ...prev,
-          {
-            role: 'assistant',
-            text: t(
-              'indlaeg.errors.rehabNoText',
-              'No text found — write a note or enter text first.'
-            ),
-            ts: Date.now(),
-          },
-        ]);
+        await appendAssistantMessage({
+          role: 'assistant',
+          text: t(
+            'indlaeg.errors.rehabNoText',
+            'No text found — write a note or enter text first.'
+          ),
+          ts: Date.now(),
+        });
         return;
       }
 
@@ -497,10 +604,11 @@ function Indlæg({
 
       setAgentError('');
       setAgentChatLoading(true);
-      setAgentMessages((prev) => [
-        ...prev,
-        { role: 'user', text: resolvedDisplayMessage, ts: Date.now() },
-      ]);
+      await appendAssistantMessage({
+        role: 'user',
+        text: resolvedDisplayMessage,
+        ts: Date.now(),
+      });
 
       try {
         await ensureAgentId('rehab');
@@ -531,10 +639,12 @@ function Indlæg({
           replyText,
           t('assistant.replyTitle', 'Answer')
         );
-        setAgentMessages((prev) => [
-          ...prev,
-          { role: 'assistant', text: replyText, sections, ts: Date.now() },
-        ]);
+        await appendAssistantMessage({
+          role: 'assistant',
+          text: replyText,
+          sections,
+          ts: Date.now(),
+        });
       } catch (error) {
         console.error('[Indlæg] Rehab agent chat error:', error);
         setAgentError(error?.message || t('indlaeg.errors.agentFailed', 'Agent failed.'));
@@ -543,7 +653,7 @@ function Indlæg({
         setAgentInput('');
       }
     },
-    [ensureAgentId, resolveRehabSourceText, resolvedLanguage, t]
+    [appendAssistantMessage, ensureAgentId, resolveRehabSourceText, resolvedLanguage, t]
   );
 
   const ACTION_TO_AGENT = useMemo(
@@ -657,6 +767,45 @@ function Indlæg({
     loadRecent();
   }, [user?.uid, clientId, t]);
 
+  const persistDictationLanguage = useCallback(
+    async (nextLanguage) => {
+      if (!user?.uid) return;
+      const resolved = typeof nextLanguage === 'string' ? nextLanguage.trim() : '';
+      await setDoc(
+        doc(db, 'users', user.uid),
+        { settings: { dictationLanguage: resolved || 'auto' } },
+        { merge: true }
+      );
+    },
+    [user?.uid]
+  );
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setDictationLanguage('auto');
+      return;
+    }
+    const loadDictationLanguage = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        const data = snap.exists() ? snap.data() : null;
+        const stored =
+          data?.settings?.dictationLanguage ||
+          data?.dictationLanguage ||
+          'auto';
+        if (typeof stored === 'string' && stored.trim()) {
+          setDictationLanguage(stored.trim());
+        } else {
+          setDictationLanguage('auto');
+        }
+      } catch (error) {
+        console.error('[Indlæg] Failed to load dictation language', error);
+        setDictationLanguage('auto');
+      }
+    };
+    void loadDictationLanguage();
+  }, [user?.uid]);
+
   const fetchTemplates = useCallback(async () => {
     setTemplatesLoading(true);
     setTemplatesError('');
@@ -731,6 +880,45 @@ function Indlæg({
       document.body.style.overflow = previousOverflow;
     };
   }, [isGeneratedSheetOpen, isTemplateSheetOpen]);
+
+  useLayoutEffect(() => {
+    updateNoteHeight();
+  }, [content, updateNoteHeight]);
+
+  useEffect(() => {
+    const handleResize = () => updateNoteHeight();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [updateNoteHeight]);
+
+  useEffect(() => {
+    const messagesRef = getAssistantMessagesRef();
+    if (!messagesRef) {
+      return undefined;
+    }
+
+    const messagesQuery = query(messagesRef, orderBy('ts', 'asc'));
+    const unsubscribe = onSnapshot(
+      messagesQuery,
+      (snapshot) => {
+        const nextMessages = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data() || {};
+          return {
+            role: data.role || 'assistant',
+            text: data.text || '',
+            sections: Array.isArray(data.sections) ? data.sections : null,
+            ts: data.ts || Date.now(),
+          };
+        });
+        setAgentMessages(nextMessages);
+      },
+      (error) => {
+        console.error('[Indlæg] Failed to load assistant chat:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [getAssistantMessagesRef]);
 
   const ensureInteraction = useCallback(async () => {
     if (interactionId) {
@@ -879,9 +1067,22 @@ function Indlæg({
 
       setDictationStatus(DICTATION_STATUS.uploading);
       try {
+        const uiLocale = preferredLanguage || language || locale || '';
+        const browserLocale =
+          typeof navigator !== 'undefined' ? navigator.language : '';
+        const userSelectedLocale =
+          dictationLanguage && dictationLanguage !== 'auto' ? dictationLanguage : null;
+        const suggestedLocale = pickCortiLocale({
+          uiLocale,
+          userSelectedLocale,
+          browserLocale,
+        });
         const formData = new FormData();
         formData.append('audio', blob, 'dictation.webm');
-        formData.append('language', transcriptionLocale);
+        formData.append('dictationLanguage', dictationLanguage || 'auto');
+        formData.append('uiLocale', uiLocale);
+        formData.append('browserLocale', browserLocale);
+        formData.append('suggestedLocale', suggestedLocale || CORTI_FALLBACK);
 
         const response = await fetch(apiUrl('/api/corti/dictate'), {
           method: 'POST',
@@ -891,8 +1092,31 @@ function Indlæg({
         setDictationStatus(DICTATION_STATUS.transcribing);
         const raw = await response.text();
         if (!response.ok) {
+          const errorPayload = (() => {
+            try {
+              return raw ? JSON.parse(raw) : null;
+            } catch (_) {
+              return null;
+            }
+          })();
+          const detail =
+            errorPayload?.error ||
+            errorPayload?.detail ||
+            errorPayload?.message ||
+            raw ||
+            `Serverfejl (${response.status})`;
           console.error('[Indlæg] Dictation upload failed (raw):', raw);
-          throw new Error(raw || `Serverfejl (${response.status})`);
+          if (response.status === 400 && /unsupported language/i.test(detail)) {
+            if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+              window.alert('Dictation language not supported. Falling back to English.');
+            }
+            setDictationLanguage('auto');
+            void persistDictationLanguage('auto');
+          }
+          if (response.status >= 500) {
+            throw new Error(t('indlaeg.errors.dictationServerError', 'Server error, try again.'));
+          }
+          throw new Error(detail);
         }
 
         let data = null;
@@ -925,7 +1149,18 @@ function Indlæg({
         setDictationStatus(DICTATION_STATUS.error);
       }
     },
-    [DICTATION_STATUS.done, DICTATION_STATUS.error, DICTATION_STATUS.transcribing, DICTATION_STATUS.uploading, t, transcriptionLocale]
+    [
+      DICTATION_STATUS.done,
+      DICTATION_STATUS.error,
+      DICTATION_STATUS.transcribing,
+      DICTATION_STATUS.uploading,
+      dictationLanguage,
+      language,
+      locale,
+      persistDictationLanguage,
+      preferredLanguage,
+      t,
+    ]
   );
 
   const startDictationRecording = useCallback(async () => {
@@ -1338,6 +1573,7 @@ function Indlæg({
       ownerIdentifier,
       createdAtIso: nowIso,
       templateKey: selectedTemplateKey || null,
+      appointmentId: resolvedAppointmentId || null,
     };
 
     setIsSaving(true);
@@ -1447,6 +1683,7 @@ function Indlæg({
   const isDictationProcessing =
     dictationStatus === DICTATION_STATUS.uploading ||
     dictationStatus === DICTATION_STATUS.transcribing;
+
 
   const assistantQuickActions = useMemo(
     () => [
@@ -1645,14 +1882,30 @@ function Indlæg({
                   <div className="indlæg-card-body indlæg-note-area">
                     <textarea
                       className="indlæg-textarea indlæg-textarea--lg"
+                      ref={noteTextareaRef}
                       value={content}
                       onChange={(event) => setContent(event.target.value)}
+                      style={
+                        manualNoteHeight
+                          ? { height: `${manualNoteHeight}px` }
+                          : expandedNoteHeight
+                          ? { height: `${expandedNoteHeight}px` }
+                          : undefined
+                      }
                       placeholder={t(
                         'indlaeg.generatedNotePlaceholder',
                         'The generated note appears here. You can edit freely.'
                       )}
                       rows={12}
                     />
+                    <div
+                      className="indlæg-journal-resize-handle"
+                      role="separator"
+                      aria-label={t('indlaeg.resizeJournal', 'Resize journal')}
+                      onPointerDown={handleNoteResizeStart}
+                    >
+                      ↕
+                    </div>
                     {generationLoading && (
                       <div className="indlæg-note-loader">
                         <QuantumPulseLoader />
@@ -1994,69 +2247,10 @@ function Indlæg({
           </div>
           {isAssistantOpen && (
             <div className="indlæg-assistant-drawer">
-            <button
-              type="button"
-              className="indlæg-drawer-edge-close indlæg-drawer-edge-close--selma"
-              onClick={() => setIsAssistantOpen(false)}
-              aria-label={t('indlaeg.assistantClose', 'Close Selma assistant panel')}
-            >
-              <span className="indlæg-dot-arrow" aria-hidden="true">
-                <span className="indlæg-dot-line indlæg-dot-line--one">
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                </span>
-                <span className="indlæg-dot-line indlæg-dot-line--two">
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                </span>
-                <span className="indlæg-dot-line indlæg-dot-line--three">
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                </span>
-                <span className="indlæg-dot-line indlæg-dot-line--four">
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                </span>
-                <span className="indlæg-dot-line indlæg-dot-line--five">
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                </span>
-                <span className="indlæg-dot-line indlæg-dot-line--six">
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                </span>
-                <span className="indlæg-dot-line indlæg-dot-line--seven">
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                  <span className="indlæg-dot-round" />
-                </span>
-              </span>
-            </button>
               <div className="indlæg-drawer-header">
                 <h3 className="indlæg-card-title">
                   {t('indlaeg.assistantTitle', 'Selma Assistant')}
                 </h3>
-                <button
-                  type="button"
-                  className="indlæg-drawer-close"
-                  onClick={() => setIsAssistantOpen(false)}
-                  aria-label={t('indlaeg.assistantCloseShort', 'Close assistant')}
-                >
-                  →
-                </button>
               </div>
 
               <CortiAssistantPanel
@@ -2080,6 +2274,7 @@ function Indlæg({
                   'indlaeg.assistantPlaceholder',
                   'Ask Selma assistant a question...'
                 )}
+                onClose={() => setIsAssistantOpen(false)}
               />
             </div>
           )}
