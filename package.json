@@ -59,12 +59,13 @@
     "upload:assets": "node scripts/uploadPublicAssetsToStorage.mjs",
     "deploy:functions": "npx firebase-tools@latest deploy --only functions:python_functions",
     "deploy:hosting": "npm run build && npx firebase-tools@latest deploy --only hosting",
-    "deploy:api": "node scripts/deployApiToCloudRun.mjs",
+    "deploy:api": "node scripts/predeployCheck.mjs && node scripts/deployApiToCloudRun.mjs",
     "deploy:live": "node scripts/deployLive.mjs",
     "deploy:all": "node scripts/deployAll.mjs",
     "deploy:all:serial": "FIREBASE_DEPLOY_CONCURRENCY=1 node scripts/deployAll.mjs",
     "functions:list": "npx firebase-tools@latest functions:list",
-    "check:no-localhost": "node scripts/checkNoLocalhost.mjs"
+    "check:no-localhost": "node scripts/checkNoLocalhost.mjs",
+    "predeploy:api": "node scripts/predeployCheck.mjs"
   },
   "eslintConfig": {
     "extends": [
