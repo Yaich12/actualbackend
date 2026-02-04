@@ -4,6 +4,7 @@ import { Button } from "../../components/ui/button";
 import ClinicHeroTemplate from "./ClinicHeroTemplate";
 import { useLanguage } from "../language/LanguageProvider";
 import { getPublicAssetUrl } from "../../utils/publicAssets";
+import { buildApiUrl } from "../../utils/runtimeUrls";
 
 const PreviewImage = ({ src, alt, className, fallbackSrc }) => {
   const handleError = (e) => {
@@ -70,7 +71,7 @@ const ChatbotPanel = ({ clinicContext, labels }) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/builder/chat", {
+      const response = await fetch(buildApiUrl("/api/builder/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

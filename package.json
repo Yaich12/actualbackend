@@ -51,14 +51,21 @@
   "scripts": {
     "start": "./node_modules/.bin/react-scripts start",
     "dev": "./node_modules/.bin/react-scripts start",
-    "build": "./node_modules/.bin/react-scripts build",
+    "build": "react-scripts build",
     "test": "./node_modules/.bin/react-scripts test",
     "eject": "./node_modules/.bin/react-scripts eject",
     "server": "node server.js",
     "emulators": "firebase emulators:start",
-    "upload:assets": "node scripts/uploadPublicAssetsToStorage.mjs"
+    "upload:assets": "node scripts/uploadPublicAssetsToStorage.mjs",
+    "deploy:functions": "npx firebase-tools@latest deploy --only functions:python_functions",
+    "deploy:hosting": "npm run build && npx firebase-tools@latest deploy --only hosting",
+    "deploy:api": "node scripts/deployApiToCloudRun.mjs",
+    "deploy:live": "node scripts/deployLive.mjs",
+    "deploy:all": "node scripts/deployAll.mjs",
+    "deploy:all:serial": "FIREBASE_DEPLOY_CONCURRENCY=1 node scripts/deployAll.mjs",
+    "functions:list": "npx firebase-tools@latest functions:list",
+    "check:no-localhost": "node scripts/checkNoLocalhost.mjs"
   },
-  "proxy": "http://localhost:4000",
   "eslintConfig": {
     "extends": [
       "react-app",

@@ -23,6 +23,7 @@ import useAppointments from '../../../hooks/useAppointments';
 import { ChevronDown, ChevronLeft } from 'lucide-react';
 import AnimatedGenerateButton from '../../../components/ui/animated-generate-button-shadcn-tailwind';
 import CortiAssistantPanel from '../components/CortiAssistantPanel';
+import { buildApiUrl } from '../../../utils/runtimeUrls';
 
 const getClientInitials = (client) => {
   const source = (client?.navn || client?.email || '').trim();
@@ -35,22 +36,7 @@ const getClientInitials = (client) => {
     .toUpperCase();
 };
 
-const getBackendHttpBase = () => {
-  const envBase = process.env.REACT_APP_BACKEND_URL;
-  if (envBase && typeof envBase === 'string') {
-    return envBase.replace(/\/+$/, '');
-  }
-
-  if (typeof window !== 'undefined') {
-    if (window.location.hostname === 'localhost') return 'http://localhost:4000';
-    return window.location.origin;
-  }
-
-  return 'http://localhost:4000';
-};
-
-const backendBase = getBackendHttpBase();
-const apiUrl = (path) => `${backendBase}${path.startsWith('/') ? '' : '/'}${path}`;
+const apiUrl = (path) => buildApiUrl(path);
 
 const ClientDetails = ({
   client,

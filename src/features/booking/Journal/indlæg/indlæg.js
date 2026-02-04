@@ -26,7 +26,9 @@ import { useLanguage } from '../../../../LanguageContext';
 import {
   CORTI_FALLBACK,
   pickCortiLocale,
+  normalizeToCortiLocale,
 } from '../../../../utils/cortiLanguages';
+import { buildApiUrl, buildWsUrl } from '../../../../utils/runtimeUrls';
 
 const DEFAULT_LANGUAGE = 'en';
 const HEADING_INSTRUCTION =
@@ -43,38 +45,8 @@ const TRANSCRIPTION_LOCALES = {
   it: 'it-IT',
 };
 
-const getBackendHttpBase = () => {
-  const envBase = process.env.REACT_APP_BACKEND_URL;
-  if (envBase && typeof envBase === 'string') {
-    return envBase.replace(/\/+$/, '');
-  }
-
-  if (typeof window !== 'undefined') {
-    if (window.location.hostname === 'localhost') return 'http://localhost:4000';
-    return window.location.origin;
-  }
-
-  return 'http://localhost:4000';
-};
-
-const toWsBase = (httpBase) => {
-  try {
-    const url = new URL(httpBase);
-    const wsProto = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${wsProto}//${url.host}`;
-  } catch (_) {
-    return httpBase.replace(/^http/, 'ws');
-  }
-};
-
-const buildWsUrl = () => {
-  const httpBase = getBackendHttpBase();
-  const wsBase = toWsBase(httpBase);
-  return `${wsBase}/ws/corti/transcribe`;
-};
-
-const backendBase = getBackendHttpBase();
-const apiUrl = (path) => `${backendBase}${path.startsWith('/') ? '' : '/'}${path}`;
+const apiUrl = (path) => buildApiUrl(path);
+const buildTranscribeWsUrl = () => buildWsUrl('/ws/corti/transcribe');
 
 const sanitizeIdentifier = (value) =>
   value
@@ -253,7 +225,11 @@ function Indlæg({
   const { user } = useAuth();
   const { language, preferredLanguage, locale, t } = useLanguage();
   const resolvedLanguage = preferredLanguage || DEFAULT_LANGUAGE;
-  const templateLanguage = resolvedLanguage;
+  // Normalize UI locale to Corti-supported locale codes (see utils/cortiLanguages).
+  const templateLanguage = useMemo(
+    () => normalizeToCortiLocale(resolvedLanguage),
+    [resolvedLanguage]
+  );
   const transcriptionLocale = useMemo(
     () => TRANSCRIPTION_LOCALES[resolvedLanguage] || TRANSCRIPTION_LOCALES[DEFAULT_LANGUAGE],
     [resolvedLanguage]
@@ -810,7 +786,9 @@ function Indlæg({
     setTemplatesLoading(true);
     setTemplatesError('');
     try {
-      const response = await fetch(apiUrl(`/api/corti/templates?lang=${templateLanguage}`));
+      const response = await fetch(
+        apiUrl(`/api/corti/templates?lang=${encodeURIComponent(templateLanguage)}`)
+      );
       if (!response.ok) {
         const message = await response.text();
         throw new Error(message || `Server ${response.status}`);
@@ -1367,7 +1345,7 @@ function Indlæg({
       return;
     }
 
-    const wsUrl = buildWsUrl();
+    const wsUrl = buildTranscribeWsUrl();
     if (!wsUrl) {
       setRecordingError(t('indlaeg.errors.recordingMissingConnection', 'Missing transcription connection.'));
       cleanupRecording(RECORDING_STATUS.error);

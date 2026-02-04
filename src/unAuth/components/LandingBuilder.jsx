@@ -8,6 +8,7 @@ import { getPublicAssetUrl } from "../../utils/publicAssets";
 import { useAuth } from "../../AuthContext";
 import BuilderPreview from "./BuilderPreview";
 import { useLanguage } from "../language/LanguageProvider";
+import { buildApiUrl } from "../../utils/runtimeUrls";
 import "./landingBuilder.css";
 
 const DRAFT_KEY = "selmaLandingBuilderDraft";
@@ -251,7 +252,7 @@ const persistConfig = (nextConfig) => {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch("/api/builder/upload-photo", {
+      const response = await fetch(buildApiUrl("/api/builder/upload-photo"), {
         method: "POST",
         body: formData,
       });
@@ -296,7 +297,7 @@ const persistConfig = (nextConfig) => {
   const handleGenerate = async () => {
     setStatus({ loading: true, error: "" });
     try {
-      const response = await fetch("/api/builder/generate", {
+      const response = await fetch(buildApiUrl("/api/builder/generate"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
