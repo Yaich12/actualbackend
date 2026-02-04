@@ -1,0 +1,29 @@
+node_modules
+build
+.firebase
+venv
+functions/venv
+functions/__pycache__
+**/__pycache__
+*.log
+*.local
+.env
+.env.*
+.git
+.gitignore
+.DS_Store
+coverage
+.tmp
+.tmp/**
+*.cache
+
+# large assets
+_disabled_assets
+public-assets
+public/hero-*
+
+# tests
+**/__tests__
+
+# os
+Thumbs.db
