@@ -7,6 +7,7 @@ import {
   collection,
   doc,
   getDocs,
+  limit,
   onSnapshot,
   query,
   serverTimestamp,
@@ -31,6 +32,7 @@ function Journal({
 }) {
   const [showHistory, setShowHistory] = useState(false);
   const [journalEntryCount, setJournalEntryCount] = useState(null);
+  const [appointmentEntry, setAppointmentEntry] = useState(null);
   const [historyTarget, setHistoryTarget] = useState(null); // { id, navn }
   const [isEditingGroupName, setIsEditingGroupName] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState('');
@@ -65,6 +67,49 @@ function Journal({
 
     return () => unsubscribe();
   }, [user, selectedClient?.id]);
+
+  useEffect(() => {
+    if (!user?.uid || !selectedClient?.id || !selectedAppointment?.id) {
+      setAppointmentEntry(null);
+      return () => {};
+    }
+
+    setAppointmentEntry(null);
+    const entriesRef = collection(
+      db,
+      'users',
+      user.uid,
+      'clients',
+      selectedClient.id,
+      'journalEntries'
+    );
+    const entriesQuery = query(
+      entriesRef,
+      where('appointmentId', '==', selectedAppointment.id),
+      limit(1)
+    );
+    const unsubscribe = onSnapshot(
+      entriesQuery,
+      (snap) => {
+        if (snap.empty) {
+          setAppointmentEntry(null);
+          return;
+        }
+        const docSnap = snap.docs[0];
+        const data = docSnap.data() || {};
+        setAppointmentEntry({
+          id: docSnap.id,
+          ...data,
+          appointmentId: selectedAppointment.id,
+          clientId: selectedClient.id,
+          clientName: data.clientName || selectedClient?.navn || '',
+        });
+      },
+      () => setAppointmentEntry(null)
+    );
+
+    return () => unsubscribe();
+  }, [user?.uid, selectedClient?.id, selectedClient?.navn, selectedAppointment?.id]);
 
   const client = selectedClient;
 
@@ -630,9 +675,23 @@ function Journal({
               {onCreateJournalEntry && (
                 <button
                   className="journal-create-appointment-btn"
-                  onClick={onCreateJournalEntry}
+                  onClick={() => {
+                    if (!onCreateJournalEntry) return;
+                    if (selectedAppointment && appointmentEntry) {
+                      onCreateJournalEntry({
+                        entry: {
+                          ...appointmentEntry,
+                          clientId: selectedClient?.id,
+                          clientName: selectedClient?.navn,
+                        },
+                        client: selectedClient,
+                      });
+                      return;
+                    }
+                    onCreateJournalEntry();
+                  }}
                 >
-                  Opret indlæg
+                  {selectedAppointment && appointmentEntry ? 'Åben notat' : 'Opret indlæg'}
                 </button>
               )}
               {selectedAppointment && (
