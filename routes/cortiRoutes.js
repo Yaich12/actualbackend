@@ -6,10 +6,9 @@ const util = require('util');
 const { execFile } = require('child_process');
 const { createCortiClient } = require('../cortiAuth');
 const {
-  CORTI_FALLBACK,
-  normalizeToCortiLocale,
-  pickCortiLocale,
-  isCortiLocaleSupported,
+  CORTI_SPEECH_ALLOWLIST,
+  CORTI_SPEECH_FALLBACK,
+  resolveSpeechLanguage,
 } = require('../server/utils/cortiLanguages');
 
 const router = express.Router();
@@ -20,6 +19,65 @@ if (!fs.existsSync(uploadDir)) {
 const upload = multer({ dest: uploadDir }).any();
 const execFileAsync = util.promisify(execFile);
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const UNSUPPORTED_LANGUAGE_RE = /unsupported language|language unavailable/i;
+let ffmpegMissingLogged = false;
+
+const isUnsupportedLanguageError = (detail) =>
+  typeof detail === 'string' && UNSUPPORTED_LANGUAGE_RE.test(detail);
+
+const getStatusCode = (err) => {
+  const status =
+    err?.statusCode ??
+    err?.status ??
+    err?.response?.status ??
+    err?.response?.statusCode ??
+    err?.details?.status;
+  return typeof status === 'number' ? status : 500;
+};
+
+const getErrorDetail = (err) =>
+  err?.body?.detail ||
+  err?.details?.detail ||
+  err?.response?.data?.detail ||
+  err?.message ||
+  'Unknown error';
+
+const getRequestId = (err) => {
+  if (err?.body?.requestid) return err.body.requestid;
+  const rawHeaders = err?.rawResponse?.headers;
+  if (rawHeaders?.get) {
+    return (
+      rawHeaders.get('x-request-id') ||
+      rawHeaders.get('x-corti-request-id') ||
+      rawHeaders.get('x-requestid') ||
+      null
+    );
+  }
+  return (
+    err?.response?.headers?.['x-request-id'] ||
+    err?.response?.headers?.['x-corti-request-id'] ||
+    err?.response?.headers?.['x-requestid'] ||
+    null
+  );
+};
+
+const isFfmpegMissing = (err) =>
+  err?.code === 'ENOENT' || /ffmpeg/i.test(String(err?.message || ''));
+
+const buildLanguageCandidates = (language) => {
+  const candidates = [];
+  const push = (value) => {
+    if (!value) return;
+    if (!candidates.includes(value)) candidates.push(value);
+  };
+  push(language);
+  if (typeof language === 'string' && language.includes('-')) {
+    const base = language.split('-')[0];
+    push(base);
+  }
+  push(CORTI_SPEECH_FALLBACK);
+  return candidates;
+};
 
 const transcodeToWav = async (inputPath, outputPath) => {
   // Convert to 16kHz mono PCM WAV (same format as /api/transcribe)
@@ -36,6 +94,20 @@ const transcodeToWav = async (inputPath, outputPath) => {
     outputPath,
   ]);
 };
+
+router.get('/health', (_req, res) => {
+  return res.json({ ok: true, service: 'corti', ts: new Date().toISOString() });
+});
+
+router.get('/capabilities', (_req, res) => {
+  return res.json({
+    ok: true,
+    allowlist: CORTI_SPEECH_ALLOWLIST,
+    fallback: CORTI_SPEECH_FALLBACK,
+    speechLanguages: CORTI_SPEECH_ALLOWLIST,
+    fallbackLanguage: CORTI_SPEECH_FALLBACK,
+  });
+});
 
 router.post('/interactions', async (req, res) => {
   try {
@@ -73,7 +145,12 @@ router.post('/interactions', async (req, res) => {
 router.get('/templates', async (req, res) => {
   try {
     const cortiClient = await createCortiClient();
-    const lang = req.query?.lang || 'da';
+    const rawLang = req.query?.lang || 'da';
+    const normalizedLang = String(rawLang || '').trim().replace(/_/g, '-');
+    const baseLang = normalizedLang.includes('-')
+      ? normalizedLang.split('-')[0]
+      : normalizedLang;
+    const lang = baseLang || 'da';
     const status = req.query?.status || undefined;
     const org = req.query?.org || undefined;
 
@@ -138,16 +215,17 @@ router.post('/dictate', upload, async (req, res) => {
   }
 
   const rawDictationLanguage =
-    req.body?.dictationLanguage || req.body?.language || req.body?.locale || req.body?.lang || '';
+    req.body?.dictationLanguage || req.body?.speechLanguage || req.body?.language || req.body?.locale || req.body?.lang || '';
   const uiLocale = req.body?.uiLocale || '';
   const browserLocale = req.body?.browserLocale || '';
-  const suggestedLocale = req.body?.suggestedLocale || '';
-  const userSelectedLocale =
-    rawDictationLanguage && rawDictationLanguage !== 'auto' ? rawDictationLanguage : null;
-  let chosenLanguage = pickCortiLocale({ uiLocale, userSelectedLocale, browserLocale });
-  if (suggestedLocale && isCortiLocaleSupported(suggestedLocale)) {
-    chosenLanguage = normalizeToCortiLocale(suggestedLocale);
-  }
+  const explicitSpeechLanguage =
+    rawDictationLanguage && rawDictationLanguage !== 'auto' ? rawDictationLanguage : '';
+  const chosenLanguage = resolveSpeechLanguage({
+    speechLanguage: explicitSpeechLanguage,
+    browserLocale,
+  });
+  const languageCandidates = buildLanguageCandidates(chosenLanguage);
+  const attemptedLanguage = languageCandidates[0] || CORTI_SPEECH_FALLBACK;
   const encounterIdentifier = req.body?.encounterIdentifier || `dictate-${Date.now()}`;
   const encounterTitle = req.body?.title || incomingFile.originalname || 'Dictation';
   const filePath = incomingFile.path;
@@ -162,7 +240,15 @@ router.post('/dictate', upload, async (req, res) => {
     try {
       await transcodeToWav(filePath, wavPath);
     } catch (err) {
-      console.error('ffmpeg transcode failed (continuing with original file):', err);
+      if (isFfmpegMissing(err)) {
+        if (!ffmpegMissingLogged && !global.__ffmpegMissingLogged) {
+          console.warn('[ffmpeg] not found; skipping transcode and using original audio.');
+        }
+        ffmpegMissingLogged = true;
+        global.__ffmpegMissingLogged = true;
+      } else {
+        console.error('ffmpeg transcode failed (continuing with original file):', err);
+      }
       transcodeFailed = true;
       wavPath = filePath;
     }
@@ -174,6 +260,7 @@ router.post('/dictate', upload, async (req, res) => {
       uiLocale,
       browserLocale,
       chosen: chosenLanguage,
+      candidates: languageCandidates,
     });
     const interaction = await cortiClient.interactions.create(
       {
@@ -209,8 +296,6 @@ router.post('/dictate', upload, async (req, res) => {
 
     await wait(1200);
 
-    const getErrorDetail = (err) =>
-      err?.details?.detail || err?.response?.data?.detail || err?.message || 'Unknown error';
     const createTranscript = async (languageToUse) =>
       cortiClient.transcripts.create(
         interactionId,
@@ -222,26 +307,60 @@ router.post('/dictate', upload, async (req, res) => {
         { tenantName: process.env.CORTI_TENANT_NAME }
       );
 
-    let transcriptResponse;
-    try {
-      transcriptResponse = await createTranscript(chosenLanguage);
-    } catch (error) {
-      const status = error?.status || error?.response?.status || 500;
-      const detail = getErrorDetail(error);
-      if (
-        status === 400 &&
-        /unsupported language/i.test(detail) &&
-        chosenLanguage !== CORTI_FALLBACK
-      ) {
-        console.warn('[corti] unsupported language, retry fallback', {
-          chosen: chosenLanguage,
-          fallback: CORTI_FALLBACK,
-        });
-        chosenLanguage = CORTI_FALLBACK;
-        transcriptResponse = await createTranscript(CORTI_FALLBACK);
-      } else {
+    let transcriptResponse = null;
+    let usedLanguage = null;
+    let fallbackUsed = false;
+    let lastRequestId = null;
+
+    for (let i = 0; i < languageCandidates.length; i += 1) {
+      const candidate = languageCandidates[i];
+      try {
+        transcriptResponse = await createTranscript(candidate);
+        usedLanguage = candidate;
+        fallbackUsed = i > 0;
+        if (fallbackUsed) {
+          console.info('[DICTATE] fallback_used', {
+            attempted: attemptedLanguage,
+            used: usedLanguage,
+            requestId: lastRequestId || null,
+          });
+        }
+        break;
+      } catch (error) {
+        const detail = getErrorDetail(error);
+        const requestId = getRequestId(error);
+        lastRequestId = requestId || lastRequestId;
+        if (isUnsupportedLanguageError(detail)) {
+          const nextCandidate = languageCandidates[i + 1];
+          if (nextCandidate) {
+            console.warn('[corti] unsupported language, retry', {
+              attempted: candidate,
+              next: nextCandidate,
+              requestId: requestId || null,
+            });
+            continue;
+          }
+          return res.status(400).json({
+            ok: false,
+            code: 'UNSUPPORTED_LANGUAGE',
+            detail,
+            attempted: attemptedLanguage,
+            fallback: CORTI_SPEECH_FALLBACK,
+            requestId: requestId || lastRequestId,
+          });
+        }
         throw error;
       }
+    }
+
+    if (!transcriptResponse) {
+      return res.status(502).json({
+        ok: false,
+        code: 'TRANSCRIPT_CREATE_FAILED',
+        detail: 'Failed to create transcript.',
+        attempted: attemptedLanguage,
+        fallback: CORTI_SPEECH_FALLBACK,
+      });
     }
 
     const transcriptId = transcriptResponse?.id || transcriptResponse?.transcriptId;
@@ -277,23 +396,42 @@ router.post('/dictate', upload, async (req, res) => {
     console.info(`[DICTATE] status=${status}`);
 
     return res.json({
+      ok: true,
       text,
       interactionId,
       recordingId,
       transcriptId: transcriptId || null,
       status,
+      usedLanguage: usedLanguage || chosenLanguage,
+      attemptedLanguage,
+      fallbackUsed,
+      language: usedLanguage || chosenLanguage,
+      usedFallback: fallbackUsed,
+      attempted: attemptedLanguage,
+      fallback: CORTI_SPEECH_FALLBACK,
     });
   } catch (error) {
     console.error('Corti dictation error:', error?.response?.data || error);
-    const status = error?.status || error?.response?.status || 500;
-    const detail =
-      error?.details?.detail ||
-      error?.response?.data?.detail ||
-      error?.message ||
-      'Unknown error';
+    const status = getStatusCode(error);
+    const detail = getErrorDetail(error);
+    const requestId = getRequestId(error);
+    if (isUnsupportedLanguageError(detail)) {
+      return res.status(400).json({
+        ok: false,
+        code: 'UNSUPPORTED_LANGUAGE',
+        detail,
+        attempted: attemptedLanguage,
+        fallback: CORTI_SPEECH_FALLBACK,
+        requestId,
+      });
+    }
     return res.status(status).json({
+      ok: false,
+      code: status >= 500 ? 'UPSTREAM_ERROR' : 'REQUEST_FAILED',
+      detail,
+      requestId,
       error: detail,
-      details: error?.details || error?.response?.data || null,
+      details: error?.details || error?.body || error?.response?.data || null,
     });
   } finally {
     fs.promises
@@ -343,8 +481,15 @@ router.post('/interactions/:id/documents', async (req, res) => {
     return res.json(response?.data || response);
   } catch (error) {
     console.error('Corti documents create error:', error?.response?.data || error);
-    return res.status(error?.response?.status || 500).json({
-      error: error?.message || 'Failed to create document',
+    const status = getStatusCode(error);
+    const detail = getErrorDetail(error);
+    const requestId = getRequestId(error);
+    return res.status(status).json({
+      ok: false,
+      code: status >= 500 ? 'UPSTREAM_ERROR' : 'REQUEST_FAILED',
+      detail,
+      requestId,
+      error: detail || error?.message || 'Failed to create document',
       details: error?.response?.data || error?.body || error?.stack || null,
     });
   }

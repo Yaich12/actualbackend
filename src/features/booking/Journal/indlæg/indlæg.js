@@ -24,26 +24,16 @@ import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
 import { useLanguage } from '../../../../LanguageContext';
 import {
-  CORTI_FALLBACK,
-  pickCortiLocale,
+  CORTI_SPEECH_FALLBACK,
   normalizeToCortiLocale,
+  resolveSpeechLanguage,
 } from '../../../../utils/cortiLanguages';
 import { buildApiUrl, buildWsUrl } from '../../../../utils/runtimeUrls';
 
 const DEFAULT_LANGUAGE = 'en';
 const HEADING_INSTRUCTION =
   'Use Markdown headings starting with ### for each section. Do not return a single block without headings.';
-const TRANSCRIPTION_LOCALES = {
-  en: 'en-US',
-  da: 'da-DK',
-  ar: 'ar',
-  sv: 'sv-SE',
-  no: 'nb-NO',
-  fr: 'fr-FR',
-  de: 'de-DE',
-  pt: 'pt-PT',
-  it: 'it-IT',
-};
+const UNSUPPORTED_LANGUAGE_RE = /unsupported language|language unavailable/i;
 
 const apiUrl = (path) => buildApiUrl(path);
 const buildTranscribeWsUrl = () => buildWsUrl('/ws/corti/transcribe');
@@ -202,12 +192,15 @@ function Indlæg({
   const [expandedNoteHeight, setExpandedNoteHeight] = useState(null);
   const [manualNoteHeight, setManualNoteHeight] = useState(null);
   const [isManualNoteResize, setIsManualNoteResize] = useState(false);
+  const [copyStatus, setCopyStatus] = useState('idle');
 
   const wsRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const noteTextareaRef = useRef(null);
   const noteBaseHeightRef = useRef(null);
+  const noteResizeStartHeightRef = useRef(null);
+  const copyResetTimeoutRef = useRef(null);
   const isRecordingRef = useRef(false);
   const isStartingRef = useRef(false);
   const isStoppingRef = useRef(false);
@@ -216,6 +209,7 @@ function Indlæg({
   const awaitingFlushRef = useRef(false);
   const awaitingEndRef = useRef(false);
   const cleanupInProgressRef = useRef(false);
+  const transcribeFallbackRef = useRef(false);
 
   const dictationRecorderRef = useRef(null);
   const dictationStreamRef = useRef(null);
@@ -225,14 +219,26 @@ function Indlæg({
   const { user } = useAuth();
   const { language, preferredLanguage, locale, t } = useLanguage();
   const resolvedLanguage = preferredLanguage || DEFAULT_LANGUAGE;
+  const browserLocale = typeof navigator !== 'undefined' ? navigator.language : '';
+  const explicitSpeechLanguage =
+    dictationLanguage && dictationLanguage !== 'auto' ? dictationLanguage : '';
+  const dateLocale = useMemo(
+    () => locale || resolvedLanguage || DEFAULT_LANGUAGE,
+    [locale, resolvedLanguage]
+  );
   // Normalize UI locale to Corti-supported locale codes (see utils/cortiLanguages).
   const templateLanguage = useMemo(
     () => normalizeToCortiLocale(resolvedLanguage),
     [resolvedLanguage]
   );
-  const transcriptionLocale = useMemo(
-    () => TRANSCRIPTION_LOCALES[resolvedLanguage] || TRANSCRIPTION_LOCALES[DEFAULT_LANGUAGE],
-    [resolvedLanguage]
+  const speechLanguage = useMemo(
+    () =>
+      resolveSpeechLanguage({
+        uiLanguage: resolvedLanguage,
+        speechLanguage: explicitSpeechLanguage,
+        browserLocale,
+      }),
+    [resolvedLanguage, explicitSpeechLanguage, browserLocale]
   );
 
   const transcriptText = useMemo(() => {
@@ -267,22 +273,106 @@ function Indlæg({
     return { text: raw, source: 'transcript' };
   }, [content, generatedDocument, activeTranscriptText, t]);
 
+  const parseDateValue = (value) => {
+    if (!value) return null;
+    if (typeof value?.toDate === 'function') return value.toDate();
+    if (value instanceof Date) return value;
+    if (typeof value === 'string') {
+      const raw = value.trim();
+      if (!raw) return null;
+      const dmYMatch = raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:\s|$)/);
+      if (dmYMatch) {
+        const day = Number.parseInt(dmYMatch[1], 10);
+        const month = Number.parseInt(dmYMatch[2], 10);
+        const year = Number.parseInt(dmYMatch[3], 10);
+        if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+          return new Date(year, month - 1, day);
+        }
+      }
+      const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/);
+      if (isoMatch) {
+        const year = Number.parseInt(isoMatch[1], 10);
+        const month = Number.parseInt(isoMatch[2], 10);
+        const day = Number.parseInt(isoMatch[3], 10);
+        return new Date(year, month - 1, day);
+      }
+      const parsed = new Date(raw);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
+      return null;
+    }
+    if (typeof value === 'number') {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    return null;
+  };
+
   const formatDateTime = (value) => {
     if (!value) return '';
     try {
-      const dateObj =
-        typeof value?.toDate === 'function'
-          ? value.toDate()
-          : typeof value === 'string'
-          ? new Date(value)
-          : value;
-      if (Number.isNaN(dateObj.getTime())) return String(value);
-      return dateObj.toLocaleString(locale || TRANSCRIPTION_LOCALES[DEFAULT_LANGUAGE], {
+      const dateObj = parseDateValue(value);
+      if (!dateObj || Number.isNaN(dateObj.getTime())) return String(value);
+      return dateObj.toLocaleString(dateLocale, {
         day: 'numeric',
         month: 'long',
         year: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
+      });
+    } catch {
+      return String(value);
+    }
+  };
+
+  const handleCopyJournal = useCallback(async () => {
+    const text = content ?? '';
+    if (!text) return;
+
+    const markCopied = () => {
+      setCopyStatus('copied');
+      if (copyResetTimeoutRef.current) {
+        clearTimeout(copyResetTimeoutRef.current);
+      }
+      copyResetTimeoutRef.current = setTimeout(() => {
+        setCopyStatus('idle');
+      }, 2000);
+    };
+
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        markCopied();
+        return;
+      }
+    } catch (error) {
+      console.warn('[Indlæg] Clipboard API failed, falling back:', error);
+    }
+
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'absolute';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      markCopied();
+    } catch (error) {
+      console.error('[Indlæg] Copy fallback failed:', error);
+    }
+  }, [content]);
+
+  const formatDateOnly = (value) => {
+    if (!value) return '';
+    try {
+      const dateObj = parseDateValue(value);
+      if (!dateObj || Number.isNaN(dateObj.getTime())) return String(value);
+      return dateObj.toLocaleDateString(dateLocale, {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
       });
     } catch {
       return String(value);
@@ -425,35 +515,21 @@ function Indlæg({
     }
   }, [expandedNoteHeight, isManualNoteResize]);
 
-  const handleNoteResizeStart = useCallback(
-    (event) => {
-      event.preventDefault();
-      if (event.currentTarget?.setPointerCapture && event.pointerId != null) {
-        event.currentTarget.setPointerCapture(event.pointerId);
-      }
-      const textarea = noteTextareaRef.current;
-      if (!textarea) return;
-      setIsManualNoteResize(true);
-      const startY = event.clientY ?? 0;
-      const startHeight = textarea.offsetHeight;
+  const handleTextareaPointerDown = useCallback(() => {
+    const textarea = noteTextareaRef.current;
+    if (!textarea) return;
+    noteResizeStartHeightRef.current = textarea.offsetHeight;
+  }, []);
 
-      const handleMove = (moveEvent) => {
-        const clientY = moveEvent.clientY ?? startY;
-        const delta = clientY - startY;
-        const nextHeight = Math.max(220, startHeight + delta);
-        setManualNoteHeight(nextHeight);
-      };
-
-      const handleUp = () => {
-        window.removeEventListener('pointermove', handleMove);
-        window.removeEventListener('pointerup', handleUp);
-      };
-
-      window.addEventListener('pointermove', handleMove);
-      window.addEventListener('pointerup', handleUp);
-    },
-    []
-  );
+  const handleTextareaPointerUp = useCallback(() => {
+    const textarea = noteTextareaRef.current;
+    if (!textarea) return;
+    const startHeight = noteResizeStartHeightRef.current;
+    const nextHeight = textarea.offsetHeight;
+    if (!startHeight || Math.abs(nextHeight - startHeight) < 4) return;
+    setIsManualNoteResize(true);
+    setManualNoteHeight(nextHeight);
+  }, []);
 
 
   const sendAgentMessage = useCallback(
@@ -870,6 +946,14 @@ function Indlæg({
   }, [updateNoteHeight]);
 
   useEffect(() => {
+    return () => {
+      if (copyResetTimeoutRef.current) {
+        clearTimeout(copyResetTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const messagesRef = getAssistantMessagesRef();
     if (!messagesRef) {
       return undefined;
@@ -1048,19 +1132,16 @@ function Indlæg({
         const uiLocale = preferredLanguage || language || locale || '';
         const browserLocale =
           typeof navigator !== 'undefined' ? navigator.language : '';
-        const userSelectedLocale =
-          dictationLanguage && dictationLanguage !== 'auto' ? dictationLanguage : null;
-        const suggestedLocale = pickCortiLocale({
-          uiLocale,
-          userSelectedLocale,
-          browserLocale,
-        });
+        const explicitSpeechLanguage =
+          dictationLanguage && dictationLanguage !== 'auto' ? dictationLanguage : '';
         const formData = new FormData();
         formData.append('audio', blob, 'dictation.webm');
         formData.append('dictationLanguage', dictationLanguage || 'auto');
+        if (explicitSpeechLanguage) {
+          formData.append('speechLanguage', explicitSpeechLanguage);
+        }
         formData.append('uiLocale', uiLocale);
         formData.append('browserLocale', browserLocale);
-        formData.append('suggestedLocale', suggestedLocale || CORTI_FALLBACK);
 
         const response = await fetch(apiUrl('/api/corti/dictate'), {
           method: 'POST',
@@ -1078,18 +1159,25 @@ function Indlæg({
             }
           })();
           const detail =
-            errorPayload?.error ||
             errorPayload?.detail ||
             errorPayload?.message ||
+            errorPayload?.error ||
             raw ||
             `Serverfejl (${response.status})`;
           console.error('[Indlæg] Dictation upload failed (raw):', raw);
-          if (response.status === 400 && /unsupported language/i.test(detail)) {
+          if (
+            response.status === 400 &&
+            (errorPayload?.code === 'UNSUPPORTED_LANGUAGE' || /unsupported language/i.test(detail))
+          ) {
+            const attempted = errorPayload?.attempted || errorPayload?.attemptedLanguage || 'valgt sprog';
+            const fallback = errorPayload?.fallback || CORTI_SPEECH_FALLBACK;
+            const message = `Corti understøtter ikke ${attempted} i denne konto – prøv ${fallback}.`;
+            setDictationError(message);
+            setDictationStatus(DICTATION_STATUS.error);
             if (typeof window !== 'undefined' && typeof window.alert === 'function') {
-              window.alert('Dictation language not supported. Falling back to English.');
+              window.alert(message);
             }
-            setDictationLanguage('auto');
-            void persistDictationLanguage('auto');
+            return;
           }
           if (response.status >= 500) {
             throw new Error(t('indlaeg.errors.dictationServerError', 'Server error, try again.'));
@@ -1106,6 +1194,20 @@ function Indlæg({
         }
 
         console.info('[Indlæg] Dictation response:', data);
+
+        if (data?.fallbackUsed || data?.usedFallback) {
+          const attempted = data?.attempted || data?.attemptedLanguage || speechLanguage;
+          const fallback = data?.fallback || data?.language || CORTI_SPEECH_FALLBACK;
+          if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+            window.alert(
+              `Corti understøtter ikke ${attempted} i denne konto – vi skifter til English (en-US).`
+            );
+          }
+          console.warn('[Corti] Dictation language fallback', {
+            attempted,
+            fallback,
+          });
+        }
 
         const nextText = data?.text || '';
         setDictationText(nextText);
@@ -1135,7 +1237,6 @@ function Indlæg({
       dictationLanguage,
       language,
       locale,
-      persistDictationLanguage,
       preferredLanguage,
       t,
     ]
@@ -1338,6 +1439,7 @@ function Indlæg({
     recorderStartedRef.current = false;
     awaitingFlushRef.current = false;
     awaitingEndRef.current = false;
+    transcribeFallbackRef.current = false;
 
     if (!navigator.mediaDevices || typeof window.MediaRecorder === 'undefined') {
       setRecordingError(t('indlaeg.errors.recordingBrowserUnsupported', 'Recording not supported.'));
@@ -1374,7 +1476,7 @@ function Indlæg({
         const configMessage = {
           type: 'config',
           configuration: {
-            primaryLanguage: transcriptionLocale,
+            primaryLanguage: speechLanguage,
             automaticPunctuation: true,
           },
         };
@@ -1394,6 +1496,18 @@ function Indlæg({
         }
 
         if (!message?.type) return;
+        if (message.type === 'warning' && message.code === 'FALLBACK_LANGUAGE') {
+          if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+            window.alert(
+              `Corti understøtter ikke ${message.attempted || 'valgt sprog'} i denne konto – vi skifter til English (en-US).`
+            );
+          }
+          console.warn('[Corti] WS language fallback', {
+            attempted: message.attempted,
+            fallback: message.fallback,
+          });
+          return;
+        }
         if (message.type === 'DEBUG') {
           setLastWs({
             type: message.event || 'DEBUG',
@@ -1420,6 +1534,34 @@ function Indlæg({
 
         if (message?.type === 'CONFIG_TIMEOUT' || message?.type === 'CONFIG_DENIED') {
           const reason = messageReason || 'No reason';
+          if (
+            !transcribeFallbackRef.current &&
+            UNSUPPORTED_LANGUAGE_RE.test(reason || '') &&
+            ws.readyState === WebSocket.OPEN
+          ) {
+            transcribeFallbackRef.current = true;
+            const fallbackConfig = {
+              type: 'config',
+              configuration: {
+                primaryLanguage: CORTI_SPEECH_FALLBACK,
+                automaticPunctuation: true,
+              },
+            };
+            try {
+              ws.send(JSON.stringify(fallbackConfig));
+              setLastWs({ type: 'SENT_CONFIG_FALLBACK', reason });
+              setRecordingStatus(RECORDING_STATUS.config);
+              if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+                window.alert('Language not supported by Corti, switched to English (en-US).');
+              }
+              console.warn('[Corti] WS language fallback', {
+                attempted: speechLanguage,
+                fallback: CORTI_SPEECH_FALLBACK,
+              });
+              return;
+            } catch (_) {}
+          }
+
           setRecordingStatus(RECORDING_STATUS.error);
           setRecordingError(`${message.type}: ${reason}`);
           cleanupRecording(RECORDING_STATUS.error);
@@ -1488,7 +1630,7 @@ function Indlæg({
     } finally {
       isStartingRef.current = false;
     }
-  }, [RECORDING_STATUS, cleanupRecording, startMediaRecorder, t, transcriptionLocale]);
+  }, [RECORDING_STATUS, cleanupRecording, startMediaRecorder, t, speechLanguage]);
 
   const cleanupTranscribe = useCallback(() => {
     cleanupRecording(RECORDING_STATUS.idle);
@@ -1559,6 +1701,13 @@ function Indlæg({
     try {
       const targetEntry = activeEntry || initialEntry;
 
+      const upsertRecentEntry = (entry) => {
+        setRecentEntries((prev) => {
+          const next = [entry, ...prev.filter((item) => item.id !== entry.id)];
+          return next.slice(0, 10);
+        });
+      };
+
       if (targetEntry?.id) {
         // Update existing entry
         const entryRef = doc(
@@ -1582,11 +1731,12 @@ function Indlæg({
           createdAtIso: targetEntry.createdAtIso || targetEntry.createdAt || nowIso,
         };
 
+        setActiveEntry(savedEntry);
+        upsertRecentEntry(savedEntry);
+
         if (typeof onSave === 'function') {
           onSave(savedEntry);
         }
-
-        onClose();
       } else {
         // Create new entry
         const entriesCollection = collection(
@@ -1609,11 +1759,12 @@ function Indlæg({
           createdAt: nowIso,
         };
 
+        setActiveEntry(savedEntry);
+        upsertRecentEntry(savedEntry);
+
         if (typeof onSave === 'function') {
           onSave(savedEntry);
         }
-
-        onClose();
       }
     } catch (error) {
       console.error('Failed to save journal entry:', error);
@@ -1818,17 +1969,9 @@ function Indlæg({
                               setContent(entry.content || '');
                             }}
                           >
-                            <div className="indlæg-history-item-main">
-                              <span className="indlæg-history-title">
-                                {entry.title || t('indlaeg.untitled', 'Untitled')}
-                              </span>
-                              <span className="indlæg-history-date">
-                                {formatDateTime(entry.date)}
-                              </span>
-                            </div>
-                            <div className="indlæg-history-meta">
-                              <span className="indlæg-history-status-badge">
-                                {t('indlaeg.active', 'Active')}
+                            <div className="indlæg-history-item-main indlæg-history-item-main--date">
+                              <span className="indlæg-history-date indlæg-history-date--only">
+                                {formatDateOnly(entry.date)}
                               </span>
                             </div>
                           </li>
@@ -1845,17 +1988,29 @@ function Indlæg({
                     <h3 className="indlæg-card-title font-bold">
                       {t('indlaeg.title', 'Journal')}
                     </h3>
-                    <button
-                      type="button"
-                      className="indlæg-action-btn"
-                      onClick={handleSave}
-                      disabled={isSaving}
-                      aria-busy={isSaving}
-                    >
-                      {isSaving
-                        ? t('indlaeg.saving', 'Saving...')
-                        : t('indlaeg.saveEntry', 'Save entry')}
-                    </button>
+                    <div className="indlæg-card-header-actions">
+                      <button
+                        type="button"
+                        className="indlæg-action-btn"
+                        onClick={handleCopyJournal}
+                        aria-live="polite"
+                      >
+                        {copyStatus === 'copied'
+                          ? t('indlaeg.copiedEntry', 'Copied')
+                          : t('indlaeg.copyEntry', 'Copy journal')}
+                      </button>
+                      <button
+                        type="button"
+                        className="indlæg-action-btn"
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        aria-busy={isSaving}
+                      >
+                        {isSaving
+                          ? t('indlaeg.saving', 'Saving...')
+                          : t('indlaeg.saveEntry', 'Save entry')}
+                      </button>
+                    </div>
                   </div>
                   <div className="indlæg-card-body indlæg-note-area">
                     <textarea
@@ -1863,6 +2018,8 @@ function Indlæg({
                       ref={noteTextareaRef}
                       value={content}
                       onChange={(event) => setContent(event.target.value)}
+                      onPointerDown={handleTextareaPointerDown}
+                      onPointerUp={handleTextareaPointerUp}
                       style={
                         manualNoteHeight
                           ? { height: `${manualNoteHeight}px` }
@@ -1876,14 +2033,6 @@ function Indlæg({
                       )}
                       rows={12}
                     />
-                    <div
-                      className="indlæg-journal-resize-handle"
-                      role="separator"
-                      aria-label={t('indlaeg.resizeJournal', 'Resize journal')}
-                      onPointerDown={handleNoteResizeStart}
-                    >
-                      ↕
-                    </div>
                     {generationLoading && (
                       <div className="indlæg-note-loader">
                         <QuantumPulseLoader />

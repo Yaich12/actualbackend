@@ -526,20 +526,6 @@ function UserSettings() {
                   </button>
                   <button
                     type="button"
-                    className={`usersettings-nav-item ${activeSection === 'workHours' ? 'active' : ''}`}
-                    onClick={() => handleSectionChange('workHours')}
-                  >
-                    {t('settings.sections.workHours', 'Arbejdstid')}
-                  </button>
-                  <button
-                    type="button"
-                    className={`usersettings-nav-item ${activeSection === 'appearance' ? 'active' : ''}`}
-                    onClick={() => handleSectionChange('appearance')}
-                  >
-                    {t('settings.sections.appearance', 'Appearance')}
-                  </button>
-                  <button
-                    type="button"
                     className={`usersettings-nav-item ${activeSection === 'language' ? 'active' : ''}`}
                     onClick={() => handleSectionChange('language')}
                   >

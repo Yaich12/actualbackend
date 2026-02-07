@@ -3,6 +3,8 @@ export const translations = {
     indlaeg: {
       title: 'Journal',
       saveEntry: 'Save entry',
+      copyEntry: 'Copy journal',
+      copiedEntry: 'Copied',
       saving: 'Saving...',
       generatedNotePlaceholder: 'The generated note appears here. You can edit freely.',
       templates: 'Templates',
@@ -124,6 +126,8 @@ export const translations = {
     indlaeg: {
       title: 'Journal',
       saveEntry: 'Gem indlæg',
+      copyEntry: 'Kopiér journal',
+      copiedEntry: 'Kopieret',
       saving: 'Gemmer...',
       generatedNotePlaceholder: 'Her vises det genererede notat. Du kan redigere frit.',
       templates: 'Skabeloner',

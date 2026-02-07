@@ -1,10 +1,13 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  getAuth,
   getRedirectResult,
   isSignInWithEmailLink,
+  RecaptchaVerifier,
   signInWithEmailLink,
   signInWithEmailAndPassword,
+  signInWithPhoneNumber,
   sendPasswordResetEmail,
   createUserWithEmailAndPassword,
   fetchSignInMethodsForEmail,
@@ -15,7 +18,7 @@ import { signInWithGoogle } from "../googleauth";
 import { useAuth } from "../AuthContext";
 import { Gem } from "lucide-react";
 import { SignInPage } from "../components/ui/sign-in";
-import { ensureUserDocument } from "../services/userService";
+import { ensureUserProfile } from "../services/userService";
 import {
   consumePostAuthRedirectTarget,
   peekPostAuthRedirectTarget,
@@ -36,17 +39,121 @@ function SignUp() {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const [lastEmail, setLastEmail] = useState("");
+  const [loginMethod, setLoginMethod] = useState("email");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [smsCode, setSmsCode] = useState("");
+  const [phoneStep, setPhoneStep] = useState("enterPhone");
+  const [confirmationResult, setConfirmationResult] = useState(null);
+  const recaptchaVerifierRef = useRef(null);
+  const recaptchaWidgetIdRef = useRef(null);
 
   const persistUserProfile = useCallback(async (authUser) => {
     if (!authUser) {
       return;
     }
     try {
-      await ensureUserDocument(authUser);
+      await ensureUserProfile(authUser);
     } catch (error) {
       console.error("Failed to ensure user document:", error);
     }
   }, []);
+
+  const normalizePhoneNumber = useCallback((value) => {
+    const trimmed = value.replace(/\s+/g, "");
+    if (!trimmed) {
+      return "";
+    }
+    const digits = trimmed.replace(/[^\d]/g, "");
+    if (!digits) {
+      return trimmed.startsWith("+") ? "+" : "";
+    }
+    return `+${digits}`;
+  }, []);
+
+  const normalizeSmsCode = useCallback((value) => value.replace(/\D/g, "").slice(0, 6), []);
+
+  const resetRecaptcha = useCallback(() => {
+    const widgetId = recaptchaWidgetIdRef.current;
+    if (
+      typeof window !== "undefined" &&
+      window.grecaptcha &&
+      typeof window.grecaptcha.reset === "function" &&
+      widgetId !== null
+    ) {
+      window.grecaptcha.reset(widgetId);
+      return;
+    }
+    if (recaptchaVerifierRef.current) {
+      recaptchaVerifierRef.current.clear();
+      recaptchaVerifierRef.current = null;
+      recaptchaWidgetIdRef.current = null;
+    }
+  }, []);
+
+  // TODO: Firebase Console -> Authentication -> Sign-in method -> enable Phone
+  // TODO: Add domain to OAuth redirect domains (e.g. selma+.dk)
+  // TODO: Set SMS region policy if desired.
+  const initRecaptcha = useCallback(async () => {
+    const authInstance = auth || getAuth();
+    if (!authInstance || typeof window === "undefined") {
+      return null;
+    }
+    if (recaptchaVerifierRef.current) {
+      return recaptchaVerifierRef.current;
+    }
+    const container = document.getElementById("recaptcha-container");
+    if (!container) {
+      return null;
+    }
+    authInstance.languageCode = "da";
+    const verifier = new RecaptchaVerifier(authInstance, "recaptcha-container", {
+      size: "normal",
+    });
+    recaptchaVerifierRef.current = verifier;
+    try {
+      const widgetId = await verifier.render();
+      recaptchaWidgetIdRef.current = widgetId;
+    } catch (error) {
+      recaptchaVerifierRef.current = null;
+      recaptchaWidgetIdRef.current = null;
+      throw error;
+    }
+    return verifier;
+  }, []);
+
+  useEffect(() => {
+    setStatusMessage(null);
+    setStatus(null);
+    if (loginMethod !== "phone") {
+      setPhoneStep("enterPhone");
+      setSmsCode("");
+      setConfirmationResult(null);
+      resetRecaptcha();
+      return;
+    }
+    setPhoneStep("enterPhone");
+  }, [loginMethod, resetRecaptcha]);
+
+  useEffect(() => {
+    if (loginMethod !== "phone") {
+      return;
+    }
+    let isMounted = true;
+    const setup = async () => {
+      try {
+        await initRecaptcha();
+      } catch (error) {
+        console.error("[SignUp] reCAPTCHA init failed:", error);
+        if (isMounted) {
+          setStatusMessage(t("login.errors.recaptchaInit"));
+        }
+      }
+    };
+    void setup();
+    return () => {
+      isMounted = false;
+    };
+  }, [initRecaptcha, loginMethod, t]);
 
   const resolvePostLoginRoute = useCallback(
     async (authUser) => {
@@ -220,6 +327,126 @@ function SignUp() {
     }
   };
 
+  const handlePhoneNumberChange = (value) => {
+    setPhoneNumber(normalizePhoneNumber(value));
+  };
+
+  const handleSmsCodeChange = (value) => {
+    setSmsCode(normalizeSmsCode(value));
+  };
+
+  const handleSendCode = async () => {
+    const authInstance = auth || getAuth();
+    if (!authInstance) return;
+    setStatus(null);
+    setStatusMessage(null);
+    setPostAuthRedirectTarget("/welcome");
+    setConfirmationResult(null);
+    setPhoneStep("enterPhone");
+    setSmsCode("");
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    setPhoneNumber(normalizedPhone);
+    if (!normalizedPhone) {
+      setStatusMessage(t("login.errors.phoneMissing"));
+      return;
+    }
+    if (!/^\+\d{8,15}$/.test(normalizedPhone)) {
+      setStatusMessage(t("login.errors.phoneInvalid"));
+      return;
+    }
+    setProcessingLink(true);
+    try {
+      const verifier = await initRecaptcha();
+      if (!verifier) {
+        setStatusMessage(t("login.errors.recaptchaInit"));
+        return;
+      }
+      const confirmation = await signInWithPhoneNumber(authInstance, normalizedPhone, verifier);
+      setConfirmationResult(confirmation);
+      setPhoneStep("enterCode");
+      setStatus({
+        type: "success",
+        message: t("login.status.codeSent"),
+      });
+    } catch (error) {
+      console.error("[SignUp] phone sign-in send code failed:", error);
+      if (error?.code === "auth/invalid-phone-number") {
+        setStatusMessage(t("login.errors.phoneInvalid"));
+      } else if (error?.code === "auth/missing-phone-number") {
+        setStatusMessage(t("login.errors.phoneMissing"));
+      } else if (
+        error?.code === "auth/too-many-requests" ||
+        error?.code === "auth/quota-exceeded"
+      ) {
+        setStatusMessage(t("login.errors.tooManyRequests"));
+      } else if (error?.code === "auth/captcha-check-failed") {
+        setStatusMessage(t("login.errors.recaptchaFailed"));
+      } else {
+        setStatusMessage(t("login.errors.phoneSendFailed"));
+      }
+      setStatus(null);
+      resetRecaptcha();
+    } finally {
+      setProcessingLink(false);
+    }
+  };
+
+  const handleConfirmCode = async () => {
+    const authInstance = auth || getAuth();
+    if (!authInstance) return;
+    setStatusMessage(null);
+    const normalizedCode = normalizeSmsCode(smsCode);
+    setSmsCode(normalizedCode);
+    if (!normalizedCode) {
+      setStatusMessage(t("login.errors.codeMissing"));
+      return;
+    }
+    if (normalizedCode.length !== 6) {
+      setStatusMessage(t("login.errors.codeInvalid"));
+      return;
+    }
+    if (!confirmationResult) {
+      setStatusMessage(t("login.errors.phoneSendFailed"));
+      return;
+    }
+    setStatus({
+      type: "success",
+      message: t("login.status.signingIn"),
+    });
+    setProcessingLink(true);
+    try {
+      const credential = await confirmationResult.confirm(normalizedCode);
+      await persistUserProfile(credential.user);
+      await redirectAfterAuth(credential.user);
+    } catch (error) {
+      console.error("[SignUp] phone sign-in confirm failed:", error);
+      if (
+        error?.code === "auth/invalid-verification-code" ||
+        error?.code === "auth/invalid-verification-id"
+      ) {
+        setStatusMessage(t("login.errors.codeInvalid"));
+        return;
+      }
+      if (error?.code === "auth/code-expired") {
+        setStatusMessage(t("login.errors.codeExpired"));
+        return;
+      }
+      if (error?.code === "auth/account-exists-with-different-credential") {
+        console.error(
+          "[SignUp] Phone sign-in provider mismatch. TODO: Link providers in settings.",
+          error
+        );
+        // TODO: After login, allow users to link multiple providers or resolve provider mismatches here.
+        setStatusMessage(t("login.errors.providerMismatch"));
+        return;
+      }
+      setStatusMessage(t("login.errors.phoneLoginFailed"));
+    } finally {
+      setProcessingLink(false);
+      setStatus(null);
+    }
+  };
+
   const handleEmailPasswordSignIn = async (event) => {
     event.preventDefault();
     if (!auth) return;
@@ -385,6 +612,15 @@ function SignUp() {
         <SignInPage
           heroImageSrc={getPublicAssetUrl("hero/pexels-yankrukov-5794028.jpg")}
           testimonials={[]}
+          loginMethod={loginMethod}
+          onLoginMethodChange={setLoginMethod}
+          phoneNumber={phoneNumber}
+          smsCode={smsCode}
+          phoneStep={phoneStep}
+          onPhoneNumberChange={handlePhoneNumberChange}
+          onSmsCodeChange={handleSmsCodeChange}
+          onSendCode={handleSendCode}
+          onConfirmCode={handleConfirmCode}
           onSignIn={handleEmailPasswordSignIn}
           onGoogleSignIn={handleGoogleSignIn}
           onResetPassword={handleResetPassword}

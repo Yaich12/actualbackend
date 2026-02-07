@@ -20,9 +20,9 @@
     },
     "steps": {
       "business": {
-        "title": "Hvad hedder din virksomhed?",
+        "title": "Hvad hedder din klinik?",
         "subtitle": "Dette er det varemærke, dine kunder vil se. Din fakturering og dit juridiske navn kan tilføjes senere.",
-        "nameLabel": "Virksomhedens navn",
+        "nameLabel": "Klinikkens navn",
         "namePlaceholder": "F.eks. Selma Klinik",
         "websiteLabel": "Websted (Valgfrit)",
         "websitePlaceholder": "www.ditwebsted.com"
@@ -103,9 +103,9 @@
       }
     },
     "completion": {
-      "title": "Din virksomhed er oprettet!",
+      "title": "Din profil er oprettet",
       "subtitle": "Få 14 dages gratis brug af Selma for virksomheder",
-      "button": "Færdig"
+      "button": "Kom i gang"
     },
     "currency": {
       "label": "Valuta",

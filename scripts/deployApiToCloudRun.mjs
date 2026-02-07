@@ -27,9 +27,65 @@ if (!projectId) {
 }
 
 const serviceId = 'actualbackend-api';
-const region = 'europe-west1';
-const repoName = 'run-images';
-const registryHost = `${region}-docker.pkg.dev`;
+const region = process.env.CLOUD_RUN_REGION || 'us-central1';
+
+const envPath = process.env.CLOUD_RUN_ENV_FILE || path.join(cwd, '.env');
+const envLocalPath = path.join(cwd, '.env.production.local');
+
+const parseEnvFile = (filePath) => {
+  if (!fs.existsSync(filePath)) return {};
+  const raw = fs.readFileSync(filePath, 'utf8');
+  const env = {};
+  raw.split(/\r?\n/).forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) return;
+    const idx = trimmed.indexOf('=');
+    if (idx === -1) return;
+    const key = trimmed.slice(0, idx).trim();
+    let value = trimmed.slice(idx + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    env[key] = value;
+  });
+  return env;
+};
+
+const envFromFile = parseEnvFile(envPath);
+const envFromLocal = parseEnvFile(envLocalPath);
+const mergedEnv = { ...envFromFile, ...envFromLocal };
+
+Object.entries(mergedEnv).forEach(([key, value]) => {
+  if (!process.env[key] && value !== undefined) {
+    process.env[key] = value;
+  }
+});
+
+const CLOUD_RUN_ENV_KEYS = [
+  'CORTI_ENVIRONMENT',
+  'CORTI_TENANT_NAME',
+  'CORTI_CLIENT_ID',
+  'CORTI_CLIENT_SECRET',
+];
+
+const escapeEnvValue = (value) =>
+  String(value ?? '')
+    .replace(/,/g, '\\,')
+    .replace(/=/g, '\\=');
+
+const resolveCloudRunEnvVars = () => {
+  const envVars = [];
+  const missing = [];
+  CLOUD_RUN_ENV_KEYS.forEach((key) => {
+    const value = process.env[key];
+    if (!value) {
+      missing.push(key);
+      return;
+    }
+    envVars.push(`${key}=${escapeEnvValue(value)}`);
+  });
+  return { envVars, missing };
+};
 
 const run = (label, command, args, { capture = false } = {}) => {
   console.log(`\n[deploy:api] ${label}`);
@@ -52,179 +108,40 @@ const run = (label, command, args, { capture = false } = {}) => {
   return result.stdout || '';
 };
 
-const ensureRepo = () => {
-  const describe = spawnSync(
-    'gcloud',
-    [
-      'artifacts',
-      'repositories',
-      'describe',
-      repoName,
-      '--location',
-      region,
-      '--project',
-      projectId,
-    ],
-    { stdio: 'pipe', env: process.env }
-  );
-
-  if (describe.status === 0) return;
-
-  run('Creating Artifact Registry repo (run-images)', 'gcloud', [
-    'artifacts',
-    'repositories',
-    'create',
-    repoName,
-    '--repository-format',
-    'docker',
-    '--location',
-    region,
-    '--project',
-    projectId,
-    '--description',
-    'Cloud Run images',
-    '--quiet',
-  ]);
-};
-
-const buildTag = () => {
-  const now = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  const stamp = [
-    now.getUTCFullYear(),
-    pad(now.getUTCMonth() + 1),
-    pad(now.getUTCDate()),
-    pad(now.getUTCHours()),
-    pad(now.getUTCMinutes()),
-    pad(now.getUTCSeconds()),
-  ].join('');
-  return `deploy-${stamp}`;
-};
-
-const tailCloudBuildLogs = (buildId) => {
-  if (!buildId) return;
-  const output = spawnSync(
-    'gcloud',
-    [
-      'builds',
-      'log',
-      buildId,
-      '--region',
-      region,
-      '--project',
-      projectId,
-    ],
-    { stdio: 'pipe', env: process.env, encoding: 'utf8' }
-  );
-
-  const stdout = output.stdout || '';
-  const lines = stdout.split('\n');
-  const tail = lines.slice(-120).join('\n');
-  if (tail.trim()) {
-    console.error('\n[deploy:api] Cloud Build log tail (last 120 lines):');
-    console.error(tail);
-  } else {
-    console.error('\n[deploy:api] Cloud Build logs unavailable.');
-  }
-};
-
 console.log(`[deploy:api] Firebase project: ${projectId}`);
 console.log(`[deploy:api] Region: ${region}`);
 console.log(`[deploy:api] Service: ${serviceId}`);
+if (fs.existsSync(envPath)) {
+  console.log(`[deploy:api] Loaded env file: ${path.relative(cwd, envPath)}`);
+}
+if (fs.existsSync(envLocalPath)) {
+  console.log(`[deploy:api] Loaded env file: ${path.relative(cwd, envLocalPath)}`);
+}
 
-ensureRepo();
+const { envVars, missing } = resolveCloudRunEnvVars();
+if (missing.length) {
+  console.warn(`[deploy:api] Missing env vars for Cloud Run: ${missing.join(', ')}`);
+}
 
-run('Configuring docker auth for Artifact Registry', 'gcloud', [
-  'auth',
-  'configure-docker',
-  registryHost,
-  '--quiet',
-]);
-
-const tag = buildTag();
-const image = `${registryHost}/${projectId}/${repoName}/${serviceId}:${tag}`;
-
-const buildId = run('Submitting Cloud Build (Dockerfile)', 'gcloud', [
-  'builds',
-  'submit',
-  '--tag',
-  image,
+const deployArgs = [
+  'run',
+  'deploy',
+  serviceId,
+  '--source',
+  '.',
   '--region',
   region,
+  '--allow-unauthenticated',
+  '--port',
+  '4000',
   '--project',
   projectId,
-  '--async',
-  '--format',
-  'value(id)',
-], { capture: true }).trim();
-
-if (!buildId) {
-  console.error('[deploy:api] Cloud Build did not return a build id.');
-  process.exit(1);
+];
+if (envVars.length) {
+  deployArgs.push('--set-env-vars', envVars.join(','));
 }
 
-const buildUrl = `https://console.cloud.google.com/cloud-build/builds;region=${region}/${buildId}?project=${projectId}`;
-console.log(`[deploy:api] Cloud Build ID: ${buildId}`);
-console.log(`[deploy:api] Cloud Build URL: ${buildUrl}`);
-
-const buildWait = spawnSync(
-  'gcloud',
-  [
-    'builds',
-    'wait',
-    buildId,
-    '--region',
-    region,
-    '--project',
-    projectId,
-  ],
-  { stdio: 'inherit', env: process.env }
-);
-
-if (buildWait.error) {
-  console.error('[deploy:api] Failed to wait for Cloud Build:', buildWait.error?.message || buildWait.error);
-  console.error('[deploy:api] Cloud Build failed. Hosting deploy should be skipped.');
-  tailCloudBuildLogs(buildId);
-  process.exit(1);
-}
-
-if (typeof buildWait.status === 'number' && buildWait.status !== 0) {
-  console.error(`[deploy:api] Cloud Build failed (exit ${buildWait.status}).`);
-  console.error('[deploy:api] Cloud Build URL:', buildUrl);
-  console.error('[deploy:api] Hosting deploy should be skipped.');
-  tailCloudBuildLogs(buildId);
-  process.exit(buildWait.status);
-}
-
-const deployResult = spawnSync(
-  'gcloud',
-  [
-    'run',
-    'deploy',
-    serviceId,
-    '--image',
-    image,
-    '--region',
-    region,
-    '--allow-unauthenticated',
-    '--project',
-    projectId,
-    '--quiet',
-  ],
-  { stdio: 'inherit', env: process.env }
-);
-
-if (deployResult.error) {
-  console.error('[deploy:api] Failed to run gcloud:', deployResult.error?.message || deployResult.error);
-  console.error('[deploy:api] Cloud Run deploy failed. Hosting deploy should be skipped.');
-  process.exit(1);
-}
-
-if (typeof deployResult.status === 'number' && deployResult.status !== 0) {
-  console.error(`[deploy:api] Cloud Run deploy failed (exit ${deployResult.status}).`);
-  console.error('[deploy:api] Hosting deploy should be skipped.');
-  process.exit(deployResult.status);
-}
+run('Deploying Cloud Run service (source build)', 'gcloud', deployArgs);
 
 const serviceUrl = run('Fetching Cloud Run service URL', 'gcloud', [
   'run',
@@ -239,9 +156,12 @@ const serviceUrl = run('Fetching Cloud Run service URL', 'gcloud', [
   'value(status.url)',
 ], { capture: true }).trim();
 
+const hostingUrl = `https://${projectId}.web.app`;
+
 console.log('[deploy:api] Cloud Run deploy completed.');
 if (serviceUrl) {
-  console.log(`[deploy:api] Service URL: ${serviceUrl}`);
+  console.log(`[deploy:api] Cloud Run URL: ${serviceUrl}`);
 } else {
-  console.log('[deploy:api] Service URL not found (describe returned empty).');
+  console.log('[deploy:api] Cloud Run URL not found (describe returned empty).');
 }
+console.log(`[deploy:api] Test: curl -i ${hostingUrl}/api/corti/health`);

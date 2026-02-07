@@ -92,7 +92,7 @@ export const TRANSLATIONS = {
         description:
           "Glem at klikke rundt efter information inden næste konsultation. Når en patient nærmer sig, serverer Selma+ automatisk det hele for dig: Hvem der kommer, et AI-resume af sidste session og en klar plan for i dag. Du er klar, før patienten træder ind ad døren.",
         cta: "Prøv Selma+ booking",
-        hint: "Ingen installation. Se demo på 2 minutter.",
+        hint: "Ingen installation. Kræver kun et login",
       },
       heroJournal: {
         eyebrow: "Selma+ platform",
@@ -100,7 +100,7 @@ export const TRANSLATIONS = {
         description:
           "Selma+ er ikke bare AI-snak. Under motorhjelmen bruger vi avanceret AI-teknologi med rødder i Corti — en af Europas mest anerkendte sundheds-AI-platforme, som er udviklet med klinisk kvalitet og sikkerhed i fokus.\n\nHvad betyder det for dig?\n\nMedicinprodukt-registrering i EU & UK – Corti Assistant er officielt registreret som medicinsk device i både EU og hos UK’s MHRA, hvilket betyder at teknologien er vurderet efter strenge regulatoriske krav før brug i kliniske sammenhænge.\n\nHealthcare-grade sikkerhed og data-compliance – Platformen overholder internationale standarder som HIPAA (fortrolig patientdata i USA), GDPR (EU/UK), ISO/IEC 27001, SOC2 og mere – så dine patienters data håndteres sikkert og efter gældende lovgivning.\n\nBygget til klinikere af klinikere – AI-modellerne er trænet specifikt på medicinske samtaler og terminologi for at give nøjagtige transskriptioner og klinisk relevante forslag — så du kan fokusere på patienten, ikke på systemet.\n\nDet betyder, at du kan bruge Selma+ med ro i maven",
         cta: "Prøv Selma+ booking",
-        hint: "Ingen installation. Se demo på 2 minutter.",
+        hint: "Ingen installation. Kræver kun et login",
       },
       manifesto: {
         line1:
@@ -1204,6 +1204,16 @@ export const TRANSLATIONS = {
         emailPlaceholder: "Indtast din email",
         passwordLabel: "Kodeord",
         passwordPlaceholder: "Indtast dit kodeord",
+        methodLabel: "Login metode",
+        methodEmail: "Email",
+        methodPhone: "Telefon",
+        phoneLabel: "Telefon",
+        phonePlaceholder: "+45 12 34 56 78",
+        phoneHelper: "Du modtager en SMS-kode. Standardtakster kan gælde.",
+        sendCode: "Send kode",
+        smsCodeLabel: "Verifikationskode",
+        smsCodePlaceholder: "6 cifre",
+        confirmCode: "Bekræft & log ind",
         remember: "Hold mig logget ind",
         resetPassword: "Nulstil kodeord",
         signIn: "Log ind",
@@ -1218,6 +1228,7 @@ export const TRANSLATIONS = {
       status: {
         loggedIn: "Du er nu logget ind. Klargør din konto...",
         signingIn: "Logger ind...",
+        codeSent: "Kode sendt. Tjek din SMS.",
         resetSent: "Nulstilling sendt. Tjek din indbakke.",
       },
       errors: {
@@ -1232,6 +1243,18 @@ export const TRANSLATIONS = {
         emailInUse:
           "Emailen findes allerede. Prøv at logge ind med dit kodeord.",
         authFailed: "Kunne ikke logge ind eller oprette bruger.",
+        phoneMissing: "Indtast dit telefonnummer.",
+        phoneInvalid: "Ugyldigt telefonnummer. Brug formatet +45 12345678.",
+        tooManyRequests: "For mange forsøg. Prøv igen senere.",
+        recaptchaFailed: "reCAPTCHA fejlede. Prøv igen.",
+        recaptchaInit: "Kunne ikke starte reCAPTCHA. Prøv igen.",
+        phoneSendFailed: "Kunne ikke sende SMS-kode.",
+        codeMissing: "Indtast verifikationskoden.",
+        codeInvalid: "Forkert verifikationskode.",
+        codeExpired: "Koden er udløbet. Send en ny kode.",
+        phoneLoginFailed: "Kunne ikke logge ind med telefon.",
+        providerMismatch:
+          "Denne konto findes med en anden login-metode. Log ind med den oprindelige metode.",
         emailPasswordFirst: "Indtast email og kodeord først.",
         userNotFound:
           "Email findes ikke. Tryk på 'Opret konto' for at oprette en bruger.",
@@ -2445,6 +2468,16 @@ export const TRANSLATIONS = {
         emailPlaceholder: "Enter your email",
         passwordLabel: "Password",
         passwordPlaceholder: "Enter your password",
+        methodLabel: "Login method",
+        methodEmail: "Email",
+        methodPhone: "Phone",
+        phoneLabel: "Phone number",
+        phonePlaceholder: "+45 12 34 56 78",
+        phoneHelper: "You'll receive an SMS code. Standard rates may apply.",
+        sendCode: "Send code",
+        smsCodeLabel: "Verification code",
+        smsCodePlaceholder: "6 digits",
+        confirmCode: "Verify & sign in",
         remember: "Keep me signed in",
         resetPassword: "Reset password",
         signIn: "Sign in",
@@ -2459,6 +2492,7 @@ export const TRANSLATIONS = {
       status: {
         loggedIn: "You're now signed in. Preparing your account...",
         signingIn: "Signing in...",
+        codeSent: "Code sent. Check your SMS.",
         resetSent: "Password reset email sent. Check your inbox.",
       },
       errors: {
@@ -2472,6 +2506,18 @@ export const TRANSLATIONS = {
         invalidEmail: "Invalid email. Check the spelling and try again.",
         emailInUse: "Email already exists. Try signing in with your password.",
         authFailed: "Could not sign in or create account.",
+        phoneMissing: "Enter your phone number.",
+        phoneInvalid: "Invalid phone number. Use the +45 12345678 format.",
+        tooManyRequests: "Too many attempts. Try again later.",
+        recaptchaFailed: "reCAPTCHA failed. Try again.",
+        recaptchaInit: "Unable to start reCAPTCHA. Try again.",
+        phoneSendFailed: "Could not send SMS code.",
+        codeMissing: "Enter the verification code.",
+        codeInvalid: "Incorrect verification code.",
+        codeExpired: "The code has expired. Send a new code.",
+        phoneLoginFailed: "Could not sign in with phone.",
+        providerMismatch:
+          "This account exists with a different sign-in method. Use the original method.",
         emailPasswordFirst: "Enter email and password first.",
         userNotFound: "Email not found. Click 'Create account' to sign up.",
         loginFailed: "Could not sign in.",

@@ -1,6 +1,13 @@
 const WebSocket = require('ws');
 const { WebSocketServer } = WebSocket;
 const { getAccessToken } = require('../cortiAuth');
+const {
+  resolveSpeechLanguage,
+  CORTI_SPEECH_FALLBACK,
+  isSpeechLanguageAllowed,
+} = require('../server/utils/cortiLanguages');
+
+const UNSUPPORTED_LANGUAGE_RE = /unsupported language|language unavailable/i;
 
 const MAX_PREVIEW_LEN = 120;
 
@@ -16,6 +23,10 @@ function createCortiTranscribeWss() {
   wss.on('connection', async (client) => {
     let cortiSocket = null;
     let configured = false;
+    let configLocked = false;
+    let lastConfig = null;
+    let attemptedLanguage = null;
+    let fallbackAttempted = false;
     const queue = [];
 
     const sendDebug = (event) => {
@@ -62,11 +73,30 @@ function createCortiTranscribeWss() {
         if (parsed?.type === 'config') {
           console.log('[TRANSCRIBE] CLIENT_CONFIG_RECEIVED', parsed?.configuration || null);
           sendDebug('CLIENT_CONFIG_RECEIVED');
-          if (configured) {
+          if (configLocked) {
             console.log('[TRANSCRIBE] CONFIG_IGNORED');
             sendDebug('CONFIG_IGNORED');
             return;
           }
+          configLocked = true;
+          const requestedLanguage = parsed?.configuration?.primaryLanguage || null;
+          const browserLocale = parsed?.configuration?.browserLocale || '';
+          const resolvedLanguage = resolveSpeechLanguage({
+            speechLanguage: requestedLanguage,
+            browserLocale,
+          });
+          const allowlistedLanguage = isSpeechLanguageAllowed(resolvedLanguage)
+            ? resolvedLanguage
+            : CORTI_SPEECH_FALLBACK;
+          attemptedLanguage = allowlistedLanguage;
+          parsed.configuration = {
+            ...(parsed.configuration || {}),
+            primaryLanguage: allowlistedLanguage,
+          };
+          lastConfig = parsed;
+          const normalizedConfig = JSON.stringify(parsed);
+          forwardToCorti(normalizedConfig, false, true);
+          return;
         }
 
         forwardToCorti(text, false, parsed?.type === 'config');
@@ -125,6 +155,44 @@ function createCortiTranscribeWss() {
             configured = true;
           } else if (parsed?.type === 'CONFIG_DENIED' || parsed?.type === 'CONFIG_TIMEOUT') {
             console.log('[TRANSCRIBE] FROM_CORTI', parsed?.type, parsed?.reason || '');
+            const reason =
+              parsed?.reason ||
+              parsed?.error?.details ||
+              parsed?.error?.detail ||
+              parsed?.error?.message ||
+              parsed?.error?.title ||
+              '';
+            if (
+              !fallbackAttempted &&
+              UNSUPPORTED_LANGUAGE_RE.test(String(reason || '')) &&
+              lastConfig &&
+              cortiSocket?.readyState === WebSocket.OPEN
+            ) {
+              fallbackAttempted = true;
+              const fallbackConfig = {
+                ...lastConfig,
+                configuration: {
+                  ...(lastConfig.configuration || {}),
+                  primaryLanguage: CORTI_SPEECH_FALLBACK,
+                },
+              };
+              try {
+                cortiSocket.send(JSON.stringify(fallbackConfig));
+                client.send(
+                  JSON.stringify({
+                    type: 'warning',
+                    code: 'FALLBACK_LANGUAGE',
+                    attempted: attemptedLanguage || null,
+                    fallback: CORTI_SPEECH_FALLBACK,
+                  })
+                );
+                console.log('[TRANSCRIBE] RETRY_FALLBACK', {
+                  attempted: attemptedLanguage,
+                  fallback: CORTI_SPEECH_FALLBACK,
+                });
+                return;
+              } catch (_) {}
+            }
           }
         } catch (_) {}
 

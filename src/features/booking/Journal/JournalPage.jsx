@@ -59,8 +59,9 @@ function JournalPage() {
 
   const handleJournalEntrySaved = (entry) => {
     console.log('[JournalPage] journal entry saved', entry);
-    setShowJournalEntry(false);
-    setJournalEntryData(null);
+    if (entry) {
+      setJournalEntryData(entry);
+    }
   };
 
   const handleCloseJournalEntry = () => {
@@ -96,4 +97,3 @@ function JournalPage() {
 }
 
 export default JournalPage;
-

@@ -27,7 +27,7 @@ if (!projectId) {
 }
 
 const serviceId = 'actualbackend-api';
-const region = 'europe-west1';
+const region = process.env.CLOUD_RUN_REGION || 'us-central1';
 
 const run = (label, command, args, { capture = false } = {}) => {
   console.log(`\n[deploy:live] ${label}`);

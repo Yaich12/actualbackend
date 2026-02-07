@@ -20,9 +20,9 @@
     },
     "steps": {
       "business": {
-        "title": "What is your business name?",
+        "title": "What is your clinic called?",
         "subtitle": "This is the brand your customers will see. Your billing and legal name can be added later.",
-        "nameLabel": "Business name",
+        "nameLabel": "Clinic name",
         "namePlaceholder": "e.g. Selma Clinic",
         "websiteLabel": "Website (optional)",
         "websitePlaceholder": "www.yoursite.com"
@@ -103,9 +103,9 @@
       }
     },
     "completion": {
-      "title": "Your business is ready!",
+      "title": "Your profile is created",
       "subtitle": "Get 14 days of free Selma for business",
-      "button": "Finish"
+      "button": "Get started"
     },
     "currency": {
       "label": "Currency",

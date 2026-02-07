@@ -25,6 +25,10 @@ const {
   sendClinicalEducationMessage,
 } = require('./src/corti/clinicalEducationAgent');
 const { initAgent, chatWithAgent } = require('./services/cortiAgentService');
+const {
+  resolveSpeechLanguage,
+  CORTI_SPEECH_FALLBACK,
+} = require('./server/utils/cortiLanguages');
 // For facts/insights fetch
 const CORTI_API_BASE =
   resolvedCortiEnv === 'us' ? 'https://api.us.corti.app/v2' : 'https://api.eu.corti.app/v2';
@@ -47,7 +51,6 @@ const getPublicAssetUrl = (relativePath) => {
 };
 
 const app = express();
-app.use(express.json({ limit: '2mb' }));
 app.use(
   cors({
     origin: '*',
@@ -55,16 +58,90 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
+app.use(express.json({ limit: '10mb' }));
 app.use('/api/corti', cortiRoutes);
 app.use('/api/agents/rehab', rehabAgentRoutes);
 app.use('/api/agents', agentRegistryRoutes);
 const execFileAsync = util.promisify(execFile);
+let ffmpegMissingLogged = false;
+
+const logFfmpegAvailability = () => {
+  execFile('ffmpeg', ['-version'], (err, stdout) => {
+    if (err) {
+      if (!ffmpegMissingLogged && !global.__ffmpegMissingLogged) {
+        console.warn('[startup] ffmpeg not available; audio transcoding will be skipped.');
+      }
+      ffmpegMissingLogged = true;
+      global.__ffmpegMissingLogged = true;
+      return;
+    }
+    execFile('which', ['ffmpeg'], (whichErr, whichStdout) => {
+      const location = whichErr ? 'ffmpeg' : (whichStdout || '').trim() || 'ffmpeg';
+      const versionLine = (stdout || '').split('\n')[0]?.trim() || 'ffmpeg available';
+      console.log(`[startup] ffmpeg available (${location}) ${versionLine}`);
+    });
+  });
+};
+
+logFfmpegAvailability();
 
 const getOpenAIClient = () => {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
   const OpenAIClient = OpenAI?.default || OpenAI;
   return new OpenAIClient({ apiKey });
+};
+
+const UNSUPPORTED_LANGUAGE_RE = /unsupported language|language unavailable/i;
+const isUnsupportedLanguageError = (detail) =>
+  typeof detail === 'string' && UNSUPPORTED_LANGUAGE_RE.test(detail);
+const getStatusCode = (err) => {
+  const status =
+    err?.statusCode ??
+    err?.status ??
+    err?.response?.status ??
+    err?.response?.statusCode ??
+    err?.details?.status;
+  return typeof status === 'number' ? status : 500;
+};
+const getErrorDetail = (err) =>
+  err?.body?.detail ||
+  err?.details?.detail ||
+  err?.response?.data?.detail ||
+  err?.message ||
+  'Unknown error';
+const getRequestId = (err) => {
+  if (err?.body?.requestid) return err.body.requestid;
+  const rawHeaders = err?.rawResponse?.headers;
+  if (rawHeaders?.get) {
+    return (
+      rawHeaders.get('x-request-id') ||
+      rawHeaders.get('x-corti-request-id') ||
+      rawHeaders.get('x-requestid') ||
+      null
+    );
+  }
+  return (
+    err?.response?.headers?.['x-request-id'] ||
+    err?.response?.headers?.['x-corti-request-id'] ||
+    err?.response?.headers?.['x-requestid'] ||
+    null
+  );
+};
+
+const buildLanguageCandidates = (language) => {
+  const candidates = [];
+  const push = (value) => {
+    if (!value) return;
+    if (!candidates.includes(value)) candidates.push(value);
+  };
+  push(language);
+  if (typeof language === 'string' && language.includes('-')) {
+    const base = language.split('-')[0];
+    push(base);
+  }
+  push(CORTI_SPEECH_FALLBACK);
+  return candidates;
 };
 
 // In-memory agent cache (per process). In production, persist in DB/redis.
@@ -361,6 +438,9 @@ const sendAgentMessage = async (accessToken, agentId, text) => {
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const isFfmpegMissing = (err) =>
+  err?.code === 'ENOENT' || /ffmpeg/i.test(String(err?.message || ''));
+
 const transcodeToWav = async (inputPath, outputPath) => {
   // Ensure ffmpeg is available; convert to 16kHz, mono, 16-bit PCM in WAV container.
   await execFileAsync('ffmpeg', [
@@ -430,7 +510,14 @@ app.post('/api/transcribe', upload, async (req, res) => {
   }
 
   const filePath = incomingFile.path;
-  const language = req.body?.language || 'da';
+  const rawSpeechLanguage = req.body?.speechLanguage || req.body?.language || '';
+  const browserLocale = req.body?.browserLocale || '';
+  const language = resolveSpeechLanguage({
+    speechLanguage: rawSpeechLanguage,
+    browserLocale,
+  });
+  const languageCandidates = buildLanguageCandidates(language);
+  const attemptedLanguage = languageCandidates[0] || CORTI_SPEECH_FALLBACK;
   const includeFacts =
     `${req.body?.includeFacts || req.query?.includeFacts || ''}`.toLowerCase() === 'true' ||
     `${req.body?.facts || req.query?.facts || ''}`.toLowerCase() === 'true';
@@ -448,7 +535,15 @@ app.post('/api/transcribe', upload, async (req, res) => {
     try {
       await transcodeToWav(filePath, wavPath);
     } catch (err) {
-      console.error('ffmpeg transcode failed:', err);
+      if (isFfmpegMissing(err)) {
+        if (!ffmpegMissingLogged && !global.__ffmpegMissingLogged) {
+          console.warn('[ffmpeg] not found; skipping transcode and using original audio.');
+        }
+        ffmpegMissingLogged = true;
+        global.__ffmpegMissingLogged = true;
+      } else {
+        console.error('ffmpeg transcode failed:', err);
+      }
       // Fallback: use original file if ffmpeg is unavailable.
       transcodeFailed = true;
       wavPath = filePath;
@@ -487,15 +582,62 @@ app.post('/api/transcribe', upload, async (req, res) => {
     // Brief pause to allow Corti to process the recording before requesting a transcript.
     await wait(1200);
 
-    const transcriptResponse = await cortiClient.transcripts.create(
-      interactionId,
-      {
-        recordingId: recordingResponse.recordingId,
-        primaryLanguage: language,
-        isDictation: true,
-      },
-      { tenantName: process.env.CORTI_TENANT_NAME }
-    );
+    let transcriptResponse = null;
+    let usedLanguage = null;
+    let fallbackUsed = false;
+    let lastRequestId = null;
+
+    for (let i = 0; i < languageCandidates.length; i += 1) {
+      const candidate = languageCandidates[i];
+      try {
+        transcriptResponse = await cortiClient.transcripts.create(
+          interactionId,
+          {
+            recordingId: recordingResponse.recordingId,
+            primaryLanguage: candidate,
+            isDictation: true,
+          },
+          { tenantName: process.env.CORTI_TENANT_NAME }
+        );
+        usedLanguage = candidate;
+        fallbackUsed = i > 0;
+        break;
+      } catch (error) {
+        const detail = getErrorDetail(error);
+        const requestId = getRequestId(error);
+        lastRequestId = requestId || lastRequestId;
+        if (isUnsupportedLanguageError(detail)) {
+          const nextCandidate = languageCandidates[i + 1];
+          if (nextCandidate) {
+            console.warn('[corti] unsupported language, retry', {
+              attempted: candidate,
+              next: nextCandidate,
+              requestId: requestId || null,
+            });
+            continue;
+          }
+          return res.status(400).json({
+            ok: false,
+            code: 'UNSUPPORTED_LANGUAGE',
+            detail,
+            attempted: attemptedLanguage,
+            fallback: CORTI_SPEECH_FALLBACK,
+            requestId: requestId || lastRequestId,
+          });
+        }
+        throw error;
+      }
+    }
+
+    if (!transcriptResponse) {
+      return res.status(502).json({
+        ok: false,
+        code: 'TRANSCRIPT_CREATE_FAILED',
+        detail: 'Failed to create transcript.',
+        attempted: attemptedLanguage,
+        fallback: CORTI_SPEECH_FALLBACK,
+      });
+    }
     console.info('Corti transcript response (initial):', transcriptResponse);
 
     let transcriptData = transcriptResponse;
@@ -520,6 +662,7 @@ app.post('/api/transcribe', upload, async (req, res) => {
       .map((segment) => segment.text)
       .join(' ')
       .trim();
+    const effectiveLanguage = usedLanguage || language;
 
     // Fetch facts stored on the interaction (if any)
     let facts = null;
@@ -534,13 +677,14 @@ app.post('/api/transcribe', upload, async (req, res) => {
     let extractedFacts = null;
     if (includeFacts) {
       try {
-        extractedFacts = await extractFactsFromText(cortiClient, text, language);
+        extractedFacts = await extractFactsFromText(cortiClient, text, effectiveLanguage);
       } catch (factsExtractErr) {
         console.error('Corti facts.extract error:', factsExtractErr?.response?.data || factsExtractErr);
       }
     }
 
     return res.json({
+      ok: true,
       text,
       interactionId,
       recordingId: recordingResponse.recordingId,
@@ -549,6 +693,10 @@ app.post('/api/transcribe', upload, async (req, res) => {
       metadata: transcriptData?.metadata ?? null,
       facts,
       extractedFacts,
+      language: effectiveLanguage,
+      usedLanguage: effectiveLanguage,
+      fallbackUsed,
+      attemptedLanguage,
     });
   } catch (error) {
     console.error('Corti transcription error:', error);
@@ -556,24 +704,35 @@ app.post('/api/transcribe', upload, async (req, res) => {
       console.error('Corti error body:', error.body);
     }
 
-    const status =
-      error instanceof CortiError
-        ? error.statusCode || 502
-        : error?.status || error?.response?.status || 500;
-    const message =
-      error instanceof CortiError
-        ? error.message
-        : error?.message ||
-      error?.response?.data?.error ||
-      error?.response?.data ||
-      'Transcription failed';
+    const status = getStatusCode(error);
+    const detail = getErrorDetail(error);
+    const requestId = getRequestId(error);
+
+    if (isUnsupportedLanguageError(detail)) {
+      return res.status(400).json({
+        ok: false,
+        code: 'UNSUPPORTED_LANGUAGE',
+        detail,
+        attempted: attemptedLanguage,
+        fallback: CORTI_SPEECH_FALLBACK,
+        requestId,
+      });
+    }
+
     const details =
       (error instanceof CortiError && error.body) ||
       error?.response?.data ||
       error?.body ||
       null;
 
-    return res.status(status).json({ error: message, details });
+    return res.status(status).json({
+      ok: false,
+      code: status >= 500 ? 'UPSTREAM_ERROR' : 'REQUEST_FAILED',
+      detail,
+      requestId,
+      error: detail,
+      details,
+    });
   } finally {
     fs.promises
       .unlink(filePath)
@@ -1168,6 +1327,7 @@ app.post('/api/chat', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 4000;
+const HOST = '0.0.0.0';
 const server = http.createServer(app);
 
 const transcribeWss = createCortiTranscribeWss();
@@ -1195,8 +1355,9 @@ server.on('upgrade', (req, socket, head) => {
   socket.destroy();
 });
 
-server.listen(PORT, () => {
-  console.log(`API server listening on port ${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`API server listening on ${HOST}:${PORT}`);
+  console.log(`WS probe: wscat -c ws://localhost:${PORT}/ws/corti/transcribe`);
 });
 
 // Make port conflicts easier to diagnose (avoid unhandled 'error' crash)
@@ -1209,4 +1370,27 @@ server.on('error', (err) => {
   }
   console.error('Server error:', err);
   process.exit(1);
+});
+
+// Body-parser error handler for oversized/invalid JSON payloads
+app.use((err, _req, res, _next) => {
+  if (err?.type === 'entity.too.large') {
+    return res.status(413).json({
+      ok: false,
+      code: 'PAYLOAD_TOO_LARGE',
+      detail: 'Request body too large.',
+    });
+  }
+  if (err instanceof SyntaxError && err?.status === 400 && 'body' in err) {
+    return res.status(400).json({
+      ok: false,
+      code: 'INVALID_JSON',
+      detail: 'Invalid JSON payload.',
+    });
+  }
+  return res.status(500).json({
+    ok: false,
+    code: 'SERVER_ERROR',
+    detail: err?.message || 'Unexpected server error.',
+  });
 });

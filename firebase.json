@@ -8,6 +8,34 @@
     ],
     "rewrites": [
       {
+        "source": "/api/corti/**",
+        "run": {
+          "serviceId": "actualbackend-api",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/ws/corti/**",
+        "run": {
+          "serviceId": "actualbackend-api",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/api/**",
+        "run": {
+          "serviceId": "actualbackend-api",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/ws/**",
+        "run": {
+          "serviceId": "actualbackend-api",
+          "region": "us-central1"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

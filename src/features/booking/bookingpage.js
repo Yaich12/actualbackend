@@ -1540,6 +1540,54 @@ function BookingPage() {
     }
   };
 
+  const openAppointmentJournalEntry = async (appointment, resolvedClientId, fallbackClient) => {
+    if (!user?.uid || !resolvedClientId || !appointment?.id) return;
+
+    try {
+      const entriesRef = collection(
+        db,
+        'users',
+        user.uid,
+        'clients',
+        resolvedClientId,
+        'journalEntries'
+      );
+      const entriesQuery = query(
+        entriesRef,
+        where('appointmentId', '==', appointment.id),
+        limit(1)
+      );
+      const snapshot = await getDocs(entriesQuery);
+      if (snapshot.empty) return;
+
+      const docSnap = snapshot.docs[0];
+      const data = docSnap.data() || {};
+      const resolvedClient =
+        fallbackClient || {
+          id: resolvedClientId,
+          navn: data.clientName || t('booking.calendar.unknownClient', 'Ukendt klient'),
+          email: data.clientEmail || '',
+          telefon: data.clientPhone || '',
+          status: t('booking.calendar.status.active', 'Aktiv'),
+        };
+      const entry = {
+        id: docSnap.id,
+        ...data,
+        appointmentId: appointment.id,
+        clientId: resolvedClientId,
+        clientName: data.clientName || resolvedClient.navn || '',
+      };
+
+      setJournalEntryToEdit(entry);
+      setJournalEntryClient(resolvedClient);
+      setJournalEntryParticipants(appointment.participants || []);
+      setJournalEntryDate(entry.date || appointment.startDate || '');
+      setShowJournalEntryForm(true);
+    } catch (error) {
+      console.error('[BookingPage] Failed to open appointment journal entry', error);
+    }
+  };
+
   const handleAppointmentClick = (appointment) => {
     if (calendarAddMode) {
       setCalendarAddMode(false);
@@ -1547,6 +1595,11 @@ function BookingPage() {
     }
     setEditingAppointment(null);
     setNextAppointmentTemplate(null);
+    setShowJournalEntryForm(false);
+    setJournalEntryToEdit(null);
+    setJournalEntryClient(null);
+    setJournalEntryParticipants([]);
+    setJournalEntryDate('');
     const { startDate } = parseAppointmentDateTimes(appointment);
     if (startDate) {
       setCurrentDate(startDate);
@@ -1574,6 +1627,7 @@ function BookingPage() {
       resolvedClientId ? { ...appointment, clientId: resolvedClientId } : appointment
     );
     setShowAppointmentForm(false);
+    void openAppointmentJournalEntry(appointment, resolvedClientId, fallbackClient);
   };
 
   const startMoveEvent = (event, appointment, dayIndex, startDateObj, endDateObj) => {
@@ -1734,10 +1788,10 @@ function BookingPage() {
 
   const handleJournalEntrySaved = (entry) => {
     console.log('[BookingPage] journal entry saved', entry);
-    setShowJournalEntryForm(false);
-    setJournalEntryParticipants([]);
-    setJournalEntryDate('');
-    setJournalEntryToEdit(null);
+    if (entry) {
+      setJournalEntryToEdit(entry);
+      setJournalEntryDate(entry.date || journalEntryDate || '');
+    }
   };
 
   const handleCloseJournalEntry = React.useCallback(() => {

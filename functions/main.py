@@ -572,6 +572,70 @@ def _agent_instructions(agent_id: str) -> str | None:
 
 
 @https_fn.on_request()
+def api(req: https_fn.Request) -> https_fn.Response:
+    if req.method == "OPTIONS":
+        return https_fn.Response("", status=204, headers=_cors_headers())
+
+    path = (req.path or "").rstrip("/") or "/"
+
+    if path == "/api/corti/transcribe":
+        return transcribe_audio(req)
+
+    if path == "/api/corti/dictate":
+        return _json_response(
+            {
+                "ok": False,
+                "error": "Corti dictation is not implemented in python_functions.",
+                "hint": "Port the Node /api/corti/dictate handler or point REACT_APP_BACKEND_URL to a backend that serves it.",
+                "path": path,
+            },
+            status=501,
+        )
+
+    if path == "/api/corti/agent":
+        return _json_response(
+            {
+                "ok": False,
+                "error": "Corti agent endpoint is not implemented in python_functions.",
+                "hint": "Port the Node /api/agents handlers or point REACT_APP_BACKEND_URL to a backend that serves them.",
+                "path": path,
+            },
+            status=501,
+        )
+
+    if path == "/api/corti" or path.startswith("/api/corti/"):
+        return _json_response(
+            {
+                "ok": False,
+                "error": "Corti endpoints are not implemented in python_functions.",
+                "hint": "Port routes/cortiRoutes.js or point REACT_APP_BACKEND_URL to a backend that serves /api/corti/*.",
+                "path": path,
+            },
+            status=501,
+        )
+
+    if path == "/api/agents" or path.startswith("/api/agents/"):
+        return _json_response(
+            {
+                "ok": False,
+                "error": "Agent endpoints are not implemented in python_functions.",
+                "hint": "Port server/routes/agentRegistryRoutes.js and server/routes/rehabAgentRoutes.js or point REACT_APP_BACKEND_URL to that backend.",
+                "path": path,
+            },
+            status=501,
+        )
+
+    return _json_response(
+        {
+            "ok": False,
+            "error": "Unknown API endpoint.",
+            "path": path,
+        },
+        status=404,
+    )
+
+
+@https_fn.on_request()
 def transcribe_audio(req: https_fn.Request) -> https_fn.Response:
     logger.info(
         "Incoming transcription request: method=%s content_type=%s",

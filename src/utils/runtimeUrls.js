@@ -50,6 +50,10 @@ export const getApiBaseUrl = () => {
 
 export const getWsBaseUrl = () => {
   assertNoLocalhostInProd();
+  const envBase = process.env.REACT_APP_WS_BASE_URL;
+  if (envBase && typeof envBase === 'string') {
+    return stripTrailingSlash(envBase);
+  }
   if (isLocalhost()) {
     const resolved = resolveLocalWsBase();
     logLocalBases(resolveLocalApiBase(), resolved);

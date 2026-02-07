@@ -54,6 +54,39 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Deploy (Hosting + API)
+
+Recommended Node version: 20.x (CRA build).
+
+One-command deploy (Cloud Run API + Hosting):
+```bash
+npm run deploy:live
+```
+
+Or run separately:
+```bash
+npm run deploy:api
+npm run deploy:hosting
+```
+
+Set or switch Firebase project alias:
+```bash
+npx firebase-tools@latest use --add
+npx firebase-tools@latest use <alias>
+```
+
+Notes on API routing:
+- The UI calls `/api/corti/*`, `/api/agents/*`, and `/api/facts-stream/*`. These are served by the Node backend (`server.js`, `routes/*`).
+- Firebase Hosting rewrites `/api/**` and `/ws/**` to the Cloud Run service `actualbackend-api` (region `europe-west1`).
+- The Python Functions codebase is still separate and deployed independently if you use those endpoints.
+
+## Live verification
+
+- Open the Hosting URL and confirm the latest landing page loads.
+- DevTools Network: `/api/*` requests should go to `https://<your-site>/api/...` (no `:4000`).
+- Test `GET https://<your-site>/api/corti/health` and confirm JSON `{ ok: true, ... }`.
+- If using realtime transcription, confirm the WebSocket connects to `wss://<your-site>/ws/corti/transcribe`.
+
 ### `npm start`
 
 Runs the app in the development mode.\

@@ -26,6 +26,15 @@ interface SignInPageProps {
   description?: React.ReactNode;
   heroImageSrc?: string;
   testimonials?: Testimonial[];
+  loginMethod?: "email" | "phone";
+  onLoginMethodChange?: (method: "email" | "phone") => void;
+  phoneNumber?: string;
+  smsCode?: string;
+  phoneStep?: "enterPhone" | "enterCode";
+  onPhoneNumberChange?: (value: string) => void;
+  onSmsCodeChange?: (value: string) => void;
+  onSendCode?: () => void;
+  onConfirmCode?: () => void;
   onSignIn?: (event: React.FormEvent<HTMLFormElement>) => void;
   onGoogleSignIn?: () => void;
   onResetPassword?: () => void;
@@ -63,6 +72,15 @@ export const SignInPage: React.FC<SignInPageProps> = ({
   description,
   heroImageSrc,
   testimonials = [],
+  loginMethod,
+  onLoginMethodChange,
+  phoneNumber = "",
+  smsCode = "",
+  phoneStep = "enterPhone",
+  onPhoneNumberChange,
+  onSmsCodeChange,
+  onSendCode,
+  onConfirmCode,
   onSignIn,
   onGoogleSignIn,
   onResetPassword,
@@ -71,6 +89,8 @@ export const SignInPage: React.FC<SignInPageProps> = ({
 }) => {
   const { t } = useLanguage();
   const [showPassword, setShowPassword] = useState(false);
+  const activeMethod = loginMethod || "email";
+  const showMethodToggle = typeof onLoginMethodChange === "function";
   const resolvedTitle = title || (
     <span className="font-light text-foreground tracking-tighter">{t("login.title")}</span>
   );
@@ -87,61 +107,177 @@ export const SignInPage: React.FC<SignInPageProps> = ({
             </h1>
             <p className="animate-element animate-delay-200 text-muted-foreground">{resolvedDescription}</p>
 
-            <form className="space-y-5" onSubmit={onSignIn}>
-              <div className="animate-element animate-delay-300">
-                <label className="text-sm font-medium text-muted-foreground">
-                  {t("login.form.emailLabel")}
-                </label>
-                <GlassInputWrapper>
-                  <input
-                    name="email"
-                    type="email"
-                    placeholder={t("login.form.emailPlaceholder")}
-                    className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none"
-                  />
-                </GlassInputWrapper>
-              </div>
-
-              <div className="animate-element animate-delay-400">
-                <label className="text-sm font-medium text-muted-foreground">
-                  {t("login.form.passwordLabel")}
-                </label>
-                <GlassInputWrapper>
-                  <div className="relative">
-                    <input
-                      name="password"
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder={t("login.form.passwordPlaceholder")}
-                      className="w-full bg-transparent text-sm p-4 pr-12 rounded-2xl focus:outline-none"
-                    />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-3 flex items-center">
-                      {showPassword ? <EyeOff className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" /> : <Eye className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />}
+            <div className="space-y-5">
+              {showMethodToggle && (
+                <div className="animate-element animate-delay-300">
+                  <label className="text-sm font-medium text-muted-foreground">
+                    {t("login.form.methodLabel")}
+                  </label>
+                  <div className="mt-3 flex rounded-2xl border border-border bg-foreground/5 p-1 backdrop-blur-sm">
+                    <button
+                      type="button"
+                      onClick={() => onLoginMethodChange?.("email")}
+                      className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                        activeMethod === "email"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {t("login.form.methodEmail")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onLoginMethodChange?.("phone")}
+                      className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                        activeMethod === "phone"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {t("login.form.methodPhone")}
                     </button>
                   </div>
-                </GlassInputWrapper>
-              </div>
+                </div>
+              )}
 
-              <div className="animate-element animate-delay-500 flex items-center justify-between text-sm">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" name="rememberMe" className="custom-checkbox" />
-                  <span className="text-foreground/90">{t("login.form.remember")}</span>
-                </label>
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onResetPassword?.();
-                  }}
-                  className="hover:underline text-violet-400 transition-colors"
-                >
-                  {t("login.form.resetPassword")}
-                </a>
-              </div>
+              {activeMethod === "email" ? (
+                <form className="space-y-5" onSubmit={onSignIn}>
+                  <div className="animate-element animate-delay-300">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      {t("login.form.emailLabel")}
+                    </label>
+                    <GlassInputWrapper>
+                      <input
+                        name="email"
+                        type="email"
+                        placeholder={t("login.form.emailPlaceholder")}
+                        className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none"
+                      />
+                    </GlassInputWrapper>
+                  </div>
 
-              <button type="submit" className="animate-element animate-delay-600 w-full rounded-2xl bg-primary py-4 font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
-                {t("login.form.signIn")}
-              </button>
-            </form>
+                  <div className="animate-element animate-delay-400">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      {t("login.form.passwordLabel")}
+                    </label>
+                    <GlassInputWrapper>
+                      <div className="relative">
+                        <input
+                          name="password"
+                          type={showPassword ? "text" : "password"}
+                          placeholder={t("login.form.passwordPlaceholder")}
+                          className="w-full bg-transparent text-sm p-4 pr-12 rounded-2xl focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute inset-y-0 right-3 flex items-center"
+                        >
+                          {showPassword ? (
+                            <EyeOff className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
+                          ) : (
+                            <Eye className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
+                          )}
+                        </button>
+                      </div>
+                    </GlassInputWrapper>
+                  </div>
+
+                  <div className="animate-element animate-delay-500 flex items-center justify-between text-sm">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input type="checkbox" name="rememberMe" className="custom-checkbox" />
+                      <span className="text-foreground/90">{t("login.form.remember")}</span>
+                    </label>
+                    <a
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        onResetPassword?.();
+                      }}
+                      className="hover:underline text-violet-400 transition-colors"
+                    >
+                      {t("login.form.resetPassword")}
+                    </a>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="animate-element animate-delay-600 w-full rounded-2xl bg-primary py-4 font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                  >
+                    {t("login.form.signIn")}
+                  </button>
+                </form>
+              ) : (
+                <div className="space-y-5">
+                  <div className="animate-element animate-delay-300">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      {t("login.form.phoneLabel")}
+                    </label>
+                    <GlassInputWrapper>
+                      <input
+                        name="phone"
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="tel"
+                        pattern="^\\+\\d{8,15}$"
+                        placeholder={t("login.form.phonePlaceholder")}
+                        value={phoneNumber}
+                        onChange={(event) => onPhoneNumberChange?.(event.target.value)}
+                        readOnly={!onPhoneNumberChange}
+                        className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none"
+                      />
+                    </GlassInputWrapper>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {t("login.form.phoneHelper")}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={onSendCode}
+                    disabled={!onSendCode}
+                    className="animate-element animate-delay-400 w-full rounded-2xl bg-primary py-4 font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {t("login.form.sendCode")}
+                  </button>
+
+                  <div className="animate-element animate-delay-500">
+                    <div id="recaptcha-container" className="min-h-[78px]" />
+                  </div>
+
+                  {phoneStep === "enterCode" && (
+                    <>
+                      <div className="animate-element animate-delay-600">
+                        <label className="text-sm font-medium text-muted-foreground">
+                          {t("login.form.smsCodeLabel")}
+                        </label>
+                        <GlassInputWrapper>
+                          <input
+                            name="smsCode"
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            placeholder={t("login.form.smsCodePlaceholder")}
+                            value={smsCode}
+                            onChange={(event) => onSmsCodeChange?.(event.target.value)}
+                            readOnly={!onSmsCodeChange}
+                            className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none"
+                          />
+                        </GlassInputWrapper>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={onConfirmCode}
+                        disabled={!onConfirmCode}
+                        className="animate-element animate-delay-700 w-full rounded-2xl bg-primary py-4 font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {t("login.form.confirmCode")}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
 
             <div className="animate-element animate-delay-700 relative flex items-center justify-center">
               <span className="w-full border-t border-border"></span>

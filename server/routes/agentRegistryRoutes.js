@@ -6,6 +6,31 @@ const { extractTextFromTask, getOrCreateAgentId, resolveAgentConfig } = require(
 const router = express.Router();
 const DEFAULT_LANGUAGE = 'en';
 
+const getStatusCode = (err) =>
+  err?.statusCode ||
+  err?.status ||
+  err?.response?.status ||
+  err?.response?.statusCode ||
+  err?.details?.status ||
+  500;
+
+const getErrorDetail = (err) =>
+  err?.body?.detail ||
+  err?.details?.detail ||
+  err?.response?.data?.detail ||
+  err?.message ||
+  'Unknown error';
+
+const getRequestId = (err) =>
+  err?.body?.requestid ||
+  err?.rawResponse?.headers?.get?.('x-request-id') ||
+  err?.response?.headers?.['x-request-id'] ||
+  err?.response?.headers?.['x-corti-request-id'] ||
+  err?.response?.headers?.['x-requestid'] ||
+  null;
+
+const getErrorCode = (err) => err?.body?.code || err?.code || null;
+
 const resolvePreferredLanguage = (value) => {
   if (typeof value !== 'string') return DEFAULT_LANGUAGE;
   const trimmed = value.trim();
@@ -31,10 +56,20 @@ router.post('/:key/init', async (req, res) => {
     if (error?.code === 'AGENT_ID_MISSING') {
       return res.status(502).json({ ok: false, error: 'agentId missing', raw: error.raw });
     }
-    const status = error?.response?.status || 500;
-    const msg = error?.message || 'Failed to init agent';
-    console.error('[AgentRegistry] init error:', msg);
-    return res.status(status).json({ ok: false, error: msg });
+    const status = getStatusCode(error);
+    const detail = getErrorDetail(error);
+    const requestId = getRequestId(error);
+    const code = getErrorCode(error) || (status >= 500 ? 'UPSTREAM_ERROR' : 'REQUEST_FAILED');
+    console.error('[AgentRegistry] init error:', detail);
+    return res.status(status).json({
+      ok: false,
+      code,
+      detail,
+      requestId,
+      error: detail,
+      howToFix: error?.body?.howToFix || null,
+      details: error?.body || error?.response?.data || null,
+    });
   }
 });
 
@@ -92,10 +127,20 @@ ${appendOutputLanguage(finalMessage, preferredLanguage)}
     if (error?.code === 'AGENT_ID_MISSING') {
       return res.status(502).json({ ok: false, error: 'agentId missing', raw: error.raw });
     }
-    const status = error?.response?.status || 500;
-    const msg = error?.message || 'Failed to send agent message';
-    console.error('[AgentRegistry] chat error:', msg);
-    return res.status(status).json({ ok: false, error: msg });
+    const status = getStatusCode(error);
+    const detail = getErrorDetail(error);
+    const requestId = getRequestId(error);
+    const code = getErrorCode(error) || (status >= 500 ? 'UPSTREAM_ERROR' : 'REQUEST_FAILED');
+    console.error('[AgentRegistry] chat error:', detail);
+    return res.status(status).json({
+      ok: false,
+      code,
+      detail,
+      requestId,
+      error: detail,
+      howToFix: error?.body?.howToFix || null,
+      details: error?.body || error?.response?.data || null,
+    });
   }
 });
 

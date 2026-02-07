@@ -7,6 +7,10 @@
   color: #0f172a;
 }
 
+.hero-devices--journal {
+  overflow-x: hidden;
+}
+
 .hero-devices__inner {
   max-width: 1200px;
   width: 100%;
@@ -147,6 +151,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.hero-devices--journal .hero-devices__visual {
+  justify-content: flex-start;
 }
 
 .hero-devices__glow {
@@ -664,8 +672,12 @@
 }
 
 .hero-devices--journal .hero-device-stack {
-  width: min(720px, 92vw);
+  width: min(1000px, 98vw);
+  margin-left: 0;
+  transform-origin: left center;
 }
+
+
 
 .hero-mac {
   position: absolute;
@@ -684,14 +696,30 @@
   transform: translateY(0);
 }
 
+@media (min-width: 960px) {
+  .hero-devices--journal .hero-device-stack {
+    transform: translateX(20px) scale(1.3);
+  }
+}
+
 @media (max-width: 960px) {
   .hero-device-stack {
     width: min(520px, 92vw);
+  }
+
+  .hero-devices--journal .hero-device-stack {
+    width: min(520px, 92vw);
+    transform: none;
   }
 }
 
 @media (max-width: 600px) {
   .hero-device-stack {
     width: min(360px, 92vw);
+  }
+
+  .hero-devices--journal .hero-device-stack {
+    width: min(360px, 92vw);
+    transform: none;
   }
 }

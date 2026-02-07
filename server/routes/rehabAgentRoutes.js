@@ -6,6 +6,31 @@ const { extractTextFromTask, getOrCreateAgentId } = require('../corti/agentRegis
 const router = express.Router();
 const DEFAULT_LANGUAGE = 'en';
 
+const getStatusCode = (err) =>
+  err?.statusCode ||
+  err?.status ||
+  err?.response?.status ||
+  err?.response?.statusCode ||
+  err?.details?.status ||
+  500;
+
+const getErrorDetail = (err) =>
+  err?.body?.detail ||
+  err?.details?.detail ||
+  err?.response?.data?.detail ||
+  err?.message ||
+  'Unknown error';
+
+const getRequestId = (err) =>
+  err?.body?.requestid ||
+  err?.rawResponse?.headers?.get?.('x-request-id') ||
+  err?.response?.headers?.['x-request-id'] ||
+  err?.response?.headers?.['x-corti-request-id'] ||
+  err?.response?.headers?.['x-requestid'] ||
+  null;
+
+const getErrorCode = (err) => err?.body?.code || err?.code || null;
+
 const resolvePreferredLanguage = (value) => {
   if (typeof value !== 'string') return DEFAULT_LANGUAGE;
   const trimmed = value.trim();
@@ -28,10 +53,20 @@ router.post('/init', async (_req, res) => {
     const agentId = await getOrCreateAgentId('rehab', cortiClient);
     return res.json({ ok: true, agentId });
   } catch (error) {
-    const status = error?.response?.status || 500;
-    const msg = error?.message || 'Failed to init rehab agent';
-    console.error('[REHAB_AGENT_INIT] error:', msg);
-    return res.status(status).json({ ok: false, error: msg });
+    const status = getStatusCode(error);
+    const detail = getErrorDetail(error);
+    const requestId = getRequestId(error);
+    const code = getErrorCode(error) || (status >= 500 ? 'UPSTREAM_ERROR' : 'REQUEST_FAILED');
+    console.error('[REHAB_AGENT_INIT] error:', detail);
+    return res.status(status).json({
+      ok: false,
+      code,
+      detail,
+      requestId,
+      error: detail,
+      howToFix: error?.body?.howToFix || null,
+      details: error?.body || error?.response?.data || null,
+    });
   }
 });
 
@@ -82,10 +117,20 @@ ${appendOutputLanguage(task, preferredLanguage)}
 
     return res.json({ ok: true, text });
   } catch (error) {
-    const status = error?.response?.status || 500;
-    const msg = error?.message || 'Failed to send rehab agent message';
-    console.error('[REHAB_AGENT_CHAT] error:', msg);
-    return res.status(status).json({ ok: false, error: msg });
+    const status = getStatusCode(error);
+    const detail = getErrorDetail(error);
+    const requestId = getRequestId(error);
+    const code = getErrorCode(error) || (status >= 500 ? 'UPSTREAM_ERROR' : 'REQUEST_FAILED');
+    console.error('[REHAB_AGENT_CHAT] error:', detail);
+    return res.status(status).json({
+      ok: false,
+      code,
+      detail,
+      requestId,
+      error: detail,
+      howToFix: error?.body?.howToFix || null,
+      details: error?.body || error?.response?.data || null,
+    });
   }
 });
 

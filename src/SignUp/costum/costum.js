@@ -5,12 +5,6 @@ import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useAuth } from '../../AuthContext';
 import { useLanguage } from '../../LanguageContext';
 import { db } from '../../firebase';
-import {
-  WORK_HOURS_DAYS,
-  buildWorkHoursPayload,
-  createDefaultWorkHours,
-  getWorkHoursValidation,
-} from '../../utils/workHours';
 import { getPublicAssetUrl } from '../../utils/publicAssets';
 import './costum.css';
 
@@ -35,12 +29,6 @@ const CATEGORY_CARDS = [
 const DEFAULT_CATEGORY_LABELS = CATEGORY_CARDS.map((card) => card.fallbackLabel);
 
 const DEFAULT_TEAM_SIZE_OPTIONS = ['2-5 personer', '6-10 personer', '11+ personer'];
-
-const DEFAULT_SERVICE_MODEL_OPTIONS = [
-  'Kunder besøger mig på et fysisk sted',
-  'Jeg rejser rundt og besøger mine kunder',
-  'Jeg tilbyder virtuelle tjenester online',
-];
 
 export const DEFAULT_SOFTWARE_OPTIONS = [
   'Acuity',
@@ -109,18 +97,14 @@ function OnboardingSlides() {
   const [mapsLoaded, setMapsLoaded] = useState(false);
   const [isPersisting, setIsPersisting] = useState(false);
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
-  const [workHours, setWorkHours] = useState(() => createDefaultWorkHours());
   const [formData, setFormData] = useState({
     language: language || 'da',
     currency: '',
-    businessName: '',
-    website: '',
+    clinicName: '',
     categories: [],
     accountType: '',
     teamSize: '',
-    serviceModel: '',
     address: '',
-    software: '',
     heardFrom: '',
   });
   const addressInputRef = useRef(null);
@@ -147,14 +131,6 @@ function OnboardingSlides() {
   );
   const teamSizeOptions = useMemo(
     () => getArray('onboarding.steps.teamSize.options', DEFAULT_TEAM_SIZE_OPTIONS),
-    [getArray]
-  );
-  const serviceModelOptions = useMemo(
-    () => getArray('onboarding.steps.serviceModel.options', DEFAULT_SERVICE_MODEL_OPTIONS),
-    [getArray]
-  );
-  const softwareOptions = useMemo(
-    () => getArray('onboarding.steps.software.options', DEFAULT_SOFTWARE_OPTIONS),
     [getArray]
   );
   const heardFromOptions = useMemo(
@@ -204,11 +180,11 @@ function OnboardingSlides() {
   }, [loading, navigate, user]);
 
   const steps = useMemo(() => {
-    const flow = ['language', 'business', 'categories', 'accountType', 'workHours'];
+    const flow = ['language', 'business', 'categories', 'accountType'];
     if (formData.accountType === 'team') {
       flow.push('teamSize');
     }
-    flow.push('serviceModel', 'address', 'software', 'heardFrom', 'complete');
+    flow.push('address', 'heardFrom', 'complete');
     return flow;
   }, [formData.accountType]);
 
@@ -283,52 +259,20 @@ function OnboardingSlides() {
     };
   }, [language]);
 
-  const defaultWorkHours = useMemo(() => createDefaultWorkHours(), []);
-  const workHoursErrors = useMemo(
-    () => getWorkHoursValidation(workHours),
-    [workHours]
-  );
-  const hasWorkHoursErrors = Object.keys(workHoursErrors).length > 0;
-  const workHoursDayLabels = useMemo(
-    () => ({
-      monday: t('onboarding.workHours.days.monday', 'Mandag'),
-      tuesday: t('onboarding.workHours.days.tuesday', 'Tirsdag'),
-      wednesday: t('onboarding.workHours.days.wednesday', 'Onsdag'),
-      thursday: t('onboarding.workHours.days.thursday', 'Torsdag'),
-      friday: t('onboarding.workHours.days.friday', 'Fredag'),
-      saturday: t('onboarding.workHours.days.saturday', 'Lørdag'),
-      sunday: t('onboarding.workHours.days.sunday', 'Søndag'),
-    }),
-    [t]
-  );
-  const workHoursErrorMessages = useMemo(
-    () => ({
-      missing: t('onboarding.workHours.errors.missing', 'Angiv start og slut'),
-      order: t('onboarding.workHours.errors.order', 'Starttid skal være før sluttid'),
-    }),
-    [t]
-  );
-
   const isStepComplete = (step) => {
     switch (step) {
       case 'language':
         return Boolean(formData.language && formData.currency);
       case 'business':
-        return formData.businessName.trim().length > 1;
+        return formData.clinicName.trim().length > 1;
       case 'categories':
         return formData.categories.length > 0;
       case 'accountType':
         return Boolean(formData.accountType);
-      case 'workHours':
-        return !hasWorkHoursErrors;
       case 'teamSize':
         return Boolean(formData.teamSize);
-      case 'serviceModel':
-        return Boolean(formData.serviceModel);
       case 'address':
         return formData.address.trim().length > 2;
-      case 'software':
-        return Boolean(formData.software);
       case 'heardFrom':
         return Boolean(formData.heardFrom);
       case 'complete':
@@ -345,12 +289,10 @@ function OnboardingSlides() {
       updatedAt: serverTimestamp(),
     };
 
-    const trimmedBusinessName = formData.businessName.trim();
-    const trimmedWebsite = formData.website.trim();
+    const trimmedClinicName = formData.clinicName.trim();
     const trimmedAddress = formData.address.trim();
 
-    if (trimmedBusinessName) update.clinicName = trimmedBusinessName;
-    if (trimmedWebsite) update.website = trimmedWebsite;
+    if (trimmedClinicName) update.clinicName = trimmedClinicName;
     if (formData.categories.length) {
       update.categories = formData.categories;
       update.jobTitle = formData.categories[0];
@@ -358,13 +300,8 @@ function OnboardingSlides() {
     if (formData.currency) update.currency = formData.currency;
     if (formData.accountType) update.accountType = formData.accountType;
     if (formData.teamSize) update.teamSize = formData.teamSize;
-    if (formData.serviceModel) update.serviceModel = formData.serviceModel;
     if (trimmedAddress) update.address = trimmedAddress;
-    if (formData.software) update.software = formData.software;
     if (formData.heardFrom) update.heardFrom = formData.heardFrom;
-    if (!hasWorkHoursErrors) {
-      update.workHours = buildWorkHoursPayload(workHours);
-    }
 
     if (markComplete) {
       update.onboardingComplete = true;
@@ -408,16 +345,6 @@ function OnboardingSlides() {
 
   const handleNext = async () => {
     if (!canContinue || isPersisting) return;
-    if (currentStep === 'workHours') {
-      setIsPersisting(true);
-      try {
-        await persistProfile(false);
-      } catch (error) {
-        console.error('[OnboardingSlides] Failed to save work hours', error);
-      } finally {
-        setIsPersisting(false);
-      }
-    }
     if (isLastStep) {
       if (currentStep === 'complete') {
         void handleFinish();
@@ -495,7 +422,7 @@ function OnboardingSlides() {
   const renderBusinessStep = () => (
     <div className="onboarding-content">
       <p className="onboarding-eyebrow">{t('onboarding.eyebrow', 'Kontoopsætning')}</p>
-      <h1 className="onboarding-title">{t('onboarding.steps.business.title', 'Hvad hedder din virksomhed?')}</h1>
+      <h1 className="onboarding-title">{t('onboarding.steps.business.title', 'Hvad hedder din klinik?')}</h1>
       <p className="onboarding-subtitle">
         {t(
           'onboarding.steps.business.subtitle',
@@ -503,19 +430,12 @@ function OnboardingSlides() {
         )}
       </p>
       <div className="onboarding-form">
-        <FormLabel>{t('onboarding.steps.business.nameLabel', 'Virksomhedens navn')}</FormLabel>
+        <FormLabel>{t('onboarding.steps.business.nameLabel', 'Klinikkens navn')}</FormLabel>
         <input
           type="text"
           placeholder={t('onboarding.steps.business.namePlaceholder', 'F.eks. Selma Klinik')}
-          value={formData.businessName}
-          onChange={(e) => setFormData((prev) => ({ ...prev, businessName: e.target.value }))}
-        />
-        <FormLabel>{t('onboarding.steps.business.websiteLabel', 'Websted (Valgfrit)')}</FormLabel>
-        <input
-          type="url"
-          placeholder={t('onboarding.steps.business.websitePlaceholder', 'www.ditwebsted.com')}
-          value={formData.website}
-          onChange={(e) => setFormData((prev) => ({ ...prev, website: e.target.value }))}
+          value={formData.clinicName}
+          onChange={(e) => setFormData((prev) => ({ ...prev, clinicName: e.target.value }))}
         />
       </div>
     </div>
@@ -599,124 +519,6 @@ function OnboardingSlides() {
     </div>
   );
 
-  const updateWorkHoursField = (dayKey, field, value) => {
-    setWorkHours((prev) => ({
-      ...prev,
-      [dayKey]: {
-        ...prev[dayKey],
-        [field]: value,
-      },
-    }));
-  };
-
-  const toggleWorkHoursDay = (dayKey) => {
-    setWorkHours((prev) => {
-      const current = prev[dayKey] || {};
-      const nextEnabled = !current.enabled;
-      const defaultDay = defaultWorkHours[dayKey] || {};
-      const nextStart = nextEnabled ? current.start || defaultDay.start || '' : current.start;
-      const nextEnd = nextEnabled ? current.end || defaultDay.end || '' : current.end;
-      return {
-        ...prev,
-        [dayKey]: {
-          ...current,
-          enabled: nextEnabled,
-          start: nextStart,
-          end: nextEnd,
-        },
-      };
-    });
-  };
-
-  const renderWorkHoursStep = () => (
-    <div className="onboarding-content">
-      <p className="onboarding-eyebrow">{t('onboarding.eyebrow', 'Kontoopsætning')}</p>
-      <h1 className="onboarding-title">
-        {t('onboarding.workHours.title', 'Arbejdstid')}
-      </h1>
-      <p className="onboarding-subtitle">
-        {t(
-          'onboarding.workHours.subtitle',
-          'Angiv hvornår du har åbent for bookinger. Du kan ændre arbejdstiden senere.'
-        )}
-      </p>
-      <div className="onboarding-workhours">
-        {WORK_HOURS_DAYS.map((day) => {
-          const dayData = workHours[day.key] || {};
-          const errorCode = workHoursErrors[day.key];
-          const errorMessage = errorCode ? workHoursErrorMessages[errorCode] : '';
-          const isEnabled = Boolean(dayData.enabled);
-          return (
-            <div
-              key={day.key}
-              className={`onboarding-workhours-row ${errorCode ? 'has-error' : ''}`}
-            >
-              <div className="onboarding-workhours-day">
-                <span className="onboarding-workhours-label">
-                  {workHoursDayLabels[day.key] || day.key}
-                </span>
-                <label className="onboarding-workhours-toggle">
-                  <input
-                    type="checkbox"
-                    checked={isEnabled}
-                    onChange={() => toggleWorkHoursDay(day.key)}
-                  />
-                  <span>
-                    {isEnabled
-                      ? t('onboarding.workHours.open', 'Åben')
-                      : t('onboarding.workHours.closed', 'Lukket')}
-                  </span>
-                </label>
-              </div>
-              <div className="onboarding-workhours-time">
-                <input
-                  type="time"
-                  className={`onboarding-workhours-input ${errorCode ? 'is-error' : ''}`}
-                  value={dayData.start || ''}
-                  onChange={(e) => updateWorkHoursField(day.key, 'start', e.target.value)}
-                  disabled={!isEnabled}
-                  aria-invalid={Boolean(errorCode)}
-                />
-                <span className="onboarding-workhours-separator">–</span>
-                <input
-                  type="time"
-                  className={`onboarding-workhours-input ${errorCode ? 'is-error' : ''}`}
-                  value={dayData.end || ''}
-                  onChange={(e) => updateWorkHoursField(day.key, 'end', e.target.value)}
-                  disabled={!isEnabled}
-                  aria-invalid={Boolean(errorCode)}
-                />
-              </div>
-              {errorMessage ? (
-                <div className="onboarding-workhours-error" role="alert">
-                  {errorMessage}
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-
-  const renderServiceModelStep = () => (
-    <div className="onboarding-content">
-      <p className="onboarding-eyebrow">{t('onboarding.eyebrow', 'Kontoopsætning')}</p>
-      <h1 className="onboarding-title">{t('onboarding.steps.serviceModel.title', 'Hvor tilbyder du dine tjenester?')}</h1>
-      <div className="onboarding-stack">
-        {serviceModelOptions.map((option) => (
-          <OptionCard
-            key={option}
-            label={option}
-            selected={formData.serviceModel === option}
-            onClick={() => setFormData((prev) => ({ ...prev, serviceModel: option }))}
-            size="lg"
-          />
-        ))}
-      </div>
-    </div>
-  );
-
   const renderAddressStep = () => (
     <div className="onboarding-content">
       <p className="onboarding-eyebrow">{t('onboarding.eyebrow', 'Kontoopsætning')}</p>
@@ -739,29 +541,6 @@ function OnboardingSlides() {
             onChange={(e) => setFormData((prev) => ({ ...prev, address: e.target.value }))}
           />
         </div>
-      </div>
-    </div>
-  );
-
-  const renderSoftwareStep = () => (
-    <div className="onboarding-content">
-      <p className="onboarding-eyebrow">{t('onboarding.eyebrow', 'Kontoopsætning')}</p>
-      <h1 className="onboarding-title">{t('onboarding.steps.software.title', 'Hvilken software bruger du i øjeblikket?')}</h1>
-      <p className="onboarding-subtitle">
-        {t(
-          'onboarding.steps.software.subtitle',
-          'Hvis du vil skifte, kan vi hjælpe med at fremskynde din virksomhedopsætning og importere dine data til din nye Selma-konto.'
-        )}
-      </p>
-      <div className="onboarding-stack">
-        {softwareOptions.map((option) => (
-          <OptionCard
-            key={option}
-            label={option}
-            selected={formData.software === option}
-            onClick={() => setFormData((prev) => ({ ...prev, software: option }))}
-          />
-        ))}
       </div>
     </div>
   );
@@ -793,16 +572,10 @@ function OnboardingSlides() {
         return renderCategoriesStep();
       case 'accountType':
         return renderAccountTypeStep();
-      case 'workHours':
-        return renderWorkHoursStep();
       case 'teamSize':
         return renderTeamSizeStep();
-      case 'serviceModel':
-        return renderServiceModelStep();
       case 'address':
         return renderAddressStep();
-      case 'software':
-        return renderSoftwareStep();
       case 'heardFrom':
         return renderHeardFromStep();
       default:
@@ -816,7 +589,7 @@ function OnboardingSlides() {
         <Check size={28} />
       </div>
       <h2 className="completion-title">
-        {t('onboarding.completion.title', 'Din virksomhed er oprettet!')}
+        {t('onboarding.completion.title', 'Din profil er oprettet')}
       </h2>
       <p className="completion-subtitle">
         {t('onboarding.completion.subtitle', 'Få 14 dages gratis brug af Selma for virksomheder')}
@@ -830,7 +603,7 @@ function OnboardingSlides() {
       >
         {isPersisting
           ? t('onboarding.actions.saving', 'Gemmer…')
-          : t('onboarding.completion.button', 'Færdig')}
+          : t('onboarding.completion.button', 'Kom i gang')}
       </button>
     </div>
   );

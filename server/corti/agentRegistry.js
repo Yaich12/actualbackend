@@ -3,9 +3,119 @@ const path = require('path');
 const { SYSTEM_PROMPT: EDUCATION_SYSTEM_PROMPT } = require('../../cortiAgentSystemPrompt');
 
 const agentCache = {};
+const registryExpertCache = { names: null, fetchedAt: 0 };
+const REGISTRY_EXPERTS_TTL_MS = 5 * 60 * 1000;
 let rehabPlanSystemPrompt = null;
 
 const rehabPromptPath = path.join(__dirname, 'systemPrompts', 'rehabPlanAgentPrompt.js');
+
+const normalizeName = (value) => `${value || ''}`.trim().toLowerCase();
+
+const getStatusCode = (err) =>
+  err?.statusCode ||
+  err?.status ||
+  err?.response?.status ||
+  err?.response?.statusCode ||
+  err?.details?.status ||
+  500;
+
+const getErrorDetail = (err) =>
+  err?.body?.detail ||
+  err?.details?.detail ||
+  err?.response?.data?.detail ||
+  err?.message ||
+  'Unknown error';
+
+const getRequestId = (err) =>
+  err?.body?.requestid ||
+  err?.rawResponse?.headers?.get?.('x-request-id') ||
+  err?.response?.headers?.['x-request-id'] ||
+  err?.response?.headers?.['x-corti-request-id'] ||
+  err?.response?.headers?.['x-requestid'] ||
+  null;
+
+const resolveEnvAgentId = (key) => {
+  if (!key) return null;
+  const envKey = `CORTI_AGENT_ID_${key.toUpperCase()}`;
+  const direct = process.env[envKey];
+  if (direct && `${direct}`.trim()) return `${direct}`.trim();
+  if (key === 'education') {
+    const fallback = process.env.CORTI_AGENT_ID;
+    if (fallback && `${fallback}`.trim()) return `${fallback}`.trim();
+  }
+  return null;
+};
+
+const loadRegistryExpertNames = async (cortiClient) => {
+  if (
+    registryExpertCache.names &&
+    Date.now() - registryExpertCache.fetchedAt < REGISTRY_EXPERTS_TTL_MS
+  ) {
+    return registryExpertCache.names;
+  }
+  try {
+    const resp = await cortiClient.agents.getRegistryExperts(
+      { limit: 200, offset: 0 },
+      { tenantName: process.env.CORTI_TENANT_NAME }
+    );
+    const experts = resp?.data?.experts || resp?.experts || [];
+    const names = new Set(
+      experts
+        .map((expert) => normalizeName(expert?.name))
+        .filter(Boolean)
+    );
+    registryExpertCache.names = names;
+    registryExpertCache.fetchedAt = Date.now();
+    return names;
+  } catch (err) {
+    console.warn('[AgentRegistry] registry experts fetch failed', {
+      status: getStatusCode(err),
+      detail: getErrorDetail(err),
+      requestId: getRequestId(err),
+    });
+    return null;
+  }
+};
+
+const filterExpertsByRegistry = async (experts, cortiClient, key) => {
+  if (!Array.isArray(experts) || experts.length === 0) return [];
+  const registryNames = await loadRegistryExpertNames(cortiClient);
+  if (!registryNames || registryNames.size === 0) return experts;
+  const filtered = experts.filter((expert) => {
+    const name = normalizeName(expert?.name);
+    return name && registryNames.has(name);
+  });
+  if (filtered.length !== experts.length) {
+    console.warn('[AgentRegistry] filtered experts', {
+      key,
+      before: experts.map((e) => e?.name).filter(Boolean),
+      after: filtered.map((e) => e?.name).filter(Boolean),
+    });
+  }
+  return filtered;
+};
+
+const findExistingAgentId = async (agentName, cortiClient) => {
+  const target = normalizeName(agentName);
+  if (!target) return null;
+  try {
+    const resp = await cortiClient.agents.list(
+      { limit: 200, offset: 0 },
+      { tenantName: process.env.CORTI_TENANT_NAME }
+    );
+    const agents = resp?.data || resp || [];
+    if (!Array.isArray(agents)) return null;
+    const match = agents.find((agent) => normalizeName(agent?.name) === target);
+    return match?.id || match?.agentId || match?.agent?.id || match?.data?.id || null;
+  } catch (err) {
+    console.warn('[AgentRegistry] agents list failed', {
+      status: getStatusCode(err),
+      detail: getErrorDetail(err),
+      requestId: getRequestId(err),
+    });
+    return null;
+  }
+};
 
 const getRehabPlanSystemPrompt = () => {
   if (rehabPlanSystemPrompt) return rehabPlanSystemPrompt;
@@ -156,20 +266,65 @@ const extractTextFromTask = (task) => {
 
 const getOrCreateAgentId = async (key, cortiClient) => {
   if (!key) throw new Error('Missing agent key');
+  const envAgentId = resolveEnvAgentId(key);
+  if (envAgentId) {
+    agentCache[key] = envAgentId;
+    return envAgentId;
+  }
   if (agentCache[key]) return agentCache[key];
   const config = resolveAgentConfig(key);
   if (!config) {
     throw new Error(`Unknown agent key: ${key}`);
   }
-  const created = await cortiClient.agents.create(
-    {
-      name: config.name,
-      experts: config.experts,
-      description: config.description,
-      systemPrompt: config.systemPrompt,
-    },
-    { tenantName: process.env.CORTI_TENANT_NAME }
-  );
+  const existingAgentId = await findExistingAgentId(config.name, cortiClient);
+  if (existingAgentId) {
+    agentCache[key] = existingAgentId;
+    return existingAgentId;
+  }
+
+  const payload = {
+    name: config.name,
+    description: config.description,
+  };
+  if (typeof config.systemPrompt === 'string' && config.systemPrompt.trim()) {
+    payload.systemPrompt = config.systemPrompt;
+  }
+
+  const filteredExperts = await filterExpertsByRegistry(config.experts, cortiClient, key);
+  if (filteredExperts.length) {
+    payload.experts = filteredExperts;
+  }
+
+  let created;
+  try {
+    created = await cortiClient.agents.create(payload, {
+      tenantName: process.env.CORTI_TENANT_NAME,
+    });
+  } catch (err) {
+    const status = getStatusCode(err);
+    const code = err?.body?.code || err?.code;
+    const detail = getErrorDetail(err);
+    const requestId = getRequestId(err);
+    if (payload.experts?.length && status === 400) {
+      console.warn('[AgentRegistry] create failed with experts, retry without experts', {
+        key,
+        status,
+        code,
+        detail,
+        requestId,
+      });
+      const retryPayload = {
+        name: payload.name,
+        description: payload.description,
+        ...(payload.systemPrompt ? { systemPrompt: payload.systemPrompt } : {}),
+      };
+      created = await cortiClient.agents.create(retryPayload, {
+        tenantName: process.env.CORTI_TENANT_NAME,
+      });
+    } else {
+      throw err;
+    }
+  }
 
   const agentId =
     created?.id ||
