@@ -14,6 +14,8 @@ const OpenAI = require('openai');
 const cortiRoutes = require('./routes/cortiRoutes');
 const agentRegistryRoutes = require('./routes/agentRegistryRoutes');
 const rehabAgentRoutes = require('./routes/rehabAgentRoutes');
+const { router: stripeRouter, webhookHandler } = require('./routes/stripeRoutes');
+const { verifyFirebaseToken } = require('./server/middleware/verifyFirebaseToken');
 const { createCortiTranscribeWss } = require('./ws/cortiTranscribeProxy');
 const { createFactsStreamWss } = require('./ws/factsStreamProxy');
 const { SYSTEM_PROMPT } = require('./cortiAgentSystemPrompt');
@@ -58,7 +60,10 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), webhookHandler);
 app.use(express.json({ limit: '10mb' }));
+app.use('/api/stripe', stripeRouter);
+app.use('/api', verifyFirebaseToken);
 app.use('/api/corti', cortiRoutes);
 app.use('/api/agents/rehab', rehabAgentRoutes);
 app.use('/api/agents', agentRegistryRoutes);
