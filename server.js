@@ -15,6 +15,7 @@ const cortiRoutes = require('./routes/cortiRoutes');
 const agentRegistryRoutes = require('./routes/agentRegistryRoutes');
 const rehabAgentRoutes = require('./routes/rehabAgentRoutes');
 const { router: stripeRouter, webhookHandler } = require('./routes/stripeRoutes');
+const { router: billingRouter } = require('./routes/billingRoutes');
 const { verifyFirebaseToken } = require('./server/middleware/verifyFirebaseToken');
 const { createCortiTranscribeWss } = require('./ws/cortiTranscribeProxy');
 const { createFactsStreamWss } = require('./ws/factsStreamProxy');
@@ -36,6 +37,18 @@ const CORTI_API_BASE =
   resolvedCortiEnv === 'us' ? 'https://api.us.corti.app/v2' : 'https://api.eu.corti.app/v2';
 const CORTI_AGENT_BASE_URL = 'https://api.eu.corti.app/v2';
 
+const logStripeEnvStatus = () => {
+  const status = {
+    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY ? 'OK' : 'MISSING',
+    STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET ? 'OK' : 'MISSING',
+    STRIPE_PRICE_SOLO_MONTHLY: process.env.STRIPE_PRICE_SOLO_MONTHLY ? 'OK' : 'MISSING',
+    STRIPE_PRICE_DUO_MONTHLY: process.env.STRIPE_PRICE_DUO_MONTHLY ? 'OK' : 'MISSING',
+    APP_URL: process.env.APP_URL ? 'OK' : 'MISSING',
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ? 'OK' : 'MISSING',
+  };
+  console.log('[stripe] env status:', status);
+};
+
 const getPublicAssetUrl = (relativePath) => {
   const trimmedPath = `${relativePath || ''}`.replace(/^\/+/, '');
   const bucket =
@@ -52,10 +65,44 @@ const getPublicAssetUrl = (relativePath) => {
   )}?alt=media`;
 };
 
+const resolveProjectId = () =>
+  process.env.FIREBASE_PROJECT_ID ||
+  process.env.GCLOUD_PROJECT ||
+  process.env.REACT_APP_PROJECT_ID;
+const projectId = resolveProjectId();
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://selmaplus.tech',
+  'https://www.selmaplus.tech',
+  projectId ? `https://${projectId}.web.app` : null,
+  projectId ? `https://${projectId}.firebaseapp.com` : null,
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+].filter(Boolean);
+const envAllowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean);
+const ALLOWED_ORIGINS = new Set([...DEFAULT_ALLOWED_ORIGINS, ...envAllowedOrigins]);
+const isOriginAllowed = (origin) => !origin || ALLOWED_ORIGINS.has(origin);
+const resolveCorsOrigin = (origin) => (origin && ALLOWED_ORIGINS.has(origin) ? origin : '');
+const applyCorsHeaders = (res, origin) => {
+  if (origin) {
+    res.set('Access-Control-Allow-Origin', origin);
+  }
+  res.set('Vary', 'Origin');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+};
+
 const app = express();
 app.use(
   cors({
-    origin: '*',
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`Not allowed by CORS: ${origin}`));
+    },
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
@@ -63,7 +110,15 @@ app.use(
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), webhookHandler);
 app.use(express.json({ limit: '10mb' }));
 app.use('/api/stripe', stripeRouter);
-app.use('/api', verifyFirebaseToken);
+// Fallback for local dev proxy stripping /api
+app.use('/stripe', stripeRouter);
+app.use('/api/billing', billingRouter);
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/stripe')) {
+    return next();
+  }
+  return verifyFirebaseToken(req, res, next);
+});
 app.use('/api/corti', cortiRoutes);
 app.use('/api/agents/rehab', rehabAgentRoutes);
 app.use('/api/agents', agentRegistryRoutes);
@@ -89,6 +144,7 @@ const logFfmpegAvailability = () => {
 };
 
 logFfmpegAvailability();
+logStripeEnvStatus();
 
 const getOpenAIClient = () => {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -204,12 +260,12 @@ const builderImageUpload = multer({
   },
 });
 
-app.options('/api/builder/upload-photo', (_req, res) => {
-  res.set({
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  });
+app.options('/api/builder/upload-photo', (req, res) => {
+  const origin = resolveCorsOrigin(req.headers.origin);
+  if (!origin) {
+    return res.sendStatus(403);
+  }
+  applyCorsHeaders(res, origin);
   return res.sendStatus(204);
 });
 
@@ -487,11 +543,11 @@ const extractFactsFromText = async (cortiClient, text, outputLanguage) => {
 };
 
 app.options('/api/transcribe', (req, res) => {
-  res.set({
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  });
+  const origin = resolveCorsOrigin(req.headers.origin);
+  if (!origin) {
+    return res.sendStatus(403);
+  }
+  applyCorsHeaders(res, origin);
   return res.sendStatus(204);
 });
 
@@ -953,11 +1009,11 @@ app.get('/api/agent/health', (_req, res) => {
 });
 
 app.options('/api/builder/generate', (req, res) => {
-  res.set({
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  });
+  const origin = resolveCorsOrigin(req.headers.origin);
+  if (!origin) {
+    return res.sendStatus(403);
+  }
+  applyCorsHeaders(res, origin);
   return res.sendStatus(204);
 });
 

@@ -1,12 +1,14 @@
 const express = require('express');
 const Stripe = require('stripe');
 const { verifyFirebaseToken } = require('../server/middleware/verifyFirebaseToken');
-const { admin, getAuth } = require('../server/firebaseAdmin');
+const { admin, getAuth, getFirestore } = require('../server/firebaseAdmin');
 const {
   ensureAccountForUser,
   getAccountById,
   getUserById,
   setAccountFields,
+  setUserSubscription,
+  updateUsersByEmail,
 } = require('../server/firestoreAccounts');
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
@@ -26,7 +28,27 @@ const normalizePlan = (plan) => {
   return null;
 };
 
-const resolveBaseUrl = () => {
+const resolveSeatsIncluded = (plan) => {
+  if (plan === 'duo') return 2;
+  if (plan === 'solo') return 1;
+  return null;
+};
+
+const normalizeEmail = (email) => `${email || ''}`.trim().toLowerCase();
+
+const normalizeBaseUrl = (value) => `${value || ''}`.replace(/\/+$/, '');
+
+const resolveBaseUrl = (req) => {
+  const origin = req?.headers?.origin;
+  if (origin && /^https?:\/\//i.test(origin)) {
+    return normalizeBaseUrl(origin);
+  }
+  const forwardedHost = req?.headers?.['x-forwarded-host'] || req?.headers?.host;
+  if (forwardedHost) {
+    const protoHeader = req?.headers?.['x-forwarded-proto'];
+    const proto = protoHeader ? protoHeader.split(',')[0].trim() : 'https';
+    return normalizeBaseUrl(`${proto}://${forwardedHost}`);
+  }
   const candidates = [
     process.env.APP_URL,
     process.env.REACT_APP_APP_URL,
@@ -35,7 +57,7 @@ const resolveBaseUrl = () => {
   const resolved = candidates.find(
     (value) => typeof value === 'string' && /^https?:\/\//i.test(value.trim())
   );
-  return `${resolved || 'http://localhost:3000'}`.replace(/\/+$/, '');
+  return normalizeBaseUrl(resolved || 'http://localhost:3000');
 };
 
 const router = express.Router();
@@ -60,13 +82,21 @@ const buildCheckoutMetadata = ({ accountId, plan, uid }) => {
   return metadata;
 };
 
-const createCheckoutSession = async ({ plan, priceId, accountId, uid, stripeCustomerId }) => {
-  const baseUrl = resolveBaseUrl();
+const createCheckoutSession = async ({
+  plan,
+  priceId,
+  accountId,
+  uid,
+  stripeCustomerId,
+  req,
+}) => {
+  const baseUrl = resolveBaseUrl(req);
   const metadata = buildCheckoutMetadata({ accountId, plan, uid });
   return stripe.checkout.sessions.create({
     mode: 'subscription',
     line_items: [{ price: priceId, quantity: 1 }],
     customer: stripeCustomerId || undefined,
+    client_reference_id: uid || undefined,
     success_url: `${baseUrl}/?checkout=success&plan=${plan}`,
     cancel_url: `${baseUrl}/?checkout=cancel&plan=${plan}`,
     allow_promotion_codes: true,
@@ -106,9 +136,8 @@ router.post('/create-checkout-session', async (req, res) => {
       return res.status(error.status).json({ error: error.message });
     }
 
-    console.info('[stripe] checkout session requested:', plan);
     const user = await verifyFirebaseTokenIfPresent(req);
-
+    console.info('[stripe] checkout session requested:', plan, 'uid:', user?.uid || 'anon');
     let accountId = null;
     let uid = null;
     let stripeCustomerId = null;
@@ -164,6 +193,7 @@ router.post('/create-checkout-session', async (req, res) => {
       accountId,
       uid,
       stripeCustomerId,
+      req,
     });
 
     console.info('[stripe] checkout session created:', {
@@ -180,7 +210,7 @@ router.post('/create-checkout-session', async (req, res) => {
   }
 });
 
-router.post('/create-billing-portal-session', verifyFirebaseToken, async (req, res) => {
+const createBillingPortalSession = async (req, res) => {
   try {
     if (!stripe) {
       return res.status(500).json({ error: 'Stripe er ikke konfigureret.' });
@@ -204,7 +234,8 @@ router.post('/create-billing-portal-session', verifyFirebaseToken, async (req, r
       return res.status(400).json({ error: 'Mangler Stripe-kunde for kontoen.' });
     }
 
-    const baseUrl = resolveBaseUrl();
+    const baseUrl = resolveBaseUrl(req);
+    const baseUrl = resolveBaseUrl(req);
     const session = await stripe.billingPortal.sessions.create({
       customer: account.stripeCustomerId,
       return_url: `${baseUrl}/settings/subscription`,
@@ -217,7 +248,10 @@ router.post('/create-billing-portal-session', verifyFirebaseToken, async (req, r
       error: error?.message || 'Server error',
     });
   }
-});
+};
+
+router.post('/create-billing-portal-session', verifyFirebaseToken, createBillingPortalSession);
+router.post('/create-portal-session', verifyFirebaseToken, createBillingPortalSession);
 
 const toFirestoreTimestamp = (seconds) => {
   if (!seconds || typeof seconds !== 'number') return null;
@@ -231,6 +265,32 @@ const resolveAccountMetadata = (object) => {
   return { accountId, plan };
 };
 
+const buildSubscriptionPayload = ({
+  status,
+  plan,
+  stripeCustomerId,
+  stripeSubscriptionId,
+  currentPeriodEnd,
+  cancelAtPeriodEnd,
+  canceledAt,
+  createdAt,
+}) => {
+  const seatsIncluded = resolveSeatsIncluded(plan);
+  const payload = {
+    status,
+    plan,
+    stripeCustomerId,
+    stripeSubscriptionId,
+    currentPeriodEnd: currentPeriodEnd ?? null,
+    cancelAtPeriodEnd: Boolean(cancelAtPeriodEnd),
+    canceledAt: canceledAt ?? null,
+    createdAt: createdAt ?? null,
+    seatsIncluded: seatsIncluded ?? null,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  return payload;
+};
+
 const updateAccountFromStripe = async ({
   accountId,
   subscriptionStatus,
@@ -238,20 +298,38 @@ const updateAccountFromStripe = async ({
   stripeCustomerId,
   stripeSubscriptionId,
   currentPeriodEnd,
+  cancelAtPeriodEnd,
+  canceledAt,
+  createdAt,
 }) => {
   if (!accountId) return;
   const payload = {
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
   if (subscriptionStatus) payload.subscriptionStatus = subscriptionStatus;
-  if (plan) {
-    payload.plan = plan;
-  }
+  if (plan) payload.plan = plan;
   if (stripeCustomerId) payload.stripeCustomerId = stripeCustomerId;
   if (stripeSubscriptionId) payload.stripeSubscriptionId = stripeSubscriptionId;
   if (currentPeriodEnd !== undefined) payload.currentPeriodEnd = currentPeriodEnd;
+  if (cancelAtPeriodEnd !== undefined) payload.cancelAtPeriodEnd = cancelAtPeriodEnd;
+  if (canceledAt !== undefined) payload.canceledAt = canceledAt;
+  if (createdAt !== undefined) payload.createdAt = createdAt;
 
   await setAccountFields(accountId, payload);
+  const account = await getAccountById(accountId);
+  if (account?.ownerUid) {
+    const subscriptionPayload = buildSubscriptionPayload({
+      status: subscriptionStatus,
+      plan,
+      stripeCustomerId,
+      stripeSubscriptionId,
+      currentPeriodEnd,
+      cancelAtPeriodEnd,
+      canceledAt,
+      createdAt,
+    });
+    await setUserSubscription(account.ownerUid, subscriptionPayload);
+  }
 };
 
 const fetchSubscription = async (subscriptionId) => {
@@ -262,6 +340,78 @@ const fetchSubscription = async (subscriptionId) => {
     console.error('[stripe] Failed to fetch subscription', subscriptionId, error);
     return null;
   }
+};
+
+const findUsersBySubscriptionField = async (field, value) => {
+  if (!value) return [];
+  const db = getFirestore();
+  const snap = await db.collection('users').where(`subscription.${field}`, '==', value).get();
+  return snap.docs.map((doc) => ({ id: doc.id, ref: doc.ref, data: doc.data() }));
+};
+
+const updateUsersBySubscriptionField = async (field, value, subscriptionPayload) => {
+  const users = await findUsersBySubscriptionField(field, value);
+  if (!users.length) return [];
+  await Promise.all(
+    users.map((user) =>
+      user.ref.set(
+        {
+          subscription: subscriptionPayload,
+        },
+        { merge: true }
+      )
+    )
+  );
+  return users.map((user) => user.id);
+};
+
+const fetchCustomerEmail = async (customerId) => {
+  if (!customerId) return null;
+  try {
+    const customer = await stripe.customers.retrieve(customerId);
+    return customer?.email || null;
+  } catch (error) {
+    console.warn('[stripe] Failed to fetch customer email', customerId, error);
+    return null;
+  }
+};
+
+const resolveEmailFromObject = async (object) => {
+  const direct =
+    object?.customer_details?.email ||
+    object?.customer_email ||
+    object?.email ||
+    null;
+  if (direct) return direct;
+  const customerId =
+    typeof object?.customer === 'string' ? object.customer : object?.customer?.id;
+  return fetchCustomerEmail(customerId);
+};
+
+const applySubscriptionToUsersByEmail = async ({
+  email,
+  subscriptionStatus,
+  plan,
+  stripeCustomerId,
+  stripeSubscriptionId,
+  currentPeriodEnd,
+  cancelAtPeriodEnd,
+  canceledAt,
+  createdAt,
+}) => {
+  if (!email) return;
+  const payload = buildSubscriptionPayload({
+    status: subscriptionStatus,
+    plan,
+    stripeCustomerId,
+    stripeSubscriptionId,
+    currentPeriodEnd,
+    cancelAtPeriodEnd,
+    canceledAt,
+    createdAt,
+  });
+  const matched = await updateUsersByEmail(email, payload);
+  console.info('[stripe] updated users by email', normalizeEmail(email), matched);
 };
 
 const webhookHandler = async (req, res) => {
@@ -304,6 +454,17 @@ const webhookHandler = async (req, res) => {
         const currentPeriodEnd = subscription
           ? toFirestoreTimestamp(subscription?.current_period_end)
           : undefined;
+        const createdAt = subscription?.created
+          ? toFirestoreTimestamp(subscription.created)
+          : session?.created
+            ? toFirestoreTimestamp(session.created)
+            : undefined;
+        const cancelAtPeriodEnd = subscription?.cancel_at_period_end || false;
+        const canceledAt = subscription?.canceled_at
+          ? toFirestoreTimestamp(subscription.canceled_at)
+          : null;
+        const uid = session?.metadata?.uid || session?.client_reference_id || null;
+        const email = await resolveEmailFromObject(session);
 
         await updateAccountFromStripe({
           accountId,
@@ -312,7 +473,35 @@ const webhookHandler = async (req, res) => {
           stripeCustomerId: session?.customer,
           stripeSubscriptionId: subscriptionId,
           currentPeriodEnd,
+          cancelAtPeriodEnd,
+          canceledAt,
+          createdAt,
         });
+        if (uid) {
+          const payload = buildSubscriptionPayload({
+            status: subscriptionStatus,
+            plan,
+            stripeCustomerId: session?.customer,
+            stripeSubscriptionId: subscriptionId,
+            currentPeriodEnd,
+            cancelAtPeriodEnd,
+            canceledAt,
+            createdAt,
+          });
+          await setUserSubscription(uid, payload);
+        } else if (email) {
+          await applySubscriptionToUsersByEmail({
+            email,
+            subscriptionStatus,
+            plan,
+            stripeCustomerId: session?.customer,
+            stripeSubscriptionId: subscriptionId,
+            currentPeriodEnd,
+            cancelAtPeriodEnd,
+            canceledAt,
+            createdAt,
+          });
+        }
         break;
       }
       case 'customer.subscription.updated':
@@ -326,6 +515,15 @@ const webhookHandler = async (req, res) => {
             ? 'canceled'
             : subscription?.status;
         const currentPeriodEnd = toFirestoreTimestamp(subscription?.current_period_end);
+        const createdAt = subscription?.created
+          ? toFirestoreTimestamp(subscription.created)
+          : undefined;
+        const cancelAtPeriodEnd = subscription?.cancel_at_period_end || false;
+        const canceledAt = subscription?.canceled_at
+          ? toFirestoreTimestamp(subscription.canceled_at)
+          : null;
+        const uid = subscription?.metadata?.uid || null;
+        const email = await resolveEmailFromObject(subscription);
 
         await updateAccountFromStripe({
           accountId,
@@ -334,7 +532,49 @@ const webhookHandler = async (req, res) => {
           stripeCustomerId: subscription?.customer,
           stripeSubscriptionId: subscription?.id,
           currentPeriodEnd,
+          cancelAtPeriodEnd,
+          canceledAt,
+          createdAt,
         });
+        if (uid) {
+          const payload = buildSubscriptionPayload({
+            status: subscriptionStatus,
+            plan,
+            stripeCustomerId: subscription?.customer,
+            stripeSubscriptionId: subscription?.id,
+            currentPeriodEnd,
+            cancelAtPeriodEnd,
+            canceledAt,
+            createdAt,
+          });
+          await setUserSubscription(uid, payload);
+        } else if (email) {
+          await applySubscriptionToUsersByEmail({
+            email,
+            subscriptionStatus,
+            plan,
+            stripeCustomerId: subscription?.customer,
+            stripeSubscriptionId: subscription?.id,
+            currentPeriodEnd,
+            cancelAtPeriodEnd,
+            canceledAt,
+            createdAt,
+          });
+        }
+        await updateUsersBySubscriptionField(
+          'stripeCustomerId',
+          subscription?.customer,
+          buildSubscriptionPayload({
+            status: subscriptionStatus,
+            plan,
+            stripeCustomerId: subscription?.customer,
+            stripeSubscriptionId: subscription?.id,
+            currentPeriodEnd,
+            cancelAtPeriodEnd,
+            canceledAt,
+            createdAt,
+          })
+        );
         break;
       }
       case 'invoice.paid':
@@ -356,6 +596,15 @@ const webhookHandler = async (req, res) => {
         const currentPeriodEnd = subscription
           ? toFirestoreTimestamp(subscription?.current_period_end)
           : undefined;
+        const createdAt = subscription?.created
+          ? toFirestoreTimestamp(subscription.created)
+          : undefined;
+        const cancelAtPeriodEnd = subscription?.cancel_at_period_end || false;
+        const canceledAt = subscription?.canceled_at
+          ? toFirestoreTimestamp(subscription.canceled_at)
+          : null;
+        const uid = subscription?.metadata?.uid || null;
+        const email = await resolveEmailFromObject(invoice);
 
         await updateAccountFromStripe({
           accountId,
@@ -364,7 +613,49 @@ const webhookHandler = async (req, res) => {
           stripeCustomerId: invoice?.customer,
           stripeSubscriptionId: invoice?.subscription,
           currentPeriodEnd,
+          cancelAtPeriodEnd,
+          canceledAt,
+          createdAt,
         });
+        if (uid) {
+          const payload = buildSubscriptionPayload({
+            status: subscriptionStatus,
+            plan,
+            stripeCustomerId: invoice?.customer,
+            stripeSubscriptionId: invoice?.subscription,
+            currentPeriodEnd,
+            cancelAtPeriodEnd,
+            canceledAt,
+            createdAt,
+          });
+          await setUserSubscription(uid, payload);
+        } else if (email) {
+          await applySubscriptionToUsersByEmail({
+            email,
+            subscriptionStatus,
+            plan,
+            stripeCustomerId: invoice?.customer,
+            stripeSubscriptionId: invoice?.subscription,
+            currentPeriodEnd,
+            cancelAtPeriodEnd,
+            canceledAt,
+            createdAt,
+          });
+        }
+        await updateUsersBySubscriptionField(
+          'stripeSubscriptionId',
+          invoice?.subscription,
+          buildSubscriptionPayload({
+            status: subscriptionStatus,
+            plan,
+            stripeCustomerId: invoice?.customer,
+            stripeSubscriptionId: invoice?.subscription,
+            currentPeriodEnd,
+            cancelAtPeriodEnd,
+            canceledAt,
+            createdAt,
+          })
+        );
         break;
       }
       default:

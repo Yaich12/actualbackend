@@ -9,6 +9,26 @@ export const isLocalhost = () => {
   return LOCALHOST_HOSTS.has(window.location.hostname);
 };
 
+const resolveEnvBaseUrl = () => {
+  const candidates = [
+    process.env.REACT_APP_BASE_URL,
+    process.env.REACT_APP_APP_URL,
+    process.env.NEXT_PUBLIC_BASE_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+  ];
+  const resolved = candidates.find(
+    (value) => typeof value === 'string' && /^https?:\/\//i.test(value.trim())
+  );
+  return resolved ? stripTrailingSlash(resolved) : '';
+};
+
+export const getBaseUrl = () => {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return stripTrailingSlash(window.location.origin);
+  }
+  return resolveEnvBaseUrl();
+};
+
 let didLog = false;
 const resolveLocalApiBase = () => {
   const envBase = process.env.REACT_APP_API_BASE_URL;

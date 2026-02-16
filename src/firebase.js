@@ -36,7 +36,6 @@ if (process.env.NODE_ENV === "development") {
 
 const requiredEnv = {
   REACT_APP_API_KEY: process.env.REACT_APP_API_KEY,
-  REACT_APP_AUTH_DOMAIN: process.env.REACT_APP_AUTH_DOMAIN,
   REACT_APP_PROJECT_ID: process.env.REACT_APP_PROJECT_ID,
   REACT_APP_STORAGE_BUCKET: process.env.REACT_APP_STORAGE_BUCKET,
   REACT_APP_MESSAGING_SENDER_ID: process.env.REACT_APP_MESSAGING_SENDER_ID,
@@ -69,12 +68,46 @@ if (!firebaseConfigured && !shouldUseEmulators) {
   );
 }
 
+const resolveAuthDomain = ({ useFallback, projectId, envAuthDomain }) => {
+  const trimmed = typeof envAuthDomain === "string" ? envAuthDomain.trim() : "";
+  if (useFallback) {
+    return trimmed || "localhost";
+  }
+  if (trimmed && trimmed.endsWith(".firebaseapp.com")) {
+    return trimmed;
+  }
+  if (projectId) {
+    return `${projectId}.firebaseapp.com`;
+  }
+  return trimmed || "localhost";
+};
+
+const resolvedProjectId = process.env.REACT_APP_PROJECT_ID || "demo-project";
+const resolvedAuthDomain = resolveAuthDomain({
+  useFallback: effectiveUseFallbackConfig,
+  projectId: resolvedProjectId,
+  envAuthDomain: process.env.REACT_APP_AUTH_DOMAIN,
+});
+
+if (
+  !effectiveUseFallbackConfig &&
+  process.env.REACT_APP_AUTH_DOMAIN &&
+  !process.env.REACT_APP_AUTH_DOMAIN.trim().endsWith(".firebaseapp.com")
+) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[Firebase] REACT_APP_AUTH_DOMAIN is not a firebaseapp.com domain. Using",
+    resolvedAuthDomain,
+    "instead."
+  );
+}
+
 const firebaseConfig = effectiveUseFallbackConfig
   ? {
       // Fallback/emulator-style mode: Firebase accepts any API key; keep projectId stable for local data.
       apiKey: process.env.REACT_APP_API_KEY || "fake-api-key",
-      authDomain: process.env.REACT_APP_AUTH_DOMAIN || "localhost",
-      projectId: process.env.REACT_APP_PROJECT_ID || "demo-project",
+      authDomain: resolvedAuthDomain,
+      projectId: resolvedProjectId,
       storageBucket:
         process.env.REACT_APP_STORAGE_BUCKET ||
         "demo-project.appspot.com",
@@ -85,7 +118,7 @@ const firebaseConfig = effectiveUseFallbackConfig
     }
   : {
       apiKey: process.env.REACT_APP_API_KEY,
-      authDomain: process.env.REACT_APP_AUTH_DOMAIN,
+      authDomain: resolvedAuthDomain,
       projectId: process.env.REACT_APP_PROJECT_ID,
       storageBucket: process.env.REACT_APP_STORAGE_BUCKET,
       messagingSenderId: process.env.REACT_APP_MESSAGING_SENDER_ID,

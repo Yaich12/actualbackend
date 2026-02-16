@@ -11,12 +11,15 @@ import {
   signOut,
   updateProfile,
 } from "firebase/auth";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
+import { ensureUserProfile } from "./services/userService";
 
 const AuthContext = createContext({
   user: null,
   loading: true,
+  userDoc: null,
+  profileLoading: true,
   signOutUser: () => Promise.resolve(),
   updateUserProfile: () => Promise.resolve(),
 });
@@ -24,6 +27,8 @@ const AuthContext = createContext({
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [userDoc, setUserDoc] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -44,7 +49,10 @@ export function AuthProvider({ children }) {
 
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (!isMounted) return;
-      console.log("[AuthContext] onAuthStateChanged:", firebaseUser);
+      console.log("[AuthContext] onAuthStateChanged:", {
+        origin: typeof window !== "undefined" ? window.location.origin : "server",
+        user: firebaseUser ? { uid: firebaseUser.uid, email: firebaseUser.email } : null,
+      });
       setUser(firebaseUser);
       setLoading(false);
     });
@@ -58,32 +66,49 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    if (loading) {
+      return undefined;
+    }
     if (!user) {
-      return;
+      setUserDoc(null);
+      setProfileLoading(false);
+      return undefined;
     }
 
-    const userRef = doc(db, "users", user.uid);
-    const providerId = user.providerData?.[0]?.providerId ?? "password";
-    const creationTime = user.metadata?.creationTime
-      ? new Date(user.metadata.creationTime)
-      : null;
-
-    setDoc(
-      userRef,
-      {
-        uid: user.uid,
-        email: user.email ?? null,
-        displayName: user.displayName ?? null,
-        photoURL: user.photoURL ?? null,
-        providerId,
-        lastLoginAt: serverTimestamp(),
-        createdAt: creationTime ?? serverTimestamp(),
-      },
-      { merge: true }
-    ).catch((error) => {
-      console.error("Failed to sync user profile", error);
+    let isMounted = true;
+    setProfileLoading(true);
+    ensureUserProfile(user).catch((error) => {
+      console.error("[AuthContext] Failed to ensure user profile", error);
     });
-  }, [user]);
+
+    const userRef = doc(db, "users", user.uid);
+    const unsubscribe = onSnapshot(
+      userRef,
+      (snap) => {
+        if (!isMounted) return;
+        setUserDoc(snap.exists() ? snap.data() : null);
+        setProfileLoading(false);
+        if (process.env.NODE_ENV === "development") {
+          // eslint-disable-next-line no-console
+          console.log("[AuthContext] profile loaded", {
+            origin: typeof window !== "undefined" ? window.location.origin : "server",
+            uid: user.uid,
+            hasProfile: snap.exists(),
+          });
+        }
+      },
+      (error) => {
+        if (!isMounted) return;
+        console.error("[AuthContext] Failed to load user profile", error);
+        setProfileLoading(false);
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [user, loading]);
 
   const signOutUser = () => signOut(auth);
 
@@ -121,10 +146,12 @@ export function AuthProvider({ children }) {
     () => ({
       user,
       loading,
+      userDoc,
+      profileLoading,
       signOutUser,
       updateUserProfile,
     }),
-    [user, loading]
+    [user, loading, userDoc, profileLoading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
