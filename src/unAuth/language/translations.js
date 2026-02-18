@@ -1051,7 +1051,7 @@ export const TRANSLATIONS = {
       },
       workflow: {
         eyebrow: "Funktioner",
-        title: "Transkribering og FactsR - sådan bruger du det i journalen",
+        title: "Transkribering og diktering - sådan bruger du det i journalen",
         description:
           "Vi viser præcis den arbejdsgang, du møder inde i journalen - gjort klar til forsiden, så det er nemt at forstå.",
         ariaLabel: "Selma+ journal-funktioner",
@@ -1071,23 +1071,23 @@ export const TRANSLATIONS = {
           },
           {
             id: "facts",
-            label: "FactsR",
-            title: "FactsR udleder kliniske fakta automatisk",
+            label: "Diktering",
+            title: "Dikter kliniske noter direkte ind i journalen",
             description:
-              "FactsR sorterer samtalen i Anamnese, Fund og Plan, så du kan indsætte forslag direkte i journalens felter.",
+              "Indtal dit notat som behandler - hurtigt, præcist og i et sprog der passer til klinisk dokumentation. Perfekt efter konsultationen, når du vil have din vurdering, konklusion og plan ned uden at skrive det hele manuelt.",
             bullets: [
-              "Auto-forslag til de rigtige journal-sektioner",
-              "Indsæt enkelte fakta eller hele blokke",
-              "Sparer tid uden at gå på kompromis",
+              "Skabt til kliniske vurderinger - Formulér konklusion, plan og HEP som du ville skrive det.",
+              "Journal-klar tekst med minimal efterredigering - Automatisk tegnsætning og læsbar struktur, så du hurtigt kan rette og gemme.",
+              "Struktureret output i skabelon - Vælg en skabelon, dikter, og få et færdigt notat med tydelige overskrifter.",
             ],
           },
         ],
         badge: {
-          facts: "FactsR i journalen",
+          facts: "Diktering i journalen",
           transcription: "Direkte transkribering",
         },
         panel: {
-          titleFacts: "FactsR",
+          titleFacts: "Diktering",
           titleTranscription: "Direkte transkript",
           subtitleFacts: "Drevet af Corti",
           subtitleTranscription: "Sikker lyd optagelse",
@@ -2313,7 +2313,7 @@ export const TRANSLATIONS = {
       },
       workflow: {
         eyebrow: "Features",
-        title: "Transcription and FactsR - how you use it in the journal",
+        title: "Transcription and dictation - how you use it in the journal",
         description:
           "We show the exact workflow you meet in the journal, adapted for the website so it's easy to understand.",
         ariaLabel: "Selma+ journal features",
@@ -2333,23 +2333,23 @@ export const TRANSLATIONS = {
           },
           {
             id: "facts",
-            label: "FactsR",
-            title: "FactsR extracts clinical facts automatically",
+            label: "Dictation",
+            title: "Dictate clinical notes directly into the journal",
             description:
-              "FactsR sorts the conversation into history, findings, and plan so you can insert suggestions directly into the journal.",
+              "Record your note as a clinician - quickly, accurately, and in language suited for clinical documentation. Perfect after the consult when you want your assessment, conclusion, and plan captured without typing everything manually.",
             bullets: [
-              "Auto-suggestions for the right sections",
-              "Insert single facts or full blocks",
-              "Save time without compromising quality",
+              "Built for clinical assessments - Phrase conclusions, plans, and HEP the way you would write them.",
+              "Journal-ready text with minimal edits - Automatic punctuation and readable structure so you can review and save fast.",
+              "Structured output in templates - Choose a template, dictate, and get a finished note with clear headings.",
             ],
           },
         ],
         badge: {
-          facts: "FactsR in the journal",
+          facts: "Dictation in the journal",
           transcription: "Live transcription",
         },
         panel: {
-          titleFacts: "FactsR",
+          titleFacts: "Dictation",
           titleTranscription: "Live transcript",
           subtitleFacts: "Powered by Corti",
           subtitleTranscription: "Secure audio recording",
