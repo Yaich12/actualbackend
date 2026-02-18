@@ -39,9 +39,7 @@ export const TRANSLATIONS = {
           title: "Funktioner",
           itemsHeader: "Udforsk",
           items: {
-            transcription: { title: "Transkribering & FactsR" },
-            booking: { title: "Intelligent booking" },
-            operations: { title: "Drift & økonomi" },
+            transcription: { title: "Transkribering & diktering" },
             copilot: { title: "Selma Copilot" },
             website: { title: "Online booking" },
           },
@@ -88,9 +86,9 @@ export const TRANSLATIONS = {
       },
       heroDevices: {
         eyebrow: "Selma+ platform",
-        title: "Overblikket der kommer til dig.",
+        title: "Et bookingsystem bygget til sundhedspraksis.",
         description:
-          "Glem at klikke rundt efter information inden næste konsultation. Når en patient nærmer sig, serverer Selma+ automatisk det hele for dig: Hvem der kommer, et AI-resume af sidste session og en klar plan for i dag. Du er klar, før patienten træder ind ad døren.",
+          "Selma+ er en platform til sundhedsprofessionelle, hvor kalender, patientoverblik og journal hænger naturligt sammen. Med transkribering og diktering kan du lave journaltekst hurtigere Og når du er i tvivl under en konsultation, har du Selma+ som en integreret, evidensbaseret hjælper, der kan afklare differentialdiagnostik og støtte dine beslutninger med afsæt i pålidelige kilder",
         cta: "Prøv Selma+ booking",
         hint: "Ingen installation. Kræver kun et login",
       },
@@ -1310,11 +1308,9 @@ export const TRANSLATIONS = {
           title: "Features",
           itemsHeader: "Explore",
           items: {
-            transcription: { title: "Transcription & FactsR" },
-            booking: { title: "Intelligent booking" },
-            operations: { title: "Operations & finance" },
+            transcription: { title: "Transcription & dictation" },
             copilot: { title: "Selma Copilot" },
-            website: { title: "Clinic website" },
+            website: { title: "Online booking" },
           },
         },
         professions: {

@@ -19,6 +19,7 @@ type FeatureShowcaseProps = {
   media: FeatureShowcaseMedia;
   hint?: string;
   variant?: 'default' | 'journal';
+  visualContent?: ReactNode;
 };
 
 export default function FeatureShowcase({
@@ -31,6 +32,7 @@ export default function FeatureShowcase({
   media,
   hint,
   variant = 'default',
+  visualContent,
 }: FeatureShowcaseProps) {
   const images = media?.images ?? [];
   const isCarousel = media?.type === 'carousel' && images.length > 1;
@@ -78,17 +80,21 @@ export default function FeatureShowcase({
         </div>
 
         <div className="hero-devices__visual">
-          <div className="hero-devices__glow" />
-          <div className="hero-device-stack">
-            {displayImages.map((src, index) => (
-              <Mac
-                key={src}
-                src={src}
-                className={`hero-mac ${activeImage === index ? 'hero-mac--active' : ''}`}
-                aria-hidden="true"
-              />
-            ))}
-          </div>
+          {visualContent ?? (
+            <>
+              <div className="hero-devices__glow" />
+              <div className="hero-device-stack">
+                {displayImages.map((src, index) => (
+                  <Mac
+                    key={src}
+                    src={src}
+                    className={`hero-mac ${activeImage === index ? 'hero-mac--active' : ''}`}
+                    aria-hidden="true"
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </section>

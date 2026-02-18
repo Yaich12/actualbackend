@@ -1,4 +1,5 @@
 import FeatureShowcase from '../sections/FeatureShowcase';
+import LoomEmbed from './LoomEmbed';
 import { HERO_6_IMAGES } from '../../assets/hero6Images';
 import { useLanguage } from '../../unAuth/language/LanguageProvider';
 
@@ -62,6 +63,7 @@ export default function HeroSection() {
       primaryCtaHref=""
       hint={t('landing.heroJournal.hint')}
       variant="journal"
+      visualContent={<LoomEmbed videoId="875ff0de7fd948d5ac07859fabc35ed8" />}
       media={{ type: mediaType, images: HERO_6_IMAGES }}
     />
   );

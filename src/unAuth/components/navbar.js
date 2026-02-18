@@ -1,13 +1,5 @@
 import React, { useMemo } from 'react';
-import {
-  Bot,
-  CalendarDays,
-  LineChart,
-  LayoutTemplate,
-  Sparkles,
-  UserRound,
-  Users,
-} from 'lucide-react';
+import { Bot, LayoutTemplate, Sparkles, UserRound, Users } from 'lucide-react';
 import { useAuth } from '../../AuthContext';
 import { useLanguage } from '../language/LanguageProvider';
 import './navbar.css';
@@ -91,22 +83,12 @@ function Navbar() {
         title: t('navbar.menu.features.title'),
         url: '#features',
         itemsHeader: t('navbar.menu.features.itemsHeader'),
-        itemsColumns: 2,
+        itemsColumns: 1,
         items: [
           {
             title: t('navbar.menu.features.items.transcription.title'),
             url: '/transcription-factsr#factsr-section',
             icon: <Sparkles className="h-5 w-5" />,
-          },
-          {
-            title: t('navbar.menu.features.items.booking.title'),
-            url: '/features',
-            icon: <CalendarDays className="h-5 w-5" />,
-          },
-          {
-            title: t('navbar.menu.features.items.operations.title'),
-            url: '/features/operations',
-            icon: <LineChart className="h-5 w-5" />,
           },
           {
             title: t('navbar.menu.features.items.copilot.title'),
