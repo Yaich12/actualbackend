@@ -12,7 +12,7 @@ function HeroDevices() {
       title={t('landing.heroDevices.title')}
       description={t('landing.heroDevices.description')}
       primaryCtaLabel={t('landing.heroDevices.cta')}
-      primaryCtaHref=""
+      primaryCtaHref="/signup"
       hint={t('landing.heroDevices.hint')}
       media={{ type: 'carousel', images: LAPTOP_IMAGES }}
     />

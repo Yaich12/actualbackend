@@ -1,7 +1,8 @@
 const express = require('express');
 const Stripe = require('stripe');
 const { verifyFirebaseToken } = require('../server/middleware/verifyFirebaseToken');
-const { admin, getFirestore } = require('../server/firebaseAdmin');
+const { admin } = require('../server/firebaseAdmin');
+const { getUserById, setUserFields, setAccountFields } = require('../server/firestoreAccounts');
 
 const router = express.Router();
 
@@ -11,116 +12,6 @@ const stripe = stripeSecretKey
   : null;
 
 const normalizeBaseUrl = (value) => `${value || ''}`.replace(/\/+$/, '');
-
-const resolveAppUrl = (req) => {
-  const origin = req?.headers?.origin;
-  if (origin && /^https?:\/\//i.test(origin)) {
-    return normalizeBaseUrl(origin);
-  }
-  const forwardedHost = req?.headers?.['x-forwarded-host'] || req?.headers?.host;
-  if (forwardedHost) {
-    const protoHeader = req?.headers?.['x-forwarded-proto'];
-    const proto = protoHeader ? protoHeader.split(',')[0].trim() : 'https';
-    return normalizeBaseUrl(`${proto}://${forwardedHost}`);
-  }
-  const candidates = [
-    process.env.APP_URL,
-    process.env.NEXT_PUBLIC_APP_URL,
-    process.env.REACT_APP_APP_URL,
-  ];
-  const resolved = candidates.find(
-    (value) => typeof value === 'string' && /^https?:\/\//i.test(value.trim())
-  );
-  return normalizeBaseUrl(resolved || 'http://localhost:3000');
-};
-
-const getUserDoc = async (uid) => {
-  if (!uid) return null;
-  const db = getFirestore();
-  const snap = await db.collection('users').doc(uid).get();
-  if (!snap.exists) return null;
-  return { id: snap.id, ...snap.data() };
-};
-
-router.post('/portal', verifyFirebaseToken, async (req, res) => {
-  try {
-    if (!stripe) {
-      return res.status(500).json({ error: 'Stripe er ikke konfigureret.' });
-    }
-    const { uid } = req.user || {};
-    if (!uid) {
-      return res.status(401).json({ error: 'Missing user.' });
-    }
-    const userDoc = await getUserDoc(uid);
-    const stripeCustomerId =
-      userDoc?.subscription?.stripeCustomerId || userDoc?.stripeCustomerId || null;
-    if (!stripeCustomerId) {
-      return res.status(400).json({ error: 'Mangler Stripe customer.' });
-    }
-
-    const baseUrl = resolveAppUrl(req);
-    const session = await stripe.billingPortal.sessions.create({
-      customer: stripeCustomerId,
-      return_url: `${baseUrl}/booking/settings?tab=subscription`,
-    });
-
-    console.info('[billing] portal session created for', uid);
-    return res.json({ url: session.url });
-  } catch (error) {
-    console.error('[billing] portal error:', error);
-    return res.status(500).json({ error: error?.message || 'Server error' });
-  }
-});
-
-router.post('/cancel', verifyFirebaseToken, async (req, res) => {
-  try {
-    if (!stripe) {
-      return res.status(500).json({ error: 'Stripe er ikke konfigureret.' });
-    }
-    const { uid } = req.user || {};
-    if (!uid) {
-      return res.status(401).json({ error: 'Missing user.' });
-    }
-    const userDoc = await getUserDoc(uid);
-    const stripeSubscriptionId = userDoc?.subscription?.stripeSubscriptionId || null;
-    if (!stripeSubscriptionId) {
-      return res.status(400).json({ error: 'Mangler Stripe subscription.' });
-    }
-
-    await stripe.subscriptions.update(stripeSubscriptionId, {
-      cancel_at_period_end: true,
-    });
-
-    const db = getFirestore();
-    await db.collection('users').doc(uid).set(
-      {
-        subscription: {
-          cancelAtPeriodEnd: true,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-      },
-      { merge: true }
-    );
-
-    console.info('[billing] cancel_at_period_end set for', uid);
-    return res.json({ ok: true });
-  } catch (error) {
-    console.error('[billing] cancel error:', error);
-    return res.status(500).json({ error: error?.message || 'Server error' });
-  }
-});
-
-module.exports = { router };
-const express = require('express');
-const Stripe = require('stripe');
-const { verifyFirebaseToken } = require('../server/middleware/verifyFirebaseToken');
-const { admin } = require('../server/firebaseAdmin');
-const { getUserById, setUserFields, setAccountFields } = require('../server/firestoreAccounts');
-
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-const stripe = stripeSecretKey
-  ? new Stripe(stripeSecretKey, { apiVersion: '2024-06-20' })
-  : null;
 
 const resolveBaseUrl = (req) => {
   const origin = req?.headers?.origin;
@@ -135,8 +26,8 @@ const resolveBaseUrl = (req) => {
   }
   const candidates = [
     process.env.APP_URL,
-    process.env.REACT_APP_APP_URL,
     process.env.NEXT_PUBLIC_APP_URL,
+    process.env.REACT_APP_APP_URL,
   ];
   const resolved = candidates.find(
     (value) => typeof value === 'string' && /^https?:\/\//i.test(value.trim())
@@ -181,8 +72,6 @@ const buildSubscriptionPayload = ({
   updatedAt: admin.firestore.FieldValue.serverTimestamp(),
 });
 
-const router = express.Router();
-
 router.post('/portal', verifyFirebaseToken, async (req, res) => {
   try {
     if (!stripe) {
@@ -207,6 +96,7 @@ router.post('/portal', verifyFirebaseToken, async (req, res) => {
       customer: stripeCustomerId,
       return_url: `${baseUrl}/booking/settings?tab=subscription`,
     });
+
     return res.json({ url: session.url });
   } catch (error) {
     console.error('[billing] portal error:', error);
@@ -236,10 +126,15 @@ router.post('/cancel', verifyFirebaseToken, async (req, res) => {
     const updated = await stripe.subscriptions.update(stripeSubscriptionId, {
       cancel_at_period_end: true,
     });
+
     const payload = buildSubscriptionPayload({
       status: updated?.status || userDoc?.subscription?.status || userDoc?.subscriptionStatus || null,
       plan: userDoc?.subscription?.plan || userDoc?.plan || null,
-      stripeCustomerId: updated?.customer || userDoc?.subscription?.stripeCustomerId || userDoc?.stripeCustomerId || null,
+      stripeCustomerId:
+        updated?.customer ||
+        userDoc?.subscription?.stripeCustomerId ||
+        userDoc?.stripeCustomerId ||
+        null,
       stripeSubscriptionId: updated?.id || stripeSubscriptionId,
       createdAt: toFirestoreTimestamp(updated?.created),
       currentPeriodEnd: toFirestoreTimestamp(updated?.current_period_end),
@@ -259,4 +154,4 @@ router.post('/cancel', verifyFirebaseToken, async (req, res) => {
   }
 });
 
-module.exports = router;
+module.exports = { router };

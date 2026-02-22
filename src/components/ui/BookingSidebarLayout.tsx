@@ -8,7 +8,6 @@ import {
   BadgeDollarSign,
   FileText,
   Settings,
-  AppWindow,
   LogOut,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -159,11 +158,6 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
       label: t("booking.sidebar.settings", "Indstillinger"),
       href: "/booking/settings",
       icon: <Settings className="h-5 w-5 flex-shrink-0" />,
-    },
-    {
-      label: t("booking.sidebar.apps", "Integrationer"),
-      href: "/booking/apps",
-      icon: <AppWindow className="h-5 w-5 flex-shrink-0" />,
     },
   ];
   const catalogLinks = [

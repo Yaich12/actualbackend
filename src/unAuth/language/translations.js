@@ -78,9 +78,10 @@ export const TRANSLATIONS = {
       },
       frontpage: {
         titleLine1: "Alt din klinik",
-        titleLine2: "behøver samlet",
+        titleLine2Prefix: "behøver",
+        titleLine2Suffix: "samlet",
         subtitle:
-          "Selma+ samler booking, journal og drift i ét roligt system - så du kan fokusere på patienterne.",
+          "Selma+ samler booking og journal i ét samlet system — med en klinisk assistent ved din side",
         ctaPrimary: "Kom i gang gratis",
         ctaSecondary: "Se demo",
       },
@@ -493,6 +494,7 @@ export const TRANSLATIONS = {
       },
       transcriptionFactsr: {
         hero: {
+          badge: "Eksklusiv",
           eyebrow: "Transkribering & FactsR",
           title: "Få kliniske noter automatisk",
           description:
@@ -508,16 +510,16 @@ export const TRANSLATIONS = {
         hero: {
           badge: "Eksklusiv",
           badgeLabel: "Selma Copilot",
-          title: "Selma Copilot: Aldrig mere alene i klinikken.",
+          title: "Selma Copilot: Skabt til klinisk praksis.",
           descriptionIntro: "Mød",
-          assistantName: "Ally",
+          assistantName: "Selma",
           descriptionOutro:
             ". Din nye intelligente kollega, der kender dine patienter, husker retningslinjerne og altid har tid til faglig sparring.",
           tagline: "AI-laget der gør Selma+ til din mest erfarne kollega.",
         },
         alwaysOn: {
-          eyebrow: "Ally, din AI-agent",
-          title: "Ally sidder altid klar i sidepanelet.",
+          eyebrow: "Selma, din AI-agent",
+          title: "Selma sidder altid klar i sidepanelet.",
           description:
             "Selma Copilot kører som et sidepanel i dit system, så du kan spørge om råd, få udkast og sikre dokumentation uden at forlade patienten.",
         },
@@ -525,17 +527,17 @@ export const TRANSLATIONS = {
           {
             title: "Faglig sparring (klinisk beslutningsstøtte)",
             description:
-              "Er du i tvivl om en diagnose? Ally analyserer symptomerne og giver dig kvalificerede forslag baseret på evidens.",
+              "Er du i tvivl om en diagnose? Selma analyserer symptomerne og giver dig kvalificerede forslag baseret på evidens.",
           },
           {
             title: "Kontekst-bevidst",
             description:
-              "I modsætning til ChatGPT, kender Ally dine journaler. Den ved, at patienten har diabetes og tidligere knæskader, når du spørger om råd.",
+              "I modsætning til ChatGPT, kender Selma dine journaler. Den ved, at patienten har diabetes og tidligere knæskader, når du spørger om råd.",
           },
           {
-            title: "Administrativ Ninja",
+            title: "Patientsikkerhed",
             description:
-              "Bed Ally om at skrive en henvisning, opsummere et langt forløb eller formulere en mail til en forsikring. Det tager sekunder.",
+              "Selma scanner dine noter for røde flag og manglende sikkerhedsspørgsmål, så du hurtigt kan afklare det vigtigste i konsultationen.",
           },
         ],
         panel: {
@@ -547,11 +549,11 @@ export const TRANSLATIONS = {
             "Næste opfølgning: 15:30",
           ],
           chat: {
-            title: "Ally chat",
+            title: "Selma chat",
             clinicianLabel: "Behandler",
             clinicianMessage:
               "Opsummer Hans' forløb de sidste 3 måneder og giv mig et forslag til statusattest.",
-            allyLabel: "Ally",
+            allyLabel: "Selma",
             allyIntro: "Her er hovedpunkterne til attesten:",
             allyDetails: [
               { label: "Diagnose", value: "Lumbal Discusprolaps (DM511)" },
@@ -564,13 +566,13 @@ export const TRANSLATIONS = {
             allyOutro:
               "Jeg har oprettet dokumentet. Skal jeg sende det til godkendelse?",
           },
-          footerNote: "Sidepanel med Ally er altid tilgængeligt under konsultationen.",
+          footerNote: "Sidepanel med Selma er altid tilgængeligt under konsultationen.",
         },
         examples: {
           eyebrow: "Flere eksempler",
-          title: "Sådan bruger klinikker Ally i praksis",
+          title: "Sådan bruger klinikker Selma i praksis",
           description:
-            "Se konkrete scenarier, hvor Ally sparer tid, løfter kvaliteten og holder styr på dokumentationen.",
+            "Se konkrete scenarier, hvor Selma sparer tid, løfter kvaliteten og holder styr på dokumentationen.",
           items: [
             {
               label: "Statusattest",
@@ -582,33 +584,33 @@ export const TRANSLATIONS = {
             {
               label: "Henvisning",
               clinician:
-                "Skriv en henvisning til MR for Mette med mistanke om meniskskade.",
+              "Hvad er de 3 mest sandsynlige differentialdiagnoser ?",
               ally:
-                "Henvisning klar: Mette, 34 år, knæsmerter ved belastning og låsningsfornemmelse. Klinisk test positiv. Ønsker MR for afklaring.",
+              "1) Diskogen irritation (fleksionsprovokeret, bedring ved ekstension)\n2) Facetledsrelateret smerte\n3) Gluteal refereret smerte",
             },
             {
               label: "Forsikringsmail",
               clinician:
-                "Lav en kort mail til forsikringen om Anders’ behandlingsstatus.",
+              "Hvad mangler jeg at afklare i anamnesen?",
               ally:
-                "Mail udkast: Anders har gennemført 6 sessioner. Funktionsniveau forbedret 30%. Vi anbefaler 3 ekstra behandlinger for varig effekt.",
+              "• Forværres symptomer ved host/nys?\n• Stråling under knæ?\n• Morgenstivhedens varighed?\n• Tidligere episoder?\n• Patientens bekymringer/fear avoidance?",
             },
             {
               label: "Klinisk sparring",
               clinician:
-                "Har du forslag til næste behandling for en patient med kronisk lændesmerte?",
+              "Har du forslag til næste behandling?",
               ally:
                 "Forslag: Fokus på gradueret belastning, core-stabilitet og individuel øvelsesplan. Overvej opfølgning efter 7-10 dage.",
             },
           ],
         },
         activate: {
-          title: "Få Ally aktiveret i din klinik",
+          title: "Få Selma aktiveret i din klinik",
           description:
             "Selma Copilot aktiveres som et eksklusivt lag oven på dit Selma+ system. Når det er aktivt, kan du spørge, diktere og dokumentere direkte fra journalen.",
           cardTitle: "Eksklusivt AI-lag",
           cardDescription:
-            "Klar til at opleve Ally? Kontakt os og få en demo af Selma Copilot.",
+            "Klar til at opleve Selma? Kontakt os og få en demo af Selma Copilot.",
           cta: "Book en demo",
         },
       },
@@ -1076,9 +1078,9 @@ export const TRANSLATIONS = {
             description:
               "Indtal dit notat som behandler - hurtigt, præcist og i et sprog der passer til klinisk dokumentation. Perfekt efter konsultationen, når du vil have din vurdering, konklusion og plan ned uden at skrive det hele manuelt.",
             bullets: [
-              "Skabt til kliniske vurderinger - Formulér konklusion, plan og HEP som du ville skrive det.",
-              "Journal-klar tekst med minimal efterredigering - Automatisk tegnsætning og læsbar struktur, så du hurtigt kan rette og gemme.",
-              "Struktureret output i skabelon - Vælg en skabelon, dikter, og få et færdigt notat med tydelige overskrifter.",
+              "Skabt til kliniske vurderinger",
+              "Journal-klar tekst med minimal efterredigering",
+              "Struktureret output i skabelon",
             ],
           },
         ],
@@ -1347,9 +1349,10 @@ export const TRANSLATIONS = {
       },
       frontpage: {
         titleLine1: "Everything your clinic",
-        titleLine2: "needs in one place",
+        titleLine2Prefix: "needs",
+        titleLine2Suffix: "in one place",
         subtitle:
-          "Selma+ unites booking, documentation, and operations in one calm system - so you can focus on patients.",
+          "Selma+ brings booking and charting into one system — with a clinical assistant by your side",
         ctaPrimary: "Get started free",
         ctaSecondary: "See demo",
       },
@@ -1760,6 +1763,7 @@ export const TRANSLATIONS = {
       },
       transcriptionFactsr: {
         hero: {
+          badge: "Premium",
           eyebrow: "Transcription & FactsR",
           title: "Get clinical notes automatically",
           description:
@@ -1777,14 +1781,14 @@ export const TRANSLATIONS = {
           badgeLabel: "Selma Copilot",
           title: "Selma Copilot: Never alone in the clinic again.",
           descriptionIntro: "Meet",
-          assistantName: "Ally",
+          assistantName: "Selma",
           descriptionOutro:
             ". Your intelligent colleague who knows your patients, remembers guidelines, and always has time to help.",
           tagline: "The AI layer that makes Selma+ your most experienced colleague.",
         },
         alwaysOn: {
-          eyebrow: "Ally, your AI agent",
-          title: "Ally is always ready in the side panel.",
+          eyebrow: "Selma, your AI agent",
+          title: "Selma is always ready in the side panel.",
           description:
             "Selma Copilot runs as a side panel so you can ask for guidance, get drafts, and secure documentation without leaving the patient.",
         },
@@ -1792,17 +1796,17 @@ export const TRANSLATIONS = {
           {
             title: "Clinical decision support",
             description:
-              "Unsure about a diagnosis? Ally analyzes symptoms and suggests evidence-based options.",
+              "Unsure about a diagnosis? Selma analyzes symptoms and suggests evidence-based options.",
           },
           {
             title: "Context aware",
             description:
-              "Unlike chatbots, Ally knows your records. It sees diabetes and previous knee injuries when you ask for guidance.",
+              "Unlike chatbots, Selma knows your records. It sees diabetes and previous knee injuries when you ask for guidance.",
           },
           {
             title: "Administrative ninja",
             description:
-              "Ask Ally to write referrals, summarize long treatments, or draft insurance emails in seconds.",
+              "Ask Selma to write referrals, summarize long treatments, or draft insurance emails in seconds.",
           },
         ],
         panel: {
@@ -1814,11 +1818,11 @@ export const TRANSLATIONS = {
             "Next follow-up: 3:30 PM",
           ],
           chat: {
-            title: "Ally chat",
+            title: "Selma chat",
             clinicianLabel: "Clinician",
             clinicianMessage:
               "Summarize Hans' last 3 months and draft a status report.",
-            allyLabel: "Ally",
+            allyLabel: "Selma",
             allyIntro: "Here are the main points for the report:",
             allyDetails: [
               { label: "Diagnosis", value: "Lumbar disc herniation (DM511)" },
@@ -1830,13 +1834,13 @@ export const TRANSLATIONS = {
             ],
             allyOutro: "Draft created. Should I send it for approval?",
           },
-          footerNote: "Ally's side panel is always available during sessions.",
+          footerNote: "Selma's side panel is always available during sessions.",
         },
         examples: {
           eyebrow: "More examples",
-          title: "How clinics use Ally in practice",
+          title: "How clinics use Selma in practice",
           description:
-            "See concrete scenarios where Ally saves time, lifts quality, and keeps documentation on track.",
+            "See concrete scenarios where Selma saves time, lifts quality, and keeps documentation on track.",
           items: [
             {
               label: "Status report",
@@ -1866,12 +1870,12 @@ export const TRANSLATIONS = {
           ],
         },
         activate: {
-          title: "Activate Ally in your clinic",
+          title: "Activate Selma in your clinic",
           description:
             "Selma Copilot is a premium layer on top of your Selma+ system. When activated, you can ask, dictate, and document directly in the journal.",
           cardTitle: "Premium AI layer",
           cardDescription:
-            "Ready to experience Ally? Contact us for a Selma Copilot demo.",
+            "Ready to experience Selma? Contact us for a Selma Copilot demo.",
           cta: "Book a demo",
         },
       },

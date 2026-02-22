@@ -1292,10 +1292,16 @@
 
 .indlæg-card--assistant {
   height: 100%;
-  min-height: 0;
+  min-height: 720px;
   display: flex;
   flex-direction: column;
   flex: 1;
+}
+
+@media (max-height: 860px) {
+  .indlæg-card--assistant {
+    min-height: 600px;
+  }
 }
 
 .indlæg-card-body--assistant {

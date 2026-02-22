@@ -60,7 +60,7 @@ export default function HeroSection() {
       description={description}
       descriptionContent={<JournalDescription description={description} />}
       primaryCtaLabel={t('landing.heroJournal.cta')}
-      primaryCtaHref=""
+      primaryCtaHref="/signup"
       hint={t('landing.heroJournal.hint')}
       variant="journal"
       visualContent={<LoomEmbed videoId="875ff0de7fd948d5ac07859fabc35ed8" />}

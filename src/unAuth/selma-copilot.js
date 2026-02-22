@@ -1,15 +1,32 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, CheckCircle2, MessageCircle, Sparkles } from 'lucide-react';
+import { Bot, CheckCircle2, Sparkles } from 'lucide-react';
 import { useLanguage } from './language/LanguageProvider';
+
+function LoomEmbed({ src, ratioPadding = '58.56832971800433%', className = '' }) {
+  return (
+    <div
+      className={`w-full overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-2xl shadow-blue-500/10 ${className}`}
+    >
+      <div className="relative h-0 w-full" style={{ paddingBottom: ratioPadding }}>
+        <iframe
+          className="absolute inset-0 h-full w-full"
+          src={src}
+          frameBorder="0"
+          allow="fullscreen; picture-in-picture"
+          allowFullScreen
+          title="Selma Copilot Loom video"
+        />
+      </div>
+    </div>
+  );
+}
 
 function SelmaCopilotPage() {
   const { t, getArray } = useLanguage();
   const brand = t('common.brand');
   const featureItems = getArray('features.selmaCopilot.features', []);
   const examples = getArray('features.selmaCopilot.examples.items', []);
-  const overviewStats = getArray('features.selmaCopilot.panel.overviewStats', []);
-  const allyDetailLines = getArray('features.selmaCopilot.panel.chat.allyDetails', []);
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -90,52 +107,18 @@ function SelmaCopilotPage() {
             </div>
           </div>
 
-          <div className="rounded-[32px] border border-white/10 bg-slate-950/70 p-6 shadow-2xl shadow-blue-500/10">
+          <div className="rounded-[32px] border border-white/10 bg-slate-950/70 p-5 shadow-2xl shadow-blue-500/10">
             <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.3em] text-blue-200/70">
               {t('features.selmaCopilot.panel.title')}
               <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] text-white">
                 {t('features.selmaCopilot.hero.assistantName')}
               </span>
             </div>
-            <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_0.75fr]">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">
-                  {t('features.selmaCopilot.panel.overviewTitle')}
-                </div>
-                <div className="mt-3 space-y-3 text-xs text-slate-300">
-                  {overviewStats.map((item) => (
-                    <div key={item} className="rounded-xl bg-white/10 px-3 py-2">{item}</div>
-                  ))}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">
-                  <MessageCircle className="h-4 w-4" />
-                  {t('features.selmaCopilot.panel.chat.title')}
-                </div>
-                <div className="mt-3 space-y-3 text-xs">
-                  <div className="rounded-2xl bg-white/10 px-3 py-2 text-slate-200">
-                    <div className="text-[10px] font-semibold text-blue-200">
-                      {t('features.selmaCopilot.panel.chat.clinicianLabel')}
-                    </div>
-                    <p>{t('features.selmaCopilot.panel.chat.clinicianMessage')}</p>
-                  </div>
-                  <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-blue-50 shadow-[0_0_15px_rgba(59,130,246,0.2)]">
-                    <div className="text-[10px] font-semibold text-blue-100">
-                      {t('features.selmaCopilot.panel.chat.allyLabel')}
-                    </div>
-                    <div className="mt-2 space-y-2 text-[11px] leading-relaxed">
-                      <p>{t('features.selmaCopilot.panel.chat.allyIntro')}</p>
-                      {allyDetailLines.map((line) => (
-                        <p key={line.label}>
-                          <span className="font-semibold">{line.label}:</span> {line.value}
-                        </p>
-                      ))}
-                      <p>{t('features.selmaCopilot.panel.chat.allyOutro')}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <div className="mt-6">
+              <LoomEmbed
+                src="https://www.loom.com/embed/abe19c71295a4c15aa34fb865d92f41e"
+                ratioPadding="62%"
+              />
             </div>
             <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-slate-300">
               {t('features.selmaCopilot.panel.footerNote')}

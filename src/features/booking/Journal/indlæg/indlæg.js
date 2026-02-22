@@ -68,6 +68,22 @@ const deriveUserIdentifier = (user) => {
   return 'unknown-user';
 };
 
+const getUserInitials = (user) => {
+  const base =
+    (user?.displayName && user.displayName.trim()) ||
+    (user?.email && user.email.trim()) ||
+    '';
+  if (!base) return '';
+  const parts = base.split(/\s+/).filter(Boolean);
+  const candidateParts =
+    parts.length > 1 ? parts : parts[0].split(/[@._-]+/).filter(Boolean);
+  return candidateParts
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+};
+
 const getTranslation = (translations, lang) => {
   if (!Array.isArray(translations) || translations.length === 0) {
     return null;
@@ -133,8 +149,6 @@ function Indlæg({
     error: 'error',
   };
   const CHAT_AVATARS = {
-    user:
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=64&h=64&q=80&crop=faces&fit=crop',
     ai: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=64&h=64&q=80&crop=faces&fit=crop',
   };
 
@@ -217,6 +231,7 @@ function Indlæg({
   const dictationStopRequestedRef = useRef(false);
 
   const { user } = useAuth();
+  const userInitials = useMemo(() => getUserInitials(user), [user]);
   const { language, preferredLanguage, locale, t } = useLanguage();
   const resolvedLanguage = preferredLanguage || DEFAULT_LANGUAGE;
   const browserLocale = typeof navigator !== 'undefined' ? navigator.language : '';
@@ -1844,15 +1859,6 @@ function Indlæg({
         ),
       },
       {
-        id: 'planHep',
-        label: t('actions.planHep', 'Plan + HEP'),
-        agentType: 'rehab',
-        message: t(
-          'prompts.planHep',
-          'Propose a clinical plan with a short HEP (home exercises) and key patient points.'
-        ),
-      },
-      {
         id: 'summarizePatient',
         label: t('actions.summarizePatient', 'Summarize patient'),
         agentType: 'education',
@@ -2396,7 +2402,13 @@ function Indlæg({
                 sendDisabled={agentLoading || agentChatLoading || !agentInput.trim()}
                 showEmptyHint={!activeTranscriptText.trim()}
                 emptyHintText={t('indlaeg.emptyHint', 'No text yet — you can still ask generally.')}
-                chatAvatars={CHAT_AVATARS}
+                chatAvatars={{
+                  ...CHAT_AVATARS,
+                  user: {
+                    src: user?.photoURL || undefined,
+                    fallback: userInitials || undefined,
+                  },
+                }}
                 placeholder={t(
                   'indlaeg.assistantPlaceholder',
                   'Ask Selma assistant a question...'

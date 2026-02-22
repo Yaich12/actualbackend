@@ -235,7 +235,6 @@ const createBillingPortalSession = async (req, res) => {
     }
 
     const baseUrl = resolveBaseUrl(req);
-    const baseUrl = resolveBaseUrl(req);
     const session = await stripe.billingPortal.sessions.create({
       customer: account.stripeCustomerId,
       return_url: `${baseUrl}/settings/subscription`,

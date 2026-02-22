@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import './sehistorik.css';
 import { collection, deleteDoc, doc, onSnapshot, orderBy, query } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
 
@@ -9,9 +8,6 @@ function SeHistorik({ clientId, clientName, onClose, onOpenEntry }) {
   const [entries, setEntries] = useState([]);
   const [isLoadingEntries, setIsLoadingEntries] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [isSummarizing, setIsSummarizing] = useState(false);
-  const [summaryText, setSummaryText] = useState('');
-  const [summaryError, setSummaryError] = useState('');
   const [readingEntry, setReadingEntry] = useState(null); // Entry being read in detail view
   const [deletingEntryId, setDeletingEntryId] = useState(null);
   const [entryActionError, setEntryActionError] = useState('');
@@ -71,54 +67,6 @@ function SeHistorik({ clientId, clientName, onClose, onOpenEntry }) {
     return lines.slice(0, maxLines).join('\n') + '...';
   };
 
-  const handleSummarizePatient = async () => {
-    if (!clientId || !user) {
-      setSummaryError('Mangler klient eller bruger.');
-      return;
-    }
-
-    if (!process.env.REACT_APP_SUMMARIZE_JOURNAL_URL) {
-      setSummaryError('Manglende opsummerings-URL (REACT_APP_SUMMARIZE_JOURNAL_URL).');
-      return;
-    }
-
-    try {
-      setIsSummarizing(true);
-      setSummaryError('');
-      setSummaryText('');
-
-      const auth = getAuth();
-      const idToken = await auth.currentUser?.getIdToken();
-      if (!idToken) {
-        setSummaryError('Kunne ikke hente login-token.');
-        setIsSummarizing(false);
-        return;
-      }
-
-      const res = await fetch(process.env.REACT_APP_SUMMARIZE_JOURNAL_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({ clientId }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        console.error('summarize error', data);
-        setSummaryError(data?.error || 'Ukendt fejl ved opsummering.');
-        return;
-      }
-
-      setSummaryText(data?.summary || '');
-    } catch (err) {
-      console.error(err);
-      setSummaryError('Der opstod en fejl. Prøv igen.');
-    } finally {
-      setIsSummarizing(false);
-    }
-  };
 
   useEffect(() => {
     if (!user) {
@@ -178,12 +126,6 @@ function SeHistorik({ clientId, clientName, onClose, onOpenEntry }) {
       unsubscribe();
     };
   }, [user, clientId]);
-
-  useEffect(() => {
-    setSummaryText('');
-    setSummaryError('');
-    setIsSummarizing(false);
-  }, [clientId]);
 
   // If reading an entry, show read-only detail view
   if (readingEntry) {
@@ -245,13 +187,6 @@ function SeHistorik({ clientId, clientName, onClose, onOpenEntry }) {
             <span className="sehistorik-client-name">{clientName}</span>
           </div>
           <div className="sehistorik-header-actions">
-            <button
-              className="sehistorik-create-entry-btn"
-              onClick={handleSummarizePatient}
-              disabled={isSummarizing}
-            >
-              {isSummarizing ? 'Opsummerer…' : 'Opsummér patient'}
-            </button>
             <button className="sehistorik-close-btn" onClick={onClose}>✕</button>
           </div>
         </div>
@@ -262,21 +197,6 @@ function SeHistorik({ clientId, clientName, onClose, onOpenEntry }) {
         {entryActionError && (
           <div className="sehistorik-summary-error" role="alert">
             {entryActionError}
-          </div>
-        )}
-        {(summaryError || summaryText) && (
-          <div className="sehistorik-summary">
-            {summaryError && (
-              <div className="sehistorik-summary-error" role="alert">
-                {summaryError}
-              </div>
-            )}
-            {summaryText && (
-              <div className="sehistorik-summary-card">
-                <h3>Opsummering af journal</h3>
-                <pre>{summaryText}</pre>
-              </div>
-            )}
           </div>
         )}
         {isLoadingEntries ? (

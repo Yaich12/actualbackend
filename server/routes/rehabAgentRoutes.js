@@ -42,6 +42,28 @@ const appendOutputLanguage = (message, preferredLanguage) => {
   return `${message}\n\nOUTPUT_LANGUAGE: ${language}\nPlease respond in this language.\nUse Markdown headings starting with ### for each section. Do not return a single block without headings.`.trim();
 };
 
+const resolveTaskId = (resp) =>
+  resp?.task?.id ||
+  resp?.taskId ||
+  resp?.id ||
+  resp?.task?.taskId ||
+  resp?.task?.status?.taskId ||
+  null;
+
+const pollTaskUntilDone = async (client, agentId, taskId, maxTries = 30, delayMs = 500) => {
+  for (let attempt = 0; attempt < maxTries; attempt += 1) {
+    const task = await client.agents.getTask(agentId, taskId, {
+      tenantName: process.env.CORTI_TENANT_NAME,
+    });
+    const state = task?.status?.state || task?.state;
+    if (state === 'completed' || state === 'failed') {
+      return task;
+    }
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  throw new Error('Task polling timed out');
+};
+
 
 router.get('/ping', (_req, res) => {
   return res.json({ ok: true });
@@ -105,11 +127,22 @@ ${appendOutputLanguage(task, preferredLanguage)}
       tenantName: process.env.CORTI_TENANT_NAME,
     });
 
-    const text =
+    let text =
       extractTextFromTask(resp?.task || resp) ||
       extractTextFromTask(resp?.task?.status || resp?.status) ||
       resp?.text ||
       '';
+
+    if (!text) {
+      const taskId = resolveTaskId(resp);
+      if (taskId) {
+        const task = await pollTaskUntilDone(cortiClient, agentId, taskId);
+        text =
+          extractTextFromTask(task) ||
+          extractTextFromTask(task?.status) ||
+          '';
+      }
+    }
 
     if (!text) {
       throw new Error('Empty response from Corti');

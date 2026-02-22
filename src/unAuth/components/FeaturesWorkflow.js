@@ -1,18 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle2, Mic, Sparkles } from "lucide-react";
-import FactsRPanel from "../../features/booking/Journal/indlæg/FactsRPanel";
-import Whisper from "../../features/booking/Journal/indlæg/whisper";
+import { CheckCircle2 } from "lucide-react";
+import LoomEmbed from "../../components/ui/LoomEmbed";
 import { useLanguage } from "../language/LanguageProvider";
 import "../../features/booking/Journal/indlæg/indlæg.css";
-
-const FACTS_STYLE_VARS = {
-  "--bg-surface": "#ffffff",
-  "--bg-subtle": "#f8fafc",
-  "--text-primary": "#0f172a",
-  "--text-muted": "#64748b",
-  "--border-subtle": "#e2e8f0",
-};
 
 const transition = { duration: 0.45, ease: "easeOut" };
 
@@ -21,104 +12,6 @@ function FeaturesWorkflow({ sectionId } = {}) {
   const [activeId, setActiveId] = useState("facts");
 
   const featureTabs = getArray("features.workflow.tabs", []);
-  const factsSample = getArray("features.workflow.sample.facts", []);
-  const transcriptSample = getArray("features.workflow.sample.transcripts", []);
-
-  const whisperSample = useMemo(
-    () => ({
-      text: t("features.workflow.sample.whisperText"),
-      usage: {
-        type: t("features.workflow.whisper.usageType"),
-        input_tokens: 812,
-        output_tokens: 156,
-        total_tokens: 968,
-        input_token_details: {
-          text_tokens: 410,
-          audio_tokens: 402,
-        },
-      },
-    }),
-    [t]
-  );
-
-  const factsGroupLabels = useMemo(
-    () => ({
-      anamnesis: t("features.workflow.factsPanel.groups.anamnesis"),
-      objective: t("features.workflow.factsPanel.groups.objective"),
-      plan: t("features.workflow.factsPanel.groups.plan"),
-    }),
-    [t]
-  );
-
-  const factsPanelLabels = useMemo(
-    () => ({
-      title: t("features.workflow.factsPanel.title"),
-      poweredBy: t("features.workflow.factsPanel.poweredBy"),
-      groupFallback: t("features.workflow.factsPanel.groupFallback"),
-      status: {
-        connecting: t("features.workflow.factsPanel.status.connecting"),
-        streaming: t("features.workflow.factsPanel.status.streaming"),
-        finalizing: t("features.workflow.factsPanel.status.finalizing"),
-        ended: t("features.workflow.factsPanel.status.ended"),
-        error: t("features.workflow.factsPanel.status.error"),
-        idle: t("features.workflow.factsPanel.status.idle"),
-      },
-      record: {
-        start: t("features.workflow.factsPanel.record.start"),
-        stop: t("features.workflow.factsPanel.record.stop"),
-      },
-      interactionLabel: t("features.workflow.factsPanel.interaction"),
-      latestLabel: t("features.workflow.factsPanel.latest"),
-      insertBarLabel: t("features.workflow.factsPanel.insertBarLabel"),
-      insertBarTitle: t("features.workflow.factsPanel.insertBarTitle"),
-      insertTargets: {
-        auto: t("features.workflow.factsPanel.insertTargets.auto"),
-        anamnesis: t("features.workflow.factsPanel.insertTargets.anamnesis"),
-        conclusion_focus: t("features.workflow.factsPanel.insertTargets.conclusionFocus"),
-        conclusion_content: t("features.workflow.factsPanel.insertTargets.conclusionContent"),
-        conclusion_tasks: t("features.workflow.factsPanel.insertTargets.conclusionTasks"),
-        conclusion_reflection: t("features.workflow.factsPanel.insertTargets.conclusionReflection"),
-        combined: t("features.workflow.factsPanel.insertTargets.combined"),
-      },
-      insertSelected: t("features.workflow.factsPanel.insertSelected"),
-      insertSelectedTitle: t("features.workflow.factsPanel.insertSelectedTitle"),
-      insertAll: t("features.workflow.factsPanel.insertAll"),
-      insertAllTitle: t("features.workflow.factsPanel.insertAllTitle"),
-      tabs: {
-        facts: t("features.workflow.factsPanel.tabs.facts"),
-        transcript: t("features.workflow.factsPanel.tabs.transcript"),
-      },
-      actions: {
-        flush: t("features.workflow.factsPanel.actions.flush"),
-        clear: t("features.workflow.factsPanel.actions.clear"),
-      },
-      item: {
-        select: t("features.workflow.factsPanel.item.select"),
-        recommended: t("features.workflow.factsPanel.item.recommended"),
-        insert: t("features.workflow.factsPanel.item.insert"),
-        insertTitle: t("features.workflow.factsPanel.item.insertTitle"),
-      },
-      empty: {
-        facts: t("features.workflow.factsPanel.empty.facts"),
-        transcript: t("features.workflow.factsPanel.empty.transcript"),
-      },
-      meta: {
-        source: t("features.workflow.factsPanel.meta.source"),
-        discarded: t("features.workflow.factsPanel.meta.discarded"),
-      },
-    }),
-    [t]
-  );
-
-  const formattedFacts = useMemo(
-    () =>
-      factsSample.map((fact) => ({
-        ...fact,
-        group: factsGroupLabels[fact.groupKey] || fact.group || "",
-      })),
-    [factsGroupLabels, factsSample]
-  );
-
   useEffect(() => {
     if (typeof window === "undefined") return;
     const applyHash = () => {
@@ -130,6 +23,7 @@ function FeaturesWorkflow({ sectionId } = {}) {
         setActiveId("facts");
       }
     };
+    
     applyHash();
     window.addEventListener("hashchange", applyHash);
     return () => window.removeEventListener("hashchange", applyHash);
@@ -144,12 +38,6 @@ function FeaturesWorkflow({ sectionId } = {}) {
   const activeBullets = activeFeature?.bullets || [];
 
   const isFacts = activeId === "facts";
-  const AccentIcon = isFacts ? Sparkles : Mic;
-  const accentBg = isFacts ? "bg-emerald-50" : "bg-blue-50";
-  const accentText = isFacts ? "text-emerald-600" : "text-blue-600";
-  const badgeClasses = isFacts ? "bg-emerald-50 text-emerald-700" : "bg-blue-50 text-blue-700";
-  const dotPing = isFacts ? "bg-emerald-400" : "bg-blue-400";
-  const dotSolid = isFacts ? "bg-emerald-500" : "bg-blue-500";
 
   return (
     <section id={sectionId} className="bg-white py-16 text-slate-900 scroll-mt-24">
@@ -232,112 +120,12 @@ function FeaturesWorkflow({ sectionId } = {}) {
               </motion.div>
             </AnimatePresence>
 
-            <div className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-200/60">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${accentBg}`}>
-                    <AccentIcon className={`h-6 w-6 ${accentText}`} />
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">
-                      {isFacts
-                        ? t("features.workflow.panel.titleFacts")
-                        : t("features.workflow.panel.titleTranscription")}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {isFacts
-                        ? t("features.workflow.panel.subtitleFacts")
-                        : t("features.workflow.panel.subtitleTranscription")}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${badgeClasses}`}>
-                    {t("features.workflow.panel.liveBadge")}
-                  </span>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700"
-                  >
-                    <span className="relative flex h-2 w-2">
-                      <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${dotPing}`} />
-                      <span className={`relative inline-flex h-2 w-2 rounded-full ${dotSolid}`} />
-                    </span>
-                    {t("features.workflow.panel.record")}
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4" style={FACTS_STYLE_VARS}>
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={activeId}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={transition}
-                    className="pointer-events-none max-h-[520px] overflow-hidden"
-                  >
-                    {isFacts ? (
-                      <FactsRPanel
-                        status="streaming"
-                        interactionId="7f23-9a2b"
-                        transcripts={transcriptSample}
-                        facts={formattedFacts}
-                        isRecording
-                        recordingStatus={t("features.workflow.panel.recordingStatus")}
-                        onToggleRecording={() => {}}
-                        insertTarget="auto"
-                        onChangeInsertTarget={() => {}}
-                        labels={factsPanelLabels}
-                        suggestionForFact={(fact) => {
-                          const groupKey = fact?.groupKey;
-                          if (groupKey === "objective") {
-                            return { label: factsGroupLabels.objective, key: "objective" };
-                          }
-                          if (groupKey === "plan") {
-                            return { label: factsGroupLabels.plan, key: "plan" };
-                          }
-                          if (!groupKey && typeof fact?.group === "string") {
-                            const normalized = fact.group.toLowerCase();
-                            if (normalized.includes(factsGroupLabels.objective.toLowerCase())) {
-                              return { label: factsGroupLabels.objective, key: "objective" };
-                            }
-                            if (normalized.includes(factsGroupLabels.plan.toLowerCase())) {
-                              return { label: factsGroupLabels.plan, key: "plan" };
-                            }
-                          }
-                          return { label: factsGroupLabels.anamnesis, key: "anamnesis" };
-                        }}
-                        onInsertSelected={() => {}}
-                        onInsertAll={() => {}}
-                        onInsertOne={() => {}}
-                        onFlush={() => {}}
-                        onClear={() => {}}
-                      />
-                    ) : (
-                      <Whisper
-                        data={whisperSample}
-                        labels={{
-                          ariaLabel: t("features.workflow.whisper.ariaLabel"),
-                          title: t("features.workflow.whisper.title"),
-                          subtitle: t("features.workflow.whisper.subtitle"),
-                          excerptTitle: t("features.workflow.whisper.excerptTitle"),
-                          placeholder: t("features.workflow.whisper.placeholder"),
-                          usageTitle: t("features.workflow.whisper.usageTitle"),
-                          usageLabels: {
-                            type: t("features.workflow.whisper.usageLabels.type"),
-                            input: t("features.workflow.whisper.usageLabels.input"),
-                            output: t("features.workflow.whisper.usageLabels.output"),
-                            total: t("features.workflow.whisper.usageLabels.total"),
-                            textTokens: t("features.workflow.whisper.usageLabels.textTokens"),
-                            audioTokens: t("features.workflow.whisper.usageLabels.audioTokens"),
-                          },
-                        }}
-                      />
-                    )}
-                  </motion.div>
-                </AnimatePresence>
+            <div className="flex w-full items-center justify-center">
+              <div className="w-full max-w-4xl">
+                <LoomEmbed
+                  videoId="875ff0de7fd948d5ac07859fabc35ed8"
+                  className="w-full border border-slate-200 bg-white shadow-lg shadow-slate-200/60"
+                />
               </div>
             </div>
           </div>

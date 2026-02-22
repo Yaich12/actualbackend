@@ -31,7 +31,7 @@ const syncHeroVideo = (src, time) => {
 };
 
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           function Frontpage() {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            const { t } = useLanguage();
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            const { t, language } = useLanguage();
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            const [active, setActive] = useState(0);
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            const [next, setNext] = useState(1);
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             const [isFading, setIsFading] = useState(false);
@@ -121,11 +121,29 @@ const syncHeroVideo = (src, time) => {
       <div className="frontpage-grid">
         <div className="frontpage-container">
           <h1 className="frontpage-title">
-            <span className="frontpage-title-line">{t("landing.frontpage.titleLine1")}</span>
-            <span className="frontpage-title-line">
-              {t("landing.frontpage.titleLine2")}
-              <span className="frontpage-dot">.</span>
-            </span>
+            {String(language || "").toLowerCase().startsWith("da") ? (
+              <>
+                <span className="frontpage-title-line">{t("landing.frontpage.titleLine1")}</span>
+                <span className="frontpage-title-line">
+                  {t("landing.frontpage.titleLine2Prefix")}
+                  <span className="frontpage-dot">,</span>{" "}
+                  {t("landing.frontpage.titleLine2Suffix")}
+                  <span className="frontpage-dot">.</span>
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="frontpage-title-line">
+                  {t("landing.frontpage.titleLine1")}{" "}
+                  {t("landing.frontpage.titleLine2Prefix")}
+                  <span className="frontpage-dot">,</span>{" "}
+                </span>
+                <span className="frontpage-title-line">
+                  {t("landing.frontpage.titleLine2Suffix")}
+                  <span className="frontpage-dot">.</span>
+                </span>
+              </>
+            )}
           </h1>
 
           <p className="frontpage-subtitle">

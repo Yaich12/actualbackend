@@ -15,9 +15,19 @@ const PLAN_CONFIG = [
 ];
 
 export default function PricingSection5() {
-  const { t, getArray } = useLanguage();
+  const { t, getArray, language } = useLanguage();
   const pricingRef = useRef<HTMLDivElement>(null);
-  const plans = PLAN_CONFIG.map((plan) => ({
+  const isDanish = String(language || "").toLowerCase().startsWith("da");
+  const resolvedPlanConfig = isDanish
+    ? PLAN_CONFIG.map((plan) =>
+        plan.id === "starter"
+          ? { ...plan, price: 249 }
+          : plan.id === "business"
+            ? { ...plan, price: 399 }
+            : plan
+      )
+    : PLAN_CONFIG;
+  const plans = resolvedPlanConfig.map((plan) => ({
     ...plan,
     name: t(`pricing.plans.${plan.id}.name`),
     description: t(`pricing.plans.${plan.id}.description`),
@@ -113,14 +123,9 @@ export default function PricingSection5() {
                   ) : (
                     <>
                       <span className="text-4xl font-semibold text-gray-900">
-                        $
-                        <NumberFlow
-                          format={{
-                            currency: "USD",
-                          }}
-                          value={plan.price}
-                          className="text-4xl font-semibold"
-                        />
+                        {!isDanish && "$"}
+                        <NumberFlow value={plan.price} className="text-4xl font-semibold" />
+                        {isDanish && " DKK"}
                       </span>
                       <span className="text-gray-600 ml-1">/{t("pricing.labels.month")}</span>
                     </>

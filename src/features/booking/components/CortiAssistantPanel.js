@@ -18,6 +18,22 @@ const DEFAULT_AVATARS = {
   ai: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=64&h=64&q=80&crop=faces&fit=crop',
 };
 
+const normalizeAvatar = (value, fallback) => {
+  if (!value) {
+    return { src: undefined, fallback };
+  }
+  if (typeof value === 'string') {
+    return { src: value, fallback };
+  }
+  if (typeof value === 'object') {
+    return {
+      src: value.src || undefined,
+      fallback: value.fallback || fallback,
+    };
+  }
+  return { src: undefined, fallback };
+};
+
 export const parseAssistantSections = (markdownText, fallbackTitle = 'Answer') => {
   const lines = `${markdownText || ''}`.split(/\r?\n/);
   const sections = [];
@@ -148,6 +164,8 @@ function CortiAssistantPanel({
   const selmaLabel = t('assistant.selmaLabel', 'Selma');
   const userFallback = userLabel.slice(0, 2).toUpperCase();
   const selmaFallback = selmaLabel.slice(0, 2).toUpperCase();
+  const resolvedUserAvatar = normalizeAvatar(chatAvatars?.user, userFallback);
+  const resolvedSelmaAvatar = normalizeAvatar(chatAvatars?.ai, selmaFallback);
   const effectiveSendDisabled =
     typeof sendDisabled === 'boolean'
       ? sendDisabled
@@ -216,8 +234,8 @@ function CortiAssistantPanel({
                   variant={msg.role === 'user' ? 'sent' : 'received'}
                 >
                   <ChatBubbleAvatar
-                    src={msg.role === 'user' ? chatAvatars.user : chatAvatars.ai}
-                  fallback={msg.role === 'user' ? userFallback : selmaFallback}
+                    src={msg.role === 'user' ? resolvedUserAvatar.src : resolvedSelmaAvatar.src}
+                    fallback={msg.role === 'user' ? resolvedUserAvatar.fallback : resolvedSelmaAvatar.fallback}
                     className="shadow-sm"
                   />
                   <div className="flex flex-col gap-1 max-w-full">
@@ -239,7 +257,11 @@ function CortiAssistantPanel({
 
               {isSending && (
                 <ChatBubble variant="received">
-                  <ChatBubbleAvatar src={chatAvatars.ai} fallback={selmaFallback} className="shadow-sm" />
+                <ChatBubbleAvatar
+                  src={resolvedSelmaAvatar.src}
+                  fallback={resolvedSelmaAvatar.fallback}
+                  className="shadow-sm"
+                />
                   <div className="flex flex-col gap-1 max-w-full">
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                       {selmaLabel}
