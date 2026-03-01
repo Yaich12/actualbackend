@@ -29,10 +29,15 @@ import {
   resolveSpeechLanguage,
 } from '../../../../utils/cortiLanguages';
 import { buildApiUrl, buildWsUrl } from '../../../../utils/runtimeUrls';
+import { getIdToken } from '../../../../utils/auth';
 
 const DEFAULT_LANGUAGE = 'en';
 const HEADING_INSTRUCTION =
   'Use Markdown headings starting with ### for each section. Do not return a single block without headings.';
+const FREE_TEXT_FAST_INSTRUCTION =
+  'Svar kort og direkte paa brugerens spoergsmaal. Maks 5 bullets eller 5 korte linjer. Ingen kilder. Ingen lange forklaringer.';
+const FREE_TEXT_TITLE_INSTRUCTION =
+  'Start altid svaret med en Markdown-overskrift paa formatet "### <kort svar>" (maks 8 ord), og skriv derefter et meget kort svar under overskriften.';
 const UNSUPPORTED_LANGUAGE_RE = /unsupported language|language unavailable/i;
 
 const apiUrl = (path) => buildApiUrl(path);
@@ -68,22 +73,6 @@ const deriveUserIdentifier = (user) => {
   return 'unknown-user';
 };
 
-const getUserInitials = (user) => {
-  const base =
-    (user?.displayName && user.displayName.trim()) ||
-    (user?.email && user.email.trim()) ||
-    '';
-  if (!base) return '';
-  const parts = base.split(/\s+/).filter(Boolean);
-  const candidateParts =
-    parts.length > 1 ? parts : parts[0].split(/[@._-]+/).filter(Boolean);
-  return candidateParts
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-};
-
 const getTranslation = (translations, lang) => {
   if (!Array.isArray(translations) || translations.length === 0) {
     return null;
@@ -117,6 +106,59 @@ const buildDocumentText = (sections, fallbackHeading = 'Section') => {
     .join('\n\n');
 };
 
+const escapeHtml = (value = '') =>
+  String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const plainTextToRichContent = (value = '') => escapeHtml(value).replace(/\n/g, '<br>');
+
+const richContentToPlainText = (value = '') => {
+  if (!value) return '';
+  if (typeof document === 'undefined') {
+    return String(value).replace(/<[^>]+>/g, '');
+  }
+
+  const normalized = String(value)
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<div>/gi, '')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<p>/gi, '');
+
+  const container = document.createElement('div');
+  container.innerHTML = normalized;
+  return (container.textContent || '').replace(/\u00a0/g, ' ');
+};
+
+const isRichContentEmpty = (value = '') =>
+  !String(value)
+    .replace(/<br\s*\/?>/gi, '')
+    .replace(/<\/?div>/gi, '')
+    .replace(/<\/?p>/gi, '')
+    .replace(/&nbsp;/gi, '')
+    .trim();
+
+const getEntryPlainContent = (entry) => {
+  if (typeof entry?.content === 'string') {
+    return entry.content;
+  }
+  if (typeof entry?.contentRich === 'string') {
+    return richContentToPlainText(entry.contentRich);
+  }
+  return '';
+};
+
+const getEntryRichContent = (entry) => {
+  if (typeof entry?.contentRich === 'string' && entry.contentRich.trim() && !isRichContentEmpty(entry.contentRich)) {
+    return entry.contentRich;
+  }
+  return plainTextToRichContent(getEntryPlainContent(entry));
+};
+
 function Indlæg({
   clientId,
   clientName,
@@ -148,17 +190,17 @@ function Indlæg({
     done: 'done',
     error: 'error',
   };
-  const CHAT_AVATARS = {
-    ai: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=64&h=64&q=80&crop=faces&fit=crop',
-  };
 
   const originalEntryRef = useRef(initialEntry);
   const previousEntryRef = useRef(null);
   // used when user starts a brand new entry (unsaved) and navigates away to a past session
   const previousDraftRef = useRef(null);
+  const initialPlainContent = getEntryPlainContent(initialEntry);
+  const initialRichContent = getEntryRichContent(initialEntry);
   const [activeEntry, setActiveEntry] = useState(initialEntry);
   const [date, setDate] = useState(initialEntry?.date || initialDate || '14-11-2025');
-  const [content, setContent] = useState(initialEntry?.content || '');
+  const [content, setContent] = useState(initialPlainContent);
+  const [contentRich, setContentRich] = useState(initialRichContent);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
@@ -207,6 +249,7 @@ function Indlæg({
   const [manualNoteHeight, setManualNoteHeight] = useState(null);
   const [isManualNoteResize, setIsManualNoteResize] = useState(false);
   const [copyStatus, setCopyStatus] = useState('idle');
+  const [noteTextFormat, setNoteTextFormat] = useState('normal');
 
   const wsRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -230,8 +273,7 @@ function Indlæg({
   const dictationChunksRef = useRef([]);
   const dictationStopRequestedRef = useRef(false);
 
-  const { user } = useAuth();
-  const userInitials = useMemo(() => getUserInitials(user), [user]);
+  const { user, userDoc } = useAuth();
   const { language, preferredLanguage, locale, t } = useLanguage();
   const resolvedLanguage = preferredLanguage || DEFAULT_LANGUAGE;
   const browserLocale = typeof navigator !== 'undefined' ? navigator.language : '';
@@ -254,6 +296,33 @@ function Indlæg({
         browserLocale,
       }),
     [resolvedLanguage, explicitSpeechLanguage, browserLocale]
+  );
+
+  const userAvatarSrc = useMemo(() => {
+    const candidates = [userDoc?.photoURL, user?.photoURL];
+    const resolved = candidates.find((value) => typeof value === 'string' && value.trim());
+    return resolved ? resolved.trim() : '';
+  }, [userDoc?.photoURL, user?.photoURL]);
+
+  const userAvatarFallback = useMemo(() => {
+    const source =
+      `${userDoc?.fullName || userDoc?.displayName || user?.displayName || user?.email || user?.uid || ''}`.trim();
+    if (!source) return 'U';
+    return source
+      .split(/\s+/)
+      .map((part) => part[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
+  }, [userDoc?.displayName, userDoc?.fullName, user?.displayName, user?.email, user?.uid]);
+
+  const CHAT_AVATARS = useMemo(
+    () => ({
+      user: userAvatarSrc,
+      userFallback: userAvatarFallback,
+      ai: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=64&h=64&q=80&crop=faces&fit=crop',
+    }),
+    [userAvatarFallback, userAvatarSrc]
   );
 
   const transcriptText = useMemo(() => {
@@ -379,6 +448,90 @@ function Indlæg({
     }
   }, [content]);
 
+  const syncNoteContentFromEditor = useCallback(() => {
+    const editor = noteTextareaRef.current;
+    if (!editor) return;
+    const nextRich = editor.innerHTML || '';
+    if (isRichContentEmpty(nextRich)) {
+      setContent('');
+      setContentRich('');
+      if (editor.innerHTML) {
+        editor.innerHTML = '';
+      }
+      return;
+    }
+    const nextPlain = richContentToPlainText(nextRich);
+    setContent(nextPlain);
+    setContentRich(nextRich);
+  }, []);
+
+  const refreshNoteTextFormat = useCallback(() => {
+    const editor = noteTextareaRef.current;
+    if (!editor || typeof window === 'undefined') return;
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    if (!editor.contains(selection.anchorNode)) return;
+    try {
+      const isBold =
+        typeof document.queryCommandState === 'function' &&
+        document.queryCommandState('bold');
+      setNoteTextFormat(isBold ? 'bold' : 'normal');
+    } catch {
+      setNoteTextFormat('normal');
+    }
+  }, []);
+
+  const handleApplyNoteTextFormat = useCallback(
+    (nextFormat) => {
+      const editor = noteTextareaRef.current;
+      if (!editor || typeof window === 'undefined') return;
+
+      editor.focus();
+
+      const selection = window.getSelection();
+      const hasSelection =
+        selection &&
+        selection.rangeCount > 0 &&
+        !selection.isCollapsed &&
+        editor.contains(selection.anchorNode) &&
+        editor.contains(selection.focusNode);
+
+      try {
+        if (nextFormat === 'bold') {
+          if (typeof document.execCommand === 'function') {
+            if (hasSelection) {
+              document.execCommand('bold', false, null);
+            } else {
+              const isBold =
+                typeof document.queryCommandState === 'function' &&
+                document.queryCommandState('bold');
+              if (!isBold) {
+                document.execCommand('bold', false, null);
+              }
+            }
+          }
+        } else if (typeof document.execCommand === 'function') {
+          if (hasSelection) {
+            document.execCommand('removeFormat', false, null);
+          } else {
+            const isBold =
+              typeof document.queryCommandState === 'function' &&
+              document.queryCommandState('bold');
+            if (isBold) {
+              document.execCommand('bold', false, null);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('[Indlæg] Could not apply note text format:', error);
+      }
+
+      syncNoteContentFromEditor();
+      setNoteTextFormat(nextFormat === 'bold' ? 'bold' : 'normal');
+    },
+    [syncNoteContentFromEditor]
+  );
+
   const formatDateOnly = (value) => {
     if (!value) return '';
     try {
@@ -441,9 +594,14 @@ function Indlæg({
       try {
         const url = apiUrl(`/api/agents/${encodeURIComponent(agentKey)}/init`);
         console.log('[Indlæg] agent init', agentKey, url);
+        const token = await getIdToken().catch(() => null);
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
         const response = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({}),
         });
         const raw = await response.text();
@@ -548,10 +706,22 @@ function Indlæg({
 
 
   const sendAgentMessage = useCallback(
-    async (overrideMessage = null, _overrideAgentType = null, agentKey = 'education') => {
+    async (
+      overrideMessage = null,
+      _overrideAgentType = null,
+      agentKey = 'education',
+      displayMessage = null,
+      sourceTextLimit = null,
+      useHeadingInstruction = true
+    ) => {
       const finalMessage = `${overrideMessage ?? agentInput}`.trim();
       if (!finalMessage) return;
-      const resolvedAgentId = await ensureAgentId(agentKey);
+      let resolvedAgentKey = agentKey;
+      let resolvedAgentId = await ensureAgentId(resolvedAgentKey);
+      if (!resolvedAgentId && resolvedAgentKey === 'educationFast') {
+        resolvedAgentKey = 'education';
+        resolvedAgentId = await ensureAgentId(resolvedAgentKey);
+      }
       if (!resolvedAgentId) {
         setAgentError(t('indlaeg.errors.agentNotReady', 'Agent not ready.'));
         return;
@@ -560,38 +730,67 @@ function Indlæg({
         (content && content.trim()) ||
         (generatedDocument?.sections?.length ? buildDocumentText(generatedDocument.sections) : '') ||
         (transcribeMode === MODE_DICTATE ? dictationText : transcriptText);
-      const sourceText = (baseText || '').trim() || finalMessage;
+      let sourceText = (baseText || '').trim() || finalMessage;
+      if (
+        Number.isFinite(sourceTextLimit) &&
+        Number(sourceTextLimit) > 0 &&
+        sourceText.length > Number(sourceTextLimit)
+      ) {
+        sourceText = `${sourceText.slice(0, Number(sourceTextLimit))}\n\n[Truncated for faster response]`;
+      }
       const contextSource = (content && content.trim()) ? 'note' : generatedDocument?.sections?.length ? 'generated' : 'transcript';
-      console.log('[AGENT UI] key=', agentKey, 'ctx source=', contextSource, 'len=', sourceText.length);
+      console.log('[AGENT UI] key=', resolvedAgentKey, 'ctx source=', contextSource, 'len=', sourceText.length);
 
       const payload = {
-        message: `${finalMessage}\n\n${HEADING_INSTRUCTION}`.trim(),
+        message: useHeadingInstruction
+          ? `${finalMessage}\n\n${HEADING_INSTRUCTION}`.trim()
+          : finalMessage,
         sourceText: sourceText,
         preferredLanguage: resolvedLanguage,
       };
 
       setAgentError('');
       setAgentChatLoading(true);
+      const visibleMessage = `${displayMessage ?? finalMessage}`.trim() || finalMessage;
       await appendAssistantMessage({
         role: 'user',
-        text: finalMessage,
+        text: visibleMessage,
         ts: Date.now(),
       });
 
       try {
-        const response = await fetch(apiUrl(`/api/agents/${encodeURIComponent(agentKey)}/chat`), {
+        const token = await getIdToken().catch(() => null);
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        const response = await fetch(
+          apiUrl(`/api/agents/${encodeURIComponent(resolvedAgentKey)}/chat`),
+          {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify(payload),
-        });
+          }
+        );
         const raw = await response.text();
+        const temporaryUnavailableError = t(
+          'indlaeg.errors.agentTemporaryUnavailable',
+          'Agenten er midlertidigt utilgaengelig. Proev igen om lidt.'
+        );
         let data = null;
         try {
           data = raw ? JSON.parse(raw) : {};
         } catch (parseErr) {
-          throw new Error(`Agent chat parse failed (${response.status}): ${raw.slice(0, 200)}`);
+          const isLikelyHtml = /^\s*<!doctype html/i.test(raw) || /^\s*<html/i.test(raw);
+          if (!response.ok && (response.status >= 500 || isLikelyHtml)) {
+            throw new Error(temporaryUnavailableError);
+          }
+          throw new Error(`Agent chat parse failed (${response.status}).`);
         }
         if (!response.ok || !data?.ok) {
+          if (response.status >= 500) {
+            throw new Error(temporaryUnavailableError);
+          }
           throw new Error(data?.error || raw.slice(0, 200) || `Agent svar fejlede (${response.status})`);
         }
         const replyText = data?.reply || data?.text || '(tomt svar fra agent)';
@@ -634,103 +833,13 @@ function Indlæg({
     ]
   );
 
-  const resolveRehabSourceText = useCallback(() => {
-    const noteText = (content || '').trim();
-    if (noteText) return noteText;
-    if (generatedDocument?.sections?.length) {
-      return buildDocumentText(
-        generatedDocument.sections,
-        t('indlaeg.sectionFallback', 'Section')
-      );
-    }
-    return (activeTranscriptText || '').trim();
-  }, [content, generatedDocument, activeTranscriptText, t]);
-
-  const sendRehabPlanMessage = useCallback(
-    async (displayMessage) => {
-      const sourceText = resolveRehabSourceText();
-      if (!sourceText) {
-        await appendAssistantMessage({
-          role: 'assistant',
-          text: t(
-            'indlaeg.errors.rehabNoText',
-            'No text found — write a note or enter text first.'
-          ),
-          ts: Date.now(),
-        });
-        return;
-      }
-
-      const resolvedDisplayMessage =
-        displayMessage || t('actions.planHep', 'Plan + HEP');
-      const questionPrompt = t(
-        'prompts.planHep',
-        'Create a clinical plan with a short HEP (home exercises) and key patient points.'
-      );
-      const questionWithStructure = `${questionPrompt}\n\n${HEADING_INSTRUCTION}`.trim();
-
-      setAgentError('');
-      setAgentChatLoading(true);
-      await appendAssistantMessage({
-        role: 'user',
-        text: resolvedDisplayMessage,
-        ts: Date.now(),
-      });
-
-      try {
-        await ensureAgentId('rehab');
-        const response = await fetch(apiUrl('/api/agents/rehab/chat'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sourceText,
-            question: questionWithStructure,
-            preferredLanguage: resolvedLanguage,
-          }),
-        });
-        const raw = await response.text();
-        let data = null;
-        try {
-          data = raw ? JSON.parse(raw) : {};
-        } catch (parseErr) {
-          throw new Error(`Rehab chat parse failed (${response.status}): ${raw.slice(0, 200)}`);
-        }
-        if (!response.ok || !data?.ok) {
-          throw new Error(data?.error || raw.slice(0, 200) || `Rehab svar fejlede (${response.status})`);
-        }
-        const replyText = data?.text || '(tomt svar fra agent)';
-        if (!data?.text) {
-          setAgentError(t('indlaeg.errors.agentNoText', 'Agent returned no text.'));
-        }
-        const sections = parseAssistantSections(
-          replyText,
-          t('assistant.replyTitle', 'Answer')
-        );
-        await appendAssistantMessage({
-          role: 'assistant',
-          text: replyText,
-          sections,
-          ts: Date.now(),
-        });
-      } catch (error) {
-        console.error('[Indlæg] Rehab agent chat error:', error);
-        setAgentError(error?.message || t('indlaeg.errors.agentFailed', 'Agent failed.'));
-      } finally {
-        setAgentChatLoading(false);
-        setAgentInput('');
-      }
-    },
-    [appendAssistantMessage, ensureAgentId, resolveRehabSourceText, resolvedLanguage, t]
-  );
-
   const ACTION_TO_AGENT = useMemo(
     () => ({
       missingInfo: 'improvement',
       redFlags: 'education',
       objectiveTests: 'education',
-      planHep: 'rehab',
-      summarizePatient: 'education',
-      freeText: 'education',
+      exerciseSuggestions: 'education',
+      freeText: 'educationFast',
     }),
     []
   );
@@ -738,38 +847,50 @@ function Indlæg({
   const ACTION_PROMPTS = useMemo(
     () => ({
       missingInfo: t(
-        'prompts.missingInfo',
-        'Find missing clinical information in the history and suggest relevant follow-up questions.'
+        'prompts.missingInfoInstruction',
+        'Find missing clinical information in the patient history and suggest relevant follow-up questions. Do not include sections or content named "Encounter Summary", "Dokumentationsmæssig betydning", or "Coding Specificity Checklist". Return your answer in Danish. Format with Markdown headings using ### for each section.'
       ),
       redFlags: t(
-        'prompts.redFlags',
-        'Identify possible red flags and what questions/actions should follow.'
+        'prompts.redFlagsInstruction',
+        'Svar kun med praecis to afsnit med disse overskrifter i denne raekkefoelge: "### Red flags i dette konkrete tilfaelde" og "### Kilder". I foerste afsnit skal du starte med "Ja" eller "Nej" paa om der er roede flag i notatet, efterfulgt af en kort begrundelse og kun konkrete fund fra dette konkrete tilfaelde samt relevante opfoelgende spoergsmaal. Ingen separate afsnit om akut eskalering/akut udredning. I andet afsnit "### Kilder" skal du angive korte relevante kilder/retningslinjer. Return your answer in Danish.'
       ),
       objectiveTests: t(
-        'prompts.objectiveTests',
-        'Suggest relevant objective tests and what they can reveal.'
+        'prompts.objectiveTestsInstruction',
+        'Suggest relevant clinical objective tests based on the patient note. Do not recommend imaging or paraclinical investigations (for example X-ray, MRI, CT, ultrasound, blood tests, or other laboratory tests). For each recommended test, briefly explain why it is relevant for this specific patient and what positive and negative findings could indicate. Return your answer in Danish. Format with Markdown headings using ### for each section.'
       ),
-      summarizePatient: t(
-        'prompts.summarizePatient',
-        'Summarize this patient’s full history across all notes.'
+      exerciseSuggestions: t(
+        'prompts.exerciseSuggestions',
+        'Provide exactly 3 evidence-based exercise suggestions tailored to the patient context. For each exercise include: purpose, dosage, load tolerance guidance, and progression/regression options. Keep each exercise very short and clinically usable. Use only information from the provided note and general clinical knowledge. Do not perform external web searches and do not include citations/sources.'
       ),
     }),
     [t]
   );
 
   const handleAssistantSendMessage = useCallback(
-    (message, agentType, actionId) => {
+    (message, agentType, actionId, displayMessage = null) => {
       const resolvedAction = actionId || 'freeText';
-      if (resolvedAction === 'planHep') {
-        sendRehabPlanMessage(t('actions.planHep', 'Plan + HEP'));
-        return;
-      }
       const agentKey = ACTION_TO_AGENT[resolvedAction] || 'education';
-      const finalMessage =
-        resolvedAction === 'freeText' ? message : ACTION_PROMPTS[resolvedAction] || message;
-      sendAgentMessage(finalMessage, agentType, agentKey);
+      const isFreeText = resolvedAction === 'freeText';
+      const rawInput = `${message ?? agentInput ?? ''}`.trim();
+      const finalMessage = isFreeText
+        ? `${rawInput}\n\n${FREE_TEXT_FAST_INSTRUCTION}\n${FREE_TEXT_TITLE_INSTRUCTION}`.trim()
+        : `${ACTION_PROMPTS[resolvedAction] || message || ''}`.trim();
+      if (!finalMessage) return;
+      const visibleMessage = isFreeText
+        ? `${displayMessage ?? rawInput}`.trim() || rawInput
+        : `${displayMessage ?? finalMessage}`.trim() || finalMessage;
+      const sourceTextLimit = resolvedAction === 'exerciseSuggestions' ? 2500 : null;
+      const useHeadingInstruction = !isFreeText;
+      sendAgentMessage(
+        finalMessage,
+        agentType,
+        agentKey,
+        visibleMessage,
+        sourceTextLimit,
+        useHeadingInstruction
+      );
     },
-    [ACTION_PROMPTS, ACTION_TO_AGENT, sendAgentMessage, sendRehabPlanMessage, t]
+    [ACTION_PROMPTS, ACTION_TO_AGENT, agentInput, sendAgentMessage]
   );
 
   const selectedTemplateMeta = useMemo(() => {
@@ -786,16 +907,30 @@ function Indlæg({
   useEffect(() => {
     if (activeEntry) {
       setDate(activeEntry.date || initialDate || '');
-      setContent(activeEntry.content || '');
+      setContent(getEntryPlainContent(activeEntry));
+      setContentRich(getEntryRichContent(activeEntry));
       setSelectedTemplateKey(activeEntry.templateKey || '');
+      setNoteTextFormat('normal');
     } else if (initialEntry) {
       setDate(initialEntry.date || initialDate || '');
-      setContent(initialEntry.content || '');
+      setContent(getEntryPlainContent(initialEntry));
+      setContentRich(getEntryRichContent(initialEntry));
       setSelectedTemplateKey(initialEntry.templateKey || '');
+      setNoteTextFormat('normal');
     } else if (initialDate) {
       setDate(initialDate);
+      setNoteTextFormat('normal');
     }
   }, [activeEntry, initialEntry, initialDate]);
+
+  useEffect(() => {
+    const editor = noteTextareaRef.current;
+    if (!editor) return;
+    const nextRich = contentRich || '';
+    if (editor.innerHTML !== nextRich) {
+      editor.innerHTML = nextRich;
+    }
+  }, [contentRich]);
 
   useEffect(() => {
     const loadRecent = async () => {
@@ -819,7 +954,8 @@ function Indlæg({
             title:
               data.title || data.templateKey || t('indlaeg.session', 'Session'),
             date: data.date || createdAt || '',
-            content: data.content || '',
+            content: getEntryPlainContent(data),
+            contentRich: getEntryRichContent(data),
           };
         });
         setRecentEntries(mapped);
@@ -877,8 +1013,14 @@ function Indlæg({
     setTemplatesLoading(true);
     setTemplatesError('');
     try {
+      const token = await getIdToken().catch(() => null);
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       const response = await fetch(
-        apiUrl(`/api/corti/templates?lang=${encodeURIComponent(templateLanguage)}`)
+        apiUrl(`/api/corti/templates?lang=${encodeURIComponent(templateLanguage)}`),
+        { headers }
       );
       if (!response.ok) {
         const message = await response.text();
@@ -905,7 +1047,14 @@ function Indlæg({
     setTemplateDetailsError('');
 
     try {
-      const response = await fetch(apiUrl(`/api/corti/templates/${encodeURIComponent(templateKey)}`));
+      const token = await getIdToken().catch(() => null);
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const response = await fetch(apiUrl(`/api/corti/templates/${encodeURIComponent(templateKey)}`), {
+        headers,
+      });
       if (!response.ok) {
         const message = await response.text();
         throw new Error(message || `Server ${response.status}`);
@@ -1002,9 +1151,17 @@ function Indlæg({
       return interactionId;
     }
 
+    const token = await getIdToken().catch(() => null);
+    if (!token) {
+      throw new Error(t('indlaeg.errors.mustBeLoggedIn', 'You must be logged in to save the entry.'));
+    }
+
     const response = await fetch(apiUrl('/api/corti/interactions'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify({
         title: clientName
           ? `${t('indlaeg.title', 'Journal')}: ${clientName}`
@@ -1043,9 +1200,16 @@ function Indlæg({
 
     try {
       const resolvedInteractionId = await ensureInteraction();
+      const token = await getIdToken().catch(() => null);
+      if (!token) {
+        throw new Error(t('indlaeg.errors.mustBeLoggedIn', 'You must be logged in to save the entry.'));
+      }
       const response = await fetch(apiUrl(`/api/corti/interactions/${resolvedInteractionId}/documents`), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           transcriptText: activeTranscriptText,
           templateKey: selectedTemplateKey,
@@ -1064,8 +1228,11 @@ function Indlæg({
       if (Array.isArray(data?.sections)) {
         const nextContent = buildDocumentText(data.sections);
         setContent(nextContent);
+        setContentRich(plainTextToRichContent(nextContent));
       } else if (data) {
-        setContent(JSON.stringify(data, null, 2));
+        const nextContent = JSON.stringify(data, null, 2);
+        setContent(nextContent);
+        setContentRich(plainTextToRichContent(nextContent));
       }
     } catch (error) {
       console.error('Document generation failed:', error);
@@ -1158,8 +1325,16 @@ function Indlæg({
         formData.append('uiLocale', uiLocale);
         formData.append('browserLocale', browserLocale);
 
+        const token = await getIdToken().catch(() => null);
+        if (!token) {
+          throw new Error(t('indlaeg.errors.mustBeLoggedIn', 'You must be logged in to save the entry.'));
+        }
+
         const response = await fetch(apiUrl('/api/corti/dictate'), {
           method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
           body: formData,
         });
 
@@ -1340,15 +1515,21 @@ function Indlæg({
   const handleAppendDictationToNote = useCallback(() => {
     if (!dictationText) return;
     setContent((prev) => {
-      if (!prev) return dictationText;
+      if (!prev) {
+        setContentRich(plainTextToRichContent(dictationText));
+        return dictationText;
+      }
       const trimmed = prev.trim();
-      return trimmed ? `${trimmed}\n\n${dictationText}` : dictationText;
+      const nextPlain = trimmed ? `${trimmed}\n\n${dictationText}` : dictationText;
+      setContentRich(plainTextToRichContent(nextPlain));
+      return nextPlain;
     });
   }, [dictationText]);
 
   const handleReplaceNoteWithDictation = useCallback(() => {
     if (!dictationText) return;
     setContent(dictationText);
+    setContentRich(plainTextToRichContent(dictationText));
   }, [dictationText]);
 
   useEffect(() => {
@@ -1698,6 +1879,7 @@ function Indlæg({
       title: resolvedTitle,
       date,
       content: content.trim(),
+      contentRich: contentRich || plainTextToRichContent(content),
       isPrivate: false,
       isStarred: false,
       isLocked: false,
@@ -1797,6 +1979,12 @@ function Indlæg({
     return selectedTemplateMeta?.name || '';
   }, [selectedTemplate, selectedTemplateMeta, templateLanguage]);
 
+  const noteEditorStyle = manualNoteHeight
+    ? { height: `${manualNoteHeight}px` }
+    : expandedNoteHeight
+    ? { height: `${expandedNoteHeight}px` }
+    : undefined;
+
   const generatedDocumentText = useMemo(() => {
     if (generatedDocument?.sections?.length) {
       return buildDocumentText(generatedDocument.sections);
@@ -1832,22 +2020,24 @@ function Indlæg({
   const assistantQuickActions = useMemo(
     () => [
       {
-        id: 'missingInfo',
-        label: t('actions.missingInfo', 'Missing info'),
-        agentType: 'improvement',
-        message: t(
-          'prompts.missingInfo',
-          'Find missing clinical information in the history and suggest relevant follow-up questions.'
-        ),
-      },
-      {
         id: 'redFlags',
         label: t('actions.redFlags', 'Red flags'),
         agentType: 'education',
         message: t(
           'prompts.redFlags',
-          'Identify possible red flags and what questions/actions should follow.'
+          'Identificer mulige røde flag'
         ),
+        displayMessage: t('prompts.redFlags', 'Identificer mulige røde flag'),
+      },
+      {
+        id: 'missingInfo',
+        label: t('actions.missingInfo', 'Missing info'),
+        agentType: 'education',
+        message: t(
+          'prompts.missingInfo',
+          'Find manglende information'
+        ),
+        displayMessage: t('prompts.missingInfo', 'Find manglende information'),
       },
       {
         id: 'objectiveTests',
@@ -1855,17 +2045,42 @@ function Indlæg({
         agentType: 'education',
         message: t(
           'prompts.objectiveTests',
-          'Suggest relevant objective tests and what they can reveal.'
+          'Foreslå relevante tests'
+        ),
+        displayMessage: t('prompts.objectiveTests', 'Foreslå relevante tests'),
+      },
+      {
+        id: 'exerciseSuggestions',
+        label: t('actions.exerciseSuggestions', 'Øvelsesforslag'),
+        agentType: 'education',
+        message: t(
+          'prompts.exerciseSuggestions',
+          'Foreslaa praecis 3 evidensbaserede ovelser tilpasset patientens kontekst. For hver ovelse: formaal, dosering, belastningstolerance og progression/regression. Hold hvert punkt meget kort og klinisk anvendeligt. Brug kun oplysninger fra notatet og generel klinisk viden. Ingen ekstern websoegning og ingen kilder.'
+        ),
+        displayMessage: t(
+          'assistant.requestExerciseSuggestions',
+          'Foreslå evidensbaseret øvelser'
         ),
       },
       {
-        id: 'summarizePatient',
-        label: t('actions.summarizePatient', 'Summarize patient'),
+        id: 'guidelines',
+        label: t('actions.guidelines', 'Retningslinjer'),
         agentType: 'education',
         message: t(
-          'prompts.summarizePatient',
-          'Summarize this patient’s full history across all notes.'
+          'prompts.guidelines',
+          'What do current clinical practice guidelines recommend for this patient group (diagnosis/condition/load management)? Include cutoff values, recommended interventions, and any contraindications. Provide citations where possible.'
         ),
+        displayMessage: t('assistant.requestGuidelines', 'Hent retningslinjer'),
+      },
+      {
+        id: 'latestEvidence',
+        label: t('actions.latestEvidence', 'Nyeste forskning'),
+        agentType: 'education',
+        message: t(
+          'prompts.latestEvidence',
+          'What does the most recent research (RCTs, systematic reviews, high-quality studies) show about interventions, outcomes, and mechanisms relevant to this patient group? Summarize key findings and effect sizes if available.'
+        ),
+        displayMessage: t('assistant.requestLatestEvidence', 'Hent nyeste forskning'),
       },
     ],
     [t]
@@ -1920,11 +2135,18 @@ function Indlæg({
                             setSelectedTemplateKey(target.templateKey || '');
                             setDate(target.date || initialDate || '');
                             setContent(target.content || '');
+                            setContentRich(
+                              target.contentRich || plainTextToRichContent(target.content || '')
+                            );
+                            setNoteTextFormat('normal');
                           } else {
                             setActiveEntry(target);
                             setSelectedTemplateKey(target?.templateKey || '');
                             setDate(target?.date || initialDate || '');
-                            setContent(target?.content || '');
+                            const targetPlain = getEntryPlainContent(target);
+                            setContent(targetPlain);
+                            setContentRich(getEntryRichContent(target));
+                            setNoteTextFormat('normal');
                           }
                         }}
                       >
@@ -1966,13 +2188,17 @@ function Indlæg({
                                   draft: true,
                                   date,
                                   content,
+                                  contentRich,
                                   templateKey: selectedTemplateKey,
                                 };
                               }
                               setActiveEntry(entry);
                               setSelectedTemplateKey(entry.templateKey || '');
                               setDate(entry.date || initialDate || '');
-                              setContent(entry.content || '');
+                              const entryPlain = getEntryPlainContent(entry);
+                              setContent(entryPlain);
+                              setContentRich(getEntryRichContent(entry));
+                              setNoteTextFormat('normal');
                             }}
                           >
                             <div className="indlæg-history-item-main indlæg-history-item-main--date">
@@ -1995,6 +2221,30 @@ function Indlæg({
                       {t('indlaeg.title', 'Journal')}
                     </h3>
                     <div className="indlæg-card-header-actions">
+                      <div
+                        className="indlæg-note-style-controls indlæg-note-style-controls--header"
+                        role="group"
+                        aria-label={t('indlaeg.textStyle', 'Text style')}
+                      >
+                        <button
+                          type="button"
+                          className={`indlæg-note-style-btn${noteTextFormat === 'normal' ? ' is-active' : ''}`}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => handleApplyNoteTextFormat('normal')}
+                          aria-pressed={noteTextFormat === 'normal'}
+                        >
+                          {t('indlaeg.textNormal', 'Normal')}
+                        </button>
+                        <button
+                          type="button"
+                          className={`indlæg-note-style-btn indlæg-note-style-btn--bold${noteTextFormat === 'bold' ? ' is-active' : ''}`}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => handleApplyNoteTextFormat('bold')}
+                          aria-pressed={noteTextFormat === 'bold'}
+                        >
+                          {t('indlaeg.textBold', 'Bold')}
+                        </button>
+                      </div>
                       <button
                         type="button"
                         className="indlæg-action-btn"
@@ -2019,25 +2269,24 @@ function Indlæg({
                     </div>
                   </div>
                   <div className="indlæg-card-body indlæg-note-area">
-                    <textarea
-                      className="indlæg-textarea indlæg-textarea--lg"
+                    <div
+                      className="indlæg-textarea indlæg-textarea--lg indlæg-rich-textarea"
                       ref={noteTextareaRef}
-                      value={content}
-                      onChange={(event) => setContent(event.target.value)}
-                      onPointerDown={handleTextareaPointerDown}
-                      onPointerUp={handleTextareaPointerUp}
-                      style={
-                        manualNoteHeight
-                          ? { height: `${manualNoteHeight}px` }
-                          : expandedNoteHeight
-                          ? { height: `${expandedNoteHeight}px` }
-                          : undefined
-                      }
-                      placeholder={t(
+                      contentEditable
+                      suppressContentEditableWarning
+                      role="textbox"
+                      aria-multiline="true"
+                      data-placeholder={t(
                         'indlaeg.generatedNotePlaceholder',
                         'The generated note appears here. You can edit freely.'
                       )}
-                      rows={12}
+                      onInput={syncNoteContentFromEditor}
+                      onFocus={refreshNoteTextFormat}
+                      onKeyUp={refreshNoteTextFormat}
+                      onMouseUp={refreshNoteTextFormat}
+                      onPointerDown={handleTextareaPointerDown}
+                      onPointerUp={handleTextareaPointerUp}
+                      style={noteEditorStyle}
                     />
                     {generationLoading && (
                       <div className="indlæg-note-loader">
@@ -2400,15 +2649,7 @@ function Indlæg({
                 onInputChange={setAgentInput}
                 inputDisabled={agentLoading}
                 sendDisabled={agentLoading || agentChatLoading || !agentInput.trim()}
-                showEmptyHint={!activeTranscriptText.trim()}
-                emptyHintText={t('indlaeg.emptyHint', 'No text yet — you can still ask generally.')}
-                chatAvatars={{
-                  ...CHAT_AVATARS,
-                  user: {
-                    src: user?.photoURL || undefined,
-                    fallback: userInitials || undefined,
-                  },
-                }}
+                chatAvatars={CHAT_AVATARS}
                 placeholder={t(
                   'indlaeg.assistantPlaceholder',
                   'Ask Selma assistant a question...'

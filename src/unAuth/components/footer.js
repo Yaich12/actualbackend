@@ -3,6 +3,8 @@ import './footer.css';
 import Featured_05 from '../../components/ui/globe-feature-section';
 import { useLanguage } from '../language/LanguageProvider';
 
+const SELMA_LINKEDIN_URL = 'https://www.linkedin.com/company/selmaplus/';
+
 function Footer() {
   const { t } = useLanguage();
 
@@ -47,7 +49,11 @@ function Footer() {
             <ul className="footer-column-list">
               <li><a href="#cases">{t('landing.footer.columns.about.items.cases')}</a></li>
               <li><a href="#company">{t('landing.footer.columns.about.items.company')}</a></li>
-              <li><a href="#linkedin">{t('landing.footer.columns.about.items.linkedin')}</a></li>
+              <li>
+                <a href={SELMA_LINKEDIN_URL} target="_blank" rel="noopener noreferrer">
+                  {t('landing.footer.columns.about.items.linkedin')}
+                </a>
+              </li>
               <li><a href="#privacy">{t('landing.footer.columns.about.items.privacy')}</a></li>
             </ul>
           </div>

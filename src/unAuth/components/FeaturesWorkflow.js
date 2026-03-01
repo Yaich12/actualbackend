@@ -6,6 +6,10 @@ import { useLanguage } from "../language/LanguageProvider";
 import "../../features/booking/Journal/indlæg/indlæg.css";
 
 const transition = { duration: 0.45, ease: "easeOut" };
+const workflowVideoByTab = {
+  transcription: "823b210c7dca4000a0ee4e8896f9495c",
+  facts: "875ff0de7fd948d5ac07859fabc35ed8",
+};
 
 function FeaturesWorkflow({ sectionId } = {}) {
   const { t, getArray } = useLanguage();
@@ -23,7 +27,7 @@ function FeaturesWorkflow({ sectionId } = {}) {
         setActiveId("facts");
       }
     };
-    
+
     applyHash();
     window.addEventListener("hashchange", applyHash);
     return () => window.removeEventListener("hashchange", applyHash);
@@ -38,6 +42,7 @@ function FeaturesWorkflow({ sectionId } = {}) {
   const activeBullets = activeFeature?.bullets || [];
 
   const isFacts = activeId === "facts";
+  const activeVideoId = workflowVideoByTab[activeId] || workflowVideoByTab.facts;
 
   return (
     <section id={sectionId} className="bg-white py-16 text-slate-900 scroll-mt-24">
@@ -123,7 +128,9 @@ function FeaturesWorkflow({ sectionId } = {}) {
             <div className="flex w-full items-center justify-center">
               <div className="w-full max-w-4xl">
                 <LoomEmbed
-                  videoId="875ff0de7fd948d5ac07859fabc35ed8"
+                  key={activeId}
+                  videoId={activeVideoId}
+                  title={isFacts ? "Diktering video" : "Transkribering video"}
                   className="w-full border border-slate-200 bg-white shadow-lg shadow-slate-200/60"
                 />
               </div>

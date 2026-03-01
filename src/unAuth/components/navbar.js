@@ -103,6 +103,7 @@ function Navbar() {
         ],
       },
       { title: t('navbar.menu.pricing.title'), url: '#pricing' },
+      { title: t('navbar.menu.about.title'), url: '#about' },
     ],
     [t]
   );

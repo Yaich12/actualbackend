@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import './usersettings.css';
 import './bookingpage.css';
 import { BookingSidebarLayout } from '../../components/ui/BookingSidebarLayout';
@@ -9,6 +9,7 @@ import { useAuth } from '../../AuthContext';
 import { useLanguage } from '../../LanguageContext';
 import { updateProfile } from 'firebase/auth';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
+import Transfer from './transfer/transfer';
 import {
   WORK_HOURS_DAYS,
   buildWorkHoursPayload,
@@ -22,6 +23,7 @@ const THEME_STORAGE_KEY = 'selma_theme_mode';
 const NIGHT_START_HOUR = 18; // 18:00
 const NIGHT_END_HOUR = 5;    // 05:00
 
+const CATEGORY_OPTIONS = ['Physiotherapist', 'Osteopath', 'Chiropractor'];
 const CURRENCY_OPTIONS = [
   { value: 'DKK', label: 'DKK' },
   { value: 'EUR', label: 'EURO' },
@@ -34,12 +36,22 @@ const CURRENCY_OPTIONS = [
 function UserSettings() {
   const { user, updateUserProfile } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { language, preferredLanguage, setPreferredLanguage, languageOptions, t } = useLanguage();
-  const resolveSectionFromPath = () => 'profile';
-  const [activeSection, setActiveSection] = useState(resolveSectionFromPath); // profile | workHours | appearance | language | ai
+  const resolveSectionFromPath = (pathname) => {
+    if (pathname.startsWith('/settings/transfer')) {
+      return 'transfer';
+    }
+    return 'profile';
+  };
+  const [activeSection, setActiveSection] = useState(() =>
+    resolveSectionFromPath(location.pathname)
+  ); // profile | account | workHours | appearance | language | ai | transfer
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [clinicName, setClinicName] = useState('');
+  const [publicClinicName, setPublicClinicName] = useState('');
+  const [publicClinicSlug, setPublicClinicSlug] = useState('');
   const [website, setWebsite] = useState('');
   const [category, setCategory] = useState('');
   const [address, setAddress] = useState('');
@@ -57,6 +69,22 @@ function UserSettings() {
   const [settingsSnapshot, setSettingsSnapshot] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [isAvatarUploading, setIsAvatarUploading] = useState(false);
+  const [isClaimingSlug, setIsClaimingSlug] = useState(false);
+  const [slugStatus, setSlugStatus] = useState(null);
+
+  const sanitizeSlug = (value) => {
+    if (!value) return '';
+    const normalized = String(value)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return normalized.slice(0, 40);
+  };
+
+  const previewSlug = useMemo(() => sanitizeSlug(clinicName), [clinicName]);
+
+  const previewUrl = previewSlug ? `/book/${previewSlug}` : '';
   const defaultWorkHours = useMemo(() => createDefaultWorkHours(), []);
   const workHoursErrors = useMemo(
     () => getWorkHoursValidation(workHours),
@@ -122,6 +150,8 @@ function UserSettings() {
           setFullName(data.displayName || user.displayName || '');
           setEmail(data.email || user.email || '');
           setClinicName(data.clinicName || '');
+          setPublicClinicName(data.publicClinicName || data.clinicName || '');
+          setPublicClinicSlug(data.publicClinicSlug || '');
           setWebsite(data.website || '');
           setPhotoURL(data.photoURL || user.photoURL || '');
           setAvatarPreviewUrl('');
@@ -154,6 +184,8 @@ function UserSettings() {
           setFullName(user.displayName || '');
           setEmail(user.email || '');
           setClinicName('');
+          setPublicClinicName('');
+          setPublicClinicSlug('');
           setWebsite('');
           setPhotoURL(user.photoURL || '');
           setAvatarPreviewUrl('');
@@ -224,8 +256,23 @@ function UserSettings() {
     localStorage.setItem(THEME_STORAGE_KEY, colorMode);
   }, [colorMode]);
 
+  useEffect(() => {
+    if (location.pathname.startsWith('/settings/transfer')) {
+      setActiveSection('transfer');
+    }
+  }, [location.pathname]);
+
   const handleSectionChange = (section) => {
     setActiveSection(section);
+    if (section === 'transfer') {
+      if (!location.pathname.startsWith('/settings/transfer')) {
+        navigate('/settings/transfer');
+      }
+      return;
+    }
+    if (location.pathname.startsWith('/settings/transfer')) {
+      navigate('/booking/settings');
+    }
   };
 
   useEffect(() => {
@@ -324,6 +371,94 @@ function UserSettings() {
     }
   };
 
+  const handleClaimSlug = async () => {
+    if (!user?.uid) return;
+    const nameValue = (clinicName || '').trim();
+    const sanitizedSlug = sanitizeSlug(clinicName);
+
+    if (!nameValue) {
+      setSlugStatus({
+        tone: 'error',
+        message: t('settings.publicBooking.errors.missingName', 'Angiv et kliniknavn.'),
+      });
+      return;
+    }
+
+    if (!sanitizedSlug) {
+      setSlugStatus({
+        tone: 'error',
+        message: t(
+          'settings.publicBooking.errors.missingSlug',
+          'Kunne ikke generere et clinic slug.'
+        ),
+      });
+      return;
+    }
+
+    setIsClaimingSlug(true);
+    setSlugStatus(null);
+
+    try {
+      const clinicRef = doc(db, 'publicClinics', sanitizedSlug);
+      const clinicSnap = await getDoc(clinicRef);
+      if (clinicSnap.exists()) {
+        const data = clinicSnap.data() || {};
+        if (data.ownerUid && data.ownerUid !== user.uid) {
+          setSlugStatus({
+            tone: 'error',
+            message: t('settings.publicBooking.errors.slugTaken', 'Slug er optaget. Prøv en anden.'),
+          });
+          return;
+        }
+      }
+
+      const clinicPayload = {
+        ownerUid: user.uid,
+        clinicSlug: sanitizedSlug,
+        clinicName: nameValue,
+        isActive: true,
+        updatedAt: serverTimestamp(),
+      };
+
+      if (!clinicSnap.exists()) {
+        clinicPayload.createdAt = serverTimestamp();
+      }
+
+      await setDoc(clinicRef, clinicPayload, { merge: true });
+
+      const generatedUrl = `/book/${sanitizedSlug}`;
+
+      await setDoc(
+        doc(db, 'users', user.uid),
+        {
+          publicClinicSlug: sanitizedSlug,
+          publicClinicName: nameValue,
+          website: generatedUrl,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      setPublicClinicSlug(sanitizedSlug);
+      setPublicClinicName(nameValue);
+      setWebsite(generatedUrl);
+      setSlugStatus({
+        tone: 'success',
+        message: t(
+          'settings.publicBooking.success',
+          `Bookingsiden er aktiv: ${generatedUrl}`
+        ),
+      });
+    } catch (error) {
+      console.error('[UserSettings] Failed to claim clinic slug', error);
+      setSlugStatus({
+        tone: 'error',
+        message: t('settings.publicBooking.errors.generic', 'Kunne ikke gemme bookingsiden. Prøv igen.'),
+      });
+    } finally {
+      setIsClaimingSlug(false);
+    }
+  };
 
   const renderThemeCard = (mode, label, previewClass) => (
     <button
@@ -384,6 +519,13 @@ function UserSettings() {
                   </button>
                   <button
                     type="button"
+                    className={`usersettings-nav-item ${activeSection === 'account' ? 'active' : ''}`}
+                    onClick={() => handleSectionChange('account')}
+                  >
+                    {t('settings.sections.account', 'Kontoopsætning')}
+                  </button>
+                  <button
+                    type="button"
                     className={`usersettings-nav-item ${activeSection === 'language' ? 'active' : ''}`}
                     onClick={() => handleSectionChange('language')}
                   >
@@ -395,6 +537,13 @@ function UserSettings() {
                     onClick={() => handleSectionChange('ai')}
                   >
                     {t('settings.sections.ai', 'AI indstillinger')}
+                  </button>
+                  <button
+                    type="button"
+                    className={`usersettings-nav-item ${activeSection === 'transfer' ? 'active' : ''}`}
+                    onClick={() => handleSectionChange('transfer')}
+                  >
+                    {t('settings.sections.transfer', 'Transfer')}
                   </button>
                 </aside>
 
@@ -455,6 +604,118 @@ function UserSettings() {
                     </>
                   )}
 
+                  {activeSection === 'account' && (
+                    <>
+                      <div className="usersettings-header">
+                        <div className="usersettings-title">
+                          {t('settings.account.title', 'Kontoopsætning')}
+                        </div>
+                      </div>
+
+                      <div className="usersettings-profile-fields">
+                        <div className="usersettings-section">
+                          <label className="usersettings-label">
+                            {t('settings.account.website', 'Websted')}
+                          </label>
+                          <input
+                            className="usersettings-input"
+                            value={website}
+                            onChange={(e) => setWebsite(e.target.value)}
+                            placeholder={t('settings.account.websitePlaceholder', 'www.ditwebsted.com')}
+                          />
+                        </div>
+
+                        <div className="usersettings-divider" />
+
+                        <div className="usersettings-section">
+                          <div className="usersettings-title">
+                            {t('settings.publicBooking.title', 'Bookingside')}
+                          </div>
+                          <div className="usersettings-subtitle">
+                            {t(
+                              'settings.publicBooking.subtitle',
+                              'Aktivér en offentlig booking-side til dine klienter.'
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="usersettings-grid">
+                          <div className="usersettings-section">
+                            <label className="usersettings-label">
+                              {t('settings.publicBooking.clinicNameLabel', 'Kliniknavn')}
+                            </label>
+                            <input
+                              className="usersettings-input"
+                              value={clinicName}
+                              readOnly
+                            />
+                          </div>
+                          <div className="usersettings-section">
+                            <label className="usersettings-label">
+                              {t('settings.publicBooking.urlLabel', 'Bookingside URL')}
+                            </label>
+                            <input
+                              className="usersettings-input"
+                              value={previewUrl}
+                              readOnly
+                              placeholder={t(
+                                'settings.publicBooking.urlPlaceholder',
+                                '/book/din-klinik'
+                              )}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="usersettings-claim-row">
+                          <button
+                            type="button"
+                            className="usersettings-claim-btn"
+                            onClick={handleClaimSlug}
+                            disabled={isClaimingSlug || !clinicName.trim()}
+                          >
+                            {isClaimingSlug
+                              ? t('settings.publicBooking.claiming', 'Aktiverer...')
+                              : t('settings.publicBooking.activate', 'Aktiver bookingside')}
+                          </button>
+                          <span className="usersettings-slug-preview">
+                            {previewUrl
+                              ? t(
+                                  'settings.publicBooking.urlPreview',
+                                  `URL: ${previewUrl}`
+                                )
+                              : t('settings.publicBooking.urlPreviewEmpty', 'URL: /book/...')}
+                          </span>
+                        </div>
+
+                        {slugStatus?.message ? (
+                          <div className={`usersettings-status ${slugStatus.tone || ''}`}>
+                            {slugStatus.message}
+                          </div>
+                        ) : null}
+
+                        <div className="usersettings-section">
+                          <label className="usersettings-label">
+                            {t('settings.account.category', 'Kategori')}
+                          </label>
+                          <select
+                            className="usersettings-input"
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value)}
+                          >
+                            <option value="">
+                              {t('settings.account.categoryPlaceholder', 'Vælg kategori')}
+                            </option>
+                            {CATEGORY_OPTIONS.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                    </>
+                  )}
 
                   {activeSection === 'workHours' && (
                     <>
@@ -713,6 +974,7 @@ function UserSettings() {
                     </>
                   )}
 
+                  {activeSection === 'transfer' && <Transfer />}
                 </main>
               </div>
               <div className="usersettings-actions">

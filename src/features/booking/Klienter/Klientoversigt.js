@@ -37,6 +37,10 @@ const getClientInitials = (client) => {
 };
 
 const apiUrl = (path) => buildApiUrl(path);
+const FREE_TEXT_FAST_INSTRUCTION =
+  'Svar kort og direkte paa brugerens spoergsmaal. Maks 5 bullets eller 5 korte linjer. Ingen kilder. Ingen lange forklaringer.';
+const FREE_TEXT_TITLE_INSTRUCTION =
+  'Start altid svaret med en Markdown-overskrift paa formatet "### <kort svar>" (maks 8 ord), og skriv derefter et meget kort svar under overskriften.';
 
 const ClientDetails = ({
   client,
@@ -193,6 +197,7 @@ const ClientDetails = ({
             title: data.title || 'Journalnotat',
             date: data.date || '',
             content: data.content || data.summary || '',
+            contentRich: data.contentRich || '',
             createdAt,
           };
         });
@@ -250,10 +255,21 @@ const ClientDetails = ({
 
   const assistantQuickActions = useMemo(
     () => [
-      { label: 'Manglende info', message: 'Manglende info' },
-      { label: 'Røde flag', message: 'Røde flag' },
-      { label: 'Objektive tests', message: 'Objektive tests' },
-      { label: 'Plan + HEP', message: 'Plan + HEP' },
+      {
+        label: 'Manglende info',
+        message: 'Manglende info',
+        displayMessage: 'Find manglende information',
+      },
+      {
+        label: 'Røde flag',
+        message: 'Røde flag',
+        displayMessage: 'Identificer mulige røde flag',
+      },
+      {
+        label: 'Objektive tests',
+        message: 'Objektive tests',
+        displayMessage: 'Foreslå relevante tests',
+      },
       {
         label: 'Opsummér patient',
         message:
@@ -459,7 +475,7 @@ const ClientDetails = ({
       'Objektive tests': 'education',
       'Plan + HEP': 'rehab',
       'Opsummér patient': 'education',
-      freeText: 'education',
+      freeText: 'educationFast',
     }),
     []
   );
@@ -467,11 +483,11 @@ const ClientDetails = ({
   const ACTION_PROMPTS = useMemo(
     () => ({
       'Manglende info':
-        'Find missing clinical information in these notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+        'Find missing clinical information in these notes and suggest relevant follow-up questions. Do not include sections or content named "Encounter Summary", "Dokumentationsmæssig betydning", or "Coding Specificity Checklist". Return your answer in Danish. Format with Markdown headings using ### for each section.',
       'Røde flag':
-        'Identify red flags and escalation criteria based on the notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+        'Svar kun med praecis to afsnit med disse overskrifter i denne raekkefoelge: "### Red flags i dette konkrete tilfaelde" og "### Kilder". I foerste afsnit skal du starte med "Ja" eller "Nej" paa om der er roede flag i notatet, efterfulgt af en kort begrundelse og kun konkrete fund fra dette konkrete tilfaelde samt relevante opfoelgende spoergsmaal. Ingen separate afsnit om akut eskalering/akut udredning. I andet afsnit "### Kilder" skal du angive korte relevante kilder/retningslinjer. Return your answer in Danish.',
       'Objektive tests':
-        'Suggest relevant objective tests based on the notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
+        'Suggest relevant clinical objective tests based on the notes. Do not recommend imaging or paraclinical investigations (for example X-ray, MRI, CT, ultrasound, blood tests, or other laboratory tests). For each recommended test, briefly explain why it is relevant for this specific patient and what positive and negative findings could indicate. Return your answer in Danish. Format with Markdown headings using ### for each section.',
       'Opsummér patient':
         'Summarize this patient’s full history across all notes. Return your answer in Danish. Format with Markdown headings using ### for each section.',
     }),
@@ -479,9 +495,9 @@ const ClientDetails = ({
   );
 
   const sendAssistantMessage = useCallback(
-    async (overrideMessage = null, _agentType = null, label) => {
-      const finalMessage = `${overrideMessage ?? assistantInput}`.trim();
-      if (!finalMessage && label !== 'Plan + HEP') return;
+    async (overrideMessage = null, _agentType = null, label, displayMessage = null) => {
+      const rawInput = `${overrideMessage ?? assistantInput ?? ''}`.trim();
+      if (!rawInput && label !== 'Plan + HEP') return;
       const isCustomInput = overrideMessage === null || overrideMessage === undefined;
 
       if (isCustomInput) {
@@ -494,9 +510,11 @@ const ClientDetails = ({
       }
 
       const resolvedLabel = label || 'freeText';
-      const agentKey = ACTION_TO_AGENT[resolvedLabel] || 'education';
-      const promptMessage =
-        resolvedLabel === 'freeText' ? finalMessage : ACTION_PROMPTS[resolvedLabel] || finalMessage;
+      const isFreeText = resolvedLabel === 'freeText';
+      const agentKey = ACTION_TO_AGENT[resolvedLabel] || 'educationFast';
+      const promptMessage = isFreeText
+        ? `${rawInput}\n\n${FREE_TEXT_FAST_INSTRUCTION}\n${FREE_TEXT_TITLE_INSTRUCTION}`.trim()
+        : `${ACTION_PROMPTS[resolvedLabel] || rawInput}`.trim();
 
       const sourceText = `${journalContextText || ''}`.trim() || promptMessage;
       if (!sourceText) {
@@ -504,7 +522,12 @@ const ClientDetails = ({
         return;
       }
 
-      const agentId = await ensureAssistantAgentId(agentKey);
+      let resolvedAgentKey = agentKey;
+      let agentId = await ensureAssistantAgentId(resolvedAgentKey);
+      if (!agentId && resolvedAgentKey === 'educationFast') {
+        resolvedAgentKey = 'education';
+        agentId = await ensureAssistantAgentId(resolvedAgentKey);
+      }
       if (!agentId) {
         setAssistantError('Agent ikke klar endnu.');
         return;
@@ -512,27 +535,41 @@ const ClientDetails = ({
 
       setAssistantError('');
       setAssistantChatLoading(true);
-      setAssistantMessages((prev) => [...prev, { role: 'user', text: promptMessage, ts: Date.now() }]);
+      const visibleMessage = isFreeText
+        ? `${displayMessage ?? rawInput}`.trim() || rawInput
+        : `${displayMessage ?? promptMessage}`.trim() || promptMessage;
+      setAssistantMessages((prev) => [...prev, { role: 'user', text: visibleMessage, ts: Date.now() }]);
 
       try {
-        const response = await fetch(apiUrl(`/api/agents/${encodeURIComponent(agentKey)}/chat`), {
+        const response = await fetch(
+          apiUrl(`/api/agents/${encodeURIComponent(resolvedAgentKey)}/chat`),
+          {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             message: promptMessage,
             sourceText,
           }),
-        });
+          }
+        );
 
         const raw = await response.text();
+        const temporaryUnavailableError = 'Agenten er midlertidigt utilgaengelig. Proev igen om lidt.';
         let data = null;
         try {
           data = raw ? JSON.parse(raw) : {};
         } catch (parseErr) {
-          throw new Error(`Agent chat parse failed (${response.status}): ${raw.slice(0, 200)}`);
+          const isLikelyHtml = /^\s*<!doctype html/i.test(raw) || /^\s*<html/i.test(raw);
+          if (!response.ok && (response.status >= 500 || isLikelyHtml)) {
+            throw new Error(temporaryUnavailableError);
+          }
+          throw new Error(`Agent svar kunne ikke fortolkes (${response.status}).`);
         }
 
         if (!response.ok || !data?.ok) {
+          if (response.status >= 500) {
+            throw new Error(temporaryUnavailableError);
+          }
           throw new Error(data?.error || raw.slice(0, 200) || `Agent svar fejlede (${response.status})`);
         }
 

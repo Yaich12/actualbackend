@@ -154,6 +154,7 @@
 }
 
 .hero-devices--journal .hero-devices__visual {
+  align-items: flex-start;
   justify-content: flex-start;
 }
 
@@ -174,6 +175,27 @@
   height: 100%;
   display: block;
   border: none;
+}
+
+.hero-devices__journal-videos {
+  width: min(720px, 100%);
+  display: grid;
+  gap: 1.4rem;
+}
+
+.hero-devices__journal-video-card {
+  margin: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.hero-devices__journal-video-title {
+  margin: 0;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #0f172a;
 }
 
 .hero-devices__glow {
@@ -724,6 +746,14 @@
 @media (max-width: 960px) {
   .hero-device-stack {
     width: min(520px, 92vw);
+  }
+
+  .hero-devices--journal .hero-devices__visual {
+    justify-content: center;
+  }
+
+  .hero-devices__journal-videos {
+    width: min(720px, 100%);
   }
 
   .hero-devices--journal .hero-device-stack {

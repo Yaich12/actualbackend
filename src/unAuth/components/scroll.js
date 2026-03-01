@@ -1,13 +1,17 @@
 import React from 'react';
 import './scroll.css';
-import { DemoOne } from '../../components/ui/text-parallax-content-demo';
 import HeroDevices from './HeroDevices';
+import AboutSection3 from 'components/ui/about-section';
+import Preview from './preview';
 
 function ScrollSection() {
   return (
     <section className="scroll-section" id="scroll-parallax">
       <HeroDevices />
-      <DemoOne />
+      <div id="about">
+        <AboutSection3 />
+      </div>
+      <Preview />
     </section>
   );
 }

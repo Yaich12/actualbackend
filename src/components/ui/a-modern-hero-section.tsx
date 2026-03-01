@@ -48,10 +48,36 @@ const JournalDescription = ({ description }: { description: string }) => {
   );
 };
 
+type JournalVideoItem = {
+  id: string;
+  title: string;
+};
+
+const JournalVideoStack = ({ videos }: { videos: JournalVideoItem[] }) => (
+  <div className="hero-devices__journal-videos">
+    {videos.map((video) => (
+      <figure key={video.id} className="hero-devices__journal-video-card">
+        <figcaption className="hero-devices__journal-video-title">{video.title}</figcaption>
+        <LoomEmbed videoId={video.id} title={video.title} />
+      </figure>
+    ))}
+  </div>
+);
+
 export default function HeroSection() {
   const { t } = useLanguage();
   const description = t('landing.heroJournal.description');
   const mediaType = HERO_6_IMAGES.length > 1 ? 'carousel' : 'image';
+  const journalVideos = [
+    {
+      id: '875ff0de7fd948d5ac07859fabc35ed8',
+      title: t('landing.heroJournal.videoTitles.dictation'),
+    },
+    {
+      id: '823b210c7dca4000a0ee4e8896f9495c',
+      title: t('landing.heroJournal.videoTitles.transcriptionFirstConsultation'),
+    },
+  ];
 
   return (
     <FeatureShowcase
@@ -63,7 +89,7 @@ export default function HeroSection() {
       primaryCtaHref="/signup"
       hint={t('landing.heroJournal.hint')}
       variant="journal"
-      visualContent={<LoomEmbed videoId="875ff0de7fd948d5ac07859fabc35ed8" />}
+      visualContent={<JournalVideoStack videos={journalVideos} />}
       media={{ type: mediaType, images: HERO_6_IMAGES }}
     />
   );

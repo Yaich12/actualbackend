@@ -67,7 +67,6 @@ function SeHistorik({ clientId, clientName, onClose, onOpenEntry }) {
     return lines.slice(0, maxLines).join('\n') + '...';
   };
 
-
   useEffect(() => {
     if (!user) {
       setEntries([]);

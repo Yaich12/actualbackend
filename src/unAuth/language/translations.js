@@ -55,6 +55,7 @@ export const TRANSLATIONS = {
           },
         },
         pricing: { title: "Priser" },
+        about: { title: "Om os" },
       },
     },
     common: {
@@ -77,11 +78,10 @@ export const TRANSLATIONS = {
         aria: "Sektionsskiller",
       },
       frontpage: {
-        titleLine1: "Alt din klinik",
-        titleLine2Prefix: "behøver",
-        titleLine2Suffix: "samlet",
+        titleLine1: "Styrk din praksis",
+        titleLine2: "med Selma+",
         subtitle:
-          "Selma+ samler booking og journal i ét samlet system — med en klinisk assistent ved din side",
+          "Booking, journalføring og din kliniske assistent — samlet i ét system.",
         ctaPrimary: "Kom i gang gratis",
         ctaSecondary: "Se demo",
       },
@@ -100,6 +100,24 @@ export const TRANSLATIONS = {
           "Selma+ er ikke bare AI-snak. Under motorhjelmen bruger vi avanceret AI-teknologi med rødder i Corti — en af Europas mest anerkendte sundheds-AI-platforme, som er udviklet med klinisk kvalitet og sikkerhed i fokus.\n\nHvad betyder det for dig?\n\nMedicinprodukt-registrering i EU & UK – Corti Assistant er officielt registreret som medicinsk device i både EU og hos UK’s MHRA, hvilket betyder at teknologien er vurderet efter strenge regulatoriske krav før brug i kliniske sammenhænge.\n\nHealthcare-grade sikkerhed og data-compliance – Platformen overholder internationale standarder som HIPAA (fortrolig patientdata i USA), GDPR (EU/UK), ISO/IEC 27001, SOC2 og mere – så dine patienters data håndteres sikkert og efter gældende lovgivning.\n\nBygget til klinikere af klinikere – AI-modellerne er trænet specifikt på medicinske samtaler og terminologi for at give nøjagtige transskriptioner og klinisk relevante forslag — så du kan fokusere på patienten, ikke på systemet.\n\nDet betyder, at du kan bruge Selma+ med ro i maven",
         cta: "Prøv Selma+ booking",
         hint: "Ingen installation. Kræver kun et login",
+        videoTitles: {
+          dictation: "Diktering",
+          transcriptionFirstConsultation: "Transkribering - Førstegangskonsultation",
+        },
+      },
+      aboutSection: {
+        statsLine: "Et nyt kapitel. Bygget til behandlere.",
+        rightHeadline: "Bygget med klinikker.",
+        rightSubline: "Formet af feedback fra praksis.",
+        title: "Fra klinisk hverdag til intelligent platform.",
+        paragraphOne:
+          "Selma+ er grundlagt fordi de systemer der fandtes aldrig helt opfyldte vores behov. Samtidig så vi, hvordan teknologi og AI forandrede verden omkring os.",
+        paragraphTwo:
+          "Selma+ samler booking, journal og intelligent klinisk støtte i én moderne platform, formet af feedback fra praksis og designet til fremtidens sundhedsprofessionelle.",
+        foundersName: "Designet i Danmark.",
+        foundersRole: "Skabt af fysioterapeuter.",
+        ctaPrompt: "Klar til at samle det hele i ét moderne system?",
+        ctaButton: "Udforsk Selma+",
       },
       manifesto: {
         line1:
@@ -172,7 +190,7 @@ export const TRANSLATIONS = {
           {
             title: "Sikker klinikdata i EU",
             text:
-              "Alt data i Selma+ gemmes på sikre servere i EU og behandles efter GDPR. Journaler, aftaler og personoplysninger er krypteret både under overførsel og i hvile. Adgang styres med sikre logins og rollebaserede rettigheder, så kun de rette personer ser det nødvendige. Du ejer altid dine data og kan få dem udleveret eller slettet.",
+              "Alt data i Selma+ gemmes på sikre servere i EU og behandles efter GDPR. Journaler, aftaler og personoplysninger er krypteret både under overførsel og i hvile. Adgang styres med sikre logins og rollebaserede rettigheder, så kun de rette personer ser det nødvendige.",
             image: getPublicAssetUrl("hero-2/pexels-eberhardgross-1743364.jpg"),
             alt: "Sikker lagring af klinikdata i EU",
           },
@@ -1326,6 +1344,7 @@ export const TRANSLATIONS = {
           },
         },
         pricing: { title: "Pricing" },
+        about: { title: "About us" },
       },
     },
     common: {
@@ -1348,11 +1367,10 @@ export const TRANSLATIONS = {
         aria: "Section divider",
       },
       frontpage: {
-        titleLine1: "Everything your clinic",
-        titleLine2Prefix: "needs",
-        titleLine2Suffix: "in one place",
+        titleLine1: "Supercharge Your Practice",
+        titleLine2: "With Selma+",
         subtitle:
-          "Selma+ brings booking and charting into one system — with a clinical assistant by your side",
+          "Booking, documentation, and your clinical assistant — all in one system.",
         ctaPrimary: "Get started free",
         ctaSecondary: "See demo",
       },
@@ -1371,6 +1389,24 @@ export const TRANSLATIONS = {
           "Forget clicking around for information before the next consultation. When a patient approaches, Selma+ automatically serves everything for you: who is coming, an AI summary of the last session, and a clear plan for today. You're ready before the patient walks in the door.",
         cta: "Try Selma+ booking",
         hint: "No installation. Watch the demo in 2 minutes.",
+        videoTitles: {
+          dictation: "Dictation",
+          transcriptionFirstConsultation: "Transcription - Initial Consultation",
+        },
+      },
+      aboutSection: {
+        statsLine: "A new chapter. Built for practitioners.",
+        rightHeadline: "Built with\nclinics.",
+        rightSubline: "Shaped by real-world feedback.",
+        title: "From clinical everyday work to an intelligent platform.",
+        paragraphOne:
+          "Selma+ was founded because the systems that existed never fully met our needs. At the same time, we saw how technology and AI were transforming the world around us.",
+        paragraphTwo:
+          "Selma+ brings booking, documentation, and intelligent clinical support together in one modern platform, shaped by real-world feedback and designed for the healthcare professionals of the future.",
+        foundersName: "Designed in Denmark.",
+        foundersRole: "Created by physiotherapists.",
+        ctaPrompt: "Ready to bring everything together in one modern system?",
+        ctaButton: "Explore Selma+",
       },
       manifesto: {
         line1:

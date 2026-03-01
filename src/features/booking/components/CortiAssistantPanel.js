@@ -13,25 +13,8 @@ import '../Journal/indlæg/indlæg.css';
 import { useLanguage } from '../../../LanguageContext';
 
 const DEFAULT_AVATARS = {
-  user:
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=64&h=64&q=80&crop=faces&fit=crop',
+  user: '',
   ai: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=64&h=64&q=80&crop=faces&fit=crop',
-};
-
-const normalizeAvatar = (value, fallback) => {
-  if (!value) {
-    return { src: undefined, fallback };
-  }
-  if (typeof value === 'string') {
-    return { src: value, fallback };
-  }
-  if (typeof value === 'object') {
-    return {
-      src: value.src || undefined,
-      fallback: value.fallback || fallback,
-    };
-  }
-  return { src: undefined, fallback };
 };
 
 export const parseAssistantSections = (markdownText, fallbackTitle = 'Answer') => {
@@ -146,8 +129,6 @@ function CortiAssistantPanel({
   sendDisabled,
   placeholder = '',
   emptyMessageText = '',
-  showEmptyHint = false,
-  emptyHintText = '',
   chatAvatars = DEFAULT_AVATARS,
   className = '',
   onClose,
@@ -158,14 +139,12 @@ function CortiAssistantPanel({
     placeholder || t('indlaeg.assistantPlaceholder', 'Ask Selma assistant a question...');
   const resolvedEmptyMessage =
     emptyMessageText || t('assistant.noMessages', 'No messages yet.');
-  const resolvedEmptyHint =
-    emptyHintText || t('indlaeg.emptyHint', 'No text yet — you can still ask generally.');
   const userLabel = t('assistant.youLabel', 'You');
   const selmaLabel = t('assistant.selmaLabel', 'Selma');
-  const userFallback = userLabel.slice(0, 2).toUpperCase();
-  const selmaFallback = selmaLabel.slice(0, 2).toUpperCase();
-  const resolvedUserAvatar = normalizeAvatar(chatAvatars?.user, userFallback);
-  const resolvedSelmaAvatar = normalizeAvatar(chatAvatars?.ai, selmaFallback);
+  const userFallbackBase = userLabel.slice(0, 2).toUpperCase();
+  const selmaFallbackBase = selmaLabel.slice(0, 2).toUpperCase();
+  const userFallback = `${chatAvatars?.userFallback || userFallbackBase}`.trim() || userFallbackBase;
+  const selmaFallback = `${chatAvatars?.aiFallback || selmaFallbackBase}`.trim() || selmaFallbackBase;
   const effectiveSendDisabled =
     typeof sendDisabled === 'boolean'
       ? sendDisabled
@@ -192,30 +171,74 @@ function CortiAssistantPanel({
       <div className="indlæg-card-body indlæg-card-body--assistant">
         {quickActions?.length ? (
           <div className="indlæg-assistant-section">
-            <p className="indlæg-assistant-heading">
-              {t('assistant.suggestions', 'Suggestions')}
-            </p>
-            <div className="indlæg-quick-actions">
-              {quickActions.map(({ id, label, message, agentType }) => {
-                const actionKey = id || label;
-                return (
-                <button
-                  key={actionKey}
-                  type="button"
-                  className={`indlæg-quick-action${
-                    activeQuickAction === actionKey ? ' is-active' : ''
-                  }`}
-                  onClick={() => {
-                    onQuickAction?.(actionKey);
-                    onSendMessage?.(message ?? label, agentType, actionKey);
-                  }}
-                  disabled={actionsDisabled}
-                >
-                  {label}
-                </button>
-                );
-              })}
-            </div>
+            {quickActions.length > 2 ? (
+              <div className="indlæg-quick-actions">
+                {quickActions.slice(0, -2).map(({ id, label, message, agentType, displayMessage }) => {
+                  const actionKey = id || label;
+                  return (
+                    <button
+                      key={actionKey}
+                      type="button"
+                      className={`indlæg-quick-action${
+                        activeQuickAction === actionKey ? ' is-active' : ''
+                      }`}
+                      onClick={() => {
+                        onQuickAction?.(actionKey);
+                        onSendMessage?.(message ?? label, agentType, actionKey, displayMessage || null);
+                      }}
+                      disabled={actionsDisabled}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+            {quickActions.length >= 2 ? (
+              <div className="indlæg-quick-actions-row">
+                {quickActions.slice(-2).map(({ id, label, message, agentType, displayMessage }) => {
+                  const actionKey = id || label;
+                  return (
+                    <button
+                      key={actionKey}
+                      type="button"
+                      className={`indlæg-quick-action${
+                        activeQuickAction === actionKey ? ' is-active' : ''
+                      }`}
+                      onClick={() => {
+                        onQuickAction?.(actionKey);
+                        onSendMessage?.(message ?? label, agentType, actionKey, displayMessage || null);
+                      }}
+                      disabled={actionsDisabled}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="indlæg-quick-actions">
+                {quickActions.map(({ id, label, message, agentType, displayMessage }) => {
+                  const actionKey = id || label;
+                  return (
+                    <button
+                      key={actionKey}
+                      type="button"
+                      className={`indlæg-quick-action${
+                        activeQuickAction === actionKey ? ' is-active' : ''
+                      }`}
+                      onClick={() => {
+                        onQuickAction?.(actionKey);
+                        onSendMessage?.(message ?? label, agentType, actionKey, displayMessage || null);
+                      }}
+                      disabled={actionsDisabled}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         ) : null}
 
@@ -234,8 +257,8 @@ function CortiAssistantPanel({
                   variant={msg.role === 'user' ? 'sent' : 'received'}
                 >
                   <ChatBubbleAvatar
-                    src={msg.role === 'user' ? resolvedUserAvatar.src : resolvedSelmaAvatar.src}
-                    fallback={msg.role === 'user' ? resolvedUserAvatar.fallback : resolvedSelmaAvatar.fallback}
+                    src={msg.role === 'user' ? chatAvatars.user : chatAvatars.ai}
+                  fallback={msg.role === 'user' ? userFallback : selmaFallback}
                     className="shadow-sm"
                   />
                   <div className="flex flex-col gap-1 max-w-full">
@@ -257,11 +280,7 @@ function CortiAssistantPanel({
 
               {isSending && (
                 <ChatBubble variant="received">
-                <ChatBubbleAvatar
-                  src={resolvedSelmaAvatar.src}
-                  fallback={resolvedSelmaAvatar.fallback}
-                  className="shadow-sm"
-                />
+                  <ChatBubbleAvatar src={chatAvatars.ai} fallback={selmaFallback} className="shadow-sm" />
                   <div className="flex flex-col gap-1 max-w-full">
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                       {selmaLabel}
@@ -273,9 +292,6 @@ function CortiAssistantPanel({
             </ChatMessageList>
           </div>
 
-          {showEmptyHint ? (
-            <p className="indlæg-muted indlæg-agent-empty-hint">{resolvedEmptyHint}</p>
-          ) : null}
         </div>
 
         {errorText ? (
@@ -285,25 +301,29 @@ function CortiAssistantPanel({
         ) : null}
 
         <div className="indlæg-agent-input indlæg-agent-input--modern">
-          <ChatInput
-            className="bg-white"
-            value={inputValue}
-            onChange={(event) => onInputChange?.(event.target.value)}
-            placeholder={resolvedPlaceholder}
-            rows={2}
-            disabled={inputDisabled}
-          />
-          <div className="indlæg-agent-send">
-            <AnimatedGenerateButton
-              type="button"
-              className="indlæg-selma-btn w-full"
-              labelIdle={t('assistant.send', 'Send')}
-              labelActive={t('assistant.sending', 'Sending...')}
-              generating={isSending}
-              onClick={() => onSendMessage?.()}
-              disabled={effectiveSendDisabled}
-              ariaLabel={t('assistant.send', 'Send')}
+          <div className="indlæg-chat-composer">
+            <ChatInput
+              className="bg-white indlæg-chat-input--expanded indlæg-chat-input--with-send"
+              value={inputValue}
+              onChange={(event) => onInputChange?.(event.target.value)}
+              placeholder={resolvedPlaceholder}
+              rows={3}
+              disabled={inputDisabled}
             />
+            <div className="indlæg-agent-send indlæg-agent-send--inside">
+              <AnimatedGenerateButton
+                type="button"
+                className="indlæg-selma-btn indlæg-selma-btn--compact w-full"
+                labelIdle={t('assistant.send', 'Send')}
+                labelActive={t('assistant.sending', 'Sending...')}
+                generating={isSending}
+                onClick={() =>
+                  onSendMessage?.(inputValue, null, 'freeText', inputValue)
+                }
+                disabled={effectiveSendDisabled}
+                ariaLabel={t('assistant.send', 'Send')}
+              />
+            </div>
           </div>
         </div>
       </div>

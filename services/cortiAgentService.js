@@ -18,7 +18,7 @@ Use these sections (translate headings to OUTPUT_LANGUAGE and include only those
 - (3-6 bullets)
 
 ### Missing information / follow-up questions
-- (3-8 bullets)
+- (3-6 bullets)
 
 ### Red flags (what to watch for)
 - (3-6 bullets)

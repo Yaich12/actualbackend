@@ -216,6 +216,15 @@ const AGENTS = {
       'Assistant for preparing patient sessions based on patient notes.',
     systemPrompt: EDUCATION_SYSTEM_PROMPT,
   },
+  educationFast: {
+    name: 'Clinical Education Agent Fast',
+    experts: [
+      { name: 'amboss-expert', type: 'reference' },
+    ],
+    description:
+      'Fast assistant for short user-defined clinical questions based on patient notes.',
+    systemPrompt: EDUCATION_SYSTEM_PROMPT,
+  },
   rehab: {
     name: 'Rehab Plan Agent',
     experts: [
@@ -240,27 +249,90 @@ const resolveAgentConfig = (key) => {
   return config;
 };
 
-const extractTextFromTask = (task) => {
+const extractTextFromParts = (parts) => {
+  if (!Array.isArray(parts) || !parts.length) return '';
+  const text = parts
+    .map((part) => {
+      if (typeof part?.text === 'string') return part.text;
+      if (typeof part?.content?.text === 'string') return part.content.text;
+      if (typeof part?.value === 'string') return part.value;
+      return '';
+    })
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+  return text;
+};
+
+const extractTextFromMessage = (message, { allowNonAssistant = false } = {}) => {
+  if (!message) return '';
+  if (typeof message === 'string') return message.trim();
+  const role = typeof message?.role === 'string' ? message.role.toLowerCase() : '';
+  if (!allowNonAssistant && role && role !== 'assistant') return '';
+  if (typeof message?.text === 'string' && message.text.trim()) return message.text.trim();
+  if (typeof message?.content?.text === 'string' && message.content.text.trim()) {
+    return message.content.text.trim();
+  }
+  const partsText = extractTextFromParts(message?.parts || message?.content?.parts || []);
+  if (partsText) return partsText;
+  return '';
+};
+
+const extractTextFromTask = (task, seen = new Set()) => {
   if (!task) return '';
-  if (Array.isArray(task?.artifacts) && task.artifacts.length) {
+  if (typeof task === 'object') {
+    if (seen.has(task)) return '';
+    seen.add(task);
+  }
+
+  const taskRole = typeof task?.role === 'string' ? task.role.toLowerCase() : '';
+  const allowDirectAssistantExtraction = !taskRole || taskRole === 'assistant';
+
+  const statusText = extractTextFromMessage(task?.status?.message);
+  if (statusText) return statusText;
+
+  if (allowDirectAssistantExtraction) {
+    const directMessageText = extractTextFromMessage(task?.message);
+    if (directMessageText) return directMessageText;
+
+    const directPartsText = extractTextFromParts(task?.parts);
+    if (directPartsText) return directPartsText;
+  }
+
+  if (Array.isArray(task?.artifacts)) {
     for (let i = task.artifacts.length - 1; i >= 0; i -= 1) {
-      const art = task.artifacts[i];
-      const parts = art?.parts || [];
-      const textPart = Array.isArray(parts) ? parts.find((p) => p?.kind === 'text' && p?.text) : null;
-      if (textPart?.text) return textPart.text;
-      const joined = parts.map((p) => p?.text || '').filter(Boolean).join('\n').trim();
-      if (joined) return joined;
+      const artifact = task.artifacts[i];
+      const artifactText =
+        extractTextFromMessage(artifact?.message) ||
+        extractTextFromParts(artifact?.parts || artifact?.content?.parts);
+      if (artifactText) return artifactText;
     }
   }
+
   if (Array.isArray(task?.history)) {
     for (let i = task.history.length - 1; i >= 0; i -= 1) {
-      const h = task.history[i];
-      if (h?.message?.role === 'assistant' && Array.isArray(h?.message?.parts)) {
-        const t = h.message.parts.find((p) => p?.kind === 'text' && p?.text)?.text;
-        if (t) return t;
-      }
+      const entry = task.history[i];
+      const role = `${entry?.message?.role || entry?.role || ''}`.toLowerCase();
+      const text = extractTextFromMessage(entry?.message || entry, { allowNonAssistant: true });
+      if (!text) continue;
+      if (!role || role === 'assistant') return text;
     }
   }
+
+  if (allowDirectAssistantExtraction) {
+    if (typeof task?.text === 'string' && task.text.trim()) return task.text.trim();
+    if (typeof task?.reply === 'string' && task.reply.trim()) return task.reply.trim();
+    if (typeof task?.output?.text === 'string' && task.output.text.trim()) return task.output.text.trim();
+    if (typeof task?.result?.text === 'string' && task.result.text.trim()) return task.result.text.trim();
+  }
+
+  const nestedText =
+    extractTextFromTask(task?.task, seen) ||
+    extractTextFromTask(task?.data, seen) ||
+    extractTextFromTask(task?.result, seen) ||
+    extractTextFromTask(task?.output, seen);
+  if (nestedText) return nestedText;
+
   return '';
 };
 

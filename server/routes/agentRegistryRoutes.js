@@ -42,6 +42,102 @@ const appendOutputLanguage = (message, preferredLanguage) => {
   return `${message}\n\nOUTPUT_LANGUAGE: ${language}\nPlease respond in this language.\nUse Markdown headings starting with ### for each section. Do not return a single block without headings.`.trim();
 };
 
+const TERMINAL_STATES = new Set([
+  'completed',
+  'failed',
+  'canceled',
+  'rejected',
+  'input-required',
+  'auth-required',
+  'unknown',
+]);
+const RETRYABLE_STATES = new Set(['submitted', 'working']);
+const POLL_TIMEOUT_MS = Number.parseInt(process.env.CORTI_AGENT_POLL_TIMEOUT_MS || '', 10) || 120000;
+const POLL_INTERVAL_MS = Number.parseInt(process.env.CORTI_AGENT_POLL_INTERVAL_MS || '', 10) || 1000;
+
+const resolveTaskId = (resp) =>
+  resp?.task?.id ||
+  resp?.taskId ||
+  resp?.task?.taskId ||
+  resp?.message?.taskId ||
+  (Array.isArray(resp?.message?.referenceTaskIds) ? resp.message.referenceTaskIds[0] : null) ||
+  (resp?.kind === 'task' ? resp?.id : null) ||
+  null;
+
+const resolveContextId = (resp, task = null) =>
+  task?.contextId ||
+  resp?.task?.contextId ||
+  resp?.message?.contextId ||
+  resp?.contextId ||
+  null;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const pollTaskUntilDone = async (
+  client,
+  agentId,
+  taskId,
+  timeoutMs = POLL_TIMEOUT_MS,
+  intervalMs = POLL_INTERVAL_MS
+) => {
+  const startedAt = Date.now();
+  let lastTask = null;
+  let lastState = 'unknown';
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const task = await client.agents.getTask(agentId, taskId, {
+      tenantName: process.env.CORTI_TENANT_NAME,
+    });
+    lastTask = task;
+    const state = `${task?.status?.state || task?.state || 'unknown'}`.toLowerCase();
+    lastState = state || 'unknown';
+
+    const text =
+      extractTextFromTask(task) ||
+      extractTextFromTask(task?.status) ||
+      '';
+    if (text) {
+      return { task, text, state: lastState };
+    }
+
+    if (TERMINAL_STATES.has(lastState) || !RETRYABLE_STATES.has(lastState)) {
+      return { task, text: '', state: lastState };
+    }
+
+    await sleep(intervalMs);
+  }
+
+  const timeoutError = new Error('Task polling timed out');
+  timeoutError.code = 'TASK_POLL_TIMEOUT';
+  timeoutError.task = lastTask;
+  timeoutError.taskState = lastState;
+  timeoutError.taskId = taskId;
+  throw timeoutError;
+};
+
+const tryExtractReplyFromContext = async (client, agentId, contextId) => {
+  if (!contextId) return '';
+  try {
+    const context = await client.agents.getContext(
+      agentId,
+      contextId,
+      { limit: 100, offset: 0 },
+      { tenantName: process.env.CORTI_TENANT_NAME }
+    );
+    const items = Array.isArray(context?.items) ? context.items : [];
+    for (let i = items.length - 1; i >= 0; i -= 1) {
+      const text =
+        extractTextFromTask(items[i]) ||
+        extractTextFromTask(items[i]?.status) ||
+        '';
+      if (text) return text;
+    }
+  } catch (error) {
+    console.warn('[AgentRegistry] context fetch failed:', error?.message);
+  }
+  return '';
+};
+
 router.post('/:key/init', async (req, res) => {
   try {
     const { key } = req.params;
@@ -112,13 +208,56 @@ ${appendOutputLanguage(finalMessage, preferredLanguage)}
       tenantName: process.env.CORTI_TENANT_NAME,
     });
 
-    const reply =
+    let task = resp?.task || null;
+    let reply =
+      extractTextFromTask(task) ||
       extractTextFromTask(resp?.task || resp) ||
       extractTextFromTask(resp?.task?.status || resp?.status) ||
       resp?.text ||
       '';
 
     if (!reply) {
+      const taskId = resolveTaskId(resp);
+      let pollTimedOut = false;
+      if (taskId) {
+        try {
+          const polled = await pollTaskUntilDone(cortiClient, agentId, taskId);
+          task = polled?.task || task;
+          reply =
+            polled?.text ||
+            extractTextFromTask(task) ||
+            extractTextFromTask(task?.status) ||
+            resp?.text ||
+            '';
+        } catch (pollError) {
+          if (pollError?.code !== 'TASK_POLL_TIMEOUT') {
+            throw pollError;
+          }
+          pollTimedOut = true;
+          task = pollError?.task || task;
+        }
+      }
+      if (!reply) {
+        const contextId = resolveContextId(resp, task);
+        reply = await tryExtractReplyFromContext(cortiClient, agentId, contextId);
+      }
+      if (!reply && pollTimedOut) {
+        const timeoutError = new Error('Task polling timed out');
+        timeoutError.code = 'TASK_POLL_TIMEOUT';
+        throw timeoutError;
+      }
+    }
+
+    if (!reply) {
+      console.warn('[AgentRegistry] empty reply', {
+        key,
+        agentId,
+        taskId: resolveTaskId(resp),
+        taskState: task?.status?.state || task?.state || null,
+        hasTask: Boolean(task),
+        hasRespMessage: Boolean(resp?.message),
+        hasRespTask: Boolean(resp?.task),
+      });
       throw new Error('Empty response from Corti');
     }
 
@@ -127,7 +266,7 @@ ${appendOutputLanguage(finalMessage, preferredLanguage)}
     if (error?.code === 'AGENT_ID_MISSING') {
       return res.status(502).json({ ok: false, error: 'agentId missing', raw: error.raw });
     }
-    const status = getStatusCode(error);
+    const status = error?.code === 'TASK_POLL_TIMEOUT' ? 504 : getStatusCode(error);
     const detail = getErrorDetail(error);
     const requestId = getRequestId(error);
     const code = getErrorCode(error) || (status >= 500 ? 'UPSTREAM_ERROR' : 'REQUEST_FAILED');

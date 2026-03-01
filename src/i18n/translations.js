@@ -78,6 +78,7 @@ export const translations = {
         agentNotReady: 'Agent is not ready yet.',
         agentNoText: 'Agent returned no text',
         agentFailed: 'The agent could not respond.',
+        agentTemporaryUnavailable: 'The agent is temporarily unavailable. Please try again shortly.',
         rehabNoText: 'No text found — write a note or enter text first.',
       },
       status: {
@@ -101,6 +102,9 @@ export const translations = {
       youLabel: 'You',
       selmaLabel: 'Selma',
       noMessages: 'No messages yet.',
+      requestExerciseSuggestions: 'Suggest evidence-based exercises',
+      requestGuidelines: 'Fetch guidelines',
+      requestLatestEvidence: 'Fetch latest research',
       send: 'Send',
       sending: 'Sending...',
     },
@@ -108,7 +112,10 @@ export const translations = {
       missingInfo: 'Missing info',
       redFlags: 'Red flags',
       objectiveTests: 'Objective tests',
+      exerciseSuggestions: 'Exercise suggestions',
       planHep: 'Plan + HEP',
+      guidelines: 'Guidelines',
+      latestEvidence: 'Latest evidence',
       summarizePatient: 'Summarize patient',
     },
     prompts: {
@@ -117,6 +124,8 @@ export const translations = {
       redFlags:
         'Identify possible red flags and what questions/actions should follow.',
       objectiveTests: 'Suggest relevant objective tests and what they can reveal.',
+      exerciseSuggestions:
+        'Provide exactly 3 evidence-based exercise suggestions tailored to the patient context. For each exercise include: purpose, dosage, load tolerance guidance, and progression/regression options. Keep each exercise very short and clinically usable. Use only information from the provided note and general clinical knowledge. Do not perform external web searches and do not include citations/sources.',
       planHep:
         'Propose a clinical plan with a short HEP (home exercises) and key patient points.',
       summarizePatient: 'Summarize this patient’s full history across all notes.',
@@ -201,6 +210,7 @@ export const translations = {
         agentNotReady: 'Agent ikke klar endnu.',
         agentNoText: 'Agent returnerede ingen tekst',
         agentFailed: 'Agenten kunne ikke svare.',
+        agentTemporaryUnavailable: 'Agenten er midlertidigt utilgaengelig. Proev igen om lidt.',
         rehabNoText: 'Ingen tekst fundet – skriv et notat eller indtast tekst først.',
       },
       status: {
@@ -224,6 +234,9 @@ export const translations = {
       youLabel: 'Dig',
       selmaLabel: 'Selma',
       noMessages: 'Ingen beskeder endnu.',
+      requestExerciseSuggestions: 'Foreslå evidensbaseret øvelser',
+      requestGuidelines: 'Hent retningslinjer',
+      requestLatestEvidence: 'Hent nyeste forskning',
       send: 'Send',
       sending: 'Sender...',
     },
@@ -231,15 +244,20 @@ export const translations = {
       missingInfo: 'Manglende info',
       redFlags: 'Røde flag',
       objectiveTests: 'Objektive tests',
+      exerciseSuggestions: 'Øvelsesforslag',
       planHep: 'Plan + HEP',
+      guidelines: 'Retningslinjer',
+      latestEvidence: 'Nyeste forskning',
       summarizePatient: 'Opsummér patient',
     },
     prompts: {
       missingInfo:
-        'Find manglende information i anamnesen og foreslå relevante opfølgende spørgsmål.',
+        'Find manglende information',
       redFlags:
-        'Identificér mulige røde flag og hvilke spørgsmål/handlinger der bør følge.',
-      objectiveTests: 'Foreslå relevante objektive tests og hvad de kan afdække.',
+        'Identificer mulige røde flag',
+      objectiveTests: 'Foreslå relevante tests',
+      exerciseSuggestions:
+        'Foreslaa praecis 3 evidensbaserede ovelser tilpasset patientens kontekst. For hver ovelse: formaal, dosering, belastningstolerance og progression/regression. Hold hvert punkt meget kort og klinisk anvendeligt. Brug kun oplysninger fra notatet og generel klinisk viden. Ingen ekstern websoegning og ingen kilder.',
       planHep:
         'Foreslå en klinisk plan med kort HEP (hjemmeøvelser) og nøglepunkter for patienten.',
       summarizePatient: 'Opsummér denne patients fulde historik på tværs af alle noter.',

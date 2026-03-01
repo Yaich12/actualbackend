@@ -8,11 +8,11 @@ import { useMemo, useRef } from "react";
 type TimelineContentProps = {
   as?: ElementType;
   animationNum?: number;
-  timelineRef?: RefObject<HTMLElement>;
+  timelineRef?: RefObject<HTMLElement | null>;
   customVariants?: Variants;
   className?: string;
   children: ReactNode;
-};
+} & Record<string, unknown>;
 
 const defaultVariants: Variants = {
   hidden: { opacity: 0, y: 16 },
@@ -33,6 +33,7 @@ export const TimelineContent = ({
   customVariants = defaultVariants,
   className,
   children,
+  ...elementProps
 }: TimelineContentProps) => {
   const localRef = useRef<HTMLElement | null>(null);
   const refToUse = timelineRef ?? localRef;
@@ -47,6 +48,7 @@ export const TimelineContent = ({
       animate={isInView ? "visible" : "hidden"}
       custom={animationNum}
       variants={customVariants}
+      {...(elementProps as Record<string, unknown>)}
     >
       {children}
     </MotionComponent>

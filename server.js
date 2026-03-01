@@ -75,6 +75,9 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'https://www.selmaplus.tech',
   projectId ? `https://${projectId}.web.app` : null,
   projectId ? `https://${projectId}.firebaseapp.com` : null,
+  // Fallback for Cloud Run environments missing FIREBASE/GCLOUD project ID.
+  'https://actualbackend-3b454.web.app',
+  'https://actualbackend-3b454.firebaseapp.com',
   'http://localhost:3000',
   'http://127.0.0.1:3000',
 ].filter(Boolean);
