@@ -89,8 +89,6 @@ const getInitialFormData = (mode, initialClient) => {
     status: 'Aktiv',
     foedselsdag: '',
     foedselsaar: '',
-    koen: '',
-    pronomer: '',
     kundekilde: '',
   };
 
@@ -123,8 +121,6 @@ const getInitialFormData = (mode, initialClient) => {
       status: initialClient.status || 'Aktiv',
       foedselsdag: initialClient.foedselsdag || '',
       foedselsaar: initialClient.foedselsaar || '',
-      koen: initialClient.koen || '',
-      pronomer: initialClient.pronomer || '',
       kundekilde: initialClient.clientensoplysninger?.kundekilde || initialClient.kundekilde || '',
     };
   }
@@ -350,8 +346,6 @@ function AddKlient({
             status: data.status || 'Aktiv',
             foedselsdag: data.foedselsdag || '',
             foedselsaar: data.foedselsaar || '',
-            koen: data.koen || '',
-            pronomer: data.pronomer || '',
             kundekilde: data.clientensoplysninger?.kundekilde || data.kundekilde || '',
           });
           setShowAddressLine2(Boolean(data.adresse2));
@@ -912,42 +906,6 @@ function AddKlient({
                         </span>
                       )}
                     </div>
-                  </div>
-                </div>
-
-                <div className="addklient-form-grid">
-                  <div className="addklient-field">
-                    <label htmlFor="koen">Køn</label>
-                    <select
-                      id="koen"
-                      name="koen"
-                      value={formData.koen}
-                      onChange={handleChange}
-                      className="addklient-select"
-                      disabled={isFormDisabled}
-                    >
-                      <option value="">Vælg en mulighed</option>
-                      <option value="kvinde">Kvinde</option>
-                      <option value="mand">Mand</option>
-                      <option value="andet">Andet</option>
-                      <option value="vil-ikke-oplyse">Vil ikke oplyse</option>
-                    </select>
-                  </div>
-                  <div className="addklient-field">
-                    <label htmlFor="pronomer">Pronomen</label>
-                    <select
-                      id="pronomer"
-                      name="pronomer"
-                      value={formData.pronomer}
-                      onChange={handleChange}
-                      className="addklient-select"
-                      disabled={isFormDisabled}
-                    >
-                      <option value="">Vælg en mulighed</option>
-                      <option value="hun-hende">Hun/hende</option>
-                      <option value="han-ham">Han/ham</option>
-                      <option value="de-dem">De/dem</option>
-                    </select>
                   </div>
                 </div>
 

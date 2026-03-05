@@ -3,6 +3,7 @@
 # Deploy with `firebase deploy`
 
 import hashlib
+import html
 import json
 import logging
 import os
@@ -87,6 +88,16 @@ BOOKING_ALLOWED_ORIGINS = [
 BOOKING_ALLOW_ANY = os.getenv("BOOKING_CORS_ALLOW_ANY", "").lower() in ("1", "true", "yes")
 LOVABLE_ORIGIN_RE = re.compile(r"^https://[a-z0-9-]+\.lovable\.app$")
 WORK_HOURS_TIMEZONE = "Europe/Copenhagen"
+BOOKING_CONFIRMATION_EMAIL_ENABLED = (
+    os.getenv("BOOKING_CONFIRMATION_EMAIL_ENABLED", "true").strip().lower()
+    in ("1", "true", "yes", "on")
+)
+BOOKING_CONFIRMATION_FROM_EMAIL = os.getenv("BOOKING_CONFIRMATION_FROM_EMAIL", "").strip()
+BOOKING_CONFIRMATION_REPLY_TO_EMAIL = os.getenv(
+    "BOOKING_CONFIRMATION_REPLY_TO_EMAIL", ""
+).strip()
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
+RESEND_API_BASE = os.getenv("RESEND_API_BASE", "https://api.resend.com").strip().rstrip("/")
 
 
 def _cors_headers() -> Dict[str, str]:
@@ -338,45 +349,332 @@ def _format_minutes_as_time(minutes: int | None) -> str | None:
     return f"{hours:02d}:{mins:02d}"
 
 
-def _load_user_work_hours(uid: str | None) -> tuple[Dict[str, Any] | None, str | None]:
+def _format_booking_datetime_da(value: datetime) -> str:
+    weekdays_da = ["mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag"]
+    weekday = weekdays_da[value.weekday()]
+    return f"{weekday}, {value.strftime('%d.%m.%Y kl. %H:%M')}"
+
+
+def _build_appointment_reference(client_name: str | None, created_at: datetime | None = None) -> str:
+    raw_name = (client_name or "").strip()
+    normalized = re.sub(r"[^A-Za-z0-9\s]+", " ", raw_name)
+    parts = [p for p in normalized.split() if p]
+
+    initials = "APT"
+    if len(parts) >= 3:
+        initials = f"{parts[0][0]}{parts[1][0]}{parts[2][0]}".upper()
+    elif len(parts) == 2:
+        first = parts[0][0] if parts[0] else "X"
+        second = parts[1][0] if parts[1] else "X"
+        third = parts[1][1] if len(parts[1]) > 1 else (parts[0][1] if len(parts[0]) > 1 else "X")
+        initials = f"{first}{second}{third}".upper()
+    elif len(parts) == 1:
+        token = parts[0].upper()
+        initials = token[:3] if len(token) >= 3 else f"{token}{'X' * (3 - len(token))}"
+
+    timestamp = created_at or datetime.now(timezone.utc)
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    local_ts = timestamp.astimezone(ZoneInfo(WORK_HOURS_TIMEZONE))
+    date_code = local_ts.strftime("%d%m%H%M")
+    return f"{initials}{date_code}"
+
+
+def _build_booking_confirmation_email(
+    clinic_name: str,
+    patient_name: str,
+    service_name: str,
+    staff_name: str,
+    start_local: datetime,
+    end_local: datetime,
+    timezone_name: str,
+    notes: str,
+) -> tuple[str, str, str]:
+    clinic = clinic_name.strip() or "Klinikken"
+    patient = patient_name.strip() or "Patient"
+    service = service_name.strip() or "Ydelse"
+    staff = staff_name.strip() or "Behandler"
+    notes_text = notes.strip() or "Ingen bemærkninger"
+
+    start_label = _format_booking_datetime_da(start_local)
+    if start_local.date() == end_local.date():
+        when_label = f"{start_label} - {end_local.strftime('%H:%M')}"
+    else:
+        when_label = f"{start_label} - {_format_booking_datetime_da(end_local)}"
+
+    safe_clinic = html.escape(clinic)
+    safe_patient = html.escape(patient)
+    safe_service = html.escape(service)
+    safe_staff = html.escape(staff)
+    safe_when = html.escape(when_label)
+    safe_timezone = html.escape(timezone_name or WORK_HOURS_TIMEZONE)
+    safe_notes = html.escape(notes_text).replace("\n", "<br>")
+
+    subject = f"Booking bekræftet hos {clinic}"
+
+    text_body = (
+        f"Hej {patient},\n\n"
+        f"Din booking hos {clinic} er registreret.\n\n"
+        f"Ydelse: {service}\n"
+        f"Behandler: {staff}\n"
+        f"Tid: {when_label} ({timezone_name})\n"
+        f"Bemærkninger: {notes_text}\n\n"
+        "Tak for din booking."
+    )
+
+    html_body = f"""
+<div style="font-family:Arial,sans-serif;color:#0f172a;line-height:1.5;max-width:560px;margin:0 auto;">
+  <h2 style="margin:0 0 12px;">Booking bekræftet</h2>
+  <p style="margin:0 0 16px;">Hej {safe_patient}, din booking hos <strong>{safe_clinic}</strong> er registreret.</p>
+  <div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;background:#f8fafc;">
+    <p style="margin:0 0 8px;"><strong>Ydelse:</strong> {safe_service}</p>
+    <p style="margin:0 0 8px;"><strong>Behandler:</strong> {safe_staff}</p>
+    <p style="margin:0 0 8px;"><strong>Tid:</strong> {safe_when}</p>
+    <p style="margin:0 0 8px;"><strong>Tidszone:</strong> {safe_timezone}</p>
+    <p style="margin:0;"><strong>Bemærkninger:</strong> {safe_notes}</p>
+  </div>
+  <p style="margin:16px 0 0;">Tak for din booking.</p>
+</div>
+""".strip()
+
+    return subject, text_body, html_body
+
+
+def _extract_resend_error_message(response: requests.Response) -> str:
+    try:
+        payload = response.json()
+    except Exception:
+        payload = None
+
+    if isinstance(payload, dict):
+        for key in ("error", "message"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        if isinstance(payload.get("name"), str) and payload.get("name").strip():
+            return payload.get("name").strip()
+
+    body_text = (response.text or "").strip()
+    if body_text:
+        return body_text[:240]
+    return f"HTTP {response.status_code}"
+
+
+def _send_patient_booking_confirmation_email(
+    *,
+    patient_email: str,
+    patient_name: str,
+    clinic_name: str,
+    service_name: str,
+    staff_name: str,
+    start_local: datetime,
+    end_local: datetime,
+    timezone_name: str,
+    notes: str,
+    reply_to_email: str,
+) -> Dict[str, Any]:
+    if not BOOKING_CONFIRMATION_EMAIL_ENABLED:
+        return {"status": "skipped", "error": "BOOKING_CONFIRMATION_EMAIL_ENABLED=false"}
+
+    recipient = (patient_email or "").strip()
+    if not recipient:
+        return {"status": "skipped", "error": "missing-recipient-email"}
+
+    if not BOOKING_CONFIRMATION_FROM_EMAIL or not RESEND_API_KEY:
+        logger.warning(
+            "Booking confirmation email skipped: missing config fromEmail=%s apiKey=%s",
+            bool(BOOKING_CONFIRMATION_FROM_EMAIL),
+            bool(RESEND_API_KEY),
+        )
+        return {"status": "skipped", "error": "missing-email-config"}
+
+    subject, text_body, html_body = _build_booking_confirmation_email(
+        clinic_name=clinic_name,
+        patient_name=patient_name,
+        service_name=service_name,
+        staff_name=staff_name,
+        start_local=start_local,
+        end_local=end_local,
+        timezone_name=timezone_name,
+        notes=notes,
+    )
+
+    payload: Dict[str, Any] = {
+        "from": BOOKING_CONFIRMATION_FROM_EMAIL,
+        "to": [recipient],
+        "subject": subject,
+        "text": text_body,
+        "html": html_body,
+    }
+
+    reply_to = (BOOKING_CONFIRMATION_REPLY_TO_EMAIL or reply_to_email or "").strip()
+    if reply_to:
+        payload["reply_to"] = reply_to
+
+    try:
+        response = requests.post(
+            f"{RESEND_API_BASE}/emails",
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        logger.exception("Failed to call Resend booking confirmation endpoint.")
+        return {"status": "failed", "error": str(exc)}
+
+    if 200 <= response.status_code < 300:
+        message_id = ""
+        try:
+            response_payload = response.json()
+            if isinstance(response_payload, dict):
+                message_id = str(response_payload.get("id") or "").strip()
+        except Exception:
+            message_id = ""
+        return {"status": "sent", "messageId": message_id or None}
+
+    error_message = _extract_resend_error_message(response)
+    logger.warning(
+        "Resend booking confirmation failed status=%s error=%s",
+        response.status_code,
+        error_message,
+    )
+    return {"status": "failed", "error": error_message}
+
+
+def _normalize_work_hours_exceptions_payload(
+    work_hours_exceptions: Any,
+) -> Dict[str, Dict[str, Any]]:
+    normalized: Dict[str, Dict[str, Any]] = {}
+    if not isinstance(work_hours_exceptions, list):
+        return normalized
+
+    for entry in work_hours_exceptions:
+        if not isinstance(entry, dict):
+            continue
+
+        raw_date = entry.get("date")
+        parsed_date = _parse_date_iso(str(raw_date).strip()) if raw_date else None
+        if not parsed_date:
+            continue
+        date_key = parsed_date.isoformat()
+
+        closed = entry.get("closed") is True
+        if closed:
+            normalized[date_key] = {
+                "date": date_key,
+                "closed": True,
+                "startMinutes": None,
+                "endMinutes": None,
+            }
+            continue
+
+        start_raw = entry.get("start")
+        end_raw = entry.get("end")
+        start_minutes = _parse_time_minutes(start_raw) if isinstance(start_raw, str) else None
+        end_minutes = _parse_time_minutes(end_raw) if isinstance(end_raw, str) else None
+        if start_minutes is None or end_minutes is None or end_minutes <= start_minutes:
+            continue
+
+        normalized[date_key] = {
+            "date": date_key,
+            "closed": False,
+            "startMinutes": start_minutes,
+            "endMinutes": end_minutes,
+        }
+
+    return normalized
+
+
+def _load_user_work_schedule(
+    uid: str | None,
+) -> tuple[Dict[str, Any] | None, Dict[str, Dict[str, Any]], str | None]:
     if not uid:
-        return None, None
+        return None, {}, None
     user_doc = get_db().collection("users").document(uid).get()
     if not user_doc.exists:
-        return None, None
+        return None, {}, None
     data = user_doc.to_dict() or {}
     work_hours = data.get("workHours")
+    work_hours_exceptions = _normalize_work_hours_exceptions_payload(
+        data.get("workHoursExceptions")
+    )
     if isinstance(work_hours, dict):
-        return work_hours, uid
-    return None, uid
+        return work_hours, work_hours_exceptions, uid
+    return None, work_hours_exceptions, uid
 
 
-def _resolve_staff_work_hours(
+def _merge_work_hours_exceptions(
+    primary: Dict[str, Dict[str, Any]] | None,
+    secondary: Dict[str, Dict[str, Any]] | None,
+) -> Dict[str, Dict[str, Any]]:
+    merged: Dict[str, Dict[str, Any]] = {}
+    if isinstance(secondary, dict):
+        merged.update(secondary)
+    if isinstance(primary, dict):
+        merged.update(primary)
+    return merged
+
+
+def _resolve_staff_work_schedule(
     clinic_data: Dict[str, Any],
     staff_uid: str,
     staff_data: Dict[str, Any] | None = None,
-) -> tuple[Dict[str, Any] | None, str | None]:
-    work_hours, resolved_uid = _load_user_work_hours(staff_uid)
+) -> tuple[Dict[str, Any] | None, Dict[str, Dict[str, Any]], str | None]:
+    work_hours, work_hours_exceptions, resolved_uid = _load_user_work_schedule(staff_uid)
     if work_hours is not None:
-        return work_hours, resolved_uid or staff_uid
+        return work_hours, work_hours_exceptions, resolved_uid or staff_uid
+
+    owner_uid = clinic_data.get("ownerUid")
 
     if isinstance(staff_data, dict):
         team_work_hours = staff_data.get("workHours")
+        team_work_hours_exceptions = _normalize_work_hours_exceptions_payload(
+            staff_data.get("workHoursExceptions")
+        )
+        merged_team_exceptions = _merge_work_hours_exceptions(
+            work_hours_exceptions, team_work_hours_exceptions
+        )
         if isinstance(team_work_hours, dict):
-            return team_work_hours, staff_data.get("uid") or staff_uid
+            return (
+                team_work_hours,
+                merged_team_exceptions,
+                staff_data.get("uid") or staff_data.get("memberUid") or staff_uid,
+            )
 
-        team_uid = staff_data.get("uid")
+        team_uid = staff_data.get("uid") or staff_data.get("memberUid")
         if team_uid:
-            work_hours, resolved_uid = _load_user_work_hours(str(team_uid))
+            work_hours, team_uid_exceptions, resolved_uid = _load_user_work_schedule(
+                str(team_uid)
+            )
+            merged_team_uid_exceptions = _merge_work_hours_exceptions(
+                merged_team_exceptions, team_uid_exceptions
+            )
             if work_hours is not None:
-                return work_hours, resolved_uid or str(team_uid)
-            return None, resolved_uid or str(team_uid)
+                return work_hours, merged_team_uid_exceptions, resolved_uid or str(team_uid)
+            return None, merged_team_uid_exceptions, resolved_uid or str(team_uid)
 
-        return None, resolved_uid
+        if owner_uid and (staff_uid == owner_uid or staff_data.get("isOwner") is True):
+            owner_work_hours, owner_exceptions, owner_resolved_uid = _load_user_work_schedule(
+                str(owner_uid)
+            )
+            merged_owner_exceptions = _merge_work_hours_exceptions(
+                merged_team_exceptions, owner_exceptions
+            )
+            if owner_work_hours is not None:
+                return (
+                    owner_work_hours,
+                    merged_owner_exceptions,
+                    owner_resolved_uid or str(owner_uid),
+                )
+            return None, merged_owner_exceptions, owner_resolved_uid or str(owner_uid)
 
-    owner_uid = clinic_data.get("ownerUid")
+        return None, merged_team_exceptions, resolved_uid
+
     if not owner_uid:
-        return None, resolved_uid
+        return None, work_hours_exceptions, resolved_uid
 
     team_doc = (
         get_db()
@@ -387,21 +685,91 @@ def _resolve_staff_work_hours(
         .get()
     )
     if not team_doc.exists:
-        return None, resolved_uid
+        return None, work_hours_exceptions, resolved_uid
 
     team_data = team_doc.to_dict() or {}
     team_work_hours = team_data.get("workHours")
+    team_work_hours_exceptions = _normalize_work_hours_exceptions_payload(
+        team_data.get("workHoursExceptions")
+    )
+    merged_team_doc_exceptions = _merge_work_hours_exceptions(
+        work_hours_exceptions, team_work_hours_exceptions
+    )
     if isinstance(team_work_hours, dict):
-        return team_work_hours, team_data.get("uid") or staff_uid
+        return (
+            team_work_hours,
+            merged_team_doc_exceptions,
+            team_data.get("uid") or team_data.get("memberUid") or staff_uid,
+        )
 
-    team_uid = team_data.get("uid")
+    team_uid = team_data.get("uid") or team_data.get("memberUid")
     if team_uid:
-        work_hours, resolved_uid = _load_user_work_hours(str(team_uid))
+        work_hours, team_uid_exceptions, resolved_uid = _load_user_work_schedule(str(team_uid))
+        merged_team_uid_exceptions = _merge_work_hours_exceptions(
+            merged_team_doc_exceptions, team_uid_exceptions
+        )
         if work_hours is not None:
-            return work_hours, resolved_uid or str(team_uid)
-        return None, resolved_uid or str(team_uid)
+            return work_hours, merged_team_uid_exceptions, resolved_uid or str(team_uid)
+        return None, merged_team_uid_exceptions, resolved_uid or str(team_uid)
 
-    return None, resolved_uid
+    if owner_uid and (
+        staff_uid == owner_uid or team_data.get("isOwner") is True or str(team_uid or "") == str(owner_uid)
+    ):
+        owner_work_hours, owner_exceptions, owner_resolved_uid = _load_user_work_schedule(
+            str(owner_uid)
+        )
+        merged_owner_exceptions = _merge_work_hours_exceptions(
+            merged_team_doc_exceptions, owner_exceptions
+        )
+        if owner_work_hours is not None:
+            return (
+                owner_work_hours,
+                merged_owner_exceptions,
+                owner_resolved_uid or str(owner_uid),
+            )
+        return None, merged_owner_exceptions, owner_resolved_uid or str(owner_uid)
+
+    return None, merged_team_doc_exceptions, resolved_uid
+
+
+def _resolve_effective_work_window(
+    target_date: date,
+    work_hours: Dict[str, Any] | None,
+    work_hours_exceptions: Dict[str, Dict[str, Any]] | None,
+) -> tuple[int | None, int | None, str]:
+    date_key = target_date.isoformat()
+
+    if isinstance(work_hours_exceptions, dict):
+        exception_entry = work_hours_exceptions.get(date_key)
+        if isinstance(exception_entry, dict):
+            if exception_entry.get("closed") is True:
+                return None, None, "exception-closed"
+            start_minutes = exception_entry.get("startMinutes")
+            end_minutes = exception_entry.get("endMinutes")
+            if (
+                isinstance(start_minutes, int)
+                and isinstance(end_minutes, int)
+                and end_minutes > start_minutes
+            ):
+                return start_minutes, end_minutes, "exception-open"
+            return None, None, "exception-invalid"
+
+    day_key = _get_weekday_key_long(target_date)
+    work_day = work_hours.get(day_key) if isinstance(work_hours, dict) else None
+    if not isinstance(work_day, dict) or work_day.get("enabled") is not True:
+        return None, None, "weekly-closed"
+
+    start_raw = work_day.get("start")
+    end_raw = work_day.get("end")
+    if not isinstance(start_raw, str) or not isinstance(end_raw, str) or not start_raw or not end_raw:
+        return None, None, "weekly-missing"
+
+    start_minutes = _parse_time_minutes(start_raw)
+    end_minutes = _parse_time_minutes(end_raw)
+    if start_minutes is None or end_minutes is None or end_minutes <= start_minutes:
+        return None, None, "weekly-invalid"
+
+    return start_minutes, end_minutes, "weekly-open"
 
 
 def _resolve_working_hours(
@@ -1525,6 +1893,25 @@ def publicBookAppointment(req: https_fn.Request) -> https_fn.Response:
     if not owner_uid:
         return _public_booking_error(req, "Clinic owner missing.", status=404)
 
+    service_ref = (
+        get_db()
+        .collection("users")
+        .document(owner_uid)
+        .collection("services")
+        .document(service_id)
+    )
+    service_snap = service_ref.get()
+    if not service_snap.exists:
+        return _public_booking_error(req, "Unknown serviceId.", status=400)
+    service_data = service_snap.to_dict() or {}
+    service_name = str(
+        service_data.get("name")
+        or service_data.get("navn")
+        or service_data.get("title")
+        or service_data.get("serviceName")
+        or service_id
+    ).strip() or service_id
+
     full_name = f"{first_name} {last_name}".strip()
 
     start_dt = _parse_iso_datetime(start_iso)
@@ -1553,22 +1940,37 @@ def publicBookAppointment(req: https_fn.Request) -> https_fn.Response:
     staff_name = staff_data.get("name") or ""
     if not staff_name:
         staff_name = f"{staff_data.get('firstName') or ''} {staff_data.get('lastName') or ''}".strip()
+    if not staff_name and staff_uid == owner_uid:
+        owner_staff_doc = get_db().collection("users").document(owner_uid).get()
+        owner_staff_data = owner_staff_doc.to_dict() if owner_staff_doc.exists else {}
+        owner_staff_first = owner_staff_data.get("fornavn") or owner_staff_data.get("firstName") or ""
+        owner_staff_last = owner_staff_data.get("efternavn") or owner_staff_data.get("lastName") or ""
+        staff_name = (
+            owner_staff_data.get("displayName")
+            or owner_staff_data.get("navn")
+            or owner_staff_data.get("name")
+            or f"{owner_staff_first} {owner_staff_last}".strip()
+        )
 
-    work_hours, _ = _resolve_staff_work_hours(clinic_data, staff_uid, staff_data)
-    work_day_key = _get_weekday_key_long(start_dt.astimezone(tzinfo).date())
-    work_day = work_hours.get(work_day_key) if isinstance(work_hours, dict) else None
-    if not isinstance(work_day, dict) or work_day.get("enabled") is not True:
-        return _public_booking_error(req, "Outside working hours", status=400)
-
-    start_raw = work_day.get("start")
-    end_raw = work_day.get("end")
-    start_minutes = _parse_time_minutes(start_raw) if isinstance(start_raw, str) else None
-    end_minutes = _parse_time_minutes(end_raw) if isinstance(end_raw, str) else None
-    if start_minutes is None or end_minutes is None or end_minutes <= start_minutes:
-        return _public_booking_error(req, "Outside working hours", status=400)
-
+    work_hours, work_hours_exceptions, _ = _resolve_staff_work_schedule(
+        clinic_data, staff_uid, staff_data
+    )
     start_local = start_dt.astimezone(tzinfo)
     end_local = end_dt.astimezone(tzinfo)
+    start_minutes, end_minutes, work_window_source = _resolve_effective_work_window(
+        start_local.date(), work_hours, work_hours_exceptions
+    )
+    if start_minutes is None or end_minutes is None:
+        logger.info(
+            "publicBookAppointment outsideWorkWindow clinicSlug=%s staffUid=%s serviceId=%s startIso=%s source=%s",
+            clinic_slug,
+            staff_uid,
+            service_id,
+            start_iso,
+            work_window_source,
+        )
+        return _public_booking_error(req, "Outside working hours", status=400)
+
     work_day_start = datetime(
         start_local.year,
         start_local.month,
@@ -1731,6 +2133,9 @@ def publicBookAppointment(req: https_fn.Request) -> https_fn.Response:
     start_time = start_date_local.strftime("%H:%M")
     end_date = end_date_local.strftime("%d-%m-%Y")
     end_time = end_date_local.strftime("%H:%M")
+    appointment_reference = _build_appointment_reference(
+        full_name or service_name or "Aftale", datetime.now(timezone.utc)
+    )
 
     appointment_ref = appointments_ref.document()
     appointment_payload = {
@@ -1738,16 +2143,19 @@ def publicBookAppointment(req: https_fn.Request) -> https_fn.Response:
         "clinicName": clinic_data.get("clinicName") or clinic_slug,
         "ownerUid": owner_uid,
         "staffUid": staff_uid,
+        "source": "publicBooking",
+        "createdBy": "publicBooking",
         "calendarOwnerId": staff_uid,
         "calendarOwner": staff_name or clinic_data.get("clinicName") or "Clinician",
-        "title": full_name or service_id or "Booking",
+        "title": service_name or full_name or "Booking",
         "client": full_name,
         "clientId": client_id,
         "clientEmail": email,
         "clientPhone": phone,
         "serviceId": service_id,
-        "service": service_id,
+        "service": service_name,
         "serviceType": "service",
+        "referenceNumber": appointment_reference,
         "startIso": start_iso,
         "endIso": end_iso,
         "start": start_iso,
@@ -1764,10 +2172,51 @@ def publicBookAppointment(req: https_fn.Request) -> https_fn.Response:
         "privacyAccepted": privacy_accepted,
         "marketingOptIn": marketing_opt_in,
         "status": "requested",
+        "notificationAcknowledged": False,
         "createdAt": firestore.SERVER_TIMESTAMP,
+        "createdAtIso": now_iso,
         "updatedAt": firestore.SERVER_TIMESTAMP,
     }
     appointment_ref.set(appointment_payload)
+
+    try:
+        email_result = _send_patient_booking_confirmation_email(
+            patient_email=email,
+            patient_name=full_name or first_name,
+            clinic_name=clinic_data.get("clinicName") or clinic_slug,
+            service_name=service_name,
+            staff_name=staff_name or clinic_data.get("clinicName") or "Behandler",
+            start_local=start_date_local,
+            end_local=end_date_local,
+            timezone_name=timezone_name,
+            notes=notes,
+            reply_to_email=owner_email,
+        )
+        email_meta: Dict[str, Any] = {
+            "provider": "resend",
+            "status": email_result.get("status") or "failed",
+            "attemptedAt": firestore.SERVER_TIMESTAMP,
+        }
+        if email_result.get("status") == "sent":
+            email_meta["sentAt"] = firestore.SERVER_TIMESTAMP
+        if email_result.get("messageId"):
+            email_meta["providerMessageId"] = email_result.get("messageId")
+        if email_result.get("error"):
+            email_meta["error"] = str(email_result.get("error"))
+
+        appointment_ref.set(
+            {
+                "patientConfirmationEmail": email_meta,
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            },
+            merge=True,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to process patient booking confirmation email clinicSlug=%s appointmentId=%s",
+            clinic_slug,
+            appointment_ref.id,
+        )
 
     return _public_booking_json_response(
         req,
@@ -1903,19 +2352,29 @@ def publicGetAvailability(req: https_fn.Request) -> https_fn.Response:
     staff_data = staff_doc.to_dict() if staff_doc.exists else {}
 
     day_key = _get_weekday_key_long(parsed_date)
-    work_hours, resolved_staff_uid = _resolve_staff_work_hours(
+    work_hours, work_hours_exceptions, resolved_staff_uid = _resolve_staff_work_schedule(
         clinic_data, staff_uid, staff_data
     )
-    work_day = work_hours.get(day_key) if isinstance(work_hours, dict) else None
-    if not isinstance(work_day, dict) or work_day.get("enabled") is not True:
+    start_minutes, end_minutes, work_window_source = _resolve_effective_work_window(
+        parsed_date, work_hours, work_hours_exceptions
+    )
+    if start_minutes is None or end_minutes is None:
+        if work_window_source in ("weekly-missing", "weekly-invalid", "exception-invalid"):
+            return _public_booking_error(
+                req,
+                f"Invalid workHours configuration for {day_key}.",
+                status=400,
+            )
+
         logger.info(
-            "publicGetAvailability workHours closed clinicSlug=%s staffUid=%s dateIso=%s serviceId=%s resolvedStaffUid=%s weekday=%s workStart=%s workEnd=%s slotsBefore=%s slotsAfter=%s",
+            "publicGetAvailability workHours closed clinicSlug=%s staffUid=%s dateIso=%s serviceId=%s resolvedStaffUid=%s weekday=%s source=%s workStart=%s workEnd=%s slotsBefore=%s slotsAfter=%s",
             clinic_slug,
             staff_uid,
             date_iso,
             service_id,
             resolved_staff_uid or "-",
             day_key,
+            work_window_source,
             "-",
             "-",
             0,
@@ -1931,24 +2390,6 @@ def publicGetAvailability(req: https_fn.Request) -> https_fn.Response:
                 "reason": "CLOSED",
             },
             status=200,
-        )
-
-    start_raw = work_day.get("start")
-    end_raw = work_day.get("end")
-    if not isinstance(start_raw, str) or not isinstance(end_raw, str) or not start_raw or not end_raw:
-        return _public_booking_error(
-            req,
-            f"workHours missing start/end for {day_key}.",
-            status=400,
-        )
-
-    start_minutes = _parse_time_minutes(start_raw)
-    end_minutes = _parse_time_minutes(end_raw)
-    if start_minutes is None or end_minutes is None or end_minutes <= start_minutes:
-        return _public_booking_error(
-            req,
-            f"Invalid workHours for {day_key}.",
-            status=400,
         )
 
     work_start_label = _format_minutes_as_time(start_minutes)
@@ -2019,13 +2460,14 @@ def publicGetAvailability(req: https_fn.Request) -> https_fn.Response:
             )
 
     logger.info(
-        "publicGetAvailability workHours clinicSlug=%s staffUid=%s dateIso=%s serviceId=%s resolvedStaffUid=%s weekday=%s workStart=%s workEnd=%s slotsBefore=%s slotsAfter=%s",
+        "publicGetAvailability workHours clinicSlug=%s staffUid=%s dateIso=%s serviceId=%s resolvedStaffUid=%s weekday=%s source=%s workStart=%s workEnd=%s slotsBefore=%s slotsAfter=%s",
         clinic_slug,
         staff_uid,
         date_iso,
         service_id,
         resolved_staff_uid or "-",
         day_key,
+        work_window_source,
         work_start_label or "-",
         work_end_label or "-",
         len(candidate_slots),
@@ -2082,6 +2524,29 @@ def getClinicStaffPublic(req: https_fn.Request) -> https_fn.Response:
     if not owner_uid:
         return _public_booking_error(req, "Clinic owner missing.", status=404)
 
+    owner_doc = get_db().collection("users").document(owner_uid).get()
+    owner_data = owner_doc.to_dict() if owner_doc.exists else {}
+    owner_first_name = owner_data.get("fornavn") or owner_data.get("firstName") or ""
+    owner_last_name = owner_data.get("efternavn") or owner_data.get("lastName") or ""
+    owner_name = (
+        owner_data.get("displayName")
+        or owner_data.get("navn")
+        or owner_data.get("name")
+        or f"{owner_first_name} {owner_last_name}".strip()
+        or clinic_data.get("clinicName")
+        or "Clinician"
+    )
+    owner_staff = {
+        "id": owner_uid,
+        "name": owner_name,
+        "firstName": owner_first_name,
+        "lastName": owner_last_name,
+        "role": "owner",
+        "avatarText": owner_data.get("avatarText") or "",
+        "calendarColor": owner_data.get("calendarColor") or "",
+        "isOwner": True,
+    }
+
     team_docs = (
         get_db()
         .collection("users")
@@ -2092,39 +2557,54 @@ def getClinicStaffPublic(req: https_fn.Request) -> https_fn.Response:
     staff = []
     for doc in team_docs:
         member = doc.to_dict() or {}
+        member_uid = str(member.get("memberUid") or member.get("uid") or "").strip()
+        first_name = member.get("firstName") or member.get("fornavn") or ""
+        last_name = member.get("lastName") or member.get("efternavn") or ""
+        member_name = (
+            member.get("name")
+            or f"{first_name} {last_name}".strip()
+            or (owner_name if doc.id == owner_uid or member_uid == owner_uid else "")
+        )
+        is_owner_member = (
+            doc.id == owner_uid
+            or member_uid == owner_uid
+            or member.get("isOwner") is True
+        )
+        normalized_member_id = owner_uid if is_owner_member else doc.id
         staff.append(
             {
-                "id": doc.id,
-                "name": member.get("name") or "",
-                "firstName": member.get("firstName") or "",
-                "lastName": member.get("lastName") or "",
-                "role": member.get("role") or "",
+                "id": normalized_member_id,
+                "name": member_name,
+                "firstName": first_name,
+                "lastName": last_name,
+                "role": member.get("role") or ("owner" if is_owner_member else ""),
                 "avatarText": member.get("avatarText") or "",
                 "calendarColor": member.get("calendarColor") or "",
+                "memberUid": member_uid or None,
+                "isOwner": is_owner_member,
             }
         )
 
-    if not staff:
-        owner_doc = get_db().collection("users").document(owner_uid).get()
-        owner_data = owner_doc.to_dict() if owner_doc.exists else {}
-        fallback_name = (
-            owner_data.get("displayName")
-            or owner_data.get("navn")
-            or owner_data.get("name")
-            or clinic_data.get("clinicName")
-            or "Clinician"
+    deduped_staff: List[Dict[str, Any]] = []
+    seen_staff_ids: set[str] = set()
+    for member in staff:
+        member_id = str(member.get("id") or "").strip()
+        if not member_id or member_id in seen_staff_ids:
+            continue
+        seen_staff_ids.add(member_id)
+        deduped_staff.append(member)
+    staff = deduped_staff
+
+    # Solo clinics should always expose the platform owner as the selectable practitioner.
+    if len(staff) <= 1:
+        staff = [owner_staff]
+    else:
+        has_owner_option = any(
+            str(item.get("id") or "").strip() == owner_uid or item.get("isOwner") is True
+            for item in staff
         )
-        staff = [
-            {
-                "id": owner_uid,
-                "name": fallback_name,
-                "firstName": owner_data.get("fornavn") or "",
-                "lastName": owner_data.get("efternavn") or "",
-                "role": "owner",
-                "avatarText": owner_data.get("avatarText") or "",
-                "calendarColor": owner_data.get("calendarColor") or "",
-            }
-        ]
+        if not has_owner_option:
+            staff.insert(0, owner_staff)
 
     return _public_booking_json_response(
         req,
@@ -2198,18 +2678,6 @@ def getClinicServicesPublic(req: https_fn.Request) -> https_fn.Response:
         price = data.get("price") if isinstance(data.get("price"), (int, float)) else data.get("pris")
         if isinstance(price, bool):
             price = None
-        price_incl_vat = (
-            data.get("priceInclVat")
-            if isinstance(data.get("priceInclVat"), (int, float))
-            else data.get("prisInklMoms")
-        )
-        if isinstance(price_incl_vat, bool):
-            price_incl_vat = None
-        include_vat = data.get("includeVat")
-        if include_vat is None and price is not None and price_incl_vat is not None:
-            include_vat = price_incl_vat != price
-        if include_vat is None:
-            include_vat = False
         services.append(
             {
                 "id": doc.id,
@@ -2219,8 +2687,8 @@ def getClinicServicesPublic(req: https_fn.Request) -> https_fn.Response:
                 "price": price,
                 "currency": data.get("currency") or "DKK",
                 "color": data.get("color") or None,
-                "includeVat": bool(include_vat),
-                "priceInclVat": price_incl_vat if price_incl_vat is not None else price,
+                "includeVat": False,
+                "priceInclVat": price,
             }
         )
 
@@ -2292,19 +2760,6 @@ def publicGetServices(req: https_fn.Request) -> https_fn.Response:
         price = data.get("price") if isinstance(data.get("price"), (int, float)) else data.get("pris")
         if isinstance(price, bool):
             price = None
-        price_incl_vat = (
-            data.get("priceInclVat")
-            if isinstance(data.get("priceInclVat"), (int, float))
-            else data.get("prisInklMoms")
-        )
-        if isinstance(price_incl_vat, bool):
-            price_incl_vat = None
-        include_vat = data.get("includeVat")
-        if include_vat is None and price is not None and price_incl_vat is not None:
-            include_vat = price_incl_vat != price
-        if include_vat is None:
-            include_vat = False
-
         services.append(
             {
                 "id": doc.id,
@@ -2313,8 +2768,8 @@ def publicGetServices(req: https_fn.Request) -> https_fn.Response:
                 "durationMinutes": duration_minutes,
                 "price": price,
                 "currency": data.get("currency") or "DKK",
-                "includeVat": include_vat,
-                "priceInclVat": price_incl_vat if price_incl_vat is not None else price,
+                "includeVat": False,
+                "priceInclVat": price,
                 "color": data.get("color") or None,
             }
         )

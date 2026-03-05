@@ -1,15 +1,16 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLanguage } from "../language/LanguageProvider";
 import { getPublicAssetUrl } from "../../utils/publicAssets";
 import "./frontpage.css";
 
-const clips = [
+const DESKTOP_CLIPS = [
   getPublicAssetUrl("hero/4489829-uhd_3840_2160_25fps.mp4"),
   getPublicAssetUrl("hero/5793441-uhd_3840_2160_25fps.mp4"),
   getPublicAssetUrl("hero/5793444-uhd_3840_2160_25fps.mp4"),
   getPublicAssetUrl("hero/6111110-uhd_3840_2160_25fps.mp4"),
 ];
+const MOBILE_CLIPS = [...DESKTOP_CLIPS];
 
 const HERO_VIDEO_EVENT = "landing-hero-video-change";
 
@@ -30,90 +31,89 @@ const syncHeroVideo = (src, time) => {
   window.dispatchEvent(new CustomEvent(HERO_VIDEO_EVENT, { detail: payload }));
 };
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          function Frontpage() {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            const { t } = useLanguage();
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           const [active, setActive] = useState(0);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           const [next, setNext] = useState(1);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            const [isFading, setIsFading] = useState(false);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            const [hasPreloaded, setHasPreloaded] = useState(false);
+const isLowMotionOrSlowConnection = () => {
+  if (typeof window === "undefined") return false;
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  const connection =
+    navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  const saveData = Boolean(connection?.saveData);
+  const effectiveType = `${connection?.effectiveType || ""}`;
+  const slowNetwork = effectiveType.includes("2g");
+  return Boolean(reducedMotion || saveData || slowNetwork);
+};
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            const activeRef = useRef(null);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            const nextRef = useRef(null);
+function Frontpage() {
+  const { t } = useLanguage();
+  const [active, setActive] = useState(0);
+  const [videoEnabled, setVideoEnabled] = useState(true);
+  const [playlist, setPlaylist] = useState(DESKTOP_CLIPS);
+  const activeRef = useRef(null);
+  const lastSyncAtRef = useRef(0);
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           useEffect(() => {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             const n = (active + 1) % clips.length;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             setNext(n);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (isLowMotionOrSlowConnection()) {
+      setVideoEnabled(false);
+      return;
+    }
+    const isMobile = window.matchMedia?.("(max-width: 768px)")?.matches;
+    setPlaylist(isMobile ? MOBILE_CLIPS : DESKTOP_CLIPS);
+  }, []);
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              if (nextRef.current) {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                nextRef.current.pause();
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                nextRef.current.currentTime = 0;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                nextRef.current.src = clips[n];
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                nextRef.current.load();
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              }
+  useEffect(() => {
+    setActive(0);
+  }, [playlist]);
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              setHasPreloaded(false);
+  const activeClip = useMemo(
+    () => playlist[active] ?? DESKTOP_CLIPS[0],
+    [playlist, active]
+  );
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             if (activeRef.current) {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               activeRef.current.currentTime = 0;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               activeRef.current.play().catch(() => {});
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              syncHeroVideo(clips[active], activeRef.current?.currentTime ?? 0);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           }, [active]);
+  useEffect(() => {
+    if (!videoEnabled) return;
+    const video = activeRef.current;
+    if (!video) return;
+    video.currentTime = 0;
+    const playPromise = video.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {});
+    }
+    syncHeroVideo(activeClip, 0);
+  }, [activeClip, videoEnabled]);
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            const preloadNextClip = () => {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              if (hasPreloaded || !nextRef.current) return;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              nextRef.current.currentTime = 0;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              nextRef.current.play().catch(() => {});
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              setHasPreloaded(true);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            };
+  const handleTimeUpdate = () => {
+    const video = activeRef.current;
+    if (!video) return;
+    const now = window.performance?.now?.() ?? Date.now();
+    if (now - lastSyncAtRef.current < 250) return;
+    lastSyncAtRef.current = now;
+    syncHeroVideo(activeClip, video.currentTime);
+  };
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           const handleTimeUpdate = () => {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             const video = activeRef.current;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              if (!video) return;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              syncHeroVideo(clips[active], video.currentTime);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              if (hasPreloaded || !video.duration) return;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             const remaining = video.duration - video.currentTime;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             if (remaining <= 1.5) {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               preloadNextClip();
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            };
-
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            const handleEnded = () => {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              setIsFading(true);
-
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              if (!hasPreloaded) {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                preloadNextClip();
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              }
-
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              setTimeout(() => {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                setActive(next);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                setIsFading(false);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              }, 900);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            };
+  const handleEnded = () => {
+    if (playlist.length <= 1) return;
+    setActive((current) => (current + 1) % playlist.length);
+  };
 
   return (
     <section className="frontpage">
       <div className="frontpage-video-bg" aria-hidden="true">
-        <video
-          ref={activeRef}
-          className={`frontpage-video ${isFading ? "fade-out" : "fade-in"}`}
-          src={clips[active]}
-          autoPlay
-          muted
-          playsInline
-          preload="auto"
-          onTimeUpdate={handleTimeUpdate}
-          onEnded={handleEnded}
-        />
-
-        <video
-          ref={nextRef}
-          className={`frontpage-video ${isFading ? "fade-in" : "fade-out"}`}
-          src={clips[next]}
-          muted
-          playsInline
-          preload="auto"
-        />
+        {videoEnabled ? (
+          <video
+            ref={activeRef}
+            className="frontpage-video fade-in"
+            src={activeClip}
+            autoPlay
+            muted
+            playsInline
+            preload="metadata"
+            loop={playlist.length === 1}
+            onTimeUpdate={handleTimeUpdate}
+            onEnded={handleEnded}
+          />
+        ) : (
+          <div className="frontpage-video-fallback" />
+        )}
 
         <div className="frontpage-video-overlay" />
       </div>

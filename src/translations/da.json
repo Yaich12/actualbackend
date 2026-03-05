@@ -196,6 +196,81 @@
       "addNewClient": "Tilføj ny kunde",
       "createNewClient": "Opret en ny kunde"
     },
+    "appointmentForm": {
+      "title": {
+        "create": "Opret aftale",
+        "edit": "Rediger aftale"
+      },
+      "fields": {
+        "date": "Dato",
+        "startTime": "Start tidspunkt",
+        "endTime": "Slut tidspunkt",
+        "practitioner": "Vælg behandler",
+        "clients": "Vælg klienter",
+        "notes": "Noter"
+      },
+      "datePickerLabel": "Vælg dato",
+      "clientsLoading": "Henter klienter…",
+      "clientsPlaceholder": "Vælg klienter",
+      "clientsSelectedSingle": "{count} klient valgt",
+      "clientsSelectedPlural": "{count} klienter valgt",
+      "clientsEmpty": "Du har ingen klienter endnu. Tilføj en ny for at fortsætte.",
+      "addClient": "Tilføj klient",
+      "notesPlaceholder": "Noterne er private og vil ikke kunne ses af din klient.",
+      "clientFallback": "Klient",
+      "actions": {
+        "cancel": "Annuller",
+        "create": "Opret aftale",
+        "update": "Opdater aftale"
+      },
+      "recurrence": {
+        "title": "Planlæg forløb (gentagende tider)",
+        "enable": "Aktivér gentagelse",
+        "weeks": "Uger (antal)",
+        "daysPerWeek": "Dage pr. uge",
+        "summary": "Alle valgte dage oprettes fra startdatoen i {weeks} uger med tiderne herover.",
+        "weekdays": {
+          "mon": "Man",
+          "tue": "Tir",
+          "wed": "Ons",
+          "thu": "Tor",
+          "fri": "Fre",
+          "sat": "Lør",
+          "sun": "Søn"
+        }
+      }
+    },
+    "journalPanel": {
+      "emptyNoClient": "Ingen klient valgt – vælg en klient for at se journalen.",
+      "groupNamePlaceholder": "Holdnavn…",
+      "groupNameErrors": {
+        "empty": "Indtast et holdnavn.",
+        "notLoggedIn": "Du skal være logget ind for at gemme.",
+        "missingProgramId": "Mangler forløbs-id – kunne ikke gemme.",
+        "saveFailed": "Kunne ikke gemme holdnavnet. Prøv igen."
+      },
+      "timeTo": "til",
+      "extraServiceFallback": "Tillægstjeneste",
+      "participants": "Deltagere",
+      "viewJournal": "Se journal",
+      "openNote": "Åben notat",
+      "createEntry": "Opret indlæg",
+      "createNextAppointment": "Opret næste aftale",
+      "deleteAppointment": "Slet aftale",
+      "confirmDelete": "Er du sikker på, at du vil slette denne aftale? Dette kan ikke fortrydes.",
+      "suggestedNoteTitle": "AI-forslag til næste tid",
+      "daysLabel": "dage",
+      "safetyNoteLabel": "Sikkerhedsnote",
+      "suggestErrors": {
+        "missingContext": "Mangler aftale, klient eller bruger.",
+        "missingUrl": "Manglende URL til forslag af næste aftale (REACT_APP_SUGGEST_NEXT_APPOINTMENT_URL).",
+        "invalidLastDate": "Kunne ikke beregne dato/tid for sidste aftale.",
+        "missingToken": "Kunne ikke hente login-token.",
+        "unknown": "Ukendt fejl ved forslag af næste aftale.",
+        "missingSuggestion": "Manglede forslag til dato/tid i svaret.",
+        "requestFailed": "Der opstod en fejl ved forslag af næste aftale. Prøv igen."
+      }
+    },
     "dropdown": {
       "add": "Tilføj",
       "calendar": "I kalenderen",
@@ -607,9 +682,12 @@
     "close": "Luk",
     "save": "Gem",
     "saving": "Gemmer…",
+    "back": "Tilbage",
     "sections": {
       "profile": "Profil",
       "account": "Kontoopsætning",
+      "booking": "Bookingside",
+      "ai": "AI indstillinger",
       "appearance": "Appearance",
       "language": "Sprog"
     },
@@ -643,11 +721,98 @@
     },
     "language": {
       "title": "Sprog",
-      "label": "Foretrukket sprog"
+      "label": "Foretrukket sprog",
+      "dictationLabel": "Dikteringssprog",
+      "dictationAuto": "Auto (anbefalet)"
     },
     "currency": {
       "label": "Valuta",
       "placeholder": "Vælg valuta"
+    },
+    "publicBooking": {
+      "visibilityLabel": "Offentlig booking",
+      "title": "Bookingside",
+      "activeDescription": "Din side er live. Del linket med patienter via hjemmeside, mail eller sociale medier.",
+      "inactiveDescription": "Vælg kliniknavn og aktivér siden for at få et offentligt bookinglink.",
+      "stateActive": "Aktiv",
+      "stateInactive": "Ikke aktiv",
+      "publicLinkLabel": "Offentlig bookingside URL",
+      "urlPlaceholder": "{baseUrl}/book/din-klinik",
+      "copied": "Kopieret",
+      "copy": "Kopiér link",
+      "openPage": "Åbn side",
+      "claiming": "Aktiverer...",
+      "update": "Opdater bookingside",
+      "activate": "Aktiver bookingside",
+      "success": "Bookingsiden er aktiv: {url}",
+      "scheduleMemberOwner": "Klinikejer",
+      "scheduleMemberFallback": "Behandler",
+      "errors": {
+        "missingName": "Angiv et kliniknavn.",
+        "missingSlug": "Kunne ikke generere et clinic slug.",
+        "slugTaken": "Slug er optaget. Prøv en anden.",
+        "generic": "Kunne ikke gemme bookingsiden. Prøv igen.",
+        "copyFailed": "Kunne ikke kopiere linket."
+      },
+      "workHours": {
+        "title": "Arbejdstider",
+        "subtitle": "Juster start/slut for hver dag.",
+        "forMember": "Viser arbejdstider for",
+        "loading": "Henter arbejdstider...",
+        "memberLabel": "Vælg behandler",
+        "addExceptions": "Tilføj undtagelser",
+        "exceptionsTitle": "Særlige datoer (engang)",
+        "exceptionsNote": "Bruges til enkeltstående lukkedage eller justerede tider.",
+        "exceptionsListTitle": "Undtagelser",
+        "exceptionsListNote": "Tilføj datoer hvor tider afviger fra standard arbejdstider.",
+        "addException": "Tilføj undtagelse",
+        "removeException": "Fjern",
+        "exceptionsErrors": {
+          "invalidDate": "Vælg en gyldig dato.",
+          "missing": "Angiv start og slut.",
+          "order": "Starttid skal være før sluttid."
+        }
+      }
+    },
+    "workHours": {
+      "title": "Arbejdstid",
+      "subtitle": "Angiv hvornår du kan bookes. Du kan justere tiderne når som helst.",
+      "open": "Åben",
+      "closed": "Lukket",
+      "markClosed": "Markér som lukket",
+      "markOpen": "Åbn dag",
+      "days": {
+        "monday": "Mandag",
+        "tuesday": "Tirsdag",
+        "wednesday": "Onsdag",
+        "thursday": "Torsdag",
+        "friday": "Fredag",
+        "saturday": "Lørdag",
+        "sunday": "Søndag"
+      },
+      "errors": {
+        "missing": "Angiv start og slut",
+        "order": "Starttid skal være før sluttid"
+      }
+    },
+    "ai": {
+      "title": "AI indstillinger",
+      "audio": {
+        "title": "Lydoptagelse",
+        "description": "Selve lyden som optaget af mikrofonen. Lydfilen kan være hjælpsom, hvis vi efterfølgende skal ind og høre efter, om der er bestemte ord, udtaler eller dialekter vi misforstår."
+      },
+      "retention": {
+        "immediate": "Slet med det samme",
+        "30d": "Gem 30 dage"
+      },
+      "transcript": {
+        "title": "Transkription",
+        "description": "Tekstudgaven af hvad systemet har \"hørt\". Vi har brug for transkriptionen, hvis vi skal hjælpe dig med \"redningsforsøg\", hvis en optagelse afbrydes, eller hvis der opstår andre tekniske problemer."
+      },
+      "agentComms": {
+        "title": "AI-genereret kommunikation",
+        "description": "Tekst og svar der bliver genereret i dialogen med vores AI-agenter (fx forslag til journalnotat, opsummeringer og anbefalinger). Gemning kan være nyttig, hvis du vil kunne genfinde tidligere samtaler, dokumentere beslutningsgrundlag eller fortsætte et igangværende forløb."
+      }
     }
   }
 }

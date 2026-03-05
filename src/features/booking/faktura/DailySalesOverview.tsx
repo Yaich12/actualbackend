@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "../../../AuthContext";
 import useSales from "../../../hooks/useSales";
+import useUserServices from "../Ydelser/hooks/useUserServices";
 import AddNowDrawer from "./AddNowDrawer";
 
 const formatCurrency = (value: number) =>
@@ -73,113 +74,110 @@ const formatDisplayDate = (value: string) => {
   return `${weekday} ${date.getDate()} ${month}, ${date.getFullYear()}`;
 };
 
-const buildTransactionRows = (sales: any[]) => {
-  const summary = {
-    services: { label: "Tjenester", count: 0, total: 0 },
-    addons: { label: "Tillægsydelser", count: 0, total: 0 },
-    products: { label: "Produkter", count: 0, total: 0 },
-    shipping: { label: "Forsendelse", count: 0, total: 0 },
-    giftcards: { label: "Gavekort", count: 0, total: 0 },
-    memberships: { label: "Medlemskaber", count: 0, total: 0 },
-    lateCancel: { label: "Gebyr for sen aflysning", count: 0, total: 0 },
-    noShow: { label: "Udeblivelsesgebyrer", count: 0, total: 0 },
-    refunds: { label: "Refundering", count: 0, total: 0 },
-  };
+const normalizeServiceName = (value: any) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const normalizeNumber = (value: any) => {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const cleaned = value.replace(/[^\d,.-]/g, "");
+    if (!cleaned) return 0;
+    const hasComma = cleaned.includes(",");
+    const hasDot = cleaned.includes(".");
+    let normalized = cleaned;
+    if (hasComma && hasDot) {
+      normalized = cleaned.replace(/\./g, "").replace(",", ".");
+    } else if (hasComma) {
+      normalized = cleaned.replace(",", ".");
+    }
+    const parsed = Number(normalized);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+};
+
+const normalizeQuantity = (value: any) => {
+  const parsed = Math.round(normalizeNumber(value));
+  return parsed > 0 ? parsed : 1;
+};
+
+const buildServiceTransactionRows = (sales: any[], services: any[]) => {
+  const servicesById = new Map<string, { label: string; color: string | null }>();
+  const servicesByName = new Map<string, { label: string; color: string | null }>();
+
+  services.forEach((service: any) => {
+    const id = `${service?.id || ""}`.trim();
+    const label = `${service?.navn || service?.name || ""}`.trim();
+    const color = `${service?.color || ""}`.trim() || null;
+    if (!label) return;
+    if (id) servicesById.set(id, { label, color });
+    servicesByName.set(normalizeServiceName(label), { label, color });
+  });
+
+  const rowsByKey = new Map<string, { key: string; label: string; color: string | null; sales: number; total: number }>();
 
   sales.forEach((sale) => {
     const items = Array.isArray(sale.items) ? sale.items : [];
     items.forEach((item: any) => {
-      const quantity = item.quantity || 1;
-      const total = (item.price || 0) * quantity;
-      const type = item.type || item.source || "service";
-      if (type === "product") {
-        summary.products.count += quantity;
-        summary.products.total += total;
-      } else {
-        summary.services.count += quantity;
-        summary.services.total += total;
+      const type = String(item?.type || item?.source || "").trim().toLowerCase();
+      if (type === "product" || type === "products") return;
+
+      const referenceId = `${item?.referenceId || ""}`.trim();
+      const itemName = `${item?.name || ""}`.trim();
+      const fromId = referenceId ? servicesById.get(referenceId) : null;
+      const fromName = itemName ? servicesByName.get(normalizeServiceName(itemName)) : null;
+
+      const resolvedLabel =
+        fromId?.label ||
+        fromName?.label ||
+        itemName ||
+        "Ukendt ydelse";
+      const resolvedColor =
+        fromId?.color ||
+        fromName?.color ||
+        (`${item?.color || ""}`.trim() || null);
+      const key = referenceId || normalizeServiceName(resolvedLabel) || `service-${rowsByKey.size + 1}`;
+
+      const quantity = normalizeQuantity(item?.quantity);
+      const amount = normalizeNumber(item?.price) * quantity;
+      const current = rowsByKey.get(key) || {
+        key,
+        label: resolvedLabel,
+        color: resolvedColor,
+        sales: 0,
+        total: 0,
+      };
+
+      current.sales += quantity;
+      current.total += amount;
+      if (!current.color && resolvedColor) {
+        current.color = resolvedColor;
       }
+      rowsByKey.set(key, current);
     });
   });
 
-  const totalCount =
-    summary.services.count +
-    summary.addons.count +
-    summary.products.count +
-    summary.shipping.count +
-    summary.giftcards.count +
-    summary.memberships.count +
-    summary.lateCancel.count +
-    summary.noShow.count +
-    summary.refunds.count;
+  const rows = Array.from(rowsByKey.values()).sort((a, b) => {
+    if (b.total !== a.total) return b.total - a.total;
+    return a.label.localeCompare(b.label, "da-DK", {
+      sensitivity: "base",
+      numeric: true,
+    });
+  });
 
-  const totalAmount =
-    summary.services.total +
-    summary.addons.total +
-    summary.products.total +
-    summary.shipping.total +
-    summary.giftcards.total +
-    summary.memberships.total +
-    summary.lateCancel.total +
-    summary.noShow.total +
-    summary.refunds.total;
+  const totalCount = rows.reduce((sum, row) => sum + row.sales, 0);
+  const totalAmount = rows.reduce((sum, row) => sum + row.total, 0);
 
   return [
-    {
-      label: summary.services.label,
-      sales: summary.services.count,
+    ...rows.map((row) => ({
+      ...row,
       refunds: 0,
-      total: summary.services.total,
-    },
-    {
-      label: summary.addons.label,
-      sales: summary.addons.count,
-      refunds: 0,
-      total: summary.addons.total,
-    },
-    {
-      label: summary.products.label,
-      sales: summary.products.count,
-      refunds: 0,
-      total: summary.products.total,
-    },
-    {
-      label: summary.shipping.label,
-      sales: summary.shipping.count,
-      refunds: 0,
-      total: summary.shipping.total,
-    },
-    {
-      label: summary.giftcards.label,
-      sales: summary.giftcards.count,
-      refunds: 0,
-      total: summary.giftcards.total,
-    },
-    {
-      label: summary.memberships.label,
-      sales: summary.memberships.count,
-      refunds: 0,
-      total: summary.memberships.total,
-    },
-    {
-      label: summary.lateCancel.label,
-      sales: summary.lateCancel.count,
-      refunds: 0,
-      total: summary.lateCancel.total,
-    },
-    {
-      label: summary.noShow.label,
-      sales: summary.noShow.count,
-      refunds: 0,
-      total: summary.noShow.total,
-    },
-    {
-      label: summary.refunds.label,
-      sales: summary.refunds.count,
-      refunds: 0,
-      total: summary.refunds.total,
-    },
-    { label: "Salg i alt", sales: totalCount, refunds: 0, total: totalAmount, isTotal: true },
+    })),
+    { key: "total", label: "Ydelser i alt", sales: totalCount, refunds: 0, total: totalAmount, isTotal: true },
   ];
 };
 
@@ -209,6 +207,7 @@ export default function DailySalesOverview() {
   const { sales, loading, error } = useSales(user?.uid || null, {
     status: "completed",
   });
+  const { services } = useUserServices();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => toDateKey(new Date()));
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -230,8 +229,8 @@ export default function DailySalesOverview() {
   }, [sales, selectedDate]);
 
   const transactionRows = useMemo(
-    () => buildTransactionRows(filteredSales),
-    [filteredSales]
+    () => buildServiceTransactionRows(filteredSales, services),
+    [filteredSales, services]
   );
 
   const paymentData = useMemo(
@@ -465,23 +464,42 @@ export default function DailySalesOverview() {
                 <table className="w-full text-sm">
                   <thead className="text-xs font-semibold text-slate-500">
                     <tr className="border-b border-slate-200">
-                      <th className="py-2 text-left">Varetype</th>
+                      <th className="py-2 text-left">Ydelse</th>
                       <th className="py-2 text-right">Salgsantal</th>
                       <th className="py-2 text-right">Antal refusioner</th>
                       <th className="py-2 text-right">Brutto i alt</th>
                     </tr>
                   </thead>
                   <tbody>
+                    {transactionRows.length === 1 && (
+                      <tr>
+                        <td className="py-4 text-sm text-slate-400" colSpan={4}>
+                          Ingen solgte ydelser for denne dato endnu.
+                        </td>
+                      </tr>
+                    )}
                     {transactionRows.map((row: any) => (
                       <tr
-                        key={row.label}
+                        key={row.key || row.label}
                         className={
                           row.isTotal
                             ? "border-t border-slate-200 font-semibold text-slate-900"
                             : "border-b border-slate-100 text-slate-700"
                         }
                       >
-                        <td className="py-2 pr-4">{row.label}</td>
+                        <td className="py-2 pr-4">
+                          {row.isTotal ? (
+                            row.label
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="inline-block h-2.5 w-2.5 rounded-full"
+                                style={{ backgroundColor: row.color || "#94a3b8" }}
+                              />
+                              <span className="font-medium text-slate-800">{row.label}</span>
+                            </div>
+                          )}
+                        </td>
                         <td className="py-2 text-right">{row.sales}</td>
                         <td className="py-2 text-right">{row.refunds}</td>
                         <td className="py-2 text-right">

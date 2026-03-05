@@ -4,26 +4,26 @@ import {
   ChevronDown,
   ChevronRight,
   CircleCheck,
-  CircleDollarSign,
   CreditCard,
   Gift,
-  Keyboard,
   MoreHorizontal,
   QrCode,
   Search,
   SlidersHorizontal,
   Smartphone,
-  Split,
   X,
 } from "lucide-react";
 import { addDoc, collection, doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { cn } from "../../../lib/utils";
 import { useAuth } from "../../../AuthContext";
 import useAppointments from "../../../hooks/useAppointments";
+import useStripeConnectStatus from "../../../hooks/useStripeConnectStatus";
 import { useUserServices } from "../Ydelser/hooks/useUserServices";
 import { useUserClients } from "../Klienter/hooks/useUserClients";
 import { useUserProducts } from "../Product/hooks/useUserProducts";
 import { db } from "../../../firebase";
+import { getIdToken } from "../../../utils/auth";
+import { buildApiUrl } from "../../../utils/runtimeUrls";
 
 const tabs = [
   { id: "appointments", label: "Aftaler" },
@@ -71,6 +71,7 @@ type PaymentMethod = {
   id: string;
   label: string;
   group: "core" | "fresha";
+  connectRequired?: boolean;
   icon: React.ComponentType<{ className?: string }>;
 };
 
@@ -82,14 +83,23 @@ type AddNowDrawerProps = {
 };
 
 const paymentMethods: PaymentMethod[] = [
+  {
+    id: "kortterminal",
+    label: "Kreditkort",
+    group: "fresha",
+    connectRequired: true,
+    icon: CreditCard,
+  },
+  {
+    id: "selvbetjening",
+    label: "MobilePay",
+    group: "fresha",
+    connectRequired: true,
+    icon: Smartphone,
+  },
+  { id: "qr", label: "QR-kode", group: "fresha", connectRequired: true, icon: QrCode },
   { id: "kontanter", label: "Kontanter", group: "core", icon: Banknote },
   { id: "gavekort", label: "Gavekort", group: "core", icon: Gift },
-  { id: "opdel", label: "Opdel betaling", group: "core", icon: Split },
-  { id: "andet", label: "Andet", group: "core", icon: CircleDollarSign },
-  { id: "kortterminal", label: "Kortterminal", group: "fresha", icon: CreditCard },
-  { id: "selvbetjening", label: "Selvbetjening", group: "fresha", icon: Smartphone },
-  { id: "qr", label: "QR-kode", group: "fresha", icon: QrCode },
-  { id: "manuel", label: "Manual kortindtastning", group: "fresha", icon: Keyboard },
 ];
 
 const formatCurrency = (value: number) =>
@@ -162,6 +172,22 @@ const getSaleNumber = (sale: any) => {
   return ref ? String(ref).replace(/^#/, "") : "";
 };
 
+const parseRequestError = (payload: any, status: number) => {
+  const rawMessage = payload?.error || payload?.message || "";
+  if (typeof rawMessage === "string" && rawMessage.trim()) {
+    return rawMessage;
+  }
+  return `Request failed (${status})`;
+};
+
+const resolveConnectCheckoutTypes = (paymentMethodId?: string | null) => {
+  const methodId = `${paymentMethodId || ""}`.trim().toLowerCase();
+  if (methodId === "qr" || methodId === "selvbetjening") {
+    return ["card", "mobilepay"];
+  }
+  return ["card"];
+};
+
 export default function AddNowDrawer({
   open,
   onClose,
@@ -169,6 +195,9 @@ export default function AddNowDrawer({
   initialStep = "cart",
 }: AddNowDrawerProps) {
   const { user } = useAuth();
+  const { status: stripeConnectStatus, loading: stripeConnectLoading } = useStripeConnectStatus({
+    enabled: Boolean(user?.uid && open),
+  });
   const { appointments, loading: appointmentsLoading, error: appointmentsError } = useAppointments(
     user?.uid || null
   );
@@ -187,9 +216,12 @@ export default function AddNowDrawer({
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [paymentError, setPaymentError] = useState("");
+  const [paymentInfo, setPaymentInfo] = useState("");
   const [completedSale, setCompletedSale] = useState<any>(null);
 
   const employeeName = user?.displayName || user?.email || "Medarbejder";
+  const connectStatus = stripeConnectStatus?.connect || null;
+  const isConnectReady = Boolean(connectStatus?.onboardingComplete);
 
   useEffect(() => {
     if (!open) return;
@@ -214,8 +246,15 @@ export default function AddNowDrawer({
     setStep(initialStep);
     setSelectedPaymentMethod(null);
     setPaymentError("");
+    setPaymentInfo("");
     setCompletedSale(null);
   }, [open, initialAppointmentId, initialStep]);
+
+  useEffect(() => {
+    if (selectedPaymentMethod?.connectRequired && !isConnectReady) {
+      setSelectedPaymentMethod(null);
+    }
+  }, [isConnectReady, selectedPaymentMethod]);
 
   const selectedAppointment = useMemo(
     () => appointments.find((item: any) => item.id === selectedAppointmentId) || null,
@@ -421,20 +460,93 @@ export default function AddNowDrawer({
     if (!lineItems.length) return;
     setStep("payment");
     setPaymentError("");
+    setPaymentInfo("");
   };
 
   const handlePaymentMethodSelect = (method: PaymentMethod) => {
+    if (method.connectRequired && !isConnectReady) {
+      setPaymentError("Aktivér betalinger i salg før du bruger kortmetoder.");
+      setPaymentInfo("");
+      return;
+    }
     setSelectedPaymentMethod(method);
     setPaymentError("");
+    setPaymentInfo("");
   };
 
   const handlePayNow = async () => {
     if (!user?.uid || !selectedPaymentMethod || !lineItems.length) return;
+    if (selectedPaymentMethod.connectRequired && !isConnectReady) {
+      setPaymentError("Kortbetalinger er låst indtil betalinger er aktiveret.");
+      setPaymentInfo("");
+      return;
+    }
+    const shouldSendPaymentLinkByEmail =
+      selectedPaymentMethod.id === "kortterminal" || selectedPaymentMethod.id === "selvbetjening";
+    if (shouldSendPaymentLinkByEmail && !selectedCustomer?.email) {
+      setPaymentError("Tilføj patientens e-mail for at sende et betalingslink.");
+      setPaymentInfo("");
+      return;
+    }
     setPaymentSaving(true);
     setPaymentError("");
+    setPaymentInfo("");
 
     try {
       const appointmentRef = selectedAppointment?.referenceNumber || selectedAppointment?.id || null;
+      if (selectedPaymentMethod.connectRequired) {
+        const token = await getIdToken();
+        const response = await fetch(buildApiUrl("/api/stripe/connect/create-sale-checkout-session"), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            appointmentId: selectedAppointment?.id || null,
+            appointmentRef,
+            customerId: selectedCustomer?.id || null,
+            customerName: selectedCustomer?.name || "",
+            customerEmail: selectedCustomer?.email || "",
+            customerPhone: selectedCustomer?.phone || "",
+            items: saleItems,
+            totals,
+            location: selectedAppointment?.location || "",
+            paymentMethodId: selectedPaymentMethod.id,
+            paymentMethodLabel: selectedPaymentMethod.label,
+            paymentMethodTypes: resolveConnectCheckoutTypes(selectedPaymentMethod.id),
+            sendPaymentLinkByEmail: shouldSendPaymentLinkByEmail,
+            currency: "dkk",
+            successUrl:
+              shouldSendPaymentLinkByEmail
+                ? "/betaling/kvittering?payment=success&session_id={CHECKOUT_SESSION_ID}"
+                : "/booking/fakturaer/salg?stripeCheckout=success&session_id={CHECKOUT_SESSION_ID}",
+            cancelUrl:
+              shouldSendPaymentLinkByEmail
+                ? "/betaling/kvittering?payment=cancel"
+                : "/booking/fakturaer/salg?stripeCheckout=cancel",
+          }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(parseRequestError(data, response.status));
+        }
+        if (!data?.url) {
+          throw new Error("Mangler checkout-link fra Stripe.");
+        }
+        if (shouldSendPaymentLinkByEmail) {
+          const recipient = data?.paymentLinkEmail?.to || selectedCustomer?.email || "";
+          setPaymentInfo(
+            recipient
+              ? `Betalingslink sendt til ${recipient}. Patienten kan betale fra sin mail.`
+              : "Betalingslink er sendt til patientens mail."
+          );
+          return;
+        }
+        window.location.assign(data.url);
+        return;
+      }
+
       const salePayload = {
         status: "completed",
         appointmentId: selectedAppointment?.id || null,
@@ -446,26 +558,21 @@ export default function AddNowDrawer({
         items: saleItems,
         totals,
         paymentMethod: selectedPaymentMethod.label,
+        paymentProvider: "manual",
         employeeId: user.uid,
         employeeName,
         completedAt: serverTimestamp(),
         createdAt: serverTimestamp(),
       };
 
-      const saleRef = await addDoc(
-        collection(db, "users", user.uid, "sales"),
-        salePayload
-      );
+      const saleRef = await addDoc(collection(db, "users", user.uid, "sales"), salePayload);
 
       if (selectedAppointment?.id) {
-        await updateDoc(
-          doc(db, "users", user.uid, "appointments", selectedAppointment.id),
-          {
-            status: "completed",
-            completedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          }
-        );
+        await updateDoc(doc(db, "users", user.uid, "appointments", selectedAppointment.id), {
+          status: "completed",
+          completedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
       }
 
       const now = new Date();
@@ -479,7 +586,8 @@ export default function AddNowDrawer({
       setStep("success");
     } catch (err) {
       console.error("[AddNowDrawer] Failed to complete payment", err);
-      setPaymentError("Kunne ikke gennemføre betalingen. Prøv igen.");
+      const message = typeof err === "object" && err && "message" in err ? String(err.message) : "";
+      setPaymentError(message || "Kunne ikke gennemføre betalingen. Prøv igen.");
     } finally {
       setPaymentSaving(false);
     }
@@ -682,35 +790,50 @@ export default function AddNowDrawer({
                         <p className="mt-1 text-sm text-slate-500">Betalingsmetoder</p>
                       </div>
 
-                      <div className="mt-4 grid grid-cols-2 gap-3">
-                        {corePaymentMethods.map((method) => {
-                          const Icon = method.icon;
-                          const isSelected = selectedPaymentMethod?.id === method.id;
-                          return (
-                            <button
-                              key={method.id}
-                              type="button"
-                              onClick={() => handlePaymentMethodSelect(method)}
-                              className={cn(
-                                "flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-2xl border px-4 py-4 text-sm font-medium text-slate-700",
-                                isSelected
-                                  ? "border-indigo-500 bg-indigo-50/40"
-                                  : "border-slate-200 hover:border-slate-300"
-                              )}
-                            >
-                              <Icon className="h-5 w-5 text-emerald-500" />
-                              {method.label}
-                            </button>
-                          );
-                        })}
+                      <div className="mt-8">
+                        <p className="text-sm font-semibold text-slate-700">
+                          Kortbetalinger via Stripe
+                        </p>
+                        {!isConnectReady && (
+                          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                            {stripeConnectLoading
+                              ? "Henter betalingsstatus..."
+                              : "Kortmetoder er låst. Aktivér betalinger i salgssektionen først."}
+                          </div>
+                        )}
+                        <div className="mt-3 grid grid-cols-2 gap-3">
+                          {freshaPaymentMethods.map((method) => {
+                            const Icon = method.icon;
+                            const isSelected = selectedPaymentMethod?.id === method.id;
+                            const isDisabled = Boolean(method.connectRequired && !isConnectReady);
+                            return (
+                              <button
+                                key={method.id}
+                                type="button"
+                                onClick={() => handlePaymentMethodSelect(method)}
+                                disabled={isDisabled}
+                                className={cn(
+                                  "flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-2xl border px-4 py-4 text-sm font-medium text-slate-700",
+                                  isSelected
+                                    ? "border-indigo-500 bg-indigo-50/40"
+                                    : "border-slate-200 hover:border-slate-300",
+                                  isDisabled ? "cursor-not-allowed opacity-50" : ""
+                                )}
+                              >
+                                <Icon className="h-5 w-5 text-emerald-500" />
+                                {method.label}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
 
                       <div className="mt-8">
                         <p className="text-sm font-semibold text-slate-700">
-                          Betalingsmetoder hos Fresha
+                          Øvrige metoder
                         </p>
                         <div className="mt-3 grid grid-cols-2 gap-3">
-                          {freshaPaymentMethods.map((method) => {
+                          {corePaymentMethods.map((method) => {
                             const Icon = method.icon;
                             const isSelected = selectedPaymentMethod?.id === method.id;
                             return (
@@ -1137,6 +1260,9 @@ export default function AddNowDrawer({
                     {paymentError && (
                       <p className="mt-3 text-sm text-rose-500">{paymentError}</p>
                     )}
+                    {paymentInfo && (
+                      <p className="mt-3 text-sm text-emerald-600">{paymentInfo}</p>
+                    )}
 
                     <div className="mt-5 flex items-center gap-3">
                       <button
@@ -1157,7 +1283,15 @@ export default function AddNowDrawer({
                               : "bg-slate-900 text-white"
                           )}
                         >
-                          {paymentSaving ? "Behandler..." : "Betal nu"}
+                          {paymentSaving
+                            ? selectedPaymentMethod?.id === "kortterminal"
+                              ? "Sender link..."
+                              : selectedPaymentMethod?.connectRequired
+                              ? "Åbner Stripe..."
+                              : "Behandler..."
+                            : selectedPaymentMethod?.id === "kortterminal"
+                            ? "Send betalingslink"
+                            : "Betal nu"}
                         </button>
                       ) : (
                         <button

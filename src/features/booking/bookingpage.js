@@ -12,6 +12,10 @@ import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, where, 
 import { db } from '../../firebase';
 import useAppointments from '../../hooks/useAppointments';
 import { combineDateAndTimeToIso, parseDateString } from '../../utils/appointmentFormat';
+import {
+  buildAppointmentReference,
+  withReferenceSuffix,
+} from '../../utils/appointmentReference';
 import { formatServiceDuration } from '../../utils/serviceLabels';
 import { useUserClients } from './Klienter/hooks/useUserClients';
 import { useUserServices } from './Ydelser/hooks/useUserServices';
@@ -218,11 +222,56 @@ function BookingPage() {
   const getAppointmentOwner = (appointment) =>
     appointment?.calendarOwner || appointment?.ownerName || primaryCalendarOwner;
 
+  const selectedTeamMemberIds = useMemo(() => {
+    if (!selectedTeamMembers.length || !teamMembers.length) {
+      return new Set();
+    }
+    const selectedNames = new Set(
+      selectedTeamMembers.map((name) => String(name || '').trim().toLowerCase())
+    );
+    const ids = teamMembers
+      .filter((member) => selectedNames.has(String(member?.name || '').trim().toLowerCase()))
+      .map((member) => String(member?.id || '').trim())
+      .filter(Boolean);
+    return new Set(ids);
+  }, [selectedTeamMembers, teamMembers]);
+
   const visibleAppointments = useMemo(() => {
+    // Solo accounts should always see all appointments in their own calendar.
+    if (!hasTeamAccess) {
+      return appointments;
+    }
     if (!selectedTeamMembers.length) return appointments;
-    const selected = new Set(selectedTeamMembers);
-    return appointments.filter((appointment) => selected.has(getAppointmentOwner(appointment)));
-  }, [appointments, selectedTeamMembers, primaryCalendarOwner]);
+
+    const selectedNames = new Set(
+      selectedTeamMembers.map((name) => String(name || '').trim().toLowerCase())
+    );
+
+    return appointments.filter((appointment) => {
+      const ownerName = String(
+        appointment?.calendarOwner || appointment?.ownerName || primaryCalendarOwner || ''
+      )
+        .trim()
+        .toLowerCase();
+      const ownerId = String(
+        appointment?.calendarOwnerId ||
+          appointment?.staffUid ||
+          appointment?.therapistId ||
+          ''
+      ).trim();
+
+      return (
+        (ownerName && selectedNames.has(ownerName)) ||
+        (ownerId && selectedTeamMemberIds.has(ownerId))
+      );
+    });
+  }, [
+    appointments,
+    hasTeamAccess,
+    primaryCalendarOwner,
+    selectedTeamMemberIds,
+    selectedTeamMembers,
+  ]);
 
   const filteredServices = useMemo(() => {
     const query = serviceQuery.trim().toLowerCase();
@@ -686,10 +735,59 @@ function BookingPage() {
     };
   };
 
+  const serviceNameById = useMemo(() => {
+    const map = new Map();
+    services.forEach((service) => {
+      const serviceId = String(service?.id || '').trim();
+      if (!serviceId) return;
+      const serviceName = String(service?.navn || service?.name || '').trim();
+      if (!serviceName) return;
+      map.set(serviceId, serviceName);
+    });
+    return map;
+  }, [services]);
+
+  const looksLikeServiceId = (value) => /^[a-zA-Z0-9_-]{14,}$/.test(String(value || '').trim());
+
+  const resolveAppointmentServiceName = (appointment) => {
+    if (!appointment) return '';
+
+    const rawServiceId = String(appointment?.serviceId || '').trim();
+    if (rawServiceId) {
+      const mappedServiceName = serviceNameById.get(rawServiceId);
+      if (mappedServiceName) {
+        return mappedServiceName;
+      }
+    }
+
+    const rawServiceValue = String(appointment?.service || '').trim();
+    if (rawServiceValue) {
+      const duplicatesServiceId = Boolean(rawServiceId && rawServiceValue === rawServiceId);
+      if (!duplicatesServiceId && !looksLikeServiceId(rawServiceValue)) {
+        return rawServiceValue;
+      }
+    }
+
+    const rawTitleValue = String(appointment?.title || '').trim();
+    if (rawTitleValue) {
+      const duplicatesServiceId = Boolean(rawServiceId && rawTitleValue === rawServiceId);
+      if (!duplicatesServiceId && !looksLikeServiceId(rawTitleValue)) {
+        return rawTitleValue;
+      }
+    }
+
+    return '';
+  };
+
   const getServiceLabel = (appointment) => {
     if (!appointment) return appointmentFallback;
-    if (appointment.service) return appointment.service;
-    if (appointment.serviceType === 'forloeb') return programFallback;
+    if (appointment.serviceType === 'forloeb') {
+      return appointment.service || appointment.title || programFallback;
+    }
+    const resolvedServiceName = resolveAppointmentServiceName(appointment);
+    if (resolvedServiceName) {
+      return resolvedServiceName;
+    }
     return appointment.title || appointment.client || appointmentFallback;
   };
 
@@ -1075,8 +1173,7 @@ function BookingPage() {
       navn: service.navn,
       varighed: service.varighed,
       pris: typeof service.pris === 'number' ? service.pris : null,
-      prisInklMoms:
-        typeof service.prisInklMoms === 'number' ? service.prisInklMoms : null,
+      prisInklMoms: typeof service.pris === 'number' ? service.pris : null,
       color: service.color || null,
     }));
 
@@ -1094,10 +1191,10 @@ function BookingPage() {
       servicePrice:
         typeof selectedService.pris === 'number' ? selectedService.pris : null,
       servicePriceInclVat:
-        typeof selectedService.prisInklMoms === 'number'
-          ? selectedService.prisInklMoms
-          : typeof selectedService.pris === 'number'
+        typeof selectedService.pris === 'number'
           ? selectedService.pris
+          : typeof selectedService.prisInklMoms === 'number'
+          ? selectedService.prisInklMoms
           : null,
       additionalServices: extraServices,
       participants: selectedClient
@@ -1267,6 +1364,17 @@ function BookingPage() {
 
       const forloebGroups = new Map(); // key -> payload
       const normalPayloads = [];
+      const referenceSequenceByBase = new Map();
+
+      const reserveReferenceNumber = (clientName, createdAt) => {
+        const baseReference = buildAppointmentReference({
+          clientName,
+          createdAt,
+        });
+        const nextSequence = referenceSequenceByBase.get(baseReference) || 0;
+        referenceSequenceByBase.set(baseReference, nextSequence + 1);
+        return withReferenceSuffix(baseReference, nextSequence);
+      };
 
       for (const appt of items) {
         const startIso = combineDateAndTimeToIso(appt.startDate, appt.startTime);
@@ -1289,9 +1397,15 @@ function BookingPage() {
           (selectedTeamMembers.length === 1 ? selectedTeamMembers[0] : teamMembers[0]?.name) ||
           ownerEntry.name;
         const selectedOwnerId = appt.calendarOwnerId || null;
+        const createdAtLocal = new Date();
+        const referenceNumber = reserveReferenceNumber(
+          appt.client || title || appt.service || '',
+          createdAtLocal
+        );
 
         const payload = {
           therapistId: user.uid,
+          referenceNumber,
           calendarOwner: selectedOwnerName,
           calendarOwnerId: selectedOwnerId,
           title,
@@ -1306,7 +1420,9 @@ function BookingPage() {
           servicePrice:
             typeof appt.servicePrice === 'number' ? appt.servicePrice : null,
           servicePriceInclVat:
-            typeof appt.servicePriceInclVat === 'number'
+            typeof appt.servicePrice === 'number'
+              ? appt.servicePrice
+              : typeof appt.servicePriceInclVat === 'number'
               ? appt.servicePriceInclVat
               : null,
           participants: Array.isArray(appt.participants)
@@ -1398,6 +1514,13 @@ function BookingPage() {
           participants: mergedParticipants,
           notes: payload.notes || primaryData.notes || '',
           color: payload.color || primaryData.color || null,
+          referenceNumber:
+            primaryData.referenceNumber ||
+            payload.referenceNumber ||
+            buildAppointmentReference({
+              clientName: payload.client || payload.title || payload.service || '',
+              createdAt: new Date(),
+            }),
           start: payload.start,
           end: payload.end,
           startDate: payload.startDate,
@@ -1449,6 +1572,12 @@ function BookingPage() {
       await updateDoc(docRef, {
         title,
         calendarOwner,
+        referenceNumber:
+          appointment.referenceNumber ||
+          buildAppointmentReference({
+            clientName: appointment.client || title || '',
+            createdAt: appointment.createdAt || new Date(),
+          }),
         client: appointment.client || title,
         clientId: appointment.clientId || null,
         clientEmail: appointment.clientEmail || '',
@@ -1460,7 +1589,9 @@ function BookingPage() {
         servicePrice:
           typeof appointment.servicePrice === 'number' ? appointment.servicePrice : null,
         servicePriceInclVat:
-          typeof appointment.servicePriceInclVat === 'number'
+          typeof appointment.servicePrice === 'number'
+            ? appointment.servicePrice
+            : typeof appointment.servicePriceInclVat === 'number'
             ? appointment.servicePriceInclVat
             : null,
         participants: Array.isArray(appointment.participants)
@@ -2506,12 +2637,6 @@ function BookingPage() {
               {t('booking.calendar.addMode.title', 'Vælg en tid, der skal bookes')}
             </div>
             <div className="calendar-add-banner-actions">
-              <button
-                type="button"
-                className="calendar-add-banner-btn calendar-add-banner-btn-ghost"
-              >
-                {t('booking.calendar.addMode.available', 'Se tilgængelige tidspunkter')}
-              </button>
               <button
                 type="button"
                 className="calendar-add-banner-btn"

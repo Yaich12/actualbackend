@@ -29,6 +29,27 @@ const parseTimeToMinutes = (value) => {
   return hours * 60 + minutes;
 };
 
+const DATE_INPUT_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const parseDateInput = (value) => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!DATE_INPUT_RE.test(trimmed)) return null;
+
+  const [year, month, day] = trimmed.split('-').map((part) => Number(part));
+  const parsed = new Date(year, month - 1, day);
+  if (Number.isNaN(parsed.getTime())) return null;
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return trimmed;
+};
+
 const createDefaultWorkHours = () =>
   WORK_HOURS_DAYS.reduce((acc, day) => {
     acc[day.key] = { ...DEFAULT_WORK_HOURS[day.key] };
@@ -102,6 +123,50 @@ const resolveWorkHours = (data) => {
   return createDefaultWorkHours();
 };
 
+const normalizeWorkHoursExceptions = (workHoursExceptions) => {
+  if (!Array.isArray(workHoursExceptions)) return [];
+
+  const byDate = new Map();
+
+  workHoursExceptions.forEach((entry) => {
+    if (!entry || typeof entry !== 'object') return;
+
+    const date = parseDateInput(entry.date);
+    if (!date) return;
+
+    const closed = entry.closed === true;
+    if (closed) {
+      byDate.set(date, { date, closed: true, start: '', end: '' });
+      return;
+    }
+
+    const start = typeof entry.start === 'string' ? entry.start : '';
+    const end = typeof entry.end === 'string' ? entry.end : '';
+    const startMinutes = parseTimeToMinutes(start);
+    const endMinutes = parseTimeToMinutes(end);
+    if (startMinutes === null || endMinutes === null || startMinutes >= endMinutes) {
+      return;
+    }
+
+    byDate.set(date, { date, closed: false, start, end });
+  });
+
+  return Array.from(byDate.values()).sort((left, right) => left.date.localeCompare(right.date));
+};
+
+const buildWorkHoursExceptionsPayload = (workHoursExceptions) => {
+  const normalized = normalizeWorkHoursExceptions(workHoursExceptions);
+  return normalized.map((entry) => ({
+    date: entry.date,
+    closed: entry.closed === true,
+    start: entry.closed ? null : entry.start || null,
+    end: entry.closed ? null : entry.end || null,
+  }));
+};
+
+const resolveWorkHoursExceptions = (data) =>
+  normalizeWorkHoursExceptions(data?.workHoursExceptions);
+
 const getWorkHoursValidation = (workHours) => {
   const errors = {};
   WORK_HOURS_DAYS.forEach((day) => {
@@ -127,8 +192,12 @@ export {
   createDefaultWorkHours,
   normalizeWorkHours,
   resolveWorkHours,
+  resolveWorkHoursExceptions,
   buildWorkHoursPayload,
+  buildWorkHoursExceptionsPayload,
   workHoursFromWorkingHours,
   parseTimeToMinutes,
+  parseDateInput,
+  normalizeWorkHoursExceptions,
   getWorkHoursValidation,
 };

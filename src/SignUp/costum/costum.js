@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Check, MapPin } from 'lucide-react';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 import { useAuth } from '../../AuthContext';
 import { useLanguage } from '../../LanguageContext';
 import { db } from '../../firebase';
@@ -311,9 +311,78 @@ function OnboardingSlides() {
     return update;
   };
 
+  const ensureClinicBootstrap = async (accountTypeValue = formData.accountType) => {
+    if (!user?.uid || !accountTypeValue) return null;
+    const clinicType = accountTypeValue === 'team' ? 'team' : 'solo';
+    const userRef = doc(db, 'users', user.uid);
+    const userSnap = await getDoc(userRef);
+    const userData = userSnap.exists() ? userSnap.data() || {} : {};
+    let clinicId = `${userData.activeClinicId || ''}`.trim() || null;
+
+    if (!clinicId) {
+      clinicId = doc(collection(db, 'clinics')).id;
+    }
+
+    const clinicRef = doc(db, 'clinics', clinicId);
+    const memberRef = doc(db, 'clinics', clinicId, 'members', user.uid);
+    const clinicSnap = await getDoc(clinicRef);
+    const memberSnap = await getDoc(memberRef);
+
+    const trimmedClinicName = formData.clinicName.trim();
+    const displayName = user.displayName || userData.displayName || '';
+    const email = user.email || userData.email || '';
+
+    const clinicPayload = {
+      ownerUid: user.uid,
+      clinicType,
+      updatedAt: serverTimestamp(),
+      ...(trimmedClinicName ? { name: trimmedClinicName } : {}),
+    };
+    if (!clinicSnap.exists()) {
+      clinicPayload.createdAt = serverTimestamp();
+    }
+
+    const memberPayload = {
+      role: 'owner',
+      displayName,
+      email,
+      updatedAt: serverTimestamp(),
+    };
+    if (!memberSnap.exists()) {
+      memberPayload.createdAt = serverTimestamp();
+    }
+
+    const batch = writeBatch(db);
+    batch.set(clinicRef, clinicPayload, { merge: true });
+    batch.set(memberRef, memberPayload, { merge: true });
+    batch.set(
+      userRef,
+      {
+        activeClinicId: clinicId,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+    await batch.commit();
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.info('[OnboardingSlides] clinic bootstrap complete', {
+        uid: user.uid,
+        clinicId,
+        clinicType,
+      });
+    }
+
+    return clinicId;
+  };
+
   const persistProfile = async (markComplete) => {
     if (!user?.uid) return;
     const update = buildProfileUpdate(markComplete);
+    const clinicId = await ensureClinicBootstrap(formData.accountType);
+    if (clinicId) {
+      update.activeClinicId = clinicId;
+    }
     await setDoc(doc(db, 'users', user.uid), update, { merge: true });
   };
 
@@ -351,6 +420,16 @@ function OnboardingSlides() {
         return;
       }
       return;
+    }
+    if (currentStep === 'accountType' && formData.accountType) {
+      try {
+        setIsPersisting(true);
+        await ensureClinicBootstrap(formData.accountType);
+      } catch (error) {
+        console.error('[OnboardingSlides] Failed to bootstrap clinic on account type step', error);
+      } finally {
+        setIsPersisting(false);
+      }
     }
     setStepIndex((prev) => Math.min(prev + 1, steps.length - 1));
   };

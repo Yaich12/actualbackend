@@ -34,14 +34,21 @@ const getRequestId = (err) =>
   err?.response?.headers?.['x-requestid'] ||
   null;
 
+const AGENT_ENV_ID_KEYS = {
+  education: ['CORTI_AGENT_ID_EDUCATION', 'CORTI_AGENT_ID'],
+  educationFast: ['CORTI_AGENT_ID_EDUCATIONFAST', 'CORTI_AGENT_ID_EDUCATION_FAST'],
+  improvement: ['CORTI_AGENT_ID_IMPROVEMENT'],
+  rehab: ['CORTI_AGENT_ID_REHAB'],
+};
+
 const resolveEnvAgentId = (key) => {
   if (!key) return null;
-  const envKey = `CORTI_AGENT_ID_${key.toUpperCase()}`;
-  const direct = process.env[envKey];
-  if (direct && `${direct}`.trim()) return `${direct}`.trim();
-  if (key === 'education') {
-    const fallback = process.env.CORTI_AGENT_ID;
-    if (fallback && `${fallback}`.trim()) return `${fallback}`.trim();
+  const configuredKeys = AGENT_ENV_ID_KEYS[key] || [`CORTI_AGENT_ID_${key.toUpperCase()}`];
+  for (const envKey of configuredKeys) {
+    const value = process.env[envKey];
+    if (value && `${value}`.trim()) {
+      return `${value}`.trim();
+    }
   }
   return null;
 };

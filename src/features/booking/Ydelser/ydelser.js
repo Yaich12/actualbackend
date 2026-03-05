@@ -17,13 +17,6 @@ const normalizeService = (stored = {}) => {
       ? stored.price
       : 0;
 
-  const priceIncl =
-    typeof stored.prisInklMoms === 'number'
-      ? stored.prisInklMoms
-      : typeof stored.priceInclVat === 'number'
-      ? stored.priceInclVat
-      : price;
-
   return {
     id:
       stored.id ||
@@ -31,7 +24,7 @@ const normalizeService = (stored = {}) => {
     navn: stored.navn || stored.name || 'Ny ydelse',
     varighed: stored.varighed || stored.duration || '1 time',
     pris: price,
-    prisInklMoms: priceIncl,
+    prisInklMoms: price,
     description: stored.description || '',
     createdAt: stored.createdAt || stored.createdAtIso || null,
     color: stored.color || '#3B82F6',
@@ -234,17 +227,7 @@ function Ydelser() {
                   {formatServiceDuration(service.varighed, t) || service.varighed}
                 </div>
                 <div className="service-price">
-                  {service.pris === 10.00 ? (
-                    <>
-                      {t('booking.services.price.currency', 'DKK')} {formatPrice(service.pris)} (
-                      {t('booking.services.price.currency', 'DKK')} {formatPrice(service.prisInklMoms)}{' '}
-                      {t('booking.services.price.inclVat', 'inkl. moms')})
-                    </>
-                  ) : (
-                    <>
-                      {t('booking.services.price.currency', 'DKK')} {formatPrice(service.pris)}
-                    </>
-                  )}
+                  {t('booking.services.price.currency', 'DKK')} {formatPrice(service.pris)}
                 </div>
               </div>
             ))}

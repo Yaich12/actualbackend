@@ -66,6 +66,30 @@ const CLOUD_RUN_ENV_KEYS = [
   'CORTI_TENANT_NAME',
   'CORTI_CLIENT_ID',
   'CORTI_CLIENT_SECRET',
+  // Firestore database selection (must match frontend database id).
+  'FIRESTORE_DB_ID',
+  'REACT_APP_FIRESTORE_DB_ID',
+  // Stripe (subscriptions + Connect)
+  'STRIPE_SECRET_KEY',
+  'STRIPE_WEBHOOK_SECRET',
+  'STRIPE_PRICE_SOLO_MONTHLY',
+  'STRIPE_PRICE_DUO_MONTHLY',
+  'STRIPE_CONNECT_COUNTRY',
+  'STRIPE_CONNECT_DEFAULT_CURRENCY',
+  'STRIPE_CONNECT_RETURN_URL',
+  'STRIPE_CONNECT_REFRESH_URL',
+  'STRIPE_CONNECT_ONBOARDING_FIELDS',
+  // Stripe sale link delivery (Resend)
+  'RESEND_API_KEY',
+  'RESEND_API_BASE',
+  'STRIPE_SALE_LINK_FROM_EMAIL',
+  'STRIPE_SALE_LINK_REPLY_TO_EMAIL',
+  'BOOKING_CONFIRMATION_FROM_EMAIL',
+  // Runtime URL / CORS helpers used by server.js + stripe routes
+  'APP_URL',
+  'NEXT_PUBLIC_APP_URL',
+  'REACT_APP_APP_URL',
+  'CORS_ALLOWED_ORIGINS',
 ];
 
 const escapeEnvValue = (value) =>

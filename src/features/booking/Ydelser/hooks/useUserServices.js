@@ -14,17 +14,15 @@ const mapDocToService = (doc) => {
     null;
 
   const price = typeof data.price === 'number' ? data.price : data.pris ?? 0;
-  const priceInclVat =
-    typeof data.priceInclVat === 'number'
-      ? data.priceInclVat
-      : data.prisInklMoms ?? price;
 
   return {
     id: doc.id || data.id,
     navn: data.name?.trim?.() || data.navn?.trim?.() || 'Ny ydelse',
     varighed: data.duration || data.varighed || '1 time',
     pris: price,
-    prisInklMoms: priceInclVat,
+    prisInklMoms: price,
+    priceInclVat: price,
+    includeVat: false,
     description: data.description || '',
     createdAt: createdAtIso,
     color: data.color || '#3B82F6',
@@ -75,4 +73,3 @@ export function useUserServices() {
 }
 
 export default useUserServices;
-

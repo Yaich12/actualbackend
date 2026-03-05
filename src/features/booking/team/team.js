@@ -4,7 +4,6 @@ import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayou
 import { useAuth } from '../../../AuthContext';
 import { db } from '../../../firebase';
 import {
-  addDoc,
   collection,
   doc,
   onSnapshot,
@@ -62,6 +61,9 @@ const resolveTimestamp = (value) => {
 
 const mapDocToMember = (docSnap) => {
   const data = docSnap.data() || {};
+  const role = `${data.role || ''}`.trim().toLowerCase() === 'owner' || data.isOwner === true
+    ? 'owner'
+    : 'member';
   const name =
     (typeof data.name === 'string' && data.name.trim()) ||
     `${data.firstName || ''}${data.lastName ? ` ${data.lastName}` : ''}`.trim() ||
@@ -86,9 +88,9 @@ const mapDocToMember = (docSnap) => {
     avatarColor: data.avatarColor || data.calendarColor || '#0ea5e9',
     avatarText,
     avatarUrl: data.avatarUrl || '',
-    isOwner: data.isOwner === true,
+    isOwner: role === 'owner',
     memberUid: data.memberUid || null,
-    role: data.role || '',
+    role,
     createdAtMs,
   };
 };
@@ -269,6 +271,7 @@ function TeamPage() {
   const { user, loading } = useAuth();
   const [teamAccessLoading, setTeamAccessLoading] = useState(true);
   const [hasTeamAccess, setHasTeamAccess] = useState(false);
+  const [activeClinicId, setActiveClinicId] = useState(null);
 
   const [members, setMembers] = useState([]);
   const [membersLoading, setMembersLoading] = useState(true);
@@ -294,16 +297,27 @@ function TeamPage() {
       doc(db, 'users', user.uid),
       (snap) => {
         const data = snap.exists() ? snap.data() : null;
-        const allowed = data?.accountType === 'team' || data?.hasTeam === true;
+        const resolvedClinicId = `${data?.activeClinicId || ''}`.trim() || null;
+        const allowed =
+          data?.accountType === 'team' || data?.hasTeam === true || data?.role === 'member';
+        setActiveClinicId(resolvedClinicId);
+        if (process.env.NODE_ENV !== 'production') {
+          console.info('[TeamPage] user clinic context', {
+            uid: user.uid,
+            activeClinicId: resolvedClinicId,
+            allowed,
+          });
+        }
         setHasTeamAccess(allowed);
         setTeamAccessLoading(false);
-        if (!allowed) {
+        if (!allowed || !resolvedClinicId) {
           navigate('/booking', { replace: true });
         }
       },
       (err) => {
         console.error('[TeamPage] Failed to load account type', err);
         setHasTeamAccess(false);
+        setActiveClinicId(null);
         setTeamAccessLoading(false);
         navigate('/booking', { replace: true });
       }
@@ -313,7 +327,7 @@ function TeamPage() {
   }, [loading, navigate, user?.uid]);
 
   useEffect(() => {
-    if (teamAccessLoading || !hasTeamAccess || !user?.uid) {
+    if (teamAccessLoading || !hasTeamAccess || !user?.uid || !activeClinicId) {
       setMembers([]);
       setMembersLoading(false);
       setMembersError('');
@@ -324,8 +338,14 @@ function TeamPage() {
     setMembersError('');
     seedAttemptedRef.current = false;
 
-    const membersRef = collection(db, 'users', user.uid, 'team');
+    const membersRef = collection(db, 'clinics', activeClinicId, 'members');
     const source = query(membersRef, orderBy('createdAt', 'asc'));
+    if (process.env.NODE_ENV !== 'production') {
+      console.info('[TeamPage] loading members from clinic', {
+        uid: user.uid,
+        clinicId: activeClinicId,
+      });
+    }
 
     const unsubscribe = onSnapshot(
       source,
@@ -359,14 +379,17 @@ function TeamPage() {
               calendarColor: '#7c3aed',
               avatarColor: '#7c3aed',
               avatarText,
-              role: 'S',
-              isOwner: true,
+              role: 'owner',
               memberUid: user.uid,
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
             };
 
             try {
+              await setDoc(doc(db, 'clinics', activeClinicId, 'members', user.uid), ownerPayload, {
+                merge: true,
+              });
+              // Legacy mirror to keep old readers working during migration.
               await setDoc(doc(db, 'users', user.uid, 'team', user.uid), ownerPayload, { merge: true });
             } catch (error) {
               console.error('[TeamPage] Failed to seed owner team member', error);
@@ -383,7 +406,7 @@ function TeamPage() {
     );
 
     return () => unsubscribe();
-  }, [hasTeamAccess, teamAccessLoading, user?.displayName, user?.email, user?.uid]);
+  }, [activeClinicId, hasTeamAccess, teamAccessLoading, user?.displayName, user?.email, user?.uid]);
 
   const filteredMembers = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -435,7 +458,37 @@ function TeamPage() {
   };
 
   const handleCreateMember = async (form) => {
-    if (!user?.uid) return;
+    if (!user?.uid || !activeClinicId) return;
+    const name = `${form.firstName}${form.lastName ? ` ${form.lastName}` : ''}`.trim();
+    const initials = (form.firstName?.charAt(0) || '?').toUpperCase();
+    const phoneComplete = form.phone ? `${form.phoneCountry} ${form.phone}`.trim() : '';
+    const memberRef = doc(collection(db, 'clinics', activeClinicId, 'members'));
+
+    const payload = {
+      name,
+      firstName: form.firstName,
+      lastName: form.lastName,
+      email: form.email,
+      phone: phoneComplete,
+      phoneCountry: form.phoneCountry,
+      phoneLocal: form.phone,
+      country: form.country,
+      calendarColor: form.calendarColor,
+      avatarColor: form.calendarColor,
+      avatarText: initials,
+      role: 'member',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    await setDoc(memberRef, payload, { merge: true });
+    // Legacy mirror to keep old readers working during migration.
+    await setDoc(doc(db, 'users', user.uid, 'team', memberRef.id), payload, { merge: true });
+    closeForm();
+  };
+
+  const handleUpdateMember = async (memberId, form) => {
+    if (!user?.uid || !memberId || !activeClinicId) return;
     const name = `${form.firstName}${form.lastName ? ` ${form.lastName}` : ''}`.trim();
     const initials = (form.firstName?.charAt(0) || '?').toUpperCase();
     const phoneComplete = form.phone ? `${form.phoneCountry} ${form.phone}`.trim() : '';
@@ -452,35 +505,11 @@ function TeamPage() {
       calendarColor: form.calendarColor,
       avatarColor: form.calendarColor,
       avatarText: initials,
-      role: 'S',
-      createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
-
-    await addDoc(collection(db, 'users', user.uid, 'team'), payload);
-    closeForm();
-  };
-
-  const handleUpdateMember = async (memberId, form) => {
-    if (!user?.uid || !memberId) return;
-    const name = `${form.firstName}${form.lastName ? ` ${form.lastName}` : ''}`.trim();
-    const initials = (form.firstName?.charAt(0) || '?').toUpperCase();
-    const phoneComplete = form.phone ? `${form.phoneCountry} ${form.phone}`.trim() : '';
-
-    await updateDoc(doc(db, 'users', user.uid, 'team', memberId), {
-      name,
-      firstName: form.firstName,
-      lastName: form.lastName,
-      email: form.email,
-      phone: phoneComplete,
-      phoneCountry: form.phoneCountry,
-      phoneLocal: form.phone,
-      country: form.country,
-      calendarColor: form.calendarColor,
-      avatarColor: form.calendarColor,
-      avatarText: initials,
-      updatedAt: serverTimestamp(),
-    });
+    await updateDoc(doc(db, 'clinics', activeClinicId, 'members', memberId), payload);
+    // Legacy mirror to keep old readers working during migration.
+    await setDoc(doc(db, 'users', user.uid, 'team', memberId), payload, { merge: true });
     closeForm();
   };
 

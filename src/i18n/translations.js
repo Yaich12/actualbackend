@@ -150,7 +150,7 @@ export const translations = {
       generatedNote: 'Genereret notat',
       generatingNote: 'Genererer notat...',
       noNoteYet: 'Ingen notat genereret endnu.',
-      transcription: 'Transskription',
+      transcription: 'Transkribering',
       dictation: 'Diktering',
       chooseMode: 'Vælg en mode for at optage eller transkribere.',
       startConsultation: 'Start konsultation',

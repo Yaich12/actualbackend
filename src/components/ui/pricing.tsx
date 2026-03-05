@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../AuthContext";
 import { getIdToken } from "../../utils/auth";
 import { setPostAuthRedirectTarget } from "../../utils/postAuthRedirect";
+import { buildApiUrl } from "../../utils/runtimeUrls";
 import { useLanguage } from "../../unAuth/language/LanguageProvider";
 
 const PLAN_CONFIG = [
@@ -108,7 +109,7 @@ export default function PricingSection5({
     setActiveCheckoutPlan(plan);
     try {
       const token = await getIdToken();
-      const response = await fetch("/api/stripe/create-checkout-session", {
+      const response = await fetch(buildApiUrl("/api/stripe/create-checkout-session"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

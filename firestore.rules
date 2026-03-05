@@ -10,6 +10,17 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isClinicOwner(clinicId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/clinics/$(clinicId))
+        && get(/databases/$(database)/documents/clinics/$(clinicId)).data.ownerUid == request.auth.uid;
+    }
+
+    function isClinicMember(clinicId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/clinics/$(clinicId)/members/$(request.auth.uid));
+    }
+
     /**
      * Main data model in this app:
      * users/{userId}/...
@@ -39,6 +50,19 @@ service cloud.firestore {
         && resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerUid == resource.data.ownerUid;
       allow delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    match /clinics/{clinicId} {
+      allow read: if isClinicOwner(clinicId) || isClinicMember(clinicId);
+      allow create: if isSignedIn()
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isClinicOwner(clinicId);
+      allow delete: if false;
+
+      match /members/{memberUid} {
+        allow read: if isClinicOwner(clinicId) || isClinicMember(clinicId);
+        allow create, update, delete: if isClinicOwner(clinicId);
+      }
     }
 
     // Default deny for anything outside /users/{userId}/...

@@ -1,20 +1,75 @@
-import React from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import './landingpage.css';
 import Navbar from './components/navbar';
 import Frontpage from './components/frontpage';
 import Demo from './components/demo';
 import Footer from './components/footer';
-import ScrollSection from './components/scroll';
 import Manifesto from './components/Manifesto';
-import Pricing from '../pricing/pricing';
-import { Stats } from '../components/ui/stats-section-with-text';
 import { useLanguage } from './language/LanguageProvider';
+
+const LazyScrollSection = lazy(() => import('./components/scroll'));
+const LazyPricing = lazy(() => import('../pricing/pricing'));
+const LazyStats = lazy(() =>
+  import('../components/ui/stats-section-with-text').then((mod) => ({ default: mod.Stats }))
+);
 
 const LandingDivider = ({ text, ariaLabel }) => (
   <div className="landing-divider" aria-label={ariaLabel}>
     <span className="landing-divider-text">{text}</span>
   </div>
 );
+
+const SectionPlaceholder = ({ minHeight = 320 }) => (
+  <div aria-hidden="true" style={{ minHeight }} />
+);
+
+function useNearViewport(rootMargin = '600px 0px') {
+  const ref = useRef(null);
+  const [isNear, setIsNear] = useState(false);
+
+  useEffect(() => {
+    if (isNear) return undefined;
+    const target = ref.current;
+    if (!target) return undefined;
+
+    if (typeof window === 'undefined' || !('IntersectionObserver' in window)) {
+      setIsNear(true);
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const firstEntry = entries[0];
+        if (firstEntry?.isIntersecting) {
+          setIsNear(true);
+          observer.disconnect();
+        }
+      },
+      { root: null, rootMargin, threshold: 0.01 }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [isNear, rootMargin]);
+
+  return [ref, isNear];
+}
+
+function DeferredSection({ id, className, minHeight, children }) {
+  const [sectionRef, shouldLoad] = useNearViewport();
+
+  return (
+    <section ref={sectionRef} className={className} id={id}>
+      {shouldLoad ? (
+        <Suspense fallback={<SectionPlaceholder minHeight={minHeight} />}>
+          {children}
+        </Suspense>
+      ) : (
+        <SectionPlaceholder minHeight={minHeight} />
+      )}
+    </section>
+  );
+}
 
 function LandingPage() {
   const { t } = useLanguage();
@@ -31,14 +86,18 @@ function LandingPage() {
             <Frontpage />
           </div>
         </section>
-        <section className="landing-section landing-section-full" id="parallax-demo">
-          <ScrollSection />
-        </section>
-        <section className="landing-section landing-section-full" id="stats">
+        <DeferredSection
+          className="landing-section landing-section-full"
+          id="parallax-demo"
+          minHeight={900}
+        >
+          <LazyScrollSection />
+        </DeferredSection>
+        <DeferredSection className="landing-section landing-section-full" id="stats" minHeight={320}>
           <div className="bg-white">
-            <Stats />
+            <LazyStats />
           </div>
-        </section>
+        </DeferredSection>
         <section
           className="landing-section landing-section-full landing-section-demo landing-section-hidden"
           id="demo"
@@ -53,9 +112,9 @@ function LandingPage() {
             </section>
           </>
         )}
-        <section className="landing-section landing-section-full" id="pricing">
-          <Pricing />
-        </section>
+        <DeferredSection className="landing-section landing-section-full" id="pricing" minHeight={780}>
+          <LazyPricing />
+        </DeferredSection>
       </main>
       <Footer />
     </div>

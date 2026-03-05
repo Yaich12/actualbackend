@@ -7,6 +7,7 @@ import {
   query,
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import { buildAppointmentReference } from '../utils/appointmentReference';
 
 const toDateValue = (value) => {
   if (!value) return null;
@@ -63,21 +64,28 @@ const mapAppointmentDoc = (doc) => {
     startTime: derivedEndTime,
   } = deriveDatePartsFromValue(endValue);
 
+  const storedReference =
+    data.refNr ||
+    data.ref_nr ||
+    data.referenceNumber ||
+    data.referenceNo ||
+    data.reference ||
+    data.ref ||
+    data.refNumber ||
+    data.appointmentRef ||
+    data.appointmentReference ||
+    data.appointmentRefNr ||
+    data.referenceId ||
+    null;
+
+  const fallbackReference = buildAppointmentReference({
+    clientName: data.client || data.title || data.firstName || '',
+    createdAt: data.createdAt || data.createdAtIso || startDateObj || startValue || null,
+  });
+
   return {
     id: doc.id,
-    referenceNumber:
-      data.refNr ||
-      data.ref_nr ||
-      data.referenceNumber ||
-      data.referenceNo ||
-      data.reference ||
-      data.ref ||
-      data.refNumber ||
-      data.appointmentRef ||
-      data.appointmentReference ||
-      data.appointmentRefNr ||
-      data.referenceId ||
-      null,
+    referenceNumber: storedReference || fallbackReference,
     staffUid:
       data.staffUid ||
       data.calendarOwnerId ||
@@ -103,6 +111,10 @@ const mapAppointmentDoc = (doc) => {
     clientId: data.clientId ?? null,
     clientEmail: data.clientEmail || '',
     clientPhone: data.clientPhone || '',
+    firstName: data.firstName || data.fornavn || '',
+    lastName: data.lastName || data.efternavn || '',
+    email: data.email || data.clientEmail || '',
+    phone: data.phone || data.clientPhone || data.telefonKomplet || data.telefon || '',
     service: data.service || '',
     serviceId: data.serviceId ?? null,
     serviceDuration: data.serviceDuration || '',
@@ -118,6 +130,8 @@ const mapAppointmentDoc = (doc) => {
     title: data.title || '',
     notes: data.notes || '',
     status: data.status || 'booked',
+    source: data.source || data.bookingSource || data.origin || '',
+    createdBy: data.createdBy || data.createdByUid || null,
     startIso: startDateObj ? startDateObj.toISOString() : data.start || '',
     endIso: endDateObj ? endDateObj.toISOString() : data.end || '',
     start: startDateObj || data.start || '',
@@ -127,7 +141,12 @@ const mapAppointmentDoc = (doc) => {
     endDate: derivedEndDate || data.endDate || '',
     endTime: derivedEndTime || data.endTime || '',
     createdAt: data.createdAt || null,
+    createdAtIso: data.createdAtIso || null,
     updatedAt: data.updatedAt || null,
+    notificationAcknowledged:
+      data.notificationAcknowledged === true || data.notificationSeen === true,
+    notificationAcknowledgedAt:
+      data.notificationAcknowledgedAt || data.notificationSeenAt || null,
     participants: Array.isArray(data.participants) ? data.participants : [],
     color: data.color || null,
   };

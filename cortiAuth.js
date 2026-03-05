@@ -22,7 +22,7 @@ console.info(
 
 let cachedAccessToken = null;
 let cachedTokenExpiresAt = 0;
-const useTokenCaching = false; // force fresh token each call to avoid stale/invalid
+const useTokenCaching = `${process.env.CORTI_TOKEN_CACHE_ENABLED || 'true'}`.toLowerCase() !== 'false';
 
 const getAccessToken = async () => {
   const { CORTI_CLIENT_ID, CORTI_CLIENT_SECRET } = process.env;
@@ -59,16 +59,7 @@ const createCortiClient = async () => {
   if (missingCortiEnv.length) {
     throw new Error(`Missing Corti config: ${missingCortiEnv.join(', ')}`);
   }
-
-  const auth = new CortiAuth({
-    environment: resolvedEnvironment,
-    tenantName: process.env.CORTI_TENANT_NAME,
-  });
-
-  const { accessToken } = await auth.getToken({
-    clientId: process.env.CORTI_CLIENT_ID,
-    clientSecret: process.env.CORTI_CLIENT_SECRET,
-  });
+  const accessToken = await getAccessToken();
 
   return new CortiClient({
     environment: resolvedEnvironment,

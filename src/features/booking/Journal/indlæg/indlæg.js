@@ -38,6 +38,13 @@ const FREE_TEXT_FAST_INSTRUCTION =
   'Svar kort og direkte paa brugerens spoergsmaal. Maks 5 bullets eller 5 korte linjer. Ingen kilder. Ingen lange forklaringer.';
 const FREE_TEXT_TITLE_INSTRUCTION =
   'Start altid svaret med en Markdown-overskrift paa formatet "### <kort svar>" (maks 8 ord), og skriv derefter et meget kort svar under overskriften.';
+const SOURCE_TEXT_WORD_LIMIT_ACTIONS = new Set([
+  'objectiveTests',
+  'exerciseSuggestions',
+  'guidelines',
+  'latestEvidence',
+]);
+const SOURCE_TEXT_WORD_LIMIT = 100;
 const UNSUPPORTED_LANGUAGE_RE = /unsupported language|language unavailable/i;
 
 const apiUrl = (path) => buildApiUrl(path);
@@ -106,6 +113,22 @@ const buildDocumentText = (sections, fallbackHeading = 'Section') => {
     .join('\n\n');
 };
 
+const truncateToWords = (value = '', wordLimit = 0) => {
+  const limit = Number(wordLimit);
+  const text = `${value || ''}`.trim();
+  if (!Number.isFinite(limit) || limit <= 0 || !text) {
+    return { text, truncated: false };
+  }
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length <= limit) {
+    return { text, truncated: false };
+  }
+  return {
+    text: words.slice(0, limit).join(' '),
+    truncated: true,
+  };
+};
+
 const escapeHtml = (value = '') =>
   String(value)
     .replace(/&/g, '&amp;')
@@ -159,6 +182,21 @@ const getEntryRichContent = (entry) => {
   return plainTextToRichContent(getEntryPlainContent(entry));
 };
 
+const buildSaveSnapshot = ({
+  entryId = null,
+  dateValue = '',
+  contentValue = '',
+  contentRichValue = '',
+  templateKeyValue = '',
+}) =>
+  JSON.stringify({
+    entryId: entryId || null,
+    date: `${dateValue || ''}`.trim(),
+    content: `${contentValue || ''}`.trim(),
+    contentRich: `${contentRichValue || ''}`.trim(),
+    templateKey: `${templateKeyValue || ''}`.trim(),
+  });
+
 function Indlæg({
   clientId,
   clientName,
@@ -195,10 +233,11 @@ function Indlæg({
   const previousEntryRef = useRef(null);
   // used when user starts a brand new entry (unsaved) and navigates away to a past session
   const previousDraftRef = useRef(null);
+  const initialResolvedDate = initialEntry?.date || initialDate || '14-11-2025';
   const initialPlainContent = getEntryPlainContent(initialEntry);
   const initialRichContent = getEntryRichContent(initialEntry);
   const [activeEntry, setActiveEntry] = useState(initialEntry);
-  const [date, setDate] = useState(initialEntry?.date || initialDate || '14-11-2025');
+  const [date, setDate] = useState(initialResolvedDate);
   const [content, setContent] = useState(initialPlainContent);
   const [contentRich, setContentRich] = useState(initialRichContent);
   const [isSaving, setIsSaving] = useState(false);
@@ -272,6 +311,16 @@ function Indlæg({
   const dictationStreamRef = useRef(null);
   const dictationChunksRef = useRef([]);
   const dictationStopRequestedRef = useRef(false);
+  const prewarmedAgentKeysRef = useRef(new Set());
+  const lastSavedSnapshotRef = useRef(
+    buildSaveSnapshot({
+      entryId: initialEntry?.id || null,
+      dateValue: initialResolvedDate,
+      contentValue: initialPlainContent,
+      contentRichValue: initialRichContent,
+      templateKeyValue: initialEntry?.templateKey || '',
+    })
+  );
 
   const { user, userDoc } = useAuth();
   const { language, preferredLanguage, locale, t } = useLanguage();
@@ -630,6 +679,23 @@ function Indlæg({
     [agentIds, t]
   );
 
+  const prewarmAssistantAgents = useCallback(() => {
+    const agentKeys = ['educationFast', 'education', 'improvement'];
+    agentKeys.forEach((agentKey) => {
+      if (prewarmedAgentKeysRef.current.has(agentKey)) return;
+      void ensureAgentId(agentKey).then((agentId) => {
+        if (agentId) {
+          prewarmedAgentKeysRef.current.add(agentKey);
+        }
+      });
+    });
+  }, [ensureAgentId]);
+
+  const handleOpenAssistant = useCallback(() => {
+    setIsAssistantOpen(true);
+    prewarmAssistantAgents();
+  }, [prewarmAssistantAgents]);
+
   const resolvedAppointmentId = useMemo(
     () =>
       appointmentId ||
@@ -711,7 +777,7 @@ function Indlæg({
       _overrideAgentType = null,
       agentKey = 'education',
       displayMessage = null,
-      sourceTextLimit = null,
+      sourceTextWordLimit = null,
       useHeadingInstruction = true
     ) => {
       const finalMessage = `${overrideMessage ?? agentInput}`.trim();
@@ -731,12 +797,11 @@ function Indlæg({
         (generatedDocument?.sections?.length ? buildDocumentText(generatedDocument.sections) : '') ||
         (transcribeMode === MODE_DICTATE ? dictationText : transcriptText);
       let sourceText = (baseText || '').trim() || finalMessage;
-      if (
-        Number.isFinite(sourceTextLimit) &&
-        Number(sourceTextLimit) > 0 &&
-        sourceText.length > Number(sourceTextLimit)
-      ) {
-        sourceText = `${sourceText.slice(0, Number(sourceTextLimit))}\n\n[Truncated for faster response]`;
+      const truncatedSource = truncateToWords(sourceText, sourceTextWordLimit);
+      sourceText = truncatedSource.text;
+      if (truncatedSource.truncated) {
+        const limitLabel = Number(sourceTextWordLimit) || SOURCE_TEXT_WORD_LIMIT;
+        sourceText = `${sourceText}\n\n[Truncated to ${limitLabel} words for faster response]`;
       }
       const contextSource = (content && content.trim()) ? 'note' : generatedDocument?.sections?.length ? 'generated' : 'transcript';
       console.log('[AGENT UI] key=', resolvedAgentKey, 'ctx source=', contextSource, 'len=', sourceText.length);
@@ -879,14 +944,16 @@ function Indlæg({
       const visibleMessage = isFreeText
         ? `${displayMessage ?? rawInput}`.trim() || rawInput
         : `${displayMessage ?? finalMessage}`.trim() || finalMessage;
-      const sourceTextLimit = resolvedAction === 'exerciseSuggestions' ? 2500 : null;
+      const sourceTextWordLimit = SOURCE_TEXT_WORD_LIMIT_ACTIONS.has(resolvedAction)
+        ? SOURCE_TEXT_WORD_LIMIT
+        : null;
       const useHeadingInstruction = !isFreeText;
       sendAgentMessage(
         finalMessage,
         agentType,
         agentKey,
         visibleMessage,
-        sourceTextLimit,
+        sourceTextWordLimit,
         useHeadingInstruction
       );
     },
@@ -906,20 +973,49 @@ function Indlæg({
 
   useEffect(() => {
     if (activeEntry) {
-      setDate(activeEntry.date || initialDate || '');
-      setContent(getEntryPlainContent(activeEntry));
-      setContentRich(getEntryRichContent(activeEntry));
-      setSelectedTemplateKey(activeEntry.templateKey || '');
+      const nextDate = activeEntry.date || initialDate || '';
+      const nextContent = getEntryPlainContent(activeEntry);
+      const nextContentRich = getEntryRichContent(activeEntry);
+      const nextTemplateKey = activeEntry.templateKey || '';
+      setDate(nextDate);
+      setContent(nextContent);
+      setContentRich(nextContentRich);
+      setSelectedTemplateKey(nextTemplateKey);
       setNoteTextFormat('normal');
+      lastSavedSnapshotRef.current = buildSaveSnapshot({
+        entryId: activeEntry?.id || initialEntry?.id || null,
+        dateValue: nextDate,
+        contentValue: nextContent,
+        contentRichValue: nextContentRich,
+        templateKeyValue: nextTemplateKey,
+      });
     } else if (initialEntry) {
-      setDate(initialEntry.date || initialDate || '');
-      setContent(getEntryPlainContent(initialEntry));
-      setContentRich(getEntryRichContent(initialEntry));
-      setSelectedTemplateKey(initialEntry.templateKey || '');
+      const nextDate = initialEntry.date || initialDate || '';
+      const nextContent = getEntryPlainContent(initialEntry);
+      const nextContentRich = getEntryRichContent(initialEntry);
+      const nextTemplateKey = initialEntry.templateKey || '';
+      setDate(nextDate);
+      setContent(nextContent);
+      setContentRich(nextContentRich);
+      setSelectedTemplateKey(nextTemplateKey);
       setNoteTextFormat('normal');
+      lastSavedSnapshotRef.current = buildSaveSnapshot({
+        entryId: initialEntry?.id || null,
+        dateValue: nextDate,
+        contentValue: nextContent,
+        contentRichValue: nextContentRich,
+        templateKeyValue: nextTemplateKey,
+      });
     } else if (initialDate) {
       setDate(initialDate);
       setNoteTextFormat('normal');
+      lastSavedSnapshotRef.current = buildSaveSnapshot({
+        entryId: null,
+        dateValue: initialDate,
+        contentValue: '',
+        contentRichValue: '',
+        templateKeyValue: '',
+      });
     }
   }, [activeEntry, initialEntry, initialDate]);
 
@@ -1844,132 +1940,225 @@ function Indlæg({
     return () => cleanupDictation();
   }, [cleanupDictation]);
 
-  const handleSave = async () => {
-    if (isSaving) {
-      return;
-    }
+  const buildCurrentSnapshot = useCallback(
+    () =>
+      buildSaveSnapshot({
+        entryId: activeEntry?.id || initialEntry?.id || null,
+        dateValue: date,
+        contentValue: content,
+        contentRichValue: contentRich,
+        templateKeyValue: selectedTemplateKey || '',
+      }),
+    [activeEntry?.id, initialEntry?.id, date, content, contentRich, selectedTemplateKey]
+  );
 
-    setSaveError('');
+  const hasPersistableContent = useCallback(() => {
+    const plain = `${content || ''}`.trim();
+    const richAsPlain = richContentToPlainText(contentRich || '').trim();
+    return Boolean(plain || richAsPlain);
+  }, [content, contentRich]);
 
-    if (!user) {
-      setSaveError(t('indlaeg.errors.mustBeLoggedIn', 'You must be logged in to save.'));
-      return;
-    }
+  const handleSave = useCallback(
+    async ({ silent = false, force = false } = {}) => {
+      if (isSaving) {
+        return { ok: false, skipped: true };
+      }
 
-    if (!clientId) {
-      setSaveError(
-        t(
-          'indlaeg.errors.missingClientId',
-          'Missing client id — could not attach the entry to a client.'
-        )
-      );
-      return;
-    }
-
-    const nowIso = new Date().toISOString();
-    const ownerIdentifier = deriveUserIdentifier(user);
-    const templateTitle =
-      typeof selectedTemplate?.name === 'string' ? selectedTemplate.name.trim() : '';
-    const fallbackTitle =
-      [clientName, date].filter(Boolean).join(' - ') ||
-      t('indlaeg.journalNote', 'Journal note');
-    const resolvedTitle = templateTitle || fallbackTitle;
-
-    const entryPayload = {
-      title: resolvedTitle,
-      date,
-      content: content.trim(),
-      contentRich: contentRich || plainTextToRichContent(content),
-      isPrivate: false,
-      isStarred: false,
-      isLocked: false,
-      clientName,
-      clientId,
-      ownerUid: user.uid,
-      ownerEmail: user.email ?? null,
-      ownerIdentifier,
-      createdAtIso: nowIso,
-      templateKey: selectedTemplateKey || null,
-      appointmentId: resolvedAppointmentId || null,
-    };
-
-    setIsSaving(true);
-
-    try {
+      const currentSnapshot = buildCurrentSnapshot();
       const targetEntry = activeEntry || initialEntry;
+      if (!force && currentSnapshot === lastSavedSnapshotRef.current) {
+        return { ok: true, skipped: true };
+      }
+      if (!targetEntry?.id && !hasPersistableContent()) {
+        return { ok: true, skipped: true };
+      }
 
-      const upsertRecentEntry = (entry) => {
-        setRecentEntries((prev) => {
-          const next = [entry, ...prev.filter((item) => item.id !== entry.id)];
-          return next.slice(0, 10);
-        });
+      if (!silent) {
+        setSaveError('');
+      }
+
+      if (!user) {
+        if (!silent) {
+          setSaveError(t('indlaeg.errors.mustBeLoggedIn', 'You must be logged in to save.'));
+        }
+        return { ok: false };
+      }
+
+      if (!clientId) {
+        if (!silent) {
+          setSaveError(
+            t(
+              'indlaeg.errors.missingClientId',
+              'Missing client id — could not attach the entry to a client.'
+            )
+          );
+        }
+        return { ok: false };
+      }
+
+      const nowIso = new Date().toISOString();
+      const ownerIdentifier = deriveUserIdentifier(user);
+      const templateTitle =
+        typeof selectedTemplate?.name === 'string' ? selectedTemplate.name.trim() : '';
+      const fallbackTitle =
+        [clientName, date].filter(Boolean).join(' - ') ||
+        t('indlaeg.journalNote', 'Journal note');
+      const resolvedTitle = templateTitle || fallbackTitle;
+
+      const entryPayload = {
+        title: resolvedTitle,
+        date,
+        content: content.trim(),
+        contentRich: contentRich || plainTextToRichContent(content),
+        isPrivate: false,
+        isStarred: false,
+        isLocked: false,
+        clientName,
+        clientId,
+        ownerUid: user.uid,
+        ownerEmail: user.email ?? null,
+        ownerIdentifier,
+        createdAtIso: nowIso,
+        templateKey: selectedTemplateKey || null,
+        appointmentId: resolvedAppointmentId || null,
       };
 
-      if (targetEntry?.id) {
-        // Update existing entry
-        const entryRef = doc(
-          db,
-          'users',
-          user.uid,
-          'clients',
-          clientId,
-          'journalEntries',
-          targetEntry.id
-        );
-        await updateDoc(entryRef, {
-          ...entryPayload,
-          updatedAt: serverTimestamp(),
-        });
+      setIsSaving(true);
 
-        const savedEntry = {
-          id: targetEntry.id,
-          ...entryPayload,
-          createdAt: targetEntry.createdAt || targetEntry.createdAtIso || nowIso,
-          createdAtIso: targetEntry.createdAtIso || targetEntry.createdAt || nowIso,
+      try {
+        const upsertRecentEntry = (entry) => {
+          setRecentEntries((prev) => {
+            const next = [entry, ...prev.filter((item) => item.id !== entry.id)];
+            return next.slice(0, 10);
+          });
         };
+
+        let savedEntry = null;
+
+        if (targetEntry?.id) {
+          // Update existing entry
+          const entryRef = doc(
+            db,
+            'users',
+            user.uid,
+            'clients',
+            clientId,
+            'journalEntries',
+            targetEntry.id
+          );
+          await updateDoc(entryRef, {
+            ...entryPayload,
+            updatedAt: serverTimestamp(),
+          });
+
+          savedEntry = {
+            id: targetEntry.id,
+            ...entryPayload,
+            createdAt: targetEntry.createdAt || targetEntry.createdAtIso || nowIso,
+            createdAtIso: targetEntry.createdAtIso || targetEntry.createdAt || nowIso,
+          };
+        } else {
+          // Create new entry
+          const entriesCollection = collection(
+            db,
+            'users',
+            user.uid,
+            'clients',
+            clientId,
+            'journalEntries'
+          );
+          const docRef = await addDoc(entriesCollection, {
+            ...entryPayload,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+
+          savedEntry = {
+            id: docRef.id,
+            ...entryPayload,
+            createdAt: nowIso,
+          };
+        }
 
         setActiveEntry(savedEntry);
         upsertRecentEntry(savedEntry);
 
-        if (typeof onSave === 'function') {
-          onSave(savedEntry);
-        }
-      } else {
-        // Create new entry
-        const entriesCollection = collection(
-          db,
-          'users',
-          user.uid,
-          'clients',
-          clientId,
-          'journalEntries'
-        );
-        const docRef = await addDoc(entriesCollection, {
-          ...entryPayload,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
+        lastSavedSnapshotRef.current = buildSaveSnapshot({
+          entryId: savedEntry?.id || null,
+          dateValue: savedEntry?.date || '',
+          contentValue: savedEntry?.content || '',
+          contentRichValue: savedEntry?.contentRich || '',
+          templateKeyValue: savedEntry?.templateKey || '',
         });
 
-        const savedEntry = {
-          id: docRef.id,
-          ...entryPayload,
-          createdAt: nowIso,
-        };
-
-        setActiveEntry(savedEntry);
-        upsertRecentEntry(savedEntry);
-
         if (typeof onSave === 'function') {
           onSave(savedEntry);
         }
+
+        return { ok: true, savedEntry };
+      } catch (error) {
+        console.error('Failed to save journal entry:', error);
+        if (!silent) {
+          setSaveError(t('indlaeg.errors.saveFailed', 'Could not save entry.'));
+        }
+        return { ok: false, error };
+      } finally {
+        setIsSaving(false);
       }
-    } catch (error) {
-      console.error('Failed to save journal entry:', error);
-      setSaveError(t('indlaeg.errors.saveFailed', 'Could not save entry.'));
-    } finally {
-      setIsSaving(false);
+    },
+    [
+      isSaving,
+      buildCurrentSnapshot,
+      activeEntry,
+      initialEntry,
+      hasPersistableContent,
+      user,
+      clientId,
+      selectedTemplate,
+      clientName,
+      date,
+      t,
+      content,
+      contentRich,
+      selectedTemplateKey,
+      resolvedAppointmentId,
+      onSave,
+    ]
+  );
+
+  const handleManualSave = useCallback(() => {
+    void handleSave({ force: true });
+  }, [handleSave]);
+
+  const handleCloseWithAutosave = useCallback(async () => {
+    const saveResult = await handleSave({ silent: true });
+    if (saveResult?.ok === false) return;
+    if (typeof onClose === 'function') {
+      onClose();
     }
-  };
+  }, [handleSave, onClose]);
+
+  const handleGlobalButtonClickCapture = useCallback(
+    (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const button = target.closest('button');
+      if (!button || button.disabled) return;
+      if (button.dataset.skipAutosave === 'true') return;
+      void handleSave({ silent: true });
+    },
+    [handleSave]
+  );
+
+  useEffect(() => {
+    if (isSaving) return undefined;
+    const currentSnapshot = buildCurrentSnapshot();
+    if (currentSnapshot === lastSavedSnapshotRef.current) return undefined;
+    const timeoutId = setTimeout(() => {
+      void handleSave({ silent: true });
+    }, 1200);
+    return () => clearTimeout(timeoutId);
+  }, [isSaving, buildCurrentSnapshot, handleSave]);
 
   const templateSelectionLabel = useMemo(() => {
     if (selectedTemplate) {
@@ -2087,7 +2276,7 @@ function Indlæg({
   );
 
   return (
-    <div className="indlæg-container">
+    <div className="indlæg-container" onClickCapture={handleGlobalButtonClickCapture}>
       <div className="indlæg-layout">
         <div className="indlæg-main-pane">
           <div className={`indlæg-content${isAssistantOpen ? ' indlæg-content--drawer-open' : ''}`}>
@@ -2097,7 +2286,8 @@ function Indlæg({
                   <button
                     type="button"
                     className="indlæg-close-btn"
-                    onClick={onClose}
+                    onClick={handleCloseWithAutosave}
+                    data-skip-autosave="true"
                     aria-label={t('indlaeg.backToCalendar', 'Back to booking calendar')}
                   >
                     ←
@@ -2120,7 +2310,9 @@ function Indlæg({
                       <button
                         type="button"
                         className="indlæg-history-link"
-                        onClick={() => {
+                        onClick={async () => {
+                          const saveResult = await handleSave({ silent: true });
+                          if (saveResult?.ok === false) return;
                           // Always return to the originally opened entry if it exists
                           const target =
                             originalEntryRef.current ||
@@ -2177,7 +2369,9 @@ function Indlæg({
                           <li
                             key={entry.id}
                             className="indlæg-history-item"
-                            onClick={() => {
+                            onClick={async () => {
+                              const saveResult = await handleSave({ silent: true });
+                              if (saveResult?.ok === false) return;
                               // remember where we came from to allow "Tilbage til nuværende"
                               const current = activeEntry || originalEntryRef.current;
                               if (current) {
@@ -2258,7 +2452,8 @@ function Indlæg({
                       <button
                         type="button"
                         className="indlæg-action-btn"
-                        onClick={handleSave}
+                        onClick={handleManualSave}
+                        data-skip-autosave="true"
                         disabled={isSaving}
                         aria-busy={isSaving}
                       >
@@ -2434,21 +2629,37 @@ function Indlæg({
                   </div>
 
                   <div className="indlæg-card">
-                    <div className="indlæg-card-header">
-                      <h3 className="indlæg-card-title">
-                        {isDictationMode
-                          ? t('indlaeg.dictation', 'Dictation')
-                          : t('indlaeg.transcription', 'Transcription')}
-                      </h3>
-                      <span className={`indlæg-status-pill indlæg-status-pill--${statusClass}`}>
-                        {modeStatusLabel}
-                      </span>
-                    </div>
+                    {transcribeMode !== MODE_NONE ? (
+                      <div className="indlæg-card-header">
+                        <h3 className="indlæg-card-title">
+                          {isDictationMode
+                            ? t('indlaeg.dictation', 'Dictation')
+                            : t('indlaeg.transcription', 'Transcription')}
+                        </h3>
+                        <span className={`indlæg-status-pill indlæg-status-pill--${statusClass}`}>
+                          {modeStatusLabel}
+                        </span>
+                      </div>
+                    ) : null}
                     <div className="indlæg-card-body">
                       {transcribeMode === MODE_NONE && (
                         <p className="indlæg-muted">
                           {t('indlaeg.chooseMode', 'Choose a mode to record or transcribe.')}
                         </p>
+                      )}
+
+                      {transcribeMode === MODE_NONE && (
+                        <div className="indlæg-selma-launch indlæg-selma-launch--after-hint">
+                          <AnimatedGenerateButton
+                            type="button"
+                            className="indlæg-selma-btn w-full"
+                            labelIdle="Selma"
+                            labelActive="Selma"
+                            onClick={handleOpenAssistant}
+                            disabled={isAssistantOpen}
+                          >
+                          </AnimatedGenerateButton>
+                        </div>
                       )}
 
                       {transcribeMode === MODE_TRANSCRIBE && (
@@ -2596,13 +2807,13 @@ function Indlæg({
                       )}
 
                       {transcribeMode !== MODE_NONE && (
-                        <div className="indlæg-selma-launch indlæg-selma-launch--inline">
+                        <div className="indlæg-selma-launch indlæg-selma-launch--after-hint">
                           <AnimatedGenerateButton
                             type="button"
                             className="indlæg-selma-btn w-full"
                             labelIdle="Selma"
                             labelActive="Selma"
-                            onClick={() => setIsAssistantOpen(true)}
+                            onClick={handleOpenAssistant}
                             disabled={isAssistantOpen}
                           >
                           </AnimatedGenerateButton>
@@ -2611,19 +2822,6 @@ function Indlæg({
                     </div>
                   </div>
                 </div>
-                {transcribeMode === MODE_NONE && (
-                  <div className="indlæg-selma-launch">
-                    <AnimatedGenerateButton
-                      type="button"
-                      className="indlæg-selma-btn w-full"
-                      labelIdle="Selma"
-                      labelActive="Selma"
-                      onClick={() => setIsAssistantOpen(true)}
-                      disabled={isAssistantOpen}
-                    >
-                    </AnimatedGenerateButton>
-                  </div>
-                )}
               </aside>
             </div>
           </div>

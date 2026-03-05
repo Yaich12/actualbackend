@@ -1725,6 +1725,11 @@
   width: auto;
 }
 
+.indlæg-selma-launch--after-hint {
+  margin-top: 0;
+  padding-bottom: 0;
+}
+
 .indlæg-selma-btn {
   width: 100%;
 }

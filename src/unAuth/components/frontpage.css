@@ -25,6 +25,15 @@
   opacity: 0;
 }
 
+.frontpage-video-fallback {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.3), transparent 45%),
+    radial-gradient(circle at 80% 35%, rgba(14, 165, 233, 0.26), transparent 48%),
+    linear-gradient(150deg, #0f172a 0%, #1e293b 45%, #0b1324 100%);
+}
+
 .frontpage-video.fade-in {
   opacity: 1;
 }

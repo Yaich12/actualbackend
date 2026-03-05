@@ -4,6 +4,8 @@ import { useUserClients } from '../Klienter/hooks/useUserClients';
 import ServiceSelector from '../Ydelser/ServiceSelector';
 import AddKlient from '../Klienter/addklient/addklient';
 import { normalizeDateString, parseDateString } from '../../../utils/appointmentFormat';
+import { CalendarDays } from 'lucide-react';
+import { useLanguage } from '../../../LanguageContext';
 
 const getAutoEndTime = (startTime, timeSlots) => {
   if (!startTime || !Array.isArray(timeSlots) || timeSlots.length === 0) {
@@ -32,6 +34,7 @@ function AppointmentForm({
   hasTeamAccess = false,
   defaultOwnerName = '',
 }) {
+  const { t } = useLanguage();
   const {
     clients,
     loading: clientsLoading,
@@ -79,6 +82,18 @@ function AppointmentForm({
   const selectedServiceData = useMemo(
     () => availableServices.find((service) => service.id === selectedServiceId) || null,
     [availableServices, selectedServiceId]
+  );
+  const recurrenceWeekdays = useMemo(
+    () => [
+      { val: '1', label: t('booking.appointmentForm.recurrence.weekdays.mon', 'Mon') },
+      { val: '2', label: t('booking.appointmentForm.recurrence.weekdays.tue', 'Tue') },
+      { val: '3', label: t('booking.appointmentForm.recurrence.weekdays.wed', 'Wed') },
+      { val: '4', label: t('booking.appointmentForm.recurrence.weekdays.thu', 'Thu') },
+      { val: '5', label: t('booking.appointmentForm.recurrence.weekdays.fri', 'Fri') },
+      { val: '6', label: t('booking.appointmentForm.recurrence.weekdays.sat', 'Sat') },
+      { val: '0', label: t('booking.appointmentForm.recurrence.weekdays.sun', 'Sun') },
+    ],
+    [t]
   );
   const [showAddClient, setShowAddClient] = useState(false);
 
@@ -237,7 +252,7 @@ function AppointmentForm({
     // Build participants array from all selected clients
     const participants = selectedClientsData.map((client) => ({
       id: client.id,
-      name: client.navn || 'Klient',
+      name: client.navn || t('booking.appointmentForm.clientFallback', 'Client'),
       email: client.email || '',
       phone: client.telefon || '',
     }));
@@ -277,10 +292,12 @@ function AppointmentForm({
             ? base.servicePrice
             : null,
       servicePriceInclVat:
-        typeof selectedServiceData?.prisInklMoms === 'number'
-          ? selectedServiceData.prisInklMoms
-          : typeof base.servicePriceInclVat === 'number'
-            ? base.servicePriceInclVat
+        typeof selectedServiceData?.pris === 'number'
+          ? selectedServiceData.pris
+          : typeof base.servicePrice === 'number'
+            ? base.servicePrice
+            : typeof base.servicePriceInclVat === 'number'
+              ? base.servicePriceInclVat
             : null,
       color:
         selectedServiceData?.color ||
@@ -295,7 +312,7 @@ function AppointmentForm({
       participants: participants.length > 0 ? participants : [
         {
           id: base.clientId || 'client-1',
-          name: base.client || 'Klient',
+          name: base.client || t('booking.appointmentForm.clientFallback', 'Client'),
           email: base.clientEmail || '',
           phone: base.clientPhone || '',
         },
@@ -331,7 +348,9 @@ function AppointmentForm({
     <div className="appointment-form-container">
       <div className="appointment-form-header">
         <h2 className="appointment-form-title">
-          {mode === 'edit' ? 'Rediger aftale' : 'Opret aftale'}
+          {mode === 'edit'
+            ? t('booking.appointmentForm.title.edit', 'Edit appointment')
+            : t('booking.appointmentForm.title.create', 'Create appointment')}
         </h2>
       </div>
 
@@ -340,7 +359,7 @@ function AppointmentForm({
         <div className="form-section">
           <div className="datetime-row">
             <div className="datetime-group">
-              <label className="form-label">Dato</label>
+              <label className="form-label">{t('booking.appointmentForm.fields.date', 'Date')}</label>
               <div className="datetime-inputs">
                 <input
                   type="text"
@@ -388,10 +407,10 @@ function AppointmentForm({
                         }
                       }
                     }}
-                    aria-label="Vælg dato"
-                    title="Vælg dato"
+                    aria-label={t('booking.appointmentForm.datePickerLabel', 'Choose date')}
+                    title={t('booking.appointmentForm.datePickerLabel', 'Choose date')}
                   >
-                    📅
+                    <CalendarDays className="date-picker-icon" size={16} strokeWidth={1.9} />
                   </button>
                 </div>
               </div>
@@ -400,7 +419,7 @@ function AppointmentForm({
 
           <div className="datetime-row">
             <div className="datetime-group">
-              <label className="form-label">Start tidspunkt</label>
+              <label className="form-label">{t('booking.appointmentForm.fields.startTime', 'Start time')}</label>
               <div className="datetime-inputs">
                 <div
                   className={`time-input-wrapper ${showStartDropdown ? 'open' : ''}`}
@@ -440,7 +459,7 @@ function AppointmentForm({
             </div>
 
             <div className="datetime-group">
-              <label className="form-label">Slut tidspunkt</label>
+              <label className="form-label">{t('booking.appointmentForm.fields.endTime', 'End time')}</label>
               <div className="datetime-inputs">
                 <div
                   className={`time-input-wrapper ${showEndDropdown ? 'open' : ''}`}
@@ -456,7 +475,6 @@ function AppointmentForm({
                     onFocus={() => setShowEndDropdown(true)}
                   />
                   <span className="dropdown-arrow">▼</span>
-                  <button type="button" className="reset-icon" onClick={() => setEndTime(startTime)}>↻</button>
                   {showEndDropdown && (
                     <div className="time-dropdown">
                       <div className="time-dropdown-list">
@@ -485,24 +503,29 @@ function AppointmentForm({
         {/* Select Client */}
         {hasTeamAccess && (
           <div className="form-section">
-            <label className="form-label">Vælg medarbejder</label>
-            <select
-              className="form-select"
-              value={selectedMemberId || ''}
-              onChange={(e) => setSelectedMemberId(e.target.value || null)}
-            >
-              {teamMembers.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.name}
-                </option>
-              ))}
-            </select>
+            <label className="form-label">
+              {t('booking.appointmentForm.fields.practitioner', 'Select practitioner')}
+            </label>
+            <div className="select-wrapper">
+              <select
+                className="form-select"
+                value={selectedMemberId || ''}
+                onChange={(e) => setSelectedMemberId(e.target.value || null)}
+              >
+                {teamMembers.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
+                ))}
+              </select>
+              <span className="dropdown-arrow">▼</span>
+            </div>
           </div>
         )}
 
         {/* Select Client */}
         <div className="form-section">
-          <label className="form-label">Vælg klienter</label>
+          <label className="form-label">{t('booking.appointmentForm.fields.clients', 'Select clients')}</label>
           
           {/* Selected clients chips */}
           {selectedClientIds.length > 0 && (
@@ -538,10 +561,16 @@ function AppointmentForm({
               >
                 <span className="client-multiselect-text">
                   {clientsLoading 
-                    ? 'Henter klienter…' 
+                    ? t('booking.appointmentForm.clientsLoading', 'Loading clients…')
                     : selectedClientIds.length === 0 
-                      ? 'Vælg klienter' 
-                      : `${selectedClientIds.length} klient${selectedClientIds.length > 1 ? 'er' : ''} valgt`
+                      ? t('booking.appointmentForm.clientsPlaceholder', 'Select clients')
+                      : selectedClientIds.length > 1
+                        ? t('booking.appointmentForm.clientsSelectedPlural', '{count} clients selected', {
+                            count: selectedClientIds.length,
+                          })
+                        : t('booking.appointmentForm.clientsSelectedSingle', '{count} client selected', {
+                            count: selectedClientIds.length,
+                          })
                   }
                 </span>
                 <span className="dropdown-arrow">{showClientDropdown ? '▲' : '▼'}</span>
@@ -586,7 +615,7 @@ function AppointmentForm({
               className="add-client-btn-small"
               onClick={() => setShowAddClient(true)}
             >
-              Tilføj klient
+              {t('booking.appointmentForm.addClient', 'Add client')}
             </button>
           </div>
           {clientsError && (
@@ -596,7 +625,10 @@ function AppointmentForm({
           )}
           {!clientsError && !clientsLoading && clients.length === 0 && (
             <p className="client-select-empty">
-              Du har ingen klienter endnu. Tilføj en ny for at fortsætte.
+              {t(
+                'booking.appointmentForm.clientsEmpty',
+                'You have no clients yet. Add a new one to continue.'
+              )}
             </p>
           )}
         </div>
@@ -614,21 +646,25 @@ function AppointmentForm({
         {selectedServiceData?.type === 'forloeb' && (
           <div className="form-section forloeb-planner">
             <div className="forloeb-planner__header">
-              <label className="form-label">Planlæg forløb (gentagende tider)</label>
+              <label className="form-label">
+                {t('booking.appointmentForm.recurrence.title', 'Plan program (recurring times)')}
+              </label>
               <label className="toggle-row">
                 <input
                   type="checkbox"
                   checked={recurrenceEnabled}
                   onChange={(e) => setRecurrenceEnabled(e.target.checked)}
                 />
-                Aktivér gentagelse
+                {t('booking.appointmentForm.recurrence.enable', 'Enable recurrence')}
               </label>
             </div>
             {recurrenceEnabled && (
               <div className="forloeb-planner__body">
                 <div className="planner-row">
                   <div className="planner-group">
-                    <label className="form-label">Uger (antal)</label>
+                    <label className="form-label">
+                      {t('booking.appointmentForm.recurrence.weeks', 'Weeks (count)')}
+                    </label>
                     <input
                       type="number"
                       min="1"
@@ -638,17 +674,11 @@ function AppointmentForm({
                     />
                   </div>
                   <div className="planner-group">
-                    <label className="form-label">Dage pr. uge</label>
+                    <label className="form-label">
+                      {t('booking.appointmentForm.recurrence.daysPerWeek', 'Days per week')}
+                    </label>
                     <div className="weekday-grid">
-                      {[
-                        { val: '1', label: 'Man' },
-                        { val: '2', label: 'Tir' },
-                        { val: '3', label: 'Ons' },
-                        { val: '4', label: 'Tor' },
-                        { val: '5', label: 'Fre' },
-                        { val: '6', label: 'Lør' },
-                        { val: '0', label: 'Søn' },
-                      ].map((d) => (
+                      {recurrenceWeekdays.map((d) => (
                         <label key={d.val} className={`weekday-chip ${recurrenceDays.includes(d.val) ? 'selected' : ''}`}>
                           <input
                             type="checkbox"
@@ -668,7 +698,11 @@ function AppointmentForm({
                   </div>
                 </div>
                 <p className="planner-hint">
-                  Alle valgte dage oprettes fra startdatoen i {recurrenceWeeks || 1} uger med tiderne herover.
+                  {t(
+                    'booking.appointmentForm.recurrence.summary',
+                    'All selected days will be created from the start date for {weeks} weeks using the times above.',
+                    { weeks: recurrenceWeeks || 1 }
+                  )}
                 </p>
               </div>
             )}
@@ -676,27 +710,29 @@ function AppointmentForm({
         )}
 
         {/* Notes */}
-        <div className="form-section">
-          <label className="form-label">Noter</label>
+        <div className="form-section notes-section">
+          <label className="form-label">{t('booking.appointmentForm.fields.notes', 'Notes')}</label>
           <textarea
             className="notes-textarea"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Tilføj noter..."
+            placeholder={t(
+              'booking.appointmentForm.notesPlaceholder',
+              'Notes are private and are not visible to your client.'
+            )}
             rows={6}
           />
-          <p className="notes-hint">
-            Noterne er private og vil ikke kunne ses af din klient.
-          </p>
         </div>
 
         {/* Action Buttons */}
         <div className="form-actions">
           <button type="button" className="cancel-btn" onClick={handleCancel}>
-            Annuller
+            {t('booking.appointmentForm.actions.cancel', 'Cancel')}
           </button>
           <button type="submit" className="submit-btn">
-            {mode === 'edit' ? 'Opdater aftale' : 'Opret aftale'}
+            {mode === 'edit'
+              ? t('booking.appointmentForm.actions.update', 'Update appointment')
+              : t('booking.appointmentForm.actions.create', 'Create appointment')}
           </button>
         </div>
       </form>

@@ -6,16 +6,17 @@
   flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
+  font-size: 13px;
 }
 
 .appointment-form-header {
   flex: 0 0 auto;
-  padding: 20px;
+  padding: 12px 16px;
   border-bottom: 1px solid #e5e7eb;
 }
 
 .appointment-form-title {
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 600;
   color: #111827;
   margin: 0;
@@ -25,7 +26,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 14px 16px;
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
@@ -34,22 +35,22 @@
 }
 
 .form-section {
-  margin-bottom: 20px;
+  margin-bottom: 14px;
 }
 
 .form-label {
   display: block;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #374151;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 /* Date/Time Row */
 .datetime-row {
   display: flex;
   align-items: flex-end;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -61,17 +62,54 @@
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: nowrap;
+}
+
+.date-picker-inline {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.date-picker-trigger {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background-color: #ffffff;
+  color: #6b7280;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.date-picker-trigger:hover {
+  border-color: #9ca3af;
+  background-color: #f9fafb;
+  color: #4b5563;
+}
+
+.date-picker-trigger:focus-visible {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  color: #1d4ed8;
+}
+
+.date-picker-icon {
+  display: block;
 }
 
 .date-input {
   flex: 1 1 0;
   width: auto;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
   color: #111827;
   background-color: #ffffff;
   min-width: 120px;
@@ -94,10 +132,10 @@
 
 .time-input {
   width: 100%;
-  padding: 10px 32px 10px 12px;
+  padding: 8px 30px 8px 10px;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
   color: #111827;
   background-color: #ffffff;
   box-sizing: border-box;
@@ -117,30 +155,10 @@
 
 .time-input-wrapper .dropdown-arrow {
   position: absolute;
-  right: 32px;
+  right: 12px;
   font-size: 10px;
   color: #6b7280;
   pointer-events: none;
-}
-
-.reset-icon {
-  position: absolute;
-  right: 8px;
-  background: none;
-  border: none;
-  color: #6b7280;
-  cursor: pointer;
-  font-size: 16px;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-
-.reset-icon:hover {
-  background-color: #f3f4f6;
 }
 
 .time-dropdown {
@@ -163,11 +181,11 @@
 
 .time-option {
   width: 100%;
-  padding: 8px 16px;
+  padding: 7px 12px;
   background: transparent;
   border: none;
   text-align: left;
-  font-size: 14px;
+  font-size: 13px;
   color: #111827;
   cursor: pointer;
   transition: background-color 0.15s, color 0.15s;
@@ -198,16 +216,16 @@
 }
 
 .arrow-icon {
-  font-size: 20px;
+  font-size: 16px;
   color: #6b7280;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   align-self: flex-end;
 }
 
 /* Client Select Row */
 .client-select-row {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .select-wrapper {
@@ -217,17 +235,27 @@
   align-items: center;
 }
 
-.select-input {
+.select-input,
+.form-select {
   width: 100%;
-  padding: 10px 32px 10px 12px;
+  padding: 8px 30px 8px 10px;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
   color: #111827;
   background-color: #ffffff;
+  box-sizing: border-box;
 }
 
-.select-input:focus {
+.form-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+}
+
+.select-input:focus,
+.form-select:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
@@ -235,18 +263,18 @@
 
 .select-wrapper .dropdown-arrow {
   position: absolute;
-  right: 12px;
+  right: 10px;
   font-size: 10px;
   color: #6b7280;
   pointer-events: none;
 }
 
 .add-client-btn-small {
-  padding: 10px 16px;
+  padding: 8px 12px;
   border: 1px solid #d1d5db;
   background-color: #ffffff;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #374151;
   cursor: pointer;
@@ -263,15 +291,15 @@
 .selected-clients-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 6px;
+  margin-bottom: 8px;
 }
 
 .client-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
+  padding: 5px 8px;
   background-color: #eff6ff;
   border: 1px solid #bfdbfe;
   border-radius: 20px;
@@ -311,10 +339,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
   color: #111827;
   background-color: #ffffff;
   cursor: pointer;
@@ -367,8 +395,8 @@
 .client-multiselect-option {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: 8px;
+  padding: 8px 10px;
   cursor: pointer;
   transition: background-color 0.15s;
 }
@@ -395,28 +423,28 @@
 }
 
 .client-option-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #111827;
 }
 
 .client-option-email {
-  font-size: 12px;
+  font-size: 13px;
   color: #6b7280;
 }
 
 /* Notes Textarea */
 .notes-textarea {
   width: 100%;
-  padding: 12px;
+  padding: 10px;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
   color: #111827;
   background-color: #ffffff;
   font-family: inherit;
   resize: vertical;
-  min-height: 120px;
+  min-height: 100px;
 }
 
 .notes-textarea:focus {
@@ -425,11 +453,13 @@
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.notes-hint {
-  margin-top: 8px;
-  font-size: 12px;
+.notes-textarea::placeholder {
   color: #6b7280;
-  margin-bottom: 0;
+  opacity: 1;
+}
+
+.notes-section {
+  margin-bottom: 8px;
 }
 
 
@@ -438,19 +468,19 @@
   flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  margin-top: 24px;
-  padding-top: 24px;
-  border-top: 1px solid #e5e7eb;
+  gap: 10px;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
   background-color: #ffffff;
 }
 
 .cancel-btn {
-  padding: 10px 20px;
+  padding: 8px 14px;
   border: 1px solid #d1d5db;
   background-color: #ffffff;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #374151;
   cursor: pointer;
@@ -463,15 +493,26 @@
 }
 
 .submit-btn {
-  padding: 10px 20px;
+  padding: 8px 14px;
   border: none;
   background-color: #3b82f6;
   color: #ffffff;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+}
+
+.service-selector {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.service-selector .select-wrapper {
+  margin-top: 6px;
 }
 
 .submit-btn:hover {

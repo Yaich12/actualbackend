@@ -1,41 +1,45 @@
-import React, { useEffect } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import LandingPage from './unAuth/landingpage';
-import AgentPage from './features/agent/AgentPage';
-import WebsiteBuilderPage from './unAuth/website-builder';
-import IntelligentBookingPage from './unAuth/intelligent-booking';
-import OperationsPage from './unAuth/operations';
-import TranscriptionFactsrPage from './unAuth/transcription-factsr';
-import SelmaCopilotPage from './unAuth/selma-copilot';
-import BookingPage from './features/booking/bookingpage';
-import Klientoversigt from './features/booking/Klienter/Klientoversigt';
-import Ydelser from './features/booking/Ydelser/ydelser';
-import Forloeb from './features/booking/forløb/forløb';
-import Product from './features/booking/Product/product';
-import JournalPage from './features/booking/Journal/JournalPage';
-import FakturaerPage from './features/booking/faktura/faktura';
-import Overview from './features/booking/overview/Overview';
-import UserSettings from './features/booking/usersettings';
-import TeamPage from './features/booking/team/team';
-import SignUp from './SignUp/SignUp';
-import SignInPageDemo from './components/ui/sign-in-demo';
 import { useAuth } from './AuthContext';
 import { LanguageProvider } from './LanguageContext';
 import { LanguageProvider as UnAuthLanguageProvider } from './unAuth/language/LanguageProvider';
 import './App.css';
 import PostAuthRedirect from './PostAuthRedirect';
-import CustomDashboardChoice from './costum';
-import GettingStartedPlaceholder from './GettingStartedPlaceholder';
-import NotEstablishedPage from './notestablished/notestablished';
-import LaunchPlannerPage from './notestablished/start/start';
-import DigitalFrontPage from './notestablished/digital-front/digital-front';
-import FirebaseEnvNotice from "./components/FirebaseEnvNotice";
+
+const AgentPage = lazy(() => import('./features/agent/AgentPage'));
+const WebsiteBuilderPage = lazy(() => import('./unAuth/website-builder'));
+const IntelligentBookingPage = lazy(() => import('./unAuth/intelligent-booking'));
+const OperationsPage = lazy(() => import('./unAuth/operations'));
+const TranscriptionFactsrPage = lazy(() => import('./unAuth/transcription-factsr'));
+const SelmaCopilotPage = lazy(() => import('./unAuth/selma-copilot'));
+const BookingPage = lazy(() => import('./features/booking/bookingpage'));
+const Klientoversigt = lazy(() => import('./features/booking/Klienter/Klientoversigt'));
+const Ydelser = lazy(() => import('./features/booking/Ydelser/ydelser'));
+const Forloeb = lazy(() => import('./features/booking/forløb/forløb'));
+const Product = lazy(() => import('./features/booking/Product/product'));
+const JournalPage = lazy(() => import('./features/booking/Journal/JournalPage'));
+const FakturaerPage = lazy(() => import('./features/booking/faktura/faktura'));
+const Overview = lazy(() => import('./features/booking/overview/Overview'));
+const UserSettings = lazy(() => import('./features/booking/usersettings'));
+const TeamPage = lazy(() => import('./features/booking/team/team'));
+const SignUp = lazy(() => import('./SignUp/SignUp'));
+const SignInPageDemo = lazy(() => import('./components/ui/sign-in-demo'));
+const PaymentReceiptPage = lazy(() => import('./unAuth/components/PaymentReceiptPage'));
+const CustomDashboardChoice = lazy(() => import('./costum'));
+const NotEstablishedPage = lazy(() => import('./notestablished/notestablished'));
+const LaunchPlannerPage = lazy(() => import('./notestablished/start/start'));
+const DigitalFrontPage = lazy(() => import('./notestablished/digital-front/digital-front'));
+
+function RouteLoader() {
+  return <div className="route-loader">Loading...</div>;
+}
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <div className="route-loader">Loading...</div>;
+    return <RouteLoader />;
   }
 
   if (!user) {
@@ -64,33 +68,36 @@ function App() {
           <ScrollToTop />
           <PostAuthRedirect />
           <div className="app-container">
-            <Routes>
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/agent" element={<AgentPage />} />
-              <Route path="/website-builder" element={<WebsiteBuilderPage />} />
-              <Route path="/features" element={<IntelligentBookingPage />} />
-              <Route path="/features/operations" element={<OperationsPage />} />
-              <Route path="/intelligent-booking" element={<IntelligentBookingPage />} />
-              <Route path="/transcription-factsr" element={<TranscriptionFactsrPage />} />
-              <Route path="/selma-copilot" element={<SelmaCopilotPage />} />
-              <Route path="/welcome" element={<CustomDashboardChoice />} />
-              <Route path="/getting-started" element={<NotEstablishedPage />} />
-              <Route path="/getting-started/start" element={<LaunchPlannerPage />} />
-              <Route path="/getting-started/digital-front" element={<DigitalFrontPage />} />
-              <Route path="/booking" element={<BookingPage />} />
-              <Route path="/booking/overview" element={<Overview />} />
-              <Route path="/journal" element={<JournalPage />} />
-              <Route path="/booking/klienter" element={<Klientoversigt />} />
-              <Route path="/booking/ydelser" element={<Ydelser />} />
-              <Route path="/booking/forloeb" element={<Forloeb />} />
-              <Route path="/booking/produkt" element={<Product />} />
-              <Route path="/booking/fakturaer/*" element={<FakturaerPage />} />
-              <Route path="/booking/team" element={<TeamPage />} />
-              <Route path="/booking/settings" element={<UserSettings />} />
-              <Route path="/settings/transfer" element={<UserSettings />} />
-              <Route path="/signup" element={<SignUp />} />
-              <Route path="/sign-in-demo" element={<SignInPageDemo />} />
-            </Routes>
+            <Suspense fallback={<RouteLoader />}>
+              <Routes>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/agent" element={<AgentPage />} />
+                <Route path="/website-builder" element={<WebsiteBuilderPage />} />
+                <Route path="/features" element={<IntelligentBookingPage />} />
+                <Route path="/features/operations" element={<OperationsPage />} />
+                <Route path="/intelligent-booking" element={<IntelligentBookingPage />} />
+                <Route path="/transcription-factsr" element={<TranscriptionFactsrPage />} />
+                <Route path="/selma-copilot" element={<SelmaCopilotPage />} />
+                <Route path="/welcome" element={<CustomDashboardChoice />} />
+                <Route path="/getting-started" element={<NotEstablishedPage />} />
+                <Route path="/getting-started/start" element={<LaunchPlannerPage />} />
+                <Route path="/getting-started/digital-front" element={<DigitalFrontPage />} />
+                <Route path="/booking" element={<BookingPage />} />
+                <Route path="/booking/overview" element={<Overview />} />
+                <Route path="/journal" element={<JournalPage />} />
+                <Route path="/booking/klienter" element={<Klientoversigt />} />
+                <Route path="/booking/ydelser" element={<Ydelser />} />
+                <Route path="/booking/forloeb" element={<Forloeb />} />
+                <Route path="/booking/produkt" element={<Product />} />
+                <Route path="/booking/fakturaer/*" element={<FakturaerPage />} />
+                <Route path="/booking/team" element={<TeamPage />} />
+                <Route path="/booking/settings" element={<UserSettings />} />
+                <Route path="/settings/transfer" element={<Navigate to="/booking/settings" replace />} />
+                <Route path="/signup" element={<SignUp />} />
+                <Route path="/sign-in-demo" element={<SignInPageDemo />} />
+                <Route path="/betaling/kvittering" element={<PaymentReceiptPage />} />
+              </Routes>
+            </Suspense>
           </div>
         </Router>
       </UnAuthLanguageProvider>

@@ -147,7 +147,6 @@ function ServiceSelector({
               ))}
           </optgroup>
         </select>
-        <span className="dropdown-arrow">▼</span>
       </div>
     </label>
   );

@@ -20,6 +20,7 @@ import { db } from '../../../firebase';
 import { useAuth } from '../../../AuthContext';
 import { Button as MovingBorderButton } from '../../../components/ui/moving-border';
 import { Trash2 } from 'lucide-react';
+import { useLanguage } from '../../../LanguageContext';
 
 function Journal({
   selectedClient,
@@ -43,6 +44,7 @@ function Journal({
   const { services: savedServices } = useUserServices();
   const { clients } = useUserClients();
   const { user } = useAuth();
+  const { t, locale } = useLanguage();
 
   useEffect(() => {
     if (!user || !selectedClient?.id) {
@@ -152,13 +154,13 @@ function Journal({
 
   // Format date
   const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    const [day, month, year] = dateStr.split('-');
-    const monthNames = [
-      'januar', 'februar', 'marts', 'april', 'maj', 'juni',
-      'juli', 'august', 'september', 'oktober', 'november', 'december'
-    ];
-    return `${day}. ${monthNames[parseInt(month) - 1]} ${year}`;
+    const dateValue = parseDateValue(dateStr);
+    if (!dateValue) return '';
+    return new Intl.DateTimeFormat(locale || 'da-DK', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    }).format(dateValue);
   };
 
   // Format time
@@ -169,19 +171,10 @@ function Journal({
 
   // Format price
   const formatPrice = (price) => {
-    return new Intl.NumberFormat('da-DK', {
+    return new Intl.NumberFormat(locale || 'da-DK', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(price || 0);
-  };
-
-  // Get day name
-  const getDayName = (dateStr) => {
-    if (!dateStr) return '';
-    const [day, month, year] = dateStr.split('-');
-    const date = new Date(year, month - 1, day);
-    const dayNames = ['Søndag', 'Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag'];
-    return dayNames[date.getDay()];
   };
 
   // Calculate end time (assuming 1 hour duration if not specified)
@@ -204,9 +197,9 @@ function Journal({
       appointmentService?.navn ||
       selectedAppointment?.service ||
       selectedAppointment?.title ||
-      'Forløb'
+      t('booking.calendar.program', 'Program')
     );
-  }, [appointmentService?.navn, isForloeb, selectedAppointment?.service, selectedAppointment?.title]);
+  }, [appointmentService?.navn, isForloeb, selectedAppointment?.service, selectedAppointment?.title, t]);
 
   const forloebDocId = useMemo(() => {
     const raw = selectedAppointment?.serviceId;
@@ -233,15 +226,22 @@ function Journal({
 
     const nextName = (groupNameDraft || '').trim();
     if (!nextName) {
-      setGroupNameError('Indtast et holdnavn.');
+      setGroupNameError(t('booking.journalPanel.groupNameErrors.empty', 'Enter a group name.'));
       return;
     }
     if (!user?.uid) {
-      setGroupNameError('Du skal være logget ind for at gemme.');
+      setGroupNameError(
+        t('booking.journalPanel.groupNameErrors.notLoggedIn', 'You must be logged in to save.')
+      );
       return;
     }
     if (!isForloeb || !selectedAppointment?.serviceId) {
-      setGroupNameError('Mangler forløbs-id – kunne ikke gemme.');
+      setGroupNameError(
+        t(
+          'booking.journalPanel.groupNameErrors.missingProgramId',
+          'Missing program id — could not save.'
+        )
+      );
       return;
     }
 
@@ -292,7 +292,12 @@ function Journal({
       setGroupNameDraft('');
     } catch (err) {
       console.error('[Journal] Failed to rename group', err);
-      setGroupNameError('Kunne ikke gemme holdnavnet. Prøv igen.');
+      setGroupNameError(
+        t(
+          'booking.journalPanel.groupNameErrors.saveFailed',
+          'Could not save group name. Please try again.'
+        )
+      );
     } finally {
       setIsSavingGroupName(false);
     }
@@ -396,13 +401,21 @@ function Journal({
 
   const handleSuggestNextAppointment = async () => {
     if (!selectedAppointment || !client || !user) {
-      setSuggestError('Mangler aftale, klient eller bruger.');
+      setSuggestError(
+        t(
+          'booking.journalPanel.suggestErrors.missingContext',
+          'Missing appointment, client, or user.'
+        )
+      );
       return;
     }
 
     if (!process.env.REACT_APP_SUGGEST_NEXT_APPOINTMENT_URL) {
       setSuggestError(
-        'Manglende URL til forslag af næste aftale (REACT_APP_SUGGEST_NEXT_APPOINTMENT_URL).'
+        t(
+          'booking.journalPanel.suggestErrors.missingUrl',
+          'Missing URL for next appointment suggestion (REACT_APP_SUGGEST_NEXT_APPOINTMENT_URL).'
+        )
       );
       return;
     }
@@ -412,7 +425,12 @@ function Journal({
       selectedAppointment.startTime
     );
     if (!lastAppointmentIso) {
-      setSuggestError('Kunne ikke beregne dato/tid for sidste aftale.');
+      setSuggestError(
+        t(
+          'booking.journalPanel.suggestErrors.invalidLastDate',
+          'Could not calculate date/time for last appointment.'
+        )
+      );
       return;
     }
 
@@ -439,7 +457,9 @@ function Journal({
       const auth = getAuth();
       const idToken = await auth.currentUser?.getIdToken();
       if (!idToken) {
-        setSuggestError('Kunne ikke hente login-token.');
+        setSuggestError(
+          t('booking.journalPanel.suggestErrors.missingToken', 'Could not get login token.')
+        );
         setIsSuggesting(false);
         return;
       }
@@ -472,13 +492,24 @@ function Journal({
       const data = await res.json();
       if (!res.ok) {
         console.error('suggestNextAppointment error', data);
-        setSuggestError(data?.error || 'Ukendt fejl ved forslag af næste aftale.');
+        setSuggestError(
+          data?.error ||
+            t(
+              'booking.journalPanel.suggestErrors.unknown',
+              'Unknown error while suggesting next appointment.'
+            )
+        );
         return;
       }
 
       const { suggested, rationale, safetyNote, intervalDays } = data || {};
       if (!suggested?.startDate || !suggested?.startTime) {
-        setSuggestError('Manglede forslag til dato/tid i svaret.');
+        setSuggestError(
+          t(
+            'booking.journalPanel.suggestErrors.missingSuggestion',
+            'Missing suggested date/time in response.'
+          )
+        );
         return;
       }
 
@@ -487,10 +518,14 @@ function Journal({
       const baseNotes = selectedAppointment.notes || '';
       const newNotes =
         (baseNotes ? baseNotes + '\n\n' : '') +
-        'AI-forslag til næste tid' +
-        (typeof intervalDays === 'number' ? ` (${intervalDays} dage):\n` : ':\n') +
+        t('booking.journalPanel.suggestedNoteTitle', 'AI suggestion for next appointment') +
+        (typeof intervalDays === 'number'
+          ? ` (${intervalDays} ${t('booking.journalPanel.daysLabel', 'days')}):\n`
+          : ':\n') +
         (rationale || '') +
-        (safetyNote ? '\n\nSikkerhedsnote: ' + safetyNote : '');
+        (safetyNote
+          ? `\n\n${t('booking.journalPanel.safetyNoteLabel', 'Safety note')}: ${safetyNote}`
+          : '');
 
       const nextAppointmentTemplate = {
         ...selectedAppointment,
@@ -508,17 +543,40 @@ function Journal({
       });
     } catch (err) {
       console.error(err);
-      setSuggestError('Der opstod en fejl ved forslag af næste aftale. Prøv igen.');
+      setSuggestError(
+        t(
+          'booking.journalPanel.suggestErrors.requestFailed',
+          'An error occurred while suggesting next appointment. Please try again.'
+        )
+      );
     } finally {
       setIsSuggesting(false);
     }
+  };
+
+  const parseDateValue = (dateStr) => {
+    if (!dateStr) return null;
+    let dd;
+    let mm;
+    let yyyy;
+    if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+      [dd, mm, yyyy] = dateStr.split('-').map(Number);
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      [yyyy, mm, dd] = dateStr.split('-').map(Number);
+    } else {
+      const parsed = new Date(dateStr);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return parsed;
+    }
+    const candidate = new Date(yyyy, (mm || 1) - 1, dd || 1);
+    return Number.isNaN(candidate.getTime()) ? null : candidate;
   };
 
   // NOTE: Early returns must come AFTER all hooks to satisfy rules-of-hooks.
   if (!selectedClient) {
     return (
       <div className="journal-empty">
-        Ingen klient valgt – vælg en klient for at se journalen.
+        {t('booking.journalPanel.emptyNoClient', 'No client selected — choose a client to view journal.')}
       </div>
     );
   }
@@ -529,7 +587,7 @@ function Journal({
     return (
       <SeHistorik 
         clientId={activeClient?.id || null}
-        clientName={activeClient?.navn || 'Ukendt klient'}
+        clientName={activeClient?.navn || t('booking.calendar.unknownClient', 'Unknown client')}
         onClose={() => {
           setShowHistory(false);
           setHistoryTarget(null);
@@ -562,14 +620,16 @@ function Journal({
             <h2 className="journal-client-name">
               {isForloeb ? (
                 <>
-                  <span className="journal-client-prefix">Forløb:</span>{' '}
+                  <span className="journal-client-prefix">
+                    {t('booking.calendar.program', 'Program')}:
+                  </span>{' '}
                   {isEditingGroupName ? (
                     <span className="journal-inline-edit">
                       <input
                         className="journal-inline-input"
                         value={groupNameDraft}
                         onChange={(e) => setGroupNameDraft(e.target.value)}
-                        placeholder="Holdnavn…"
+                        placeholder={t('booking.journalPanel.groupNamePlaceholder', 'Group name…')}
                         autoFocus
                       />
                       <button
@@ -578,7 +638,9 @@ function Journal({
                         onClick={saveGroupName}
                         disabled={isSavingGroupName}
                       >
-                        {isSavingGroupName ? 'Gemmer…' : 'Gem'}
+                        {isSavingGroupName
+                          ? t('settings.saving', 'Saving…')
+                          : t('settings.save', 'Save')}
                       </button>
                       <button
                         type="button"
@@ -586,7 +648,7 @@ function Journal({
                         onClick={cancelEditGroupName}
                         disabled={isSavingGroupName}
                       >
-                        Annuller
+                        {t('booking.appointmentForm.actions.cancel', 'Cancel')}
                       </button>
                     </span>
                   ) : (
@@ -594,7 +656,7 @@ function Journal({
                   )}
                 </>
               ) : (
-                client?.navn || 'Ukendt klient'
+                client?.navn || t('booking.calendar.unknownClient', 'Unknown client')
               )}
             </h2>
           </div>
@@ -615,7 +677,8 @@ function Journal({
         {selectedAppointment && (
           <div className="journal-section">
             <div className="journal-appointment-date">
-              {formatDate(selectedAppointment.startDate)}, {formatTime(selectedAppointment.startTime)} til {getEndTime(selectedAppointment.startTime)}
+              {formatDate(selectedAppointment.startDate)}, {formatTime(selectedAppointment.startTime)}{' '}
+              {t('booking.journalPanel.timeTo', 'to')} {getEndTime(selectedAppointment.startTime)}
             </div>
             {!isForloeb && appointmentService && (
               <>
@@ -623,7 +686,7 @@ function Journal({
                   {appointmentService.navn}
                 </div>
                 <div className="journal-appointment-price">
-                  DKK {formatPrice(appointmentService.pris)}
+                  {t('booking.services.price.currency', 'DKK')} {formatPrice(appointmentService.pris)}
                 </div>
                 {additionalServices.length > 0 && (
                   <div className="journal-appointment-services">
@@ -633,11 +696,11 @@ function Journal({
                         className="journal-appointment-service-row"
                       >
                         <span className="journal-appointment-service-name">
-                          {service.navn || 'Tillægstjeneste'}
+                          {service.navn || t('booking.journalPanel.extraServiceFallback', 'Add-on service')}
                         </span>
                         <span className="journal-appointment-service-meta">
                           {typeof service.pris === 'number'
-                            ? `DKK ${formatPrice(service.pris)}`
+                            ? `${t('booking.services.price.currency', 'DKK')} ${formatPrice(service.pris)}`
                             : '—'}
                         </span>
                       </div>
@@ -651,7 +714,7 @@ function Journal({
 
         {isForloeb && participantEntries.length > 0 && (
           <div className="journal-section">
-            <div className="journal-label">Deltagere</div>
+            <div className="journal-label">{t('booking.journalPanel.participants', 'Participants')}</div>
             <div className="journal-participants">
               {participantEntries.map((participant) => (
                 <button
@@ -661,7 +724,9 @@ function Journal({
                   onClick={() => openParticipantHistory(participant)}
                 >
                   {participant.navn}
-                  <span className="journal-participant-link">Se journal</span>
+                  <span className="journal-participant-link">
+                    {t('booking.journalPanel.viewJournal', 'View journal')}
+                  </span>
                 </button>
               ))}
             </div>
@@ -691,7 +756,9 @@ function Journal({
                     onCreateJournalEntry();
                   }}
                 >
-                  {selectedAppointment && appointmentEntry ? 'Åben notat' : 'Opret indlæg'}
+                  {selectedAppointment && appointmentEntry
+                    ? t('booking.journalPanel.openNote', 'Open note')
+                    : t('booking.journalPanel.createEntry', 'Create entry')}
                 </button>
               )}
               {selectedAppointment && (
@@ -702,7 +769,7 @@ function Journal({
                     setShowHistory(true);
                   }}
                 >
-                  Se journal
+                  {t('booking.journalPanel.viewJournal', 'View journal')}
                 </button>
               )}
             </div>
@@ -724,14 +791,17 @@ function Journal({
                     });
                   }}
                 >
-                  Opret næste aftale
+                  {t('booking.journalPanel.createNextAppointment', 'Create next appointment')}
                 </button>
                 <button
                   className="journal-action-btn journal-delete-btn"
                   onClick={() => {
                     if (!selectedAppointment || !onDeleteAppointment) return;
                     const confirmed = window.confirm(
-                      'Er du sikker på, at du vil slette denne aftale? Dette kan ikke fortrydes.'
+                      t(
+                        'booking.journalPanel.confirmDelete',
+                        'Are you sure you want to delete this appointment? This cannot be undone.'
+                      )
                     );
                     if (confirmed) {
                       onDeleteAppointment(selectedAppointment);
@@ -739,7 +809,7 @@ function Journal({
                   }}
                 >
                   <Trash2 className="journal-delete-icon" size={16} aria-hidden="true" />
-                  Slet aftale
+                  {t('booking.journalPanel.deleteAppointment', 'Delete appointment')}
                 </button>
               </div>
               {suggestError && (

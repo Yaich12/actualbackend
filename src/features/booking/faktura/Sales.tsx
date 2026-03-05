@@ -10,8 +10,11 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../AuthContext";
 import useSales from "../../../hooks/useSales";
+import { getIdToken } from "../../../utils/auth";
+import { buildApiUrl } from "../../../utils/runtimeUrls";
 import AddNowDrawer from "./AddNowDrawer";
 
 const formatCurrency = (value: number) =>
@@ -227,6 +230,8 @@ const parseAmount = (value: string) => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const getSaleStatusLabel = (status: any) => {
   if (!status) return "Gennemført";
   const normalized = String(status).toLowerCase();
@@ -239,6 +244,8 @@ const getSaleStatusLabel = (status: any) => {
 
 export default function Sales() {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { sales, loading, error } = useSales(user?.uid || null, {
     status: "completed",
   });
@@ -271,6 +278,94 @@ export default function Sales() {
   const [draftFilters, setDraftFilters] = useState<SalesFilters>(appliedFilters);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [selectedSortId, setSelectedSortId] = useState("dateDesc");
+
+  const stripeCheckoutStatus = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return `${params.get("stripeCheckout") || ""}`.trim().toLowerCase();
+  }, [location.search]);
+
+  const stripeSessionId = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return `${params.get("session_id") || ""}`.trim();
+  }, [location.search]);
+  const [stripeSyncState, setStripeSyncState] = useState<"idle" | "syncing" | "synced" | "pending" | "error">(
+    "idle"
+  );
+  const [stripeSyncError, setStripeSyncError] = useState("");
+
+  const dismissStripeBanner = () => {
+    const params = new URLSearchParams(location.search);
+    params.delete("stripeCheckout");
+    params.delete("session_id");
+    const nextSearch = params.toString();
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : "",
+      },
+      { replace: true }
+    );
+  };
+
+  useEffect(() => {
+    if (stripeCheckoutStatus !== "success" || !stripeSessionId || !user?.uid) {
+      setStripeSyncState("idle");
+      setStripeSyncError("");
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncSale = async () => {
+      setStripeSyncState("syncing");
+      setStripeSyncError("");
+
+      const token = await getIdToken();
+      let lastPending = false;
+
+      for (let attempt = 1; attempt <= 5; attempt += 1) {
+        const response = await fetch(buildApiUrl("/api/stripe/connect/sync-sale-session"), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ sessionId: stripeSessionId }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.error || `Request failed (${response.status})`);
+        }
+
+        if (cancelled) return;
+        if (data?.synced) {
+          setStripeSyncState("synced");
+          return;
+        }
+
+        lastPending = Boolean(data?.pending);
+        if (!lastPending || attempt === 5) {
+          setStripeSyncState(lastPending ? "pending" : "synced");
+          return;
+        }
+
+        await wait(1500);
+      }
+    };
+
+    syncSale().catch((syncError) => {
+      if (cancelled) return;
+      setStripeSyncState("error");
+      setStripeSyncError(
+        syncError?.message || "Kunne ikke synkronisere Stripe-salg automatisk."
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [stripeCheckoutStatus, stripeSessionId, user?.uid]);
 
   const earliestSaleDate = useMemo(() => {
     const dates = sales
@@ -658,6 +753,45 @@ export default function Sales() {
       </div>
 
       <div className="flex-1 overflow-auto bg-slate-50 px-8 pb-10">
+        {stripeCheckoutStatus === "success" && (
+          <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            <div className="flex items-start justify-between gap-3">
+              <p>
+                Betaling gennemført i Stripe.
+                {stripeSyncState === "syncing" && " Synkroniserer salg og opdaterer aftale..."}
+                {stripeSyncState === "synced" && " Aftalen er markeret som gennemført, og salget er registreret."}
+                {stripeSyncState === "pending" &&
+                  " Vi afventer endelig bekræftelse fra Stripe; salget kommer automatisk om lidt."}
+                {stripeSyncState === "error" &&
+                  ` Automatisk sync fejlede midlertidigt: ${stripeSyncError || "ukendt fejl"}.`}
+                {stripeSyncState === "idle" && " Salget bliver synkroniseret automatisk."}
+                {stripeSessionId ? ` Session: ${stripeSessionId}` : ""}
+              </p>
+              <button
+                type="button"
+                onClick={dismissStripeBanner}
+                className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold text-emerald-700"
+              >
+                Luk
+              </button>
+            </div>
+          </div>
+        )}
+        {stripeCheckoutStatus === "cancel" && (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div className="flex items-start justify-between gap-3">
+              <p>Stripe betaling blev annulleret. Ingen kortbetaling er gennemført.</p>
+              <button
+                type="button"
+                onClick={dismissStripeBanner}
+                className="rounded-full border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700"
+              >
+                Luk
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="mt-6 flex items-center gap-2">
           <button
             type="button"

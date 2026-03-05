@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import './usersettings.css';
 import './bookingpage.css';
@@ -9,13 +9,16 @@ import { useAuth } from '../../AuthContext';
 import { useLanguage } from '../../LanguageContext';
 import { updateProfile } from 'firebase/auth';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
-import Transfer from './transfer/transfer';
 import {
   WORK_HOURS_DAYS,
+  buildWorkHoursExceptionsPayload,
   buildWorkHoursPayload,
   createDefaultWorkHours,
   getWorkHoursValidation,
+  parseDateInput,
+  parseTimeToMinutes,
   resolveWorkHours,
+  resolveWorkHoursExceptions,
 } from '../../utils/workHours';
 import { CORTI_LANGS, getCortiLanguageLabel } from '../../utils/cortiLanguages';
 
@@ -23,7 +26,6 @@ const THEME_STORAGE_KEY = 'selma_theme_mode';
 const NIGHT_START_HOUR = 18; // 18:00
 const NIGHT_END_HOUR = 5;    // 05:00
 
-const CATEGORY_OPTIONS = ['Physiotherapist', 'Osteopath', 'Chiropractor'];
 const CURRENCY_OPTIONS = [
   { value: 'DKK', label: 'DKK' },
   { value: 'EUR', label: 'EURO' },
@@ -32,21 +34,76 @@ const CURRENCY_OPTIONS = [
   { value: 'SEK', label: 'SEK' },
   { value: 'AED', label: 'AED' },
 ];
+const PUBLIC_BOOKING_BASE_URL = (
+  process.env.REACT_APP_PUBLIC_BOOKING_BASE_URL || 'https://booking.selmaplus.tech'
+).replace(/\/+$/, '');
+
+const buildPublicBookingAbsoluteUrl = (bookingPath) => {
+  const raw = String(bookingPath || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const normalizedPath = raw.startsWith('/') ? raw : `/${raw}`;
+  return `${PUBLIC_BOOKING_BASE_URL}${normalizedPath}`;
+};
+
+const formatDateForInput = (inputDate) => {
+  const date = new Date(inputDate);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const createWorkHourExceptionPreview = (overrides = {}) => ({
+  id: `exception-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+  date: formatDateForInput(new Date()),
+  start: '08:00',
+  end: '16:00',
+  closed: false,
+  ...overrides,
+});
+
+const createInitialWorkHourExceptionPreviews = () => {
+  return [];
+};
+
+const resolveWorkHourExceptionPreviews = (data) =>
+  resolveWorkHoursExceptions(data).map((entry) =>
+    createWorkHourExceptionPreview({
+      date: entry.date,
+      start: entry.closed ? '' : entry.start || '08:00',
+      end: entry.closed ? '' : entry.end || '16:00',
+      closed: Boolean(entry.closed),
+    })
+  );
+
+const mapTeamDocToScheduleMember = (docSnap, fallbackLabel) => {
+  const data = docSnap.data() || {};
+  const name =
+    (typeof data.name === 'string' && data.name.trim()) ||
+    `${data.firstName || ''}${data.lastName ? ` ${data.lastName}` : ''}`.trim() ||
+    fallbackLabel;
+  const memberUid =
+    (typeof data.memberUid === 'string' && data.memberUid.trim()) ||
+    (typeof data.uid === 'string' && data.uid.trim()) ||
+    '';
+  return {
+    id: docSnap.id,
+    name,
+    memberUid: memberUid || null,
+    isOwner: data.isOwner === true,
+  };
+};
 
 function UserSettings() {
   const { user, updateUserProfile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { language, preferredLanguage, setPreferredLanguage, languageOptions, t } = useLanguage();
-  const resolveSectionFromPath = (pathname) => {
-    if (pathname.startsWith('/settings/transfer')) {
-      return 'transfer';
-    }
-    return 'profile';
-  };
+  const resolveSectionFromPath = () => 'profile';
   const [activeSection, setActiveSection] = useState(() =>
     resolveSectionFromPath(location.pathname)
-  ); // profile | account | workHours | appearance | language | ai | transfer
+  ); // profile | account | booking | workHours | appearance | language | ai
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [clinicName, setClinicName] = useState('');
@@ -71,6 +128,15 @@ function UserSettings() {
   const [isAvatarUploading, setIsAvatarUploading] = useState(false);
   const [isClaimingSlug, setIsClaimingSlug] = useState(false);
   const [slugStatus, setSlugStatus] = useState(null);
+  const [bookingLinkCopied, setBookingLinkCopied] = useState(false);
+  const [workHoursExceptionPreviews, setWorkHoursExceptionPreviews] = useState(() =>
+    createInitialWorkHourExceptionPreviews()
+  );
+  const [showWorkHoursExceptionsPreview, setShowWorkHoursExceptionsPreview] = useState(false);
+  const [hasTeamAccess, setHasTeamAccess] = useState(false);
+  const [scheduleMembers, setScheduleMembers] = useState([]);
+  const [selectedScheduleMemberId, setSelectedScheduleMemberId] = useState('');
+  const [isScheduleLoading, setIsScheduleLoading] = useState(false);
 
   const sanitizeSlug = (value) => {
     if (!value) return '';
@@ -85,6 +151,42 @@ function UserSettings() {
   const previewSlug = useMemo(() => sanitizeSlug(clinicName), [clinicName]);
 
   const previewUrl = previewSlug ? `/book/${previewSlug}` : '';
+  const activeBookingUrl = publicClinicSlug ? `/book/${publicClinicSlug}` : '';
+  const suggestedBookingUrl = previewUrl;
+  const resolvedBookingUrl = activeBookingUrl || suggestedBookingUrl;
+  const resolvedBookingAbsoluteUrl = useMemo(
+    () => buildPublicBookingAbsoluteUrl(resolvedBookingUrl),
+    [resolvedBookingUrl]
+  );
+  const bookingIsActive = Boolean(activeBookingUrl);
+  const activeBookingStatusMessage = bookingIsActive
+    ? t(
+        'settings.publicBooking.success',
+        'Booking page is active: {url}',
+        { url: resolvedBookingAbsoluteUrl || resolvedBookingUrl }
+      )
+    : '';
+  const ownerScheduleMember = useMemo(() => {
+    const ownerId = user?.uid || '';
+    const fallbackName =
+      fullName ||
+      user?.displayName ||
+      user?.email ||
+      t('settings.publicBooking.scheduleMemberOwner', 'Klinikejer');
+    return {
+      id: ownerId,
+      name: fallbackName,
+      memberUid: ownerId || null,
+      isOwner: true,
+    };
+  }, [fullName, t, user?.displayName, user?.email, user?.uid]);
+  const selectedScheduleMember = useMemo(
+    () =>
+      scheduleMembers.find((member) => member.id === selectedScheduleMemberId) ||
+      scheduleMembers[0] ||
+      ownerScheduleMember,
+    [ownerScheduleMember, scheduleMembers, selectedScheduleMemberId]
+  );
   const defaultWorkHours = useMemo(() => createDefaultWorkHours(), []);
   const workHoursErrors = useMemo(
     () => getWorkHoursValidation(workHours),
@@ -107,6 +209,51 @@ function UserSettings() {
     () => ({
       missing: t('settings.workHours.errors.missing', 'Angiv start og slut'),
       order: t('settings.workHours.errors.order', 'Starttid skal være før sluttid'),
+    }),
+    [t]
+  );
+  const workHoursExceptionErrors = useMemo(() => {
+    const errors = {};
+
+    workHoursExceptionPreviews.forEach((item) => {
+      const itemErrors = {};
+      const normalizedDate = parseDateInput(item?.date);
+      if (!normalizedDate) {
+        itemErrors.date = 'invalidDate';
+      }
+
+      if (!item?.closed) {
+        const startMinutes = parseTimeToMinutes(item?.start);
+        const endMinutes = parseTimeToMinutes(item?.end);
+        if (startMinutes === null || endMinutes === null) {
+          itemErrors.time = 'missing';
+        } else if (startMinutes >= endMinutes) {
+          itemErrors.time = 'order';
+        }
+      }
+
+      if (Object.keys(itemErrors).length > 0) {
+        errors[item.id] = itemErrors;
+      }
+    });
+
+    return errors;
+  }, [workHoursExceptionPreviews]);
+  const hasWorkHoursExceptionErrors = Object.keys(workHoursExceptionErrors).length > 0;
+  const workHoursExceptionErrorMessages = useMemo(
+    () => ({
+      invalidDate: t(
+        'settings.publicBooking.workHours.exceptionsErrors.invalidDate',
+        'Vælg en gyldig dato.'
+      ),
+      missing: t(
+        'settings.publicBooking.workHours.exceptionsErrors.missing',
+        'Angiv start og slut.'
+      ),
+      order: t(
+        'settings.publicBooking.workHours.exceptionsErrors.order',
+        'Starttid skal være før sluttid.'
+      ),
     }),
     [t]
   );
@@ -146,6 +293,8 @@ function UserSettings() {
         const snap = await getDoc(ref);
         if (snap.exists()) {
           const data = snap.data();
+          const teamAllowed = data?.accountType === 'team' || data?.hasTeam === true;
+          setHasTeamAccess(teamAllowed);
           setSettingsSnapshot(data.settings || {});
           setFullName(data.displayName || user.displayName || '');
           setEmail(data.email || user.email || '');
@@ -169,6 +318,7 @@ function UserSettings() {
             '';
           setCurrency(loadedCurrency);
           setWorkHours(resolveWorkHours(data));
+          setWorkHoursExceptionPreviews(resolveWorkHourExceptionPreviews(data));
           const storedDictationLanguage =
             typeof data.settings?.dictationLanguage === 'string' && data.settings.dictationLanguage.trim()
               ? data.settings.dictationLanguage.trim()
@@ -180,6 +330,7 @@ function UserSettings() {
             localStorage.setItem(THEME_STORAGE_KEY, data.themeMode);
           }
         } else {
+          setHasTeamAccess(false);
           setSettingsSnapshot({});
           setFullName(user.displayName || '');
           setEmail(user.email || '');
@@ -195,15 +346,169 @@ function UserSettings() {
           setAddress('');
           setCurrency('');
           setWorkHours(createDefaultWorkHours());
+          setWorkHoursExceptionPreviews([]);
           setDictationLanguage('auto');
         }
       } catch (error) {
         console.error('[UserSettings] Failed to load profile', error);
+        setHasTeamAccess(false);
       }
     };
 
     loadProfile();
   }, [user]);
+
+  useEffect(() => {
+    if (!ownerScheduleMember.id) {
+      setScheduleMembers([]);
+      setSelectedScheduleMemberId('');
+      return;
+    }
+
+    setScheduleMembers((prev) => {
+      if (hasTeamAccess && prev.length > 1) {
+        return prev;
+      }
+      if (
+        prev.length === 1 &&
+        prev[0]?.id === ownerScheduleMember.id &&
+        prev[0]?.name === ownerScheduleMember.name
+      ) {
+        return prev;
+      }
+      return [ownerScheduleMember];
+    });
+
+    setSelectedScheduleMemberId((prev) => prev || ownerScheduleMember.id);
+  }, [hasTeamAccess, ownerScheduleMember]);
+
+  useEffect(() => {
+    if (!user?.uid || !hasTeamAccess) {
+      return undefined;
+    }
+
+    const teamRef = collection(db, 'users', user.uid, 'team');
+    const unsubscribe = onSnapshot(
+      teamRef,
+      (snap) => {
+        const fallbackLabel = t('settings.publicBooking.scheduleMemberFallback', 'Behandler');
+        const loaded = snap.docs.map((docSnap) => mapTeamDocToScheduleMember(docSnap, fallbackLabel));
+        const hasOwnerOption = loaded.some(
+          (member) =>
+            member.id === user.uid || member.memberUid === user.uid || member.isOwner === true
+        );
+
+        let nextMembers = loaded;
+        if (!hasOwnerOption) {
+          nextMembers = [ownerScheduleMember, ...loaded];
+        }
+
+        const seen = new Set();
+        const dedupedMembers = [];
+        nextMembers.forEach((member) => {
+          const memberId = String(member?.id || '').trim();
+          if (!memberId || seen.has(memberId)) return;
+          seen.add(memberId);
+          dedupedMembers.push(
+            memberId === user.uid || member.memberUid === user.uid || member.isOwner === true
+              ? {
+                  ...member,
+                  id: user.uid,
+                  name: member.name || ownerScheduleMember.name,
+                  memberUid: member.memberUid || user.uid,
+                  isOwner: true,
+                }
+              : member
+          );
+        });
+
+        const resolvedMembers = dedupedMembers.length ? dedupedMembers : [ownerScheduleMember];
+        setScheduleMembers(resolvedMembers);
+        setSelectedScheduleMemberId((prev) => {
+          if (prev && resolvedMembers.some((member) => member.id === prev)) {
+            return prev;
+          }
+          return resolvedMembers[0].id;
+        });
+      },
+      (error) => {
+        console.error('[UserSettings] Failed to load team members for schedules', error);
+        setScheduleMembers([ownerScheduleMember]);
+        setSelectedScheduleMemberId(ownerScheduleMember.id);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [hasTeamAccess, ownerScheduleMember, t, user?.uid]);
+
+  useEffect(() => {
+    const selectedMemberId = selectedScheduleMember?.id || '';
+    const selectedMemberUid = selectedScheduleMember?.memberUid || '';
+    if (!user?.uid || !selectedMemberId) return;
+
+    let isCancelled = false;
+    const loadSelectedSchedule = async () => {
+      setIsScheduleLoading(true);
+      setShowWorkHoursExceptionsPreview(false);
+      try {
+        let sourceData = {};
+
+        if (selectedMemberId === user.uid) {
+          const ownerSnap = await getDoc(doc(db, 'users', user.uid));
+          sourceData = ownerSnap.exists() ? ownerSnap.data() || {} : {};
+        } else {
+          const teamSnap = await getDoc(doc(db, 'users', user.uid, 'team', selectedMemberId));
+          const teamData = teamSnap.exists() ? teamSnap.data() || {} : {};
+          sourceData = teamData;
+
+          const hasTeamHours = Boolean(
+            teamData?.workHours && typeof teamData.workHours === 'object'
+          );
+          const hasTeamExceptions = Array.isArray(teamData?.workHoursExceptions);
+          const linkedMemberUid = String(
+            teamData?.memberUid || teamData?.uid || selectedMemberUid || ''
+          ).trim();
+
+          if ((!hasTeamHours || !hasTeamExceptions) && linkedMemberUid && linkedMemberUid !== user.uid) {
+            const linkedUserSnap = await getDoc(doc(db, 'users', linkedMemberUid));
+            if (linkedUserSnap.exists()) {
+              const linkedUserData = linkedUserSnap.data() || {};
+              sourceData = {
+                ...linkedUserData,
+                ...teamData,
+                workHours: hasTeamHours ? teamData.workHours : linkedUserData.workHours,
+                workHoursExceptions: hasTeamExceptions
+                  ? teamData.workHoursExceptions
+                  : linkedUserData.workHoursExceptions,
+                workingHours: teamData.workingHours || linkedUserData.workingHours,
+              };
+            }
+          }
+        }
+
+        if (!isCancelled) {
+          setWorkHours(resolveWorkHours(sourceData));
+          setWorkHoursExceptionPreviews(resolveWorkHourExceptionPreviews(sourceData));
+        }
+      } catch (error) {
+        console.error('[UserSettings] Failed to load selected schedule', error);
+        if (!isCancelled) {
+          setWorkHours(createDefaultWorkHours());
+          setWorkHoursExceptionPreviews([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsScheduleLoading(false);
+        }
+      }
+    };
+
+    loadSelectedSchedule();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedScheduleMember?.id, selectedScheduleMember?.memberUid, user?.uid]);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -258,18 +563,12 @@ function UserSettings() {
 
   useEffect(() => {
     if (location.pathname.startsWith('/settings/transfer')) {
-      setActiveSection('transfer');
+      navigate('/booking/settings', { replace: true });
     }
-  }, [location.pathname]);
+  }, [location.pathname, navigate]);
 
   const handleSectionChange = (section) => {
     setActiveSection(section);
-    if (section === 'transfer') {
-      if (!location.pathname.startsWith('/settings/transfer')) {
-        navigate('/settings/transfer');
-      }
-      return;
-    }
     if (location.pathname.startsWith('/settings/transfer')) {
       navigate('/booking/settings');
     }
@@ -295,11 +594,31 @@ function UserSettings() {
 
   const handleSaveProfile = async () => {
     if (!user) return;
-    if (hasWorkHoursErrors) {
+    if (hasWorkHoursErrors || hasWorkHoursExceptionErrors) {
       return;
     }
     setIsSaving(true);
     try {
+      const isBookingTeamScheduleSave =
+        activeSection === 'booking' &&
+        hasTeamAccess &&
+        selectedScheduleMemberId &&
+        selectedScheduleMemberId !== user.uid;
+
+      if (isBookingTeamScheduleSave) {
+        const teamMemberRef = doc(db, 'users', user.uid, 'team', selectedScheduleMemberId);
+        await setDoc(
+          teamMemberRef,
+          {
+            workHours: buildWorkHoursPayload(workHours),
+            workHoursExceptions: buildWorkHoursExceptionsPayload(workHoursExceptionPreviews),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+        return;
+      }
+
       const jobTitleForSave = category || '';
       const ref = doc(db, 'users', user.uid);
 
@@ -346,6 +665,7 @@ function UserSettings() {
         categories: category ? [category] : [],
         address,
         workHours: buildWorkHoursPayload(workHours),
+        workHoursExceptions: buildWorkHoursExceptionsPayload(workHoursExceptionPreviews),
         preferredLanguage: preferredLanguage || language,
         settings: {
           ...settingsSnapshot,
@@ -427,6 +747,7 @@ function UserSettings() {
       await setDoc(clinicRef, clinicPayload, { merge: true });
 
       const generatedUrl = `/book/${sanitizedSlug}`;
+      const generatedAbsoluteUrl = buildPublicBookingAbsoluteUrl(generatedUrl);
 
       await setDoc(
         doc(db, 'users', user.uid),
@@ -439,14 +760,23 @@ function UserSettings() {
         { merge: true }
       );
 
-      setPublicClinicSlug(sanitizedSlug);
-      setPublicClinicName(nameValue);
-      setWebsite(generatedUrl);
+      const refreshedUserSnap = await getDoc(doc(db, 'users', user.uid));
+      if (refreshedUserSnap.exists()) {
+        const refreshedUser = refreshedUserSnap.data() || {};
+        setPublicClinicSlug(refreshedUser.publicClinicSlug || sanitizedSlug);
+        setPublicClinicName(refreshedUser.publicClinicName || nameValue);
+        setWebsite(refreshedUser.website || generatedUrl);
+      } else {
+        setPublicClinicSlug(sanitizedSlug);
+        setPublicClinicName(nameValue);
+        setWebsite(generatedUrl);
+      }
       setSlugStatus({
         tone: 'success',
         message: t(
           'settings.publicBooking.success',
-          `Bookingsiden er aktiv: ${generatedUrl}`
+          'Booking page is active: {url}',
+          { url: generatedAbsoluteUrl || generatedUrl }
         ),
       });
     } catch (error) {
@@ -458,6 +788,28 @@ function UserSettings() {
     } finally {
       setIsClaimingSlug(false);
     }
+  };
+
+  const handleCopyBookingLink = async () => {
+    if (!resolvedBookingAbsoluteUrl || typeof navigator === 'undefined' || !navigator.clipboard) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(resolvedBookingAbsoluteUrl);
+      setBookingLinkCopied(true);
+      setTimeout(() => setBookingLinkCopied(false), 2200);
+    } catch (error) {
+      console.error('[UserSettings] Failed to copy booking link', error);
+      setSlugStatus({
+        tone: 'error',
+        message: t('settings.publicBooking.errors.copyFailed', 'Kunne ikke kopiere linket.'),
+      });
+    }
+  };
+
+  const handleOpenBookingPage = () => {
+    if (!resolvedBookingAbsoluteUrl || typeof window === 'undefined') return;
+    window.open(resolvedBookingAbsoluteUrl, '_blank', 'noopener,noreferrer');
   };
 
   const renderThemeCard = (mode, label, previewClass) => (
@@ -500,6 +852,35 @@ function UserSettings() {
     });
   };
 
+  const addWorkHoursExceptionPreview = () => {
+    setWorkHoursExceptionPreviews((prev) => [...prev, createWorkHourExceptionPreview()]);
+  };
+
+  const removeWorkHoursExceptionPreview = (id) => {
+    setWorkHoursExceptionPreviews((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const updateWorkHoursExceptionPreview = (id, field, value) => {
+    setWorkHoursExceptionPreviews((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        if (field === 'closed') {
+          const isClosed = Boolean(value);
+          return {
+            ...item,
+            closed: isClosed,
+            start: isClosed ? '' : item.start || '08:00',
+            end: isClosed ? '' : item.end || '16:00',
+          };
+        }
+        return {
+          ...item,
+          [field]: value,
+        };
+      })
+    );
+  };
+
   return (
     <BookingSidebarLayout>
       <div className="booking-page">
@@ -519,10 +900,10 @@ function UserSettings() {
                   </button>
                   <button
                     type="button"
-                    className={`usersettings-nav-item ${activeSection === 'account' ? 'active' : ''}`}
-                    onClick={() => handleSectionChange('account')}
+                    className={`usersettings-nav-item ${activeSection === 'booking' ? 'active' : ''}`}
+                    onClick={() => handleSectionChange('booking')}
                   >
-                    {t('settings.sections.account', 'Kontoopsætning')}
+                    {t('settings.sections.booking', 'Bookingside')}
                   </button>
                   <button
                     type="button"
@@ -537,13 +918,6 @@ function UserSettings() {
                     onClick={() => handleSectionChange('ai')}
                   >
                     {t('settings.sections.ai', 'AI indstillinger')}
-                  </button>
-                  <button
-                    type="button"
-                    className={`usersettings-nav-item ${activeSection === 'transfer' ? 'active' : ''}`}
-                    onClick={() => handleSectionChange('transfer')}
-                  >
-                    {t('settings.sections.transfer', 'Transfer')}
                   </button>
                 </aside>
 
@@ -604,116 +978,443 @@ function UserSettings() {
                     </>
                   )}
 
-                  {activeSection === 'account' && (
+                  {activeSection === 'booking' && (
                     <>
-                      <div className="usersettings-header">
-                        <div className="usersettings-title">
-                          {t('settings.account.title', 'Kontoopsætning')}
-                        </div>
-                      </div>
-
-                      <div className="usersettings-profile-fields">
-                        <div className="usersettings-section">
-                          <label className="usersettings-label">
-                            {t('settings.account.website', 'Websted')}
-                          </label>
-                          <input
-                            className="usersettings-input"
-                            value={website}
-                            onChange={(e) => setWebsite(e.target.value)}
-                            placeholder={t('settings.account.websitePlaceholder', 'www.ditwebsted.com')}
-                          />
-                        </div>
-
-                        <div className="usersettings-divider" />
-
-                        <div className="usersettings-section">
-                          <div className="usersettings-title">
-                            {t('settings.publicBooking.title', 'Bookingside')}
+                      <div className="usersettings-booking-shell">
+                        <section className="usersettings-booking-hero">
+                          <div className="usersettings-booking-hero-head">
+                            <div className="usersettings-booking-hero-copy">
+                              <p className="usersettings-booking-eyebrow">
+                                {t('settings.publicBooking.visibilityLabel', 'Offentlig booking')}
+                              </p>
+                              <h3 className="usersettings-booking-hero-title">
+                                {publicClinicName || clinicName || t('settings.publicBooking.title', 'Bookingside')}
+                              </h3>
+                              <p className="usersettings-booking-note">
+                                {bookingIsActive
+                                  ? t(
+                                      'settings.publicBooking.activeDescription',
+                                      'Din side er live. Del linket med patienter via hjemmeside, mail eller sociale medier.'
+                                    )
+                                  : t(
+                                      'settings.publicBooking.inactiveDescription',
+                                      'Vælg kliniknavn og aktivér siden for at få et offentligt bookinglink.'
+                                    )}
+                              </p>
+                            </div>
+                            <span
+                              className={`usersettings-booking-state ${
+                                bookingIsActive ? 'active' : 'inactive'
+                              }`}
+                            >
+                              {bookingIsActive
+                                ? t('settings.publicBooking.stateActive', 'Aktiv')
+                                : t('settings.publicBooking.stateInactive', 'Ikke aktiv')}
+                            </span>
                           </div>
-                          <div className="usersettings-subtitle">
-                            {t(
-                              'settings.publicBooking.subtitle',
-                              'Aktivér en offentlig booking-side til dine klienter.'
-                            )}
-                          </div>
-                        </div>
 
-                        <div className="usersettings-grid">
-                          <div className="usersettings-section">
+                          <div className="usersettings-booking-link-block">
                             <label className="usersettings-label">
-                              {t('settings.publicBooking.clinicNameLabel', 'Kliniknavn')}
+                              {t('settings.publicBooking.publicLinkLabel', 'Offentlig bookingside URL')}
                             </label>
                             <input
                               className="usersettings-input"
-                              value={clinicName}
-                              readOnly
-                            />
-                          </div>
-                          <div className="usersettings-section">
-                            <label className="usersettings-label">
-                              {t('settings.publicBooking.urlLabel', 'Bookingside URL')}
-                            </label>
-                            <input
-                              className="usersettings-input"
-                              value={previewUrl}
+                              value={resolvedBookingAbsoluteUrl}
                               readOnly
                               placeholder={t(
                                 'settings.publicBooking.urlPlaceholder',
-                                '/book/din-klinik'
+                                '{baseUrl}/book/your-clinic',
+                                { baseUrl: PUBLIC_BOOKING_BASE_URL }
                               )}
                             />
+                            <div className="usersettings-booking-link-actions">
+                              <button
+                                type="button"
+                                className="usersettings-booking-link-btn"
+                                onClick={handleCopyBookingLink}
+                                disabled={!resolvedBookingAbsoluteUrl}
+                              >
+                                {bookingLinkCopied
+                                  ? t('settings.publicBooking.copied', 'Kopieret')
+                                  : t('settings.publicBooking.copy', 'Kopiér link')}
+                              </button>
+                              <button
+                                type="button"
+                                className="usersettings-booking-link-btn"
+                                onClick={handleOpenBookingPage}
+                                disabled={!resolvedBookingAbsoluteUrl}
+                              >
+                                {t('settings.publicBooking.openPage', 'Åbn side')}
+                              </button>
+                              <button
+                                type="button"
+                                className="usersettings-claim-btn usersettings-claim-btn-primary"
+                                onClick={handleClaimSlug}
+                                disabled={isClaimingSlug || !clinicName.trim()}
+                              >
+                                {isClaimingSlug
+                                  ? t('settings.publicBooking.claiming', 'Aktiverer...')
+                                  : bookingIsActive
+                                    ? t('settings.publicBooking.update', 'Opdater bookingside')
+                                    : t('settings.publicBooking.activate', 'Aktiver bookingside')}
+                              </button>
+                            </div>
                           </div>
-                        </div>
 
-                        <div className="usersettings-claim-row">
-                          <button
-                            type="button"
-                            className="usersettings-claim-btn"
-                            onClick={handleClaimSlug}
-                            disabled={isClaimingSlug || !clinicName.trim()}
-                          >
-                            {isClaimingSlug
-                              ? t('settings.publicBooking.claiming', 'Aktiverer...')
-                              : t('settings.publicBooking.activate', 'Aktiver bookingside')}
-                          </button>
-                          <span className="usersettings-slug-preview">
-                            {previewUrl
-                              ? t(
-                                  'settings.publicBooking.urlPreview',
-                                  `URL: ${previewUrl}`
-                                )
-                              : t('settings.publicBooking.urlPreviewEmpty', 'URL: /book/...')}
-                          </span>
-                        </div>
+                          {bookingIsActive ? (
+                            <div className="usersettings-status success">
+                              {activeBookingStatusMessage}
+                            </div>
+                          ) : null}
+                          {slugStatus?.tone === 'error' && slugStatus?.message ? (
+                            <div className="usersettings-status error">{slugStatus.message}</div>
+                          ) : null}
+                        </section>
 
-                        {slugStatus?.message ? (
-                          <div className={`usersettings-status ${slugStatus.tone || ''}`}>
-                            {slugStatus.message}
-                          </div>
-                        ) : null}
+                        <section className="usersettings-booking-hours-card usersettings-booking-hours-card-expanded">
+                          {showWorkHoursExceptionsPreview ? (
+                            <>
+                              <div className="usersettings-booking-hours-head usersettings-booking-hours-head-exceptions">
+                                <div className="usersettings-booking-hours-copy">
+                                  <h4 className="usersettings-booking-hours-title">
+                                    {t(
+                                      'settings.publicBooking.workHours.exceptionsTitle',
+                                      'Særlige datoer (engang)'
+                                    )}
+                                  </h4>
+                                  <p className="usersettings-booking-hours-note">
+                                    {t(
+                                      'settings.publicBooking.workHours.exceptionsNote',
+                                      'Bruges til enkeltstående lukkedage eller justerede tider.'
+                                    )}
+                                  </p>
+                                  {hasTeamAccess && scheduleMembers.length > 1 ? (
+                                    <p className="usersettings-booking-hours-note">
+                                      {t('settings.publicBooking.workHours.forMember', 'Viser arbejdstider for')}:{' '}
+                                      {selectedScheduleMember?.name || ''}
+                                    </p>
+                                  ) : null}
+                                  {isScheduleLoading ? (
+                                    <p className="usersettings-booking-hours-note">
+                                      {t('settings.publicBooking.workHours.loading', 'Henter arbejdstider...')}
+                                    </p>
+                                  ) : null}
+                                </div>
+                                <button
+                                  type="button"
+                                  className="usersettings-booking-link-btn usersettings-booking-exceptions-back-btn"
+                                  onClick={() => setShowWorkHoursExceptionsPreview(false)}
+                                  disabled={isScheduleLoading}
+                                >
+                                  {t('settings.back', 'Tilbage')}
+                                </button>
+                              </div>
 
-                        <div className="usersettings-section">
-                          <label className="usersettings-label">
-                            {t('settings.account.category', 'Kategori')}
-                          </label>
-                          <select
-                            className="usersettings-input"
-                            value={category}
-                            onChange={(e) => setCategory(e.target.value)}
-                          >
-                            <option value="">
-                              {t('settings.account.categoryPlaceholder', 'Vælg kategori')}
-                            </option>
-                            {CATEGORY_OPTIONS.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                              <div className="usersettings-booking-exceptions">
+                                <div className="usersettings-booking-exceptions-head">
+                                  <div className="usersettings-booking-exceptions-copy">
+                                    <h5 className="usersettings-booking-exceptions-title">
+                                      {t(
+                                        'settings.publicBooking.workHours.exceptionsListTitle',
+                                        'Undtagelser'
+                                      )}
+                                    </h5>
+                                    <p className="usersettings-booking-exceptions-note">
+                                      {t(
+                                        'settings.publicBooking.workHours.exceptionsListNote',
+                                        'Tilføj datoer hvor tider afviger fra standard arbejdstider.'
+                                      )}
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="usersettings-booking-link-btn usersettings-booking-exceptions-add-btn"
+                                    onClick={addWorkHoursExceptionPreview}
+                                    disabled={isScheduleLoading}
+                                  >
+                                    {t(
+                                      'settings.publicBooking.workHours.addException',
+                                      'Tilføj undtagelse'
+                                    )}
+                                  </button>
+                                </div>
+                                <div className="usersettings-booking-exceptions-list">
+                                  {workHoursExceptionPreviews.map((item) => {
+                                    const itemErrors = workHoursExceptionErrors[item.id] || {};
+                                    const itemErrorCode = itemErrors.date || itemErrors.time || '';
+                                    const itemErrorMessage = itemErrorCode
+                                      ? workHoursExceptionErrorMessages[itemErrorCode]
+                                      : '';
+
+                                    return (
+                                      <div
+                                        key={item.id}
+                                        className={`usersettings-booking-exceptions-row ${
+                                          item.closed ? 'is-closed' : ''
+                                        } ${itemErrorCode ? 'has-error' : ''}`}
+                                      >
+                                        <input
+                                          type="date"
+                                          className="usersettings-booking-exceptions-date"
+                                          value={item.date}
+                                          onChange={(e) =>
+                                            updateWorkHoursExceptionPreview(
+                                              item.id,
+                                              'date',
+                                              e.target.value
+                                            )
+                                          }
+                                          disabled={isScheduleLoading}
+                                        />
+                                        <label className="usersettings-booking-exceptions-toggle">
+                                          <input
+                                            type="checkbox"
+                                            checked={Boolean(item.closed)}
+                                            onChange={(e) =>
+                                              updateWorkHoursExceptionPreview(
+                                                item.id,
+                                                'closed',
+                                                e.target.checked
+                                              )
+                                            }
+                                            disabled={isScheduleLoading}
+                                          />
+                                          <span>{t('settings.workHours.closed', 'Lukket')}</span>
+                                        </label>
+                                        <input
+                                          type="time"
+                                          className="usersettings-booking-hours-time-input"
+                                          value={item.start}
+                                          onChange={(e) =>
+                                            updateWorkHoursExceptionPreview(
+                                              item.id,
+                                              'start',
+                                              e.target.value
+                                            )
+                                          }
+                                          disabled={Boolean(item.closed) || isScheduleLoading}
+                                        />
+                                        <span className="usersettings-booking-hours-separator">–</span>
+                                        <input
+                                          type="time"
+                                          className="usersettings-booking-hours-time-input"
+                                          value={item.end}
+                                          onChange={(e) =>
+                                            updateWorkHoursExceptionPreview(item.id, 'end', e.target.value)
+                                          }
+                                          disabled={Boolean(item.closed) || isScheduleLoading}
+                                        />
+                                        <button
+                                          type="button"
+                                          className="usersettings-booking-exceptions-remove-btn"
+                                          onClick={() => removeWorkHoursExceptionPreview(item.id)}
+                                          disabled={isScheduleLoading}
+                                        >
+                                          {t('settings.publicBooking.workHours.removeException', 'Fjern')}
+                                        </button>
+                                        {itemErrorMessage ? (
+                                          <div
+                                            className="usersettings-booking-exceptions-error"
+                                            role="alert"
+                                          >
+                                            {itemErrorMessage}
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              <div className="usersettings-booking-hours-actions usersettings-booking-hours-actions-standalone">
+                                <button
+                                  type="button"
+                                  className="usersettings-top-btn primary"
+                                  onClick={handleSaveProfile}
+                                  disabled={
+                                    isSaving ||
+                                    isAvatarUploading ||
+                                    isScheduleLoading ||
+                                    hasWorkHoursErrors ||
+                                    hasWorkHoursExceptionErrors
+                                  }
+                                  aria-busy={isSaving || isAvatarUploading}
+                                >
+                                  {isSaving || isAvatarUploading
+                                    ? t('settings.saving', 'Gemmer…')
+                                    : t('settings.save', 'Gem')}
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="usersettings-booking-hours-head">
+                                <div className="usersettings-booking-hours-copy">
+                                  <h4 className="usersettings-booking-hours-title">
+                                    {t('settings.publicBooking.workHours.title', 'Arbejdstider')}
+                                  </h4>
+                                  <p className="usersettings-booking-hours-note">
+                                    {t(
+                                      'settings.publicBooking.workHours.subtitle',
+                                      'Juster start/slut for hver dag.'
+                                    )}
+                                  </p>
+                                  {hasTeamAccess && scheduleMembers.length > 1 ? (
+                                    <p className="usersettings-booking-hours-note">
+                                      {t('settings.publicBooking.workHours.forMember', 'Viser arbejdstider for')}:{' '}
+                                      {selectedScheduleMember?.name || ''}
+                                    </p>
+                                  ) : null}
+                                </div>
+                                <div className="usersettings-booking-hours-head-actions">
+                                  {hasTeamAccess && scheduleMembers.length > 1 ? (
+                                    <div className="usersettings-booking-schedule-member">
+                                      <label
+                                        htmlFor="booking-schedule-member-select"
+                                        className="usersettings-booking-schedule-member-label"
+                                      >
+                                        {t(
+                                          'settings.publicBooking.workHours.memberLabel',
+                                          'Vælg behandler'
+                                        )}
+                                      </label>
+                                      <select
+                                        id="booking-schedule-member-select"
+                                        className="usersettings-booking-schedule-member-select"
+                                        value={selectedScheduleMemberId}
+                                        onChange={(e) => setSelectedScheduleMemberId(e.target.value)}
+                                        disabled={isScheduleLoading}
+                                      >
+                                        {scheduleMembers.map((member) => (
+                                          <option key={member.id} value={member.id}>
+                                            {member.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    className="usersettings-booking-link-btn usersettings-booking-exceptions-open-btn"
+                                    onClick={() => setShowWorkHoursExceptionsPreview(true)}
+                                    disabled={isScheduleLoading}
+                                  >
+                                    {t(
+                                      'settings.publicBooking.workHours.addExceptions',
+                                      'Tilføj undtagelser'
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="usersettings-booking-hours-list">
+                                {WORK_HOURS_DAYS.map((day) => {
+                                  const dayData = workHours[day.key] || {};
+                                  const errorCode = workHoursErrors[day.key];
+                                  const errorMessage = errorCode
+                                    ? workHoursErrorMessages[errorCode]
+                                    : '';
+                                  const isEnabled = Boolean(dayData.enabled);
+                                  return (
+                                    <div
+                                      key={day.key}
+                                      className={`usersettings-booking-hours-row ${
+                                        !isEnabled ? 'is-closed' : ''
+                                      } ${errorCode ? 'has-error' : ''}`}
+                                    >
+                                      <span className="usersettings-booking-hours-day-name">
+                                        {workHoursDayLabels[day.key] || day.key}
+                                      </span>
+
+                                      <div className="usersettings-booking-hours-row-time">
+                                        <input
+                                          type="time"
+                                          className={`usersettings-booking-hours-time-input ${
+                                            errorCode ? 'is-error' : ''
+                                          }`}
+                                          value={dayData.start || ''}
+                                          onChange={(e) =>
+                                            updateWorkHoursField(day.key, 'start', e.target.value)
+                                          }
+                                          disabled={!isEnabled || isScheduleLoading}
+                                          aria-invalid={Boolean(errorCode)}
+                                        />
+                                        <span className="usersettings-booking-hours-separator">–</span>
+                                        <input
+                                          type="time"
+                                          className={`usersettings-booking-hours-time-input ${
+                                            errorCode ? 'is-error' : ''
+                                          }`}
+                                          value={dayData.end || ''}
+                                          onChange={(e) =>
+                                            updateWorkHoursField(day.key, 'end', e.target.value)
+                                          }
+                                          disabled={!isEnabled || isScheduleLoading}
+                                          aria-invalid={Boolean(errorCode)}
+                                        />
+                                        {!isEnabled ? (
+                                          <span className="usersettings-booking-hours-closed-pill">
+                                            {t('settings.workHours.closed', 'Lukket')}
+                                          </span>
+                                        ) : null}
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        className={`usersettings-booking-hours-close-btn ${
+                                          !isEnabled ? 'closed' : ''
+                                        }`}
+                                        onClick={() => toggleWorkHoursDay(day.key)}
+                                        disabled={isScheduleLoading}
+                                        aria-label={
+                                          isEnabled
+                                            ? t('settings.workHours.markClosed', 'Markér som lukket')
+                                            : t('settings.workHours.markOpen', 'Åbn dag')
+                                        }
+                                        title={
+                                          isEnabled
+                                            ? t('settings.workHours.markClosed', 'Markér som lukket')
+                                            : t('settings.workHours.markOpen', 'Åbn dag')
+                                        }
+                                      >
+                                        ×
+                                      </button>
+
+                                      {errorMessage ? (
+                                        <div
+                                          className="usersettings-booking-hours-error"
+                                          role="alert"
+                                        >
+                                          {errorMessage}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })}
+                                <div className="usersettings-booking-hours-actions">
+                                  <button
+                                    type="button"
+                                    className="usersettings-top-btn primary"
+                                    onClick={handleSaveProfile}
+                                    disabled={
+                                      isSaving ||
+                                      isAvatarUploading ||
+                                      isScheduleLoading ||
+                                      hasWorkHoursErrors ||
+                                      hasWorkHoursExceptionErrors
+                                    }
+                                    aria-busy={isSaving || isAvatarUploading}
+                                  >
+                                    {isSaving || isAvatarUploading
+                                      ? t('settings.saving', 'Gemmer…')
+                                      : t('settings.save', 'Gem')}
+                                  </button>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </section>
                       </div>
-
                     </>
                   )}
 
@@ -974,29 +1675,28 @@ function UserSettings() {
                     </>
                   )}
 
-                  {activeSection === 'transfer' && <Transfer />}
                 </main>
               </div>
-              <div className="usersettings-actions">
-                <button
-                  type="button"
-                  className="usersettings-top-btn ghost"
-                  onClick={() => navigate('/booking')}
-                >
-                  {t('settings.close', 'Luk')}
-                </button>
-                <button
-                  type="button"
-                  className="usersettings-top-btn primary"
-                  onClick={handleSaveProfile}
-                  disabled={isSaving || isAvatarUploading || hasWorkHoursErrors}
-                  aria-busy={isSaving || isAvatarUploading}
-                >
-                  {isSaving || isAvatarUploading
-                    ? t('settings.saving', 'Gemmer…')
-                    : t('settings.save', 'Gem')}
-                </button>
-              </div>
+              {activeSection !== 'booking' ? (
+                <div className="usersettings-actions">
+                  <button
+                    type="button"
+                    className="usersettings-top-btn primary"
+                    onClick={handleSaveProfile}
+                    disabled={
+                      isSaving ||
+                      isAvatarUploading ||
+                      hasWorkHoursErrors ||
+                      hasWorkHoursExceptionErrors
+                    }
+                    aria-busy={isSaving || isAvatarUploading}
+                  >
+                    {isSaving || isAvatarUploading
+                      ? t('settings.saving', 'Gemmer…')
+                      : t('settings.save', 'Gem')}
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

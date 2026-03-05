@@ -11,7 +11,6 @@ const DEFAULT_FORM_VALUES = {
   description: '',
   duration: '1 time',
   price: '',
-  includeVat: false,
   currency: 'DKK',
   color: '#3B82F6',
 };
@@ -88,24 +87,6 @@ function AddNewServiceModal({
             : typeof initialService.pris === 'number'
               ? initialService.pris
               : '',
-        includeVat: (() => {
-          const price =
-            typeof initialService.price === 'number'
-              ? initialService.price
-              : typeof initialService.pris === 'number'
-                ? initialService.pris
-                : null;
-          const incl =
-            typeof initialService.priceInclVat === 'number'
-              ? initialService.priceInclVat
-              : typeof initialService.prisInklMoms === 'number'
-                ? initialService.prisInklMoms
-                : null;
-          if (price == null || incl == null) {
-            return Boolean(initialService.includeVat);
-          }
-          return incl !== price ? true : Boolean(initialService.includeVat);
-        })(),
         currency: initialService.currency || 'DKK',
         color: initialService.color || '#3B82F6',
       });
@@ -124,7 +105,7 @@ function AddNewServiceModal({
   }
 
   const handleChange = (field) => (event) => {
-    const value = field === 'includeVat' ? event.target.checked : event.target.value;
+    const value = event.target.value;
     setFormValues((prev) => ({
       ...prev,
       [field]: value,
@@ -155,12 +136,12 @@ function AddNewServiceModal({
         (formValues.price || '').toString().replace(',', '.')
       );
       const price = Number.isNaN(priceParsed) ? 0 : priceParsed;
-      const priceInclVat = formValues.includeVat ? price : price * 1.25;
 
       const payload = {
         ...formValues,
         price,
-        priceInclVat,
+        priceInclVat: price,
+        includeVat: false,
         ownerUid: user.uid,
         ownerEmail: user.email ?? null,
         ownerIdentifier,
@@ -180,7 +161,7 @@ function AddNewServiceModal({
             navn: payload.name?.trim() || 'Ny ydelse',
             varighed: payload.duration || '1 time',
             pris: payload.price,
-            prisInklMoms: payload.priceInclVat,
+            prisInklMoms: payload.price,
             description: payload.description || '',
             color: payload.color || '#3B82F6',
             updatedAt: nowIso,
@@ -199,7 +180,7 @@ function AddNewServiceModal({
           navn: payload.name?.trim() || 'Ny ydelse',
           varighed: payload.duration || '1 time',
           pris: payload.price,
-          prisInklMoms: payload.priceInclVat,
+          prisInklMoms: payload.price,
           description: payload.description || '',
           color: payload.color || '#3B82F6',
           createdAt: nowIso,
@@ -354,18 +335,6 @@ function AddNewServiceModal({
                   placeholder={t('booking.services.addNew.fields.price.placeholder', '0,00')}
                 />
               </div>
-            </div>
-
-            <div className="addnew-field-group addnew-tax-toggle">
-              <label>{t('booking.services.addNew.fields.vat.label', 'Moms')}</label>
-              <label className="addnew-switch">
-                <input
-                  type="checkbox"
-                  checked={formValues.includeVat}
-                  onChange={handleChange('includeVat')}
-                />
-                <span className="addnew-slider" />
-              </label>
             </div>
           </div>
 
