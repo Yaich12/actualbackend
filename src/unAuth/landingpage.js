@@ -13,6 +13,10 @@ const LazyStats = lazy(() =>
   import('../components/ui/stats-section-with-text').then((mod) => ({ default: mod.Stats }))
 );
 
+const FLOWISE_EMBED_URL = 'https://cdn.jsdelivr.net/npm/flowise-embed/dist/web.js';
+const FLOWISE_CHATFLOW_ID = 'f3b98b82-d3ba-4599-b53f-af733eaccd98';
+const FLOWISE_API_HOST = 'https://flowise.petsen.ai';
+
 const LandingDivider = ({ text, ariaLabel }) => (
   <div className="landing-divider" aria-label={ariaLabel}>
     <span className="landing-divider-text">{text}</span>
@@ -76,6 +80,44 @@ function LandingPage() {
   const showManifesto = false;
   const dividerText = t('landing.divider.text');
   const dividerLabel = t('landing.divider.aria');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const initFlowiseChatbot = async () => {
+      if (typeof window === 'undefined' || window.__landingFlowiseChatbotInitialized) return;
+
+      try {
+        const { default: Chatbot } = await import(/* webpackIgnore: true */ FLOWISE_EMBED_URL);
+        if (cancelled || window.__landingFlowiseChatbotInitialized) return;
+
+        Chatbot.init({
+          chatflowid: FLOWISE_CHATFLOW_ID,
+          apiHost: FLOWISE_API_HOST,
+          theme: {
+            button: {
+              right: 20,
+              bottom: 20,
+            },
+            chatWindow: {
+              right: 20,
+              bottom: 90,
+            },
+          },
+        });
+
+        window.__landingFlowiseChatbotInitialized = true;
+      } catch (error) {
+        console.error('Flowise chatbot failed to initialize:', error);
+      }
+    };
+
+    initFlowiseChatbot();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="landing-page">

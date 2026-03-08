@@ -78,21 +78,21 @@ function App() {
                 <Route path="/intelligent-booking" element={<IntelligentBookingPage />} />
                 <Route path="/transcription-factsr" element={<TranscriptionFactsrPage />} />
                 <Route path="/selma-copilot" element={<SelmaCopilotPage />} />
-                <Route path="/welcome" element={<CustomDashboardChoice />} />
-                <Route path="/getting-started" element={<NotEstablishedPage />} />
-                <Route path="/getting-started/start" element={<LaunchPlannerPage />} />
-                <Route path="/getting-started/digital-front" element={<DigitalFrontPage />} />
-                <Route path="/booking" element={<BookingPage />} />
-                <Route path="/booking/overview" element={<Overview />} />
-                <Route path="/journal" element={<JournalPage />} />
-                <Route path="/booking/klienter" element={<Klientoversigt />} />
-                <Route path="/booking/ydelser" element={<Ydelser />} />
-                <Route path="/booking/forloeb" element={<Forloeb />} />
-                <Route path="/booking/produkt" element={<Product />} />
-                <Route path="/booking/fakturaer/*" element={<FakturaerPage />} />
-                <Route path="/booking/team" element={<TeamPage />} />
-                <Route path="/booking/settings" element={<UserSettings />} />
-                <Route path="/settings/transfer" element={<Navigate to="/booking/settings" replace />} />
+                <Route path="/welcome" element={<ProtectedRoute><CustomDashboardChoice /></ProtectedRoute>} />
+                <Route path="/getting-started" element={<ProtectedRoute><NotEstablishedPage /></ProtectedRoute>} />
+                <Route path="/getting-started/start" element={<ProtectedRoute><LaunchPlannerPage /></ProtectedRoute>} />
+                <Route path="/getting-started/digital-front" element={<ProtectedRoute><DigitalFrontPage /></ProtectedRoute>} />
+                <Route path="/booking" element={<ProtectedRoute><BookingPage /></ProtectedRoute>} />
+                <Route path="/booking/overview" element={<ProtectedRoute><Overview /></ProtectedRoute>} />
+                <Route path="/journal" element={<ProtectedRoute><JournalPage /></ProtectedRoute>} />
+                <Route path="/booking/klienter" element={<ProtectedRoute><Klientoversigt /></ProtectedRoute>} />
+                <Route path="/booking/ydelser" element={<ProtectedRoute><Ydelser /></ProtectedRoute>} />
+                <Route path="/booking/forloeb" element={<ProtectedRoute><Forloeb /></ProtectedRoute>} />
+                <Route path="/booking/produkt" element={<ProtectedRoute><Product /></ProtectedRoute>} />
+                <Route path="/booking/fakturaer/*" element={<ProtectedRoute><FakturaerPage /></ProtectedRoute>} />
+                <Route path="/booking/team" element={<ProtectedRoute><TeamPage /></ProtectedRoute>} />
+                <Route path="/booking/settings" element={<ProtectedRoute><UserSettings /></ProtectedRoute>} />
+                <Route path="/settings/transfer" element={<ProtectedRoute><Navigate to="/booking/settings" replace /></ProtectedRoute>} />
                 <Route path="/signup" element={<SignUp />} />
                 <Route path="/sign-in-demo" element={<SignInPageDemo />} />
                 <Route path="/betaling/kvittering" element={<PaymentReceiptPage />} />

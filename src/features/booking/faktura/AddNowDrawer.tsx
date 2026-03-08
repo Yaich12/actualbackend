@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Banknote,
+  Check,
   ChevronDown,
   ChevronRight,
   CircleCheck,
@@ -13,7 +14,7 @@ import {
   Smartphone,
   X,
 } from "lucide-react";
-import { addDoc, collection, doc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { addDoc, collection, doc, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
 import { cn } from "../../../lib/utils";
 import { useAuth } from "../../../AuthContext";
 import useAppointments from "../../../hooks/useAppointments";
@@ -21,6 +22,7 @@ import useStripeConnectStatus from "../../../hooks/useStripeConnectStatus";
 import { useUserServices } from "../Ydelser/hooks/useUserServices";
 import { useUserClients } from "../Klienter/hooks/useUserClients";
 import { useUserProducts } from "../Product/hooks/useUserProducts";
+import { dedupeClinicMembers, mapClinicMemberDoc, normalizeMemberName } from "../team/clinicMembers";
 import { db } from "../../../firebase";
 import { getIdToken } from "../../../utils/auth";
 import { buildApiUrl } from "../../../utils/runtimeUrls";
@@ -31,9 +33,37 @@ const tabs = [
   { id: "products", label: "Produkter" },
 ] as const;
 
+const datePresetOptions = [
+  { id: "today", label: "I dag" },
+  { id: "yesterday", label: "I går" },
+  { id: "last7", label: "Seneste 7 dage" },
+  { id: "last30", label: "Seneste 30 dage" },
+  { id: "last90", label: "Seneste 90 dage" },
+  { id: "lastYear", label: "Sidste år" },
+  { id: "weekToDate", label: "Ugen til dato" },
+  { id: "monthToDate", label: "Måned til dato" },
+  { id: "quarterToDate", label: "Kvartal til dato" },
+  { id: "yearToDate", label: "Året til dato" },
+  { id: "tomorrow", label: "I morgen" },
+  { id: "next7", label: "Næste 7 dage" },
+  { id: "next30", label: "Næste 30 dage" },
+] as const;
+
+const defaultEmployeeFilter = "Alle medarbejdere";
+
 type DrawerTab = (typeof tabs)[number]["id"];
 
 type DrawerStep = "cart" | "payment" | "success";
+
+type DateRange = {
+  start: Date | null;
+  end: Date | null;
+};
+
+type TeamMember = {
+  id: string;
+  name: string;
+};
 
 type LineItem = {
   id: string;
@@ -157,6 +187,127 @@ const getAppointmentTimeRange = (appointment: any) => {
   return `${startTime} – ${String(nextHour).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 };
 
+const parseDateString = (value?: string) => {
+  if (!value) return null;
+  const parts = value.split("-");
+  if (parts.length !== 3) return null;
+  const [day, month, year] = parts.map((part) => Number(part));
+  if (!day || !month || !year) return null;
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+};
+
+const resolveAppointmentDateTime = (appointment: any) => {
+  const fromStartDate = parseDateString(appointment?.startDate);
+  if (fromStartDate) {
+    if (appointment?.startTime) {
+      const [hours, minutes] = appointment.startTime.split(":").map(Number);
+      if (!Number.isNaN(hours) && !Number.isNaN(minutes)) {
+        fromStartDate.setHours(hours, minutes, 0, 0);
+      }
+    }
+    return fromStartDate;
+  }
+  const isoValue = appointment?.start || appointment?.startIso || "";
+  if (isoValue) {
+    const parsed = new Date(isoValue);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return null;
+};
+
+const resolveAppointmentOwner = (appointment: any) =>
+  appointment?.calendarOwner ||
+  appointment?.ownerName ||
+  appointment?.staffName ||
+  appointment?.employeeName ||
+  appointment?.teamMember ||
+  appointment?.assignedTo ||
+  "fælles konto";
+
+const startOfDay = (date: Date) => {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+};
+
+const endOfDay = (date: Date) => {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+};
+
+const addDays = (date: Date, amount: number) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + amount);
+  return next;
+};
+
+const resolvePresetRange = (presetId: string): DateRange => {
+  const today = new Date();
+  const todayStart = startOfDay(today);
+  switch (presetId) {
+    case "today":
+      return { start: todayStart, end: endOfDay(todayStart) };
+    case "yesterday": {
+      const yesterday = addDays(todayStart, -1);
+      return { start: yesterday, end: endOfDay(yesterday) };
+    }
+    case "last7": {
+      const start = addDays(todayStart, -6);
+      return { start, end: endOfDay(todayStart) };
+    }
+    case "last30": {
+      const start = addDays(todayStart, -29);
+      return { start, end: endOfDay(todayStart) };
+    }
+    case "last90": {
+      const start = addDays(todayStart, -89);
+      return { start, end: endOfDay(todayStart) };
+    }
+    case "lastYear": {
+      const start = new Date(todayStart.getFullYear() - 1, 0, 1);
+      const end = new Date(todayStart.getFullYear() - 1, 11, 31);
+      return { start, end: endOfDay(end) };
+    }
+    case "weekToDate": {
+      const weekdayIndex = (todayStart.getDay() + 6) % 7;
+      const start = addDays(todayStart, -weekdayIndex);
+      return { start, end: endOfDay(todayStart) };
+    }
+    case "monthToDate": {
+      const start = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+      return { start, end: endOfDay(todayStart) };
+    }
+    case "quarterToDate": {
+      const quarter = Math.floor(todayStart.getMonth() / 3);
+      const start = new Date(todayStart.getFullYear(), quarter * 3, 1);
+      return { start, end: endOfDay(todayStart) };
+    }
+    case "yearToDate": {
+      const start = new Date(todayStart.getFullYear(), 0, 1);
+      return { start, end: endOfDay(todayStart) };
+    }
+    case "tomorrow": {
+      const next = addDays(todayStart, 1);
+      return { start: next, end: endOfDay(next) };
+    }
+    case "next7": {
+      const start = addDays(todayStart, 1);
+      const end = addDays(start, 6);
+      return { start, end: endOfDay(end) };
+    }
+    case "next30": {
+      const start = addDays(todayStart, 1);
+      const end = addDays(start, 29);
+      return { start, end: endOfDay(end) };
+    }
+    default:
+      return { start: todayStart, end: endOfDay(todayStart) };
+  }
+};
+
 const formatDateTime = (date: Date | null) => {
   if (!date) return "";
   const day = date.getDate();
@@ -194,19 +345,29 @@ export default function AddNowDrawer({
   initialAppointmentId = null,
   initialStep = "cart",
 }: AddNowDrawerProps) {
-  const { user } = useAuth();
+  const { user, workspaceUid, sessionUid, activeClinicId: authClinicId } = useAuth();
   const { status: stripeConnectStatus, loading: stripeConnectLoading } = useStripeConnectStatus({
     enabled: Boolean(user?.uid && open),
   });
   const { appointments, loading: appointmentsLoading, error: appointmentsError } = useAppointments(
-    user?.uid || null
+    authClinicId || workspaceUid || null
   );
   const { services, loading: servicesLoading } = useUserServices();
   const { clients, loading: clientsLoading } = useUserClients();
   const { products, loading: productsLoading, error: productsError } = useUserProducts();
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [activeClinicId, setActiveClinicId] = useState<string | null>(authClinicId || null);
+  const datePresetRef = useRef<HTMLDivElement | null>(null);
+  const employeeMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [activeTab, setActiveTab] = useState<DrawerTab>("appointments");
   const [searchTerm, setSearchTerm] = useState("");
+  const [datePresetOpen, setDatePresetOpen] = useState(false);
+  const [selectedDatePreset, setSelectedDatePreset] = useState<string>("today");
+  const [employeeFilterOpen, setEmployeeFilterOpen] = useState(false);
+  const [employeeMenuOpen, setEmployeeMenuOpen] = useState(false);
+  const [selectedEmployeeFilter, setSelectedEmployeeFilter] = useState(defaultEmployeeFilter);
+  const [draftEmployeeFilter, setDraftEmployeeFilter] = useState(defaultEmployeeFilter);
   const [clientSearch, setClientSearch] = useState("");
   const [showClientPicker, setShowClientPicker] = useState(false);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
@@ -219,9 +380,36 @@ export default function AddNowDrawer({
   const [paymentInfo, setPaymentInfo] = useState("");
   const [completedSale, setCompletedSale] = useState<any>(null);
 
+  const ownerFallbackName = user?.displayName || user?.email || "Medarbejder";
   const employeeName = user?.displayName || user?.email || "Medarbejder";
   const connectStatus = stripeConnectStatus?.connect || null;
   const isConnectReady = Boolean(connectStatus?.onboardingComplete);
+  const teamMemberById = useMemo(() => {
+    const entries: Array<[string, string]> = teamMembers
+      .map((member): [string, string] => [String(member.id || "").trim(), member.name.trim()])
+      .filter(([id, name]) => Boolean(id && name));
+    return new Map<string, string>(entries);
+  }, [teamMembers]);
+
+  const resolveDrawerAppointmentOwner = useCallback((appointment: any) => {
+    const ownerName = normalizeMemberName(resolveAppointmentOwner(appointment));
+    if (ownerName && ownerName !== "fælles konto") return ownerName;
+    const ownerId = String(
+      appointment?.calendarOwnerId || appointment?.staffUid || appointment?.therapistId || ""
+    ).trim();
+    if (ownerId && teamMemberById.has(ownerId)) {
+      return normalizeMemberName(teamMemberById.get(ownerId) || ownerName);
+    }
+    return ownerName;
+  }, [teamMemberById]);
+
+  const selectedDatePresetLabel = useMemo(
+    () => datePresetOptions.find((option) => option.id === selectedDatePreset)?.label || "I dag",
+    [selectedDatePreset]
+  );
+  const datePresetRange = useMemo(() => resolvePresetRange(selectedDatePreset), [selectedDatePreset]);
+  const appointmentsHeading = selectedDatePreset === "today" ? "Tidligere i dag" : selectedDatePresetLabel;
+  const employeeFilterActive = selectedEmployeeFilter !== defaultEmployeeFilter;
 
   useEffect(() => {
     if (!open) return;
@@ -238,6 +426,12 @@ export default function AddNowDrawer({
     if (!open) return;
     setActiveTab("appointments");
     setSearchTerm("");
+    setDatePresetOpen(false);
+    setSelectedDatePreset("today");
+    setEmployeeFilterOpen(false);
+    setEmployeeMenuOpen(false);
+    setSelectedEmployeeFilter(defaultEmployeeFilter);
+    setDraftEmployeeFilter(defaultEmployeeFilter);
     setClientSearch("");
     setShowClientPicker(false);
     setSelectedAppointmentId(initialAppointmentId);
@@ -251,10 +445,74 @@ export default function AddNowDrawer({
   }, [open, initialAppointmentId, initialStep]);
 
   useEffect(() => {
+    if (!open) {
+      setActiveClinicId(null);
+      return;
+    }
+    const resolvedClinicId = String(authClinicId || "").trim() || null;
+    setActiveClinicId(resolvedClinicId);
+  }, [authClinicId, open]);
+
+  useEffect(() => {
+    if (!sessionUid || !open || !activeClinicId) {
+      setTeamMembers([]);
+      return;
+    }
+    const teamRef = collection(db, "clinics", activeClinicId, "members");
+    const unsubscribe = onSnapshot(
+      teamRef,
+      (snapshot) => {
+        const normalizedOwnerFallback = normalizeMemberName(ownerFallbackName);
+        const loaded = dedupeClinicMembers(
+          snapshot.docs.map((docSnap) => mapClinicMemberDoc(docSnap, "Medarbejder"))
+        )
+          .map((member) => ({
+            id: member.id,
+            name:
+              String(member.id || "").trim() === String(sessionUid || "").trim() &&
+              normalizeMemberName(member.name).toLowerCase() === "medarbejder" &&
+              normalizedOwnerFallback.toLowerCase() !== "medarbejder"
+                ? normalizedOwnerFallback
+                : normalizeMemberName(member.name),
+          }))
+          .filter((member) => Boolean(member.id && member.name)) as TeamMember[];
+        setTeamMembers(loaded);
+      },
+      (error) => {
+        console.error("[AddNowDrawer] Failed to load team members", error);
+        setTeamMembers([]);
+      }
+    );
+    return () => unsubscribe();
+  }, [activeClinicId, open, ownerFallbackName, sessionUid]);
+
+  useEffect(() => {
     if (selectedPaymentMethod?.connectRequired && !isConnectReady) {
       setSelectedPaymentMethod(null);
     }
   }, [isConnectReady, selectedPaymentMethod]);
+
+  useEffect(() => {
+    if (activeTab === "appointments") return;
+    setDatePresetOpen(false);
+    setEmployeeFilterOpen(false);
+    setEmployeeMenuOpen(false);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (datePresetRef.current && !datePresetRef.current.contains(target)) {
+        setDatePresetOpen(false);
+      }
+      if (employeeMenuRef.current && !employeeMenuRef.current.contains(target)) {
+        setEmployeeMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => window.removeEventListener("mousedown", handlePointerDown);
+  }, [open]);
 
   const selectedAppointment = useMemo(
     () => appointments.find((item: any) => item.id === selectedAppointmentId) || null,
@@ -263,14 +521,51 @@ export default function AddNowDrawer({
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
 
-  const filteredAppointments = useMemo(() => {
-    if (!normalizedSearch) return appointments;
-    return appointments.filter((appointment: any) => {
-      return [appointment.client, appointment.service, appointment.clientEmail]
-        .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(normalizedSearch));
+  const employeeOptions = useMemo(() => {
+    const values = new Map<string, string>();
+    const addValue = (value?: string | null) => {
+      const normalized = normalizeMemberName(value);
+      if (!normalized) return;
+      const key = normalized.toLowerCase();
+      if (!values.has(key)) {
+        values.set(key, normalized);
+      }
+    };
+    addValue(ownerFallbackName);
+    teamMembers.forEach((member) => {
+      addValue(member.name);
     });
-  }, [appointments, normalizedSearch]);
+    return [
+      defaultEmployeeFilter,
+      ...Array.from(values.values()).sort((a, b) => a.localeCompare(b, "da-DK")),
+    ];
+  }, [ownerFallbackName, teamMembers]);
+
+  const filteredAppointments = useMemo(() => {
+    const start = datePresetRange.start ? startOfDay(datePresetRange.start) : null;
+    const end = datePresetRange.end ? endOfDay(datePresetRange.end) : null;
+    const selectedOwnerNormalized = normalizeMemberName(selectedEmployeeFilter).toLowerCase();
+
+    return appointments.filter((appointment: any) => {
+      const appointmentDate = resolveAppointmentDateTime(appointment);
+      if (!appointmentDate) return false;
+      if (start && appointmentDate < start) return false;
+      if (end && appointmentDate > end) return false;
+
+      const owner = resolveDrawerAppointmentOwner(appointment);
+      if (
+        selectedEmployeeFilter !== defaultEmployeeFilter &&
+        normalizeMemberName(owner).toLowerCase() !== selectedOwnerNormalized
+      ) {
+        return false;
+      }
+
+      if (!normalizedSearch) return true;
+      return [appointment.client, appointment.service, appointment.clientEmail, owner]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedSearch));
+    });
+  }, [appointments, datePresetRange, normalizedSearch, resolveDrawerAppointmentOwner, selectedEmployeeFilter]);
 
   const filteredServices = useMemo(() => {
     if (!normalizedSearch) return services;
@@ -316,7 +611,7 @@ export default function AddNowDrawer({
       typeof selectedAppointment.servicePrice === "number"
         ? selectedAppointment.servicePrice
         : service?.pris || 0;
-    const owner = selectedAppointment.calendarOwner || "fælles konto";
+    const owner = resolveDrawerAppointmentOwner(selectedAppointment);
 
     return [
       {
@@ -330,7 +625,7 @@ export default function AddNowDrawer({
         referenceId: selectedAppointment.id,
       },
     ];
-  }, [selectedAppointment, services]);
+  }, [resolveDrawerAppointmentOwner, selectedAppointment, services]);
 
   useEffect(() => {
     if (!selectedAppointment) return;
@@ -456,6 +751,32 @@ export default function AddNowDrawer({
     setShowClientPicker(false);
   };
 
+  const handleSelectDatePreset = (presetId: string) => {
+    setSelectedDatePreset(presetId);
+    setDatePresetOpen(false);
+  };
+
+  const handleOpenEmployeeFilters = () => {
+    setDraftEmployeeFilter(selectedEmployeeFilter);
+    setEmployeeMenuOpen(false);
+    setEmployeeFilterOpen(true);
+  };
+
+  const handleCloseEmployeeFilters = () => {
+    setEmployeeFilterOpen(false);
+    setEmployeeMenuOpen(false);
+  };
+
+  const handleResetEmployeeFilters = () => {
+    setDraftEmployeeFilter(defaultEmployeeFilter);
+  };
+
+  const handleApplyEmployeeFilters = () => {
+    setSelectedEmployeeFilter(draftEmployeeFilter);
+    setEmployeeFilterOpen(false);
+    setEmployeeMenuOpen(false);
+  };
+
   const handleContinueToPayment = () => {
     if (!lineItems.length) return;
     setStep("payment");
@@ -475,7 +796,7 @@ export default function AddNowDrawer({
   };
 
   const handlePayNow = async () => {
-    if (!user?.uid || !selectedPaymentMethod || !lineItems.length) return;
+    if (!sessionUid || (!activeClinicId && !workspaceUid) || !selectedPaymentMethod || !lineItems.length) return;
     if (selectedPaymentMethod.connectRequired && !isConnectReady) {
       setPaymentError("Kortbetalinger er låst indtil betalinger er aktiveret.");
       setPaymentInfo("");
@@ -548,6 +869,8 @@ export default function AddNowDrawer({
       }
 
       const salePayload = {
+        clinicId: activeClinicId || null,
+        createdByUid: sessionUid || null,
         status: "completed",
         appointmentId: selectedAppointment?.id || null,
         appointmentRef,
@@ -559,16 +882,22 @@ export default function AddNowDrawer({
         totals,
         paymentMethod: selectedPaymentMethod.label,
         paymentProvider: "manual",
-        employeeId: user.uid,
+        employeeId: sessionUid || null,
         employeeName,
         completedAt: serverTimestamp(),
         createdAt: serverTimestamp(),
       };
 
-      const saleRef = await addDoc(collection(db, "users", user.uid, "sales"), salePayload);
+      const salesCollectionRef = activeClinicId
+        ? collection(db, "clinics", activeClinicId, "sales")
+        : collection(db, "users", workspaceUid, "sales");
+      const saleRef = await addDoc(salesCollectionRef, salePayload);
 
       if (selectedAppointment?.id) {
-        await updateDoc(doc(db, "users", user.uid, "appointments", selectedAppointment.id), {
+        const appointmentDocRef = activeClinicId
+          ? doc(db, "clinics", activeClinicId, "appointments", selectedAppointment.id)
+          : doc(db, "users", workspaceUid, "appointments", selectedAppointment.id);
+        await updateDoc(appointmentDocRef, {
           status: "completed",
           completedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -634,7 +963,7 @@ export default function AddNowDrawer({
           open ? "translate-x-0" : "translate-x-full"
         )}
       >
-        <div className="flex h-full flex-col">
+        <div className="flex h-full min-h-0 flex-col">
           <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
             <div>
               <p className="text-xs text-slate-400">{headerSubtitle}</p>
@@ -652,9 +981,9 @@ export default function AddNowDrawer({
             </button>
           </div>
 
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             {step === "success" ? (
-              <div className="grid h-full grid-cols-[120px_minmax(0,1fr)]">
+              <div className="grid h-full min-h-0 grid-cols-[120px_minmax(0,1fr)]">
                 <div className="border-r border-slate-200 bg-white px-4 py-6">
                   <button
                     type="button"
@@ -670,7 +999,7 @@ export default function AddNowDrawer({
                   </button>
                 </div>
 
-                <div className="flex h-full flex-col overflow-auto px-10 py-8">
+                <div className="flex h-full min-h-0 flex-col overflow-auto px-10 py-8">
                   <div className="flex items-center justify-between">
                     <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white">
                       <CircleCheck className="h-4 w-4" />
@@ -781,10 +1110,10 @@ export default function AddNowDrawer({
                 </div>
               </div>
             ) : (
-              <div className="grid h-full grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
-                <div className="flex h-full flex-col border-r border-slate-200 bg-white">
+              <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="flex h-full min-h-0 flex-col border-r border-slate-200 bg-white">
                   {step === "payment" ? (
-                    <div className="flex h-full flex-col overflow-auto px-6 py-6">
+                    <div className="flex h-full min-h-0 flex-col overflow-auto px-6 py-6">
                       <div>
                         <h3 className="text-lg font-semibold text-slate-900">Vælg betaling</h3>
                         <p className="mt-1 text-sm text-slate-500">Betalingsmetoder</p>
@@ -891,24 +1220,55 @@ export default function AddNowDrawer({
                         </div>
                       </div>
 
-                      <div className="flex-1 overflow-auto px-6 pb-6">
+                      <div className="flex-1 min-h-0 overflow-auto px-6 pb-6">
                         {activeTab === "appointments" && (
                           <div className="space-y-4">
                             <div className="flex items-center justify-between text-xs text-slate-400">
-                              <span>Tidligere i dag</span>
+                              <span>{appointmentsHeading}</span>
                               <div className="flex items-center gap-2">
+                                <div className="relative" ref={datePresetRef}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDatePresetOpen((prev) => !prev)}
+                                    className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600"
+                                  >
+                                    {selectedDatePresetLabel}
+                                    <ChevronDown className="h-3 w-3" />
+                                  </button>
+                                  {datePresetOpen && (
+                                    <div className="absolute right-0 top-full z-20 mt-2 max-h-72 w-56 overflow-auto rounded-2xl border border-slate-200 bg-white py-2 shadow-xl">
+                                      {datePresetOptions.map((option) => (
+                                        <button
+                                          key={option.id}
+                                          type="button"
+                                          onClick={() => handleSelectDatePreset(option.id)}
+                                          className={cn(
+                                            "flex w-full items-center justify-between px-4 py-2 text-left text-sm",
+                                            option.id === selectedDatePreset
+                                              ? "bg-indigo-50 text-indigo-600"
+                                              : "text-slate-700 hover:bg-slate-50"
+                                          )}
+                                        >
+                                          <span>{option.label}</span>
+                                          {option.id === selectedDatePreset && (
+                                            <Check className="h-4 w-4" />
+                                          )}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
                                 <button
                                   type="button"
-                                  className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600"
+                                  onClick={handleOpenEmployeeFilters}
+                                  className={cn(
+                                    "flex h-8 w-8 items-center justify-center rounded-full border",
+                                    employeeFilterActive
+                                      ? "border-indigo-500 text-indigo-600"
+                                      : "border-slate-200 text-slate-500"
+                                  )}
                                 >
-                                  I dag
-                                  <ChevronDown className="h-3 w-3" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200"
-                                >
-                                  <SlidersHorizontal className="h-3 w-3 text-slate-500" />
+                                  <SlidersHorizontal className="h-3 w-3" />
                                 </button>
                               </div>
                             </div>
@@ -927,7 +1287,7 @@ export default function AddNowDrawer({
 
                             {!appointmentsLoading && filteredAppointments.length === 0 && (
                               <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
-                                Ingen aftaler matcher din søgning.
+                                Ingen aftaler matcher dine filtre.
                               </div>
                             )}
 
@@ -939,7 +1299,7 @@ export default function AddNowDrawer({
                                 const timeRange = getAppointmentTimeRange(appointment);
                                 const duration =
                                   appointment.serviceDuration || service?.varighed || "1t";
-                                const owner = appointment.calendarOwner || "fælles konto";
+                                const owner = resolveDrawerAppointmentOwner(appointment);
                                 const serviceName = service?.navn || appointment.service || "";
                                 const price =
                                   typeof appointment.servicePrice === "number"
@@ -1084,7 +1444,7 @@ export default function AddNowDrawer({
                   )}
                 </div>
 
-                <div className="flex h-full flex-col bg-white">
+                <div className="flex h-full min-h-0 flex-col bg-white">
                   <div className="border-b border-slate-200 px-6 py-6">
                     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                       {step === "payment" ? (
@@ -1190,7 +1550,7 @@ export default function AddNowDrawer({
                     )}
                   </div>
 
-                  <div className="flex-1 overflow-auto px-6 py-4">
+                  <div className="flex-1 min-h-0 overflow-auto px-6 py-4">
                     {lineItems.length === 0 ? (
                       <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
                         Vælg en aftale eller ydelse for at komme i gang.
@@ -1314,6 +1674,82 @@ export default function AddNowDrawer({
               </div>
             )}
           </div>
+
+          {employeeFilterOpen && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+              <div
+                className="absolute inset-0 bg-black/30"
+                onClick={handleCloseEmployeeFilters}
+              />
+              <div className="relative w-full max-w-[920px] rounded-[32px] bg-white px-8 py-7 shadow-2xl">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-3xl font-semibold text-slate-900">Filtre</h2>
+                  <button
+                    type="button"
+                    onClick={handleCloseEmployeeFilters}
+                    className="flex h-10 w-10 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"
+                    aria-label="Luk filtre"
+                  >
+                    <X className="h-6 w-6" />
+                  </button>
+                </div>
+
+                <div className="mt-10">
+                  <p className="text-xl font-semibold text-slate-900">Medarbejder</p>
+                  <div className="relative mt-4" ref={employeeMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setEmployeeMenuOpen((prev) => !prev)}
+                      className="flex w-full items-center justify-between rounded-2xl border border-indigo-500 px-5 py-4 text-lg font-medium text-slate-900"
+                    >
+                      {draftEmployeeFilter}
+                      <ChevronDown className="h-5 w-5 text-slate-700" />
+                    </button>
+                    {employeeMenuOpen && (
+                      <div className="absolute left-0 right-0 top-full z-10 mt-2 max-h-72 overflow-auto rounded-2xl border border-slate-200 bg-white py-2 shadow-xl">
+                        {employeeOptions.map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => {
+                              setDraftEmployeeFilter(option);
+                              setEmployeeMenuOpen(false);
+                            }}
+                            className={cn(
+                              "flex w-full items-center justify-between px-5 py-3 text-left text-sm",
+                              option === draftEmployeeFilter
+                                ? "bg-indigo-50 text-indigo-600"
+                                : "text-slate-700 hover:bg-slate-50"
+                            )}
+                          >
+                            <span>{option}</span>
+                            {option === draftEmployeeFilter && <Check className="h-5 w-5" />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-12 flex items-center justify-end gap-4">
+                  <button
+                    type="button"
+                    onClick={handleResetEmployeeFilters}
+                    className="rounded-full border border-slate-300 px-8 py-3 text-lg font-semibold text-slate-800"
+                  >
+                    Ryd filtre
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplyEmployeeFilters}
+                    className="rounded-full bg-black px-8 py-3 text-lg font-semibold text-white"
+                  >
+                    Godkend
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

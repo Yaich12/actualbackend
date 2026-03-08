@@ -6,6 +6,9 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Download,
+  Mail,
+  MoreHorizontal,
   Search,
   SlidersHorizontal,
   X,
@@ -13,6 +16,8 @@ import {
 import { useAuth } from "../../../AuthContext";
 import useAppointments from "../../../hooks/useAppointments";
 import useSales from "../../../hooks/useSales";
+import { getIdToken } from "../../../utils/auth";
+import { buildApiUrl } from "../../../utils/runtimeUrls";
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("da-DK", {
@@ -46,6 +51,32 @@ const getItemSummary = (sale: any) => {
   return summary;
 };
 
+const normalizeStatus = (value: any) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const isPaidSale = (sale: any) => {
+  const status = normalizeStatus(sale?.paymentStatus || sale?.status);
+  return (
+    status === "paid" ||
+    status === "completed" ||
+    status === "complete" ||
+    status === "success" ||
+    status === "succeeded" ||
+    status === "gennemfort"
+  );
+};
+
+const getPaymentIdentifier = (sale: any) =>
+  sale?.paymentId ||
+  sale?.stripePaymentIntentId ||
+  sale?.stripeChargeId ||
+  sale?.stripeCheckoutSessionId ||
+  null;
+
 type DateRange = {
   start: Date | null;
   end: Date | null;
@@ -59,6 +90,11 @@ type PaymentFilters = {
   maxAmount: string;
   vouchers: string;
   deposits: string;
+};
+
+type ToastState = {
+  tone: "success" | "error";
+  message: string;
 };
 
 const monthNames = [
@@ -318,15 +354,16 @@ const formatDayHeading = (date: Date) => {
 };
 
 export default function Payments() {
-  const { user } = useAuth();
-  const { sales, loading, error } = useSales(user?.uid || null, {
+  const { workspaceUid, activeClinicId } = useAuth();
+  const sharedScopeId = activeClinicId || workspaceUid || null;
+  const { sales, loading, error } = useSales(sharedScopeId, {
     status: "completed",
   });
   const {
     appointments,
     loading: appointmentsLoading,
     error: appointmentsError,
-  } = useAppointments(user?.uid || null);
+  } = useAppointments(sharedScopeId);
   const [searchTerm, setSearchTerm] = useState("");
   const rangePickerRef = useRef<HTMLDivElement | null>(null);
   const [dateRange, setDateRange] = useState<DateRange>(() => {
@@ -361,6 +398,12 @@ export default function Payments() {
   const [draftFilters, setDraftFilters] = useState<PaymentFilters>(appliedFilters);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isDayDetailsOpen, setIsDayDetailsOpen] = useState(false);
+  const [openActionsSaleId, setOpenActionsSaleId] = useState<string | null>(null);
+  const [actionStateBySaleId, setActionStateBySaleId] = useState<
+    Record<string, "download" | "resend" | null>
+  >({});
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
 
   const earliestSaleDate = useMemo(() => {
     const dates = sales
@@ -614,6 +657,119 @@ export default function Payments() {
     setIsDayDetailsOpen(false);
   };
 
+  const showToast = (tone: "success" | "error", message: string) => {
+    setToast({ tone, message });
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 3600);
+  };
+
+  const setActionState = (
+    saleId: string,
+    action: "download" | "resend" | null
+  ) => {
+    setActionStateBySaleId((previous) => ({
+      ...previous,
+      [saleId]: action,
+    }));
+  };
+
+  const callReceiptApi = async ({
+    path,
+    paymentId,
+    saleId,
+  }: {
+    path: string;
+    paymentId?: string | null;
+    saleId?: string | null;
+  }): Promise<any> => {
+    if (!paymentId && !saleId) {
+      throw new Error("Betalingen mangler reference til kvittering.");
+    }
+    const token = await getIdToken();
+    const response = await fetch(buildApiUrl(path), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        paymentId: paymentId || undefined,
+        saleId: saleId || undefined,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload?.error || `Request failed (${response.status})`);
+    }
+    return payload;
+  };
+
+  const handleDownloadReceipt = async (sale: any) => {
+    const paymentId = getPaymentIdentifier(sale);
+    const saleId = sale?.id ? String(sale.id) : null;
+    if (!paymentId && !saleId) {
+      showToast("error", "Betalingen mangler reference til kvittering.");
+      return;
+    }
+
+    setActionState(sale.id, "download");
+    try {
+      const result = await callReceiptApi({
+        path: "/api/stripe/connect/payments/get-receipt-download-url",
+        paymentId,
+        saleId,
+      });
+      const url = `${result?.url || ""}`.trim();
+      if (!url) {
+        throw new Error("Kunne ikke hente download-link til kvittering.");
+      }
+      window.open(url, "_blank", "noopener,noreferrer");
+      showToast("success", "Kvittering åbnet i ny fane.");
+      setOpenActionsSaleId(null);
+    } catch (error: any) {
+      showToast(
+        "error",
+        error?.message || "Kunne ikke hente kvittering lige nu."
+      );
+    } finally {
+      setActionState(sale.id, null);
+    }
+  };
+
+  const handleResendReceipt = async (sale: any) => {
+    const paymentId = getPaymentIdentifier(sale);
+    const saleId = sale?.id ? String(sale.id) : null;
+    if (!paymentId && !saleId) {
+      showToast("error", "Betalingen mangler reference til kvittering.");
+      return;
+    }
+
+    setActionState(sale.id, "resend");
+    try {
+      await callReceiptApi({
+        path: "/api/stripe/connect/payments/resend-receipt",
+        paymentId,
+        saleId,
+      });
+      showToast("success", "Kvittering er sendt igen.");
+      setOpenActionsSaleId(null);
+    } catch (error: any) {
+      const message = `${error?.message || ""}`.trim();
+      if (message.toLowerCase().includes("e-mail")) {
+        showToast("error", message);
+      } else {
+        showToast("error", message || "Kunne ikke gensende kvitteringen.");
+      }
+    } finally {
+      setActionState(sale.id, null);
+    }
+  };
+
   useEffect(() => {
     if (!rangePickerOpen) return;
     const handleClickOutside = (event: MouseEvent) => {
@@ -647,6 +803,27 @@ export default function Payments() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isDayDetailsOpen]);
+
+  useEffect(() => {
+    const handleMouseDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const insideActionMenu = target.closest("[data-payment-actions-root]");
+      if (!insideActionMenu) {
+        setOpenActionsSaleId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
 
   const searchedSales = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -747,19 +924,28 @@ export default function Payments() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      {toast && (
+        <div className="pointer-events-none fixed right-6 top-6 z-[120]">
+          <div
+            className={`rounded-xl px-4 py-3 text-sm font-medium shadow-xl ${
+              toast.tone === "success"
+                ? "bg-emerald-600 text-white"
+                : "bg-rose-600 text-white"
+            }`}
+          >
+            {toast.message}
+          </div>
+        </div>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 bg-white px-8 pb-6 pt-8">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">
             Betalingstransaktioner
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Se, filtrer og eksportér din betalingshistorik.
+            Se og filtrer din betalingshistorik.
           </p>
         </div>
-        <button type="button" className="toolbar-pill">
-          Muligheder
-          <ChevronDown className="toolbar-caret" />
-        </button>
       </div>
 
       <div className="flex-1 overflow-auto bg-slate-50 px-8 pb-10">
@@ -1295,6 +1481,7 @@ export default function Payments() {
                   <th className="px-4 py-3 text-left">Medarbejder</th>
                   <th className="px-4 py-3 text-left">Type</th>
                   <th className="px-4 py-3 text-left">Metode</th>
+                  <th className="px-4 py-3 text-right">Muligheder</th>
                 </tr>
               </thead>
               <tbody>
@@ -1306,12 +1493,13 @@ export default function Payments() {
                   <td className="px-4 py-3" />
                   <td className="px-4 py-3" />
                   <td className="px-4 py-3" />
+                  <td className="px-4 py-3" />
                 </tr>
 
                 {loading && (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="px-4 py-8 text-center text-xs text-slate-400"
                     >
                       Henter betalinger...
@@ -1322,7 +1510,7 @@ export default function Payments() {
                 {!loading && error && (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="px-4 py-8 text-center text-xs text-slate-400"
                     >
                       Kunne ikke hente betalinger lige nu.
@@ -1333,7 +1521,7 @@ export default function Payments() {
                 {!loading && !error && filteredSales.length === 0 && (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="px-4 py-8 text-center text-xs text-slate-400"
                     >
                       Ingen gennemførte betalinger endnu.
@@ -1355,6 +1543,14 @@ export default function Payments() {
                     const employeeName = sale.employeeName || "—";
                     const paymentMethod = sale.paymentMethod || "—";
                     const typeLabel = resolveSaleType(sale);
+                    const paid = isPaidSale(sale);
+                    const paymentIdentifier = getPaymentIdentifier(sale);
+                    const hasReceiptReference = Boolean(
+                      paymentIdentifier || sale?.id
+                    );
+                    const currentAction = actionStateBySaleId[sale.id] || null;
+                    const isActionBusy = currentAction !== null;
+                    const actionsOpen = openActionsSaleId === sale.id;
 
                     return (
                       <tr key={sale.id} className="border-b border-slate-100">
@@ -1384,6 +1580,59 @@ export default function Payments() {
                         <td className="px-4 py-3 text-slate-700">{employeeName}</td>
                         <td className="px-4 py-3 text-slate-700">{typeLabel}</td>
                         <td className="px-4 py-3 text-slate-700">{paymentMethod}</td>
+                        <td className="px-4 py-3 text-right">
+                          {paid && hasReceiptReference ? (
+                            <div
+                              className="relative inline-flex justify-end"
+                              data-payment-actions-root={sale.id}
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setOpenActionsSaleId((previous) =>
+                                    previous === sale.id ? null : sale.id
+                                  )
+                                }
+                                disabled={isActionBusy}
+                                className={`inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 ${
+                                  isActionBusy ? "cursor-wait opacity-60" : "hover:bg-slate-50"
+                                }`}
+                              >
+                                {isActionBusy ? "Arbejder..." : "Muligheder"}
+                                <MoreHorizontal className="h-3.5 w-3.5" />
+                              </button>
+
+                              {actionsOpen && (
+                                <div className="absolute right-0 top-9 z-20 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadReceipt(sale)}
+                                    disabled={isActionBusy}
+                                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-700 ${
+                                      isActionBusy ? "cursor-wait opacity-60" : "hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    <Download className="h-3.5 w-3.5" />
+                                    Download kvittering (PDF)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleResendReceipt(sale)}
+                                    disabled={isActionBusy}
+                                    className={`flex w-full items-center gap-2 border-t border-slate-100 px-3 py-2 text-left text-xs text-slate-700 ${
+                                      isActionBusy ? "cursor-wait opacity-60" : "hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    <Mail className="h-3.5 w-3.5" />
+                                    Gensend kvittering
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}

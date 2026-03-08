@@ -26,16 +26,23 @@ interface SignInPageProps {
   description?: React.ReactNode;
   heroImageSrc?: string;
   testimonials?: Testimonial[];
-  loginMethod?: "email" | "phone";
-  onLoginMethodChange?: (method: "email" | "phone") => void;
+  statusMessage?: React.ReactNode;
+  authMode?: "login" | "signup";
+  onAuthModeChange?: (mode: "login" | "signup") => void;
+  loginMethod?: "email" | "phone" | "employee";
+  onLoginMethodChange?: (method: "email" | "phone" | "employee") => void;
   phoneNumber?: string;
   smsCode?: string;
+  employeeUsername?: string;
   phoneStep?: "enterPhone" | "enterCode";
   onPhoneNumberChange?: (value: string) => void;
   onSmsCodeChange?: (value: string) => void;
+  onEmployeeUsernameChange?: (value: string) => void;
   onSendCode?: () => void;
   onConfirmCode?: () => void;
+  onEmployeeSignIn?: (event: React.FormEvent<HTMLFormElement>) => void;
   onSignIn?: (event: React.FormEvent<HTMLFormElement>) => void;
+  onSignUpSubmit?: (event: React.FormEvent<HTMLFormElement>) => void;
   onGoogleSignIn?: () => void;
   onResetPassword?: () => void;
   onLoginLink?: () => void;
@@ -43,7 +50,7 @@ interface SignInPageProps {
 }
 
 const GlassInputWrapper = ({ children }: { children: React.ReactNode }) => (
-  <div className="rounded-2xl border border-border bg-foreground/5 backdrop-blur-sm transition-colors focus-within:border-violet-400/70 focus-within:bg-violet-500/10">
+  <div className="rounded-2xl border border-border/80 bg-white/60 backdrop-blur-sm transition-all focus-within:border-primary/50 focus-within:bg-white focus-within:ring-2 focus-within:ring-primary/20">
     {children}
   </div>
 );
@@ -72,16 +79,23 @@ export const SignInPage: React.FC<SignInPageProps> = ({
   description,
   heroImageSrc,
   testimonials = [],
+  statusMessage,
+  authMode,
+  onAuthModeChange,
   loginMethod,
   onLoginMethodChange,
   phoneNumber = "",
   smsCode = "",
+  employeeUsername = "",
   phoneStep = "enterPhone",
   onPhoneNumberChange,
   onSmsCodeChange,
+  onEmployeeUsernameChange,
   onSendCode,
   onConfirmCode,
+  onEmployeeSignIn,
   onSignIn,
+  onSignUpSubmit,
   onGoogleSignIn,
   onResetPassword,
   onLoginLink,
@@ -90,37 +104,92 @@ export const SignInPage: React.FC<SignInPageProps> = ({
   const { t } = useLanguage();
   const [showPassword, setShowPassword] = useState(false);
   const activeMethod = loginMethod || "email";
+  const activeAuthMode = authMode || "login";
+  const isSignUpMode = activeAuthMode === "signup";
   const showMethodToggle = typeof onLoginMethodChange === "function";
-  const resolvedTitle = title || (
-    <span className="font-light text-foreground tracking-tighter">{t("login.title")}</span>
-  );
+  const resolvedTitle = title || t("login.title");
   const resolvedDescription = description || t("login.description");
 
-  return (
-    <div className="h-[100dvh] flex flex-col md:flex-row font-geist w-[100dvw] bg-background text-foreground">
-      {/* Left column: sign-in form */}
-      <section className="flex-1 flex items-center justify-center p-8">
-        <div className="w-full max-w-md">
-          <div className="flex flex-col gap-6">
-            <h1 className="animate-element animate-delay-100 text-4xl md:text-5xl font-semibold leading-tight">
-              {resolvedTitle}
-            </h1>
-            <p className="animate-element animate-delay-200 text-muted-foreground">{resolvedDescription}</p>
+  const handleAuthModeChange = (nextMode: "login" | "signup") => {
+    if (typeof onAuthModeChange === "function") {
+      onAuthModeChange(nextMode);
+      return;
+    }
+    if (nextMode === "login") {
+      onLoginLink?.();
+      return;
+    }
+    onSignUp?.();
+  };
 
-            <div className="space-y-5">
+  const handleEmailSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    if (isSignUpMode) {
+      onSignUpSubmit?.(event);
+      return;
+    }
+    onSignIn?.(event);
+  };
+
+  const showAuthModeButtons =
+    typeof onAuthModeChange === "function" ||
+    typeof onLoginLink === "function" ||
+    typeof onSignUp === "function";
+
+  return (
+    <div className="min-h-[100dvh] flex w-full flex-col bg-background text-foreground md:flex-row font-geist">
+      {/* Left column: sign-in form */}
+      <section className="flex flex-1 items-center justify-center p-5 sm:p-8">
+        <div className="w-full max-w-md">
+          <div className="flex flex-col gap-5 rounded-[26px] border border-border/70 bg-background/70 p-5 shadow-[0_18px_48px_-34px_rgba(15,23,42,0.45)] backdrop-blur-md sm:p-7">
+            {showAuthModeButtons ? (
+              <div className="animate-element animate-delay-100 flex items-center gap-3 text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
+                <button
+                  type="button"
+                  onClick={() => handleAuthModeChange("login")}
+                  className={`transition-colors ${
+                    activeAuthMode === "login"
+                      ? "text-foreground"
+                      : "text-foreground/55 hover:text-foreground"
+                  }`}
+                >
+                  {t("login.form.loginLink")}
+                </button>
+                <span className="text-foreground/35">/</span>
+                <button
+                  type="button"
+                  onClick={() => handleAuthModeChange("signup")}
+                  className={`transition-colors ${
+                    activeAuthMode === "signup"
+                      ? "text-foreground"
+                      : "text-foreground/55 hover:text-foreground"
+                  }`}
+                >
+                  {t("login.form.signUpLink")}
+                </button>
+              </div>
+            ) : (
+              <h1 className="animate-element animate-delay-100 text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
+                {resolvedTitle}
+              </h1>
+            )}
+            <p className="animate-element animate-delay-200 text-sm leading-6 text-muted-foreground">
+              {resolvedDescription}
+            </p>
+
+            <div className="space-y-4">
               {showMethodToggle && (
                 <div className="animate-element animate-delay-300">
-                  <label className="text-sm font-medium text-muted-foreground">
+                  <label className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">
                     {t("login.form.methodLabel")}
                   </label>
-                  <div className="mt-3 flex rounded-2xl border border-border bg-foreground/5 p-1 backdrop-blur-sm">
+                  <div className="mt-2 flex rounded-2xl border border-border/80 bg-muted/40 p-1">
                     <button
                       type="button"
                       onClick={() => onLoginMethodChange?.("email")}
-                      className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                      className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
                         activeMethod === "email"
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
+                          ? "border-border/70 bg-background text-foreground shadow-sm"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
                       }`}
                     >
                       {t("login.form.methodEmail")}
@@ -128,22 +197,33 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                     <button
                       type="button"
                       onClick={() => onLoginMethodChange?.("phone")}
-                      className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                      className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
                         activeMethod === "phone"
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
+                          ? "border-border/70 bg-background text-foreground shadow-sm"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
                       }`}
                     >
                       {t("login.form.methodPhone")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onLoginMethodChange?.("employee")}
+                      className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
+                        activeMethod === "employee"
+                          ? "border-border/70 bg-background text-foreground shadow-sm"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {t("login.form.methodEmployee")}
                     </button>
                   </div>
                 </div>
               )}
 
               {activeMethod === "email" ? (
-                <form className="space-y-5" onSubmit={onSignIn}>
+                <form className="space-y-4" onSubmit={handleEmailSubmit}>
                   <div className="animate-element animate-delay-300">
-                    <label className="text-sm font-medium text-muted-foreground">
+                    <label className="mb-1.5 block text-sm font-medium text-foreground/80">
                       {t("login.form.emailLabel")}
                     </label>
                     <GlassInputWrapper>
@@ -151,13 +231,13 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                         name="email"
                         type="email"
                         placeholder={t("login.form.emailPlaceholder")}
-                        className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none"
+                        className="w-full rounded-2xl bg-transparent px-4 py-3.5 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
                       />
                     </GlassInputWrapper>
                   </div>
 
                   <div className="animate-element animate-delay-400">
-                    <label className="text-sm font-medium text-muted-foreground">
+                    <label className="mb-1.5 block text-sm font-medium text-foreground/80">
                       {t("login.form.passwordLabel")}
                     </label>
                     <GlassInputWrapper>
@@ -166,12 +246,12 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                           name="password"
                           type={showPassword ? "text" : "password"}
                           placeholder={t("login.form.passwordPlaceholder")}
-                          className="w-full bg-transparent text-sm p-4 pr-12 rounded-2xl focus:outline-none"
+                          className="w-full rounded-2xl bg-transparent px-4 py-3.5 pr-12 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute inset-y-0 right-3 flex items-center"
+                          className="absolute inset-y-0 right-3 flex items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                         >
                           {showPassword ? (
                             <EyeOff className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
@@ -182,35 +262,62 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                       </div>
                     </GlassInputWrapper>
                   </div>
-
-                  <div className="animate-element animate-delay-500 flex items-center justify-between text-sm">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input type="checkbox" name="rememberMe" className="custom-checkbox" />
-                      <span className="text-foreground/90">{t("login.form.remember")}</span>
-                    </label>
-                    <a
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        onResetPassword?.();
-                      }}
-                      className="hover:underline text-violet-400 transition-colors"
+                  {isSignUpMode && (
+                    <div className="animate-element animate-delay-500">
+                      <label className="mb-1.5 block text-sm font-medium text-foreground/80">
+                        {t("login.form.confirmPasswordLabel")}
+                      </label>
+                      <GlassInputWrapper>
+                        <input
+                          name="confirmPassword"
+                          type={showPassword ? "text" : "password"}
+                          placeholder={t("login.form.confirmPasswordPlaceholder")}
+                          className="w-full rounded-2xl bg-transparent px-4 py-3.5 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
+                        />
+                      </GlassInputWrapper>
+                    </div>
+                  )}
+                  {statusMessage && (
+                    <p
+                      role="alert"
+                      aria-live="assertive"
+                      className="rounded-xl border border-blue-200/80 bg-blue-50/85 px-3 py-2 text-sm text-blue-900"
                     >
-                      {t("login.form.resetPassword")}
-                    </a>
-                  </div>
+                      {statusMessage}
+                    </p>
+                  )}
+
+                  {!isSignUpMode && (
+                    <div className="animate-element animate-delay-600 flex items-center justify-between gap-3 text-sm">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          name="rememberMe"
+                          className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
+                        />
+                        <span className="text-foreground/90">{t("login.form.remember")}</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => onResetPassword?.()}
+                        className="text-primary/80 transition-colors hover:text-primary hover:underline"
+                      >
+                        {t("login.form.resetPassword")}
+                      </button>
+                    </div>
+                  )}
 
                   <button
                     type="submit"
-                    className="animate-element animate-delay-600 w-full rounded-2xl bg-primary py-4 font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                    className="animate-element animate-delay-700 w-full rounded-2xl bg-primary py-3.5 font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
-                    {t("login.form.signIn")}
+                    {isSignUpMode ? t("login.form.signUpLink") : t("login.form.signIn")}
                   </button>
                 </form>
-              ) : (
-                <div className="space-y-5">
+              ) : activeMethod === "phone" ? (
+                <div className="space-y-4">
                   <div className="animate-element animate-delay-300">
-                    <label className="text-sm font-medium text-muted-foreground">
+                    <label className="mb-1.5 block text-sm font-medium text-foreground/80">
                       {t("login.form.phoneLabel")}
                     </label>
                     <GlassInputWrapper>
@@ -224,19 +331,28 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                         value={phoneNumber}
                         onChange={(event) => onPhoneNumberChange?.(event.target.value)}
                         readOnly={!onPhoneNumberChange}
-                        className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none"
+                        className="w-full rounded-2xl bg-transparent px-4 py-3.5 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
                       />
                     </GlassInputWrapper>
                     <p className="mt-2 text-xs text-muted-foreground">
                       {t("login.form.phoneHelper")}
                     </p>
+                    {statusMessage && (
+                      <p
+                        role="alert"
+                        aria-live="assertive"
+                        className="mt-2 rounded-xl border border-blue-200/80 bg-blue-50/85 px-3 py-2 text-sm text-blue-900"
+                      >
+                        {statusMessage}
+                      </p>
+                    )}
                   </div>
 
                   <button
                     type="button"
                     onClick={onSendCode}
                     disabled={!onSendCode}
-                    className="animate-element animate-delay-400 w-full rounded-2xl bg-primary py-4 font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                    className="animate-element animate-delay-400 w-full rounded-2xl bg-primary py-3.5 font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {t("login.form.sendCode")}
                   </button>
@@ -248,7 +364,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                   {phoneStep === "enterCode" && (
                     <>
                       <div className="animate-element animate-delay-600">
-                        <label className="text-sm font-medium text-muted-foreground">
+                        <label className="mb-1.5 block text-sm font-medium text-foreground/80">
                           {t("login.form.smsCodeLabel")}
                         </label>
                         <GlassInputWrapper>
@@ -261,7 +377,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                             value={smsCode}
                             onChange={(event) => onSmsCodeChange?.(event.target.value)}
                             readOnly={!onSmsCodeChange}
-                            className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none"
+                            className="w-full rounded-2xl bg-transparent px-4 py-3.5 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
                           />
                         </GlassInputWrapper>
                       </div>
@@ -269,50 +385,100 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                         type="button"
                         onClick={onConfirmCode}
                         disabled={!onConfirmCode}
-                        className="animate-element animate-delay-700 w-full rounded-2xl bg-primary py-4 font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                        className="animate-element animate-delay-700 w-full rounded-2xl bg-primary py-3.5 font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {t("login.form.confirmCode")}
                       </button>
                     </>
                   )}
                 </div>
+              ) : (
+                <form className="space-y-4" onSubmit={onEmployeeSignIn}>
+                  <div className="animate-element animate-delay-300">
+                    <label className="mb-1.5 block text-sm font-medium text-foreground/80">
+                      {t("login.form.usernameLabel")}
+                    </label>
+                    <GlassInputWrapper>
+                      <input
+                        name="employeeUsername"
+                        type="text"
+                        autoComplete="username"
+                        placeholder={t("login.form.usernamePlaceholder")}
+                        value={employeeUsername}
+                        onChange={(event) => onEmployeeUsernameChange?.(event.target.value)}
+                        readOnly={!onEmployeeUsernameChange}
+                        className="w-full rounded-2xl bg-transparent px-4 py-3.5 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
+                      />
+                    </GlassInputWrapper>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {t("login.form.employeeHelper")}
+                    </p>
+                  </div>
+
+                  <div className="animate-element animate-delay-400">
+                    <label className="mb-1.5 block text-sm font-medium text-foreground/80">
+                      {t("login.form.passwordLabel")}
+                    </label>
+                    <GlassInputWrapper>
+                      <div className="relative">
+                        <input
+                          name="employeePassword"
+                          type={showPassword ? "text" : "password"}
+                          autoComplete="current-password"
+                          placeholder={t("login.form.passwordPlaceholder")}
+                          className="w-full rounded-2xl bg-transparent px-4 py-3.5 pr-12 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute inset-y-0 right-3 flex items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                        >
+                          {showPassword ? (
+                            <EyeOff className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
+                          ) : (
+                            <Eye className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
+                          )}
+                        </button>
+                      </div>
+                    </GlassInputWrapper>
+                  </div>
+
+                  {statusMessage && (
+                    <p
+                      role="alert"
+                      aria-live="assertive"
+                      className="rounded-xl border border-blue-200/80 bg-blue-50/85 px-3 py-2 text-sm text-blue-900"
+                    >
+                      {statusMessage}
+                    </p>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="animate-element animate-delay-700 w-full rounded-2xl bg-primary py-3.5 font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  >
+                    {t("login.form.signIn")}
+                  </button>
+                </form>
               )}
             </div>
 
             <div className="animate-element animate-delay-700 relative flex items-center justify-center">
-              <span className="w-full border-t border-border"></span>
-              <span className="px-4 text-sm text-muted-foreground bg-background absolute">
+              <span className="w-full border-t border-border/80"></span>
+              <span className="absolute rounded-full border border-border/70 bg-background px-3 py-0.5 text-xs font-medium text-muted-foreground">
                 {t("login.form.orContinue")}
               </span>
             </div>
 
-            <button onClick={onGoogleSignIn} className="animate-element animate-delay-800 w-full flex items-center justify-center gap-3 border border-border rounded-2xl py-4 hover:bg-secondary transition-colors">
+            <button
+              type="button"
+              onClick={onGoogleSignIn}
+              className="animate-element animate-delay-800 flex w-full items-center justify-center gap-3 rounded-2xl border border-border/80 bg-white/70 py-3.5 text-sm font-medium transition-colors hover:bg-muted/40"
+            >
                 <GoogleIcon />
                 {t("login.form.google")}
             </button>
 
-            <div className="animate-element animate-delay-900 flex justify-center gap-6 text-sm text-muted-foreground">
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  onLoginLink?.();
-                }}
-                className="text-violet-400 hover:underline transition-colors"
-              >
-                {t("login.form.loginLink")}
-              </a>
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  onSignUp?.();
-                }}
-                className="text-violet-400 hover:underline transition-colors"
-              >
-                {t("login.form.signUpLink")}
-              </a>
-            </div>
           </div>
         </div>
       </section>

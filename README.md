@@ -15,6 +15,28 @@ Backend env vars (set in `.env` on the server side):
 - `CORTI_CLIENT_SECRET=...`
 - Optional: `PORT=4000`
 
+## SelmaPay receipts (Stripe + PDF + Resend)
+
+Required backend env vars:
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `RESEND_API_KEY`
+- `RESEND_API_BASE` (default: `https://api.resend.com`)
+- `STRIPE_RECEIPT_FROM_EMAIL` (or fallback `STRIPE_SALE_LINK_FROM_EMAIL` / `BOOKING_CONFIRMATION_FROM_EMAIL`)
+- Optional: `STRIPE_RECEIPT_REPLY_TO_EMAIL`
+- `FIREBASE_STORAGE_BUCKET` (for `receipts/{clinicId}/{receiptNumber}.pdf`)
+
+Receipt-related API endpoints:
+- `POST /api/stripe/connect/payments/get-receipt-download-url`
+- `POST /api/stripe/connect/payments/resend-receipt`
+
+Both endpoints accept:
+- `paymentId` (preferred)
+- `saleId` fallback for legacy sales without a `payments/{paymentId}` document
+
+Cloud Run IAM requirement for signed download URLs:
+- Runtime service account must have `roles/iam.serviceAccountTokenCreator` on itself (for `iam.serviceAccounts.signBlob`).
+
 Local run:
 ```bash
 npm install
@@ -37,7 +59,7 @@ Upload large hero assets to Firebase Storage (served from `public/` in Storage):
 
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS="/path/to/key.json"
-export FIREBASE_STORAGE_BUCKET="actualbackend-3b454.appspot.com"
+export FIREBASE_STORAGE_BUCKET="actualbackend-3b454.firebasestorage.app"
 npm run upload:assets
 npm run build
 npx firebase-tools@latest deploy --only hosting

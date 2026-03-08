@@ -243,10 +243,10 @@ const getSaleStatusLabel = (status: any) => {
 };
 
 export default function Sales() {
-  const { user } = useAuth();
+  const { sessionUid, workspaceUid, activeClinicId } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const { sales, loading, error } = useSales(user?.uid || null, {
+  const { sales, loading, error } = useSales(activeClinicId || workspaceUid || null, {
     status: "completed",
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -308,7 +308,7 @@ export default function Sales() {
   };
 
   useEffect(() => {
-    if (stripeCheckoutStatus !== "success" || !stripeSessionId || !user?.uid) {
+    if (stripeCheckoutStatus !== "success" || !stripeSessionId || !sessionUid) {
       setStripeSyncState("idle");
       setStripeSyncError("");
       return;
@@ -365,7 +365,7 @@ export default function Sales() {
     return () => {
       cancelled = true;
     };
-  }, [stripeCheckoutStatus, stripeSessionId, user?.uid]);
+  }, [sessionUid, stripeCheckoutStatus, stripeSessionId]);
 
   const earliestSaleDate = useMemo(() => {
     const dates = sales
@@ -731,17 +731,10 @@ export default function Sales() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Salg</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Vis, filtrer og eksportér din salgshistorik. {" "}
-            <a href="#" className="text-indigo-500">
-              Læs mere
-            </a>
+            Vis og filtrer din salgshistorik.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button type="button" className="toolbar-pill">
-            Muligheder
-            <ChevronDown className="toolbar-caret" />
-          </button>
+        <div className="flex items-center">
           <button
             type="button"
             className="toolbar-pill toolbar-primary"
@@ -798,12 +791,6 @@ export default function Sales() {
             className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white"
           >
             Salg
-          </button>
-          <button
-            type="button"
-            className="rounded-full px-4 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100"
-          >
-            Kladder
           </button>
         </div>
 

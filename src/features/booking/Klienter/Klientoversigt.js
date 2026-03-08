@@ -173,7 +173,7 @@ const ClientDetails = ({
 
     const entriesRef = collection(
       db,
-      'users',
+      'clinics',
       userId,
       'clients',
       client.id,
@@ -287,7 +287,7 @@ const ClientDetails = ({
     setJournalActionError('');
     setDeletingJournalId(entryId);
     try {
-      const entryRef = doc(db, 'users', userId, 'clients', client.id, 'journalEntries', entryId);
+      const entryRef = doc(db, 'clinics', userId, 'clients', client.id, 'journalEntries', entryId);
       await deleteDoc(entryRef);
       if (readingJournalEntry?.id === entryId) {
         setReadingJournalEntry(null);
@@ -611,7 +611,7 @@ const ClientDetails = ({
         }))
         .filter((goal) => goal.text.length > 0);
 
-      await updateDoc(doc(db, 'users', userId, 'clients', client.id), {
+      await updateDoc(doc(db, 'clinics', userId, 'clients', client.id), {
         'clientensoplysninger.maalForForloebet': goalsToSave,
         updatedAt: serverTimestamp(),
       });
@@ -666,7 +666,7 @@ const ClientDetails = ({
         updatedList = [...forloebList, cleaned];
       }
 
-      await updateDoc(doc(db, 'users', userId, 'clients', client.id), {
+      await updateDoc(doc(db, 'clinics', userId, 'clients', client.id), {
         'clientensoplysninger.behandlingsforloeb': updatedList,
         updatedAt: serverTimestamp(),
       });
@@ -744,7 +744,7 @@ const ClientDetails = ({
 
     try {
       const updatedList = forloebList.filter((_, i) => i !== index);
-      await updateDoc(doc(db, 'users', userId, 'clients', client.id), {
+      await updateDoc(doc(db, 'clinics', userId, 'clients', client.id), {
         'clientensoplysninger.behandlingsforloeb': updatedList,
         updatedAt: serverTimestamp(),
       });
@@ -1396,7 +1396,7 @@ const ClientDetails = ({
 };
 
 function Klientoversigt() {
-  const { user } = useAuth();
+  const { user, workspaceUid, activeClinicId } = useAuth();
   const { t, locale } = useLanguage();
   const {
     clients,
@@ -1404,8 +1404,6 @@ function Klientoversigt() {
     error: clientsLoadError,
   } = useUserClients();
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortColumn, setSortColumn] = useState(null);
-  const [sortDirection, setSortDirection] = useState('asc');
   const [showAddClient, setShowAddClient] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
   const [editView, setEditView] = useState('forloeb'); // 'personal' or 'forloeb'
@@ -1417,28 +1415,28 @@ function Klientoversigt() {
   const [initialTab, setInitialTab] = useState(null);
   const [initialEditForloeb, setInitialEditForloeb] = useState(false);
 
-  const handleSort = (column) => {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-  };
-
   const filteredClients = useMemo(() => {
     const queryValue = searchQuery.trim().toLowerCase();
+    const queryDigits = queryValue.replace(/\D/g, '');
     let result = clients;
     
     if (queryValue) {
       result = clients.filter((client) => {
         const name = client.navn?.toLowerCase?.() || '';
         const email = client.email?.toLowerCase?.() || '';
+        const phone = client.telefon?.toLowerCase?.() || '';
+        const cpr = client.cpr?.toLowerCase?.() || '';
         const city = client.by?.toLowerCase?.() || '';
+        const phoneDigits = phone.replace(/\D/g, '');
+        const cprDigits = cpr.replace(/\D/g, '');
         return (
           name.includes(queryValue) ||
           email.includes(queryValue) ||
-          city.includes(queryValue)
+          phone.includes(queryValue) ||
+          cpr.includes(queryValue) ||
+          city.includes(queryValue) ||
+          (queryDigits.length > 0 &&
+            (phoneDigits.includes(queryDigits) || cprDigits.includes(queryDigits)))
         );
       });
     }
@@ -1518,12 +1516,7 @@ function Klientoversigt() {
   };
 
   const handleClientRowClick = (e, client) => {
-    // Ignore clicks on checkbox
-    if (e.target.type === 'checkbox') {
-      return;
-    }
-
-    // Get position for menu
+    // Get position for client menu
     const rect = e.currentTarget.getBoundingClientRect();
     setClientMenuPosition({
       x: rect.left + rect.width / 2,
@@ -1569,7 +1562,7 @@ function Klientoversigt() {
   };
 
   const handleDeleteFromDetails = async () => {
-    if (!user?.uid || !detailClient?.id) {
+    if ((!activeClinicId && !workspaceUid) || !detailClient?.id) {
       alert('Kunne ikke finde klienten.');
       return;
     }
@@ -1581,7 +1574,11 @@ function Klientoversigt() {
     if (!shouldDelete) return;
 
     try {
-      await deleteDoc(doc(db, 'users', user.uid, 'clients', detailClient.id));
+      if (activeClinicId) {
+        await deleteDoc(doc(db, 'clinics', activeClinicId, 'clients', detailClient.id));
+      } else {
+        await deleteDoc(doc(db, 'users', workspaceUid, 'clients', detailClient.id));
+      }
       setDetailClientId(null);
     } catch (error) {
       console.error('[Klientoversigt] Failed to delete client', error);
@@ -1634,7 +1631,7 @@ function Klientoversigt() {
                 onDelete={handleDeleteFromDetails}
                 onRequestStatusChange={handleRequestStatusChange}
                 onRequestConsent={handleRequestConsent}
-                userId={user?.uid || null}
+                userId={activeClinicId || null}
                 initialTab={initialTab}
                 initialEditForloeb={initialEditForloeb}
               />
@@ -1695,7 +1692,6 @@ function Klientoversigt() {
                     )}
                   </div>
                   <div className="search-bar">
-                    <span className="search-icon-small">🔍</span>
                     <input 
                       type="text" 
                       placeholder={t('booking.clients.search.placeholder', 'Søg')}
@@ -1724,89 +1720,32 @@ function Klientoversigt() {
                   <table className="clients-table">
                     <thead>
                       <tr>
-                        <th className="checkbox-col">
-                          <input type="checkbox" />
-                        </th>
-                        <th 
-                          className="sortable" 
-                          onClick={() => handleSort('navn')}
-                        >
+                        <th>
                           {t('booking.clients.columns.name', 'Navn')}
-                          {sortColumn === 'navn' && (
-                            <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                          )}
                         </th>
-                        <th 
-                          className="sortable" 
-                          onClick={() => handleSort('status')}
-                        >
+                        <th>
                           {t('booking.clients.columns.status', 'Status')}
-                          {sortColumn === 'status' && (
-                            <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                          )}
                         </th>
-                        <th 
-                          className="sortable" 
-                          onClick={() => handleSort('email')}
-                        >
+                        <th>
                           {t('booking.clients.columns.email', 'E-mail')}
-                          {sortColumn === 'email' && (
-                            <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                          )}
                         </th>
-                        <th 
-                          className="sortable" 
-                          onClick={() => handleSort('telefon')}
-                        >
+                        <th>
                           {t('booking.clients.columns.phone', 'Telefon')}
-                          {sortColumn === 'telefon' && (
-                            <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                          )}
                         </th>
-                        <th 
-                          className="sortable" 
-                          onClick={() => handleSort('cpr')}
-                        >
+                        <th>
                           {t('booking.clients.columns.cpr', 'CPR')}
-                          {sortColumn === 'cpr' && (
-                            <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                          )}
                         </th>
-                        <th 
-                          className="sortable" 
-                          onClick={() => handleSort('adresse')}
-                        >
+                        <th>
                           {t('booking.clients.columns.address', 'Adresse')}
-                          {sortColumn === 'adresse' && (
-                            <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                          )}
                         </th>
-                        <th 
-                          className="sortable" 
-                          onClick={() => handleSort('by')}
-                        >
+                        <th>
                           {t('booking.clients.columns.city', 'By')}
-                          {sortColumn === 'by' && (
-                            <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                          )}
                         </th>
-                        <th 
-                          className="sortable" 
-                          onClick={() => handleSort('postnummer')}
-                        >
+                        <th>
                           {t('booking.clients.columns.postalCode', 'Postnummer')}
-                          {sortColumn === 'postnummer' && (
-                            <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                          )}
                         </th>
-                        <th 
-                          className="sortable" 
-                          onClick={() => handleSort('land')}
-                        >
+                        <th>
                           {t('booking.clients.columns.country', 'Land')}
-                          {sortColumn === 'land' && (
-                            <span className="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                          )}
                         </th>
                       </tr>
                     </thead>
@@ -1818,14 +1757,6 @@ function Klientoversigt() {
                           className={selectedClientId === client.id ? 'row-selected' : ''}
                           style={{ cursor: 'pointer' }}
                         >
-                          <td className="checkbox-col" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="checkbox"
-                              checked={false}
-                              readOnly
-                              onClick={() => openClientDetails(client)}
-                            />
-                          </td>
                           <td>{client.navn}</td>
                           <td>
                             <span className={`status-badge ${client.status.toLowerCase()}`}>

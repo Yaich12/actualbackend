@@ -46,7 +46,7 @@ function FeaturesWorkflow({ sectionId } = {}) {
 
   return (
     <section id={sectionId} className="bg-white py-16 text-slate-900 scroll-mt-24">
-      <div className="mx-auto w-full max-w-6xl px-6">
+      <div className="mx-auto w-full max-w-7xl px-6">
         <div className="mb-8">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
             {t("features.workflow.eyebrow")}
@@ -89,7 +89,7 @@ function FeaturesWorkflow({ sectionId } = {}) {
             })}
           </div>
 
-          <div className="mt-10 grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
+          <div className="mt-10 grid gap-10 lg:grid-cols-[0.82fr_1.18fr] lg:items-start">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeFeature.id}
@@ -125,13 +125,14 @@ function FeaturesWorkflow({ sectionId } = {}) {
               </motion.div>
             </AnimatePresence>
 
-            <div className="flex w-full items-center justify-center">
-              <div className="w-full max-w-4xl">
+            <div className="flex w-full items-start justify-center">
+              <div className="w-full max-w-none">
                 <LoomEmbed
                   key={activeId}
                   videoId={activeVideoId}
                   title={isFacts ? "Diktering video" : "Transkribering video"}
-                  className="w-full border border-slate-200 bg-white shadow-lg shadow-slate-200/60"
+                  className="!h-auto !w-full !max-w-none !aspect-[16/9] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-200/60"
+                  frameClassName="!h-full !w-full"
                 />
               </div>
             </div>

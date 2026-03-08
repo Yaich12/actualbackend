@@ -6,18 +6,30 @@ import { useLanguage } from '../../../LanguageContext';
 import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import { ChevronDown } from 'lucide-react';
+import { migrateLegacyCollectionToClinic } from '../../../utils/workspaceContext';
+
+const parseOptionalNumber = (value) => {
+  if (value === '' || value === null || value === undefined) return null;
+  const normalized = typeof value === 'string' ? value.replace(',', '.').trim() : value;
+  if (normalized === '') return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parseNumberWithFallback = (value, fallback) => {
+  const parsed = parseOptionalNumber(value);
+  return parsed === null ? fallback : parsed;
+};
 
 function ForlobCreate({ onSave, isSaving = false }) {
   const { t, locale } = useLanguage();
   const [form, setForm] = useState({
     name: '',
-    condition: 'knee_oa',
     format: 'group',
     setting: 'clinic',
     weeks: 8,
     sessionsPerWeek: 2,
     sessionLength: 60,
-    pricePerSession: '',
     packagePrice: '',
     maxParticipants: 8,
     goals: '',
@@ -43,7 +55,21 @@ function ForlobCreate({ onSave, isSaving = false }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const payload = {
-      ...form,
+      name: form.name.trim(),
+      format: form.format,
+      setting: form.setting,
+      weeks: parseNumberWithFallback(form.weeks, 8),
+      sessionsPerWeek: parseNumberWithFallback(form.sessionsPerWeek, 2),
+      sessionLength: parseNumberWithFallback(form.sessionLength, 60),
+      packagePrice: parseOptionalNumber(form.packagePrice),
+      maxParticipants: parseNumberWithFallback(form.maxParticipants, 8),
+      goals: form.goals.trim(),
+      contentEducation: Boolean(form.contentEducation),
+      contentStrength: Boolean(form.contentStrength),
+      contentNeuromuscular: Boolean(form.contentNeuromuscular),
+      contentHomeProgram: Boolean(form.contentHomeProgram),
+      contentOutcomeMeasures: Boolean(form.contentOutcomeMeasures),
+      notes: form.notes.trim(),
       totalSessions,
       createdAt: new Date().toISOString(),
     };
@@ -60,15 +86,6 @@ function ForlobCreate({ onSave, isSaving = false }) {
     );
   };
 
-  const conditionOptions = [
-    { value: 'knee_oa', label: t('booking.programs.options.condition.kneeOa', 'Knæartrose') },
-    { value: 'hip_oa', label: t('booking.programs.options.condition.hipOa', 'Hofteartrose') },
-    { value: 'glad', label: t('booking.programs.options.condition.glad', 'GLAD-forløb') },
-    { value: 'acl', label: t('booking.programs.options.condition.acl', 'Postoperativ ACL') },
-    { value: 'shoulder', label: t('booking.programs.options.condition.shoulder', 'Skulder / impingement') },
-    { value: 'low_back', label: t('booking.programs.options.condition.lowBack', 'Uspecifik lændesmerte') },
-    { value: 'other', label: t('booking.programs.options.condition.other', 'Andet / blandet MSK') },
-  ];
   const formatLabels = {
     individual: t('booking.programs.options.format.individual', 'Individuel'),
     small_group: t('booking.programs.options.format.smallGroup', 'Lille hold (2–4)'),
@@ -103,7 +120,7 @@ function ForlobCreate({ onSave, isSaving = false }) {
         className="grid gap-4 rounded-2xl bg-white p-4 shadow-sm md:grid-cols-3 md:p-6"
       >
         <div className="space-y-4 md:col-span-2">
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3">
             <div className="space-y-1">
               <label className="text-xs font-medium text-slate-700">
                 {t('booking.programs.create.fields.name.label', 'Forløbsnavn')}
@@ -118,22 +135,6 @@ function ForlobCreate({ onSave, isSaving = false }) {
                 value={form.name}
                 onChange={handleChange('name')}
               />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700">
-                {t('booking.programs.create.fields.condition.label', 'Primær problemstilling')}
-              </label>
-              <select
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                value={form.condition}
-                onChange={handleChange('condition')}
-              >
-                {conditionOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
 
@@ -358,20 +359,6 @@ function ForlobCreate({ onSave, isSaving = false }) {
             </p>
             <div className="space-y-1">
               <label className="text-[11px] font-medium text-slate-700">
-                {t('booking.programs.financial.sessionPrice', 'Pris pr. session ({currency})', {
-                  currency: currencyLabel,
-                })}
-              </label>
-              <input
-                type="number"
-                min="0"
-                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                value={form.pricePerSession}
-                onChange={handleChange('pricePerSession')}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium text-slate-700">
                 {t(
                   'booking.programs.financial.packagePrice',
                   'Pakkepris for hele forløbet ({currency})',
@@ -387,21 +374,19 @@ function ForlobCreate({ onSave, isSaving = false }) {
               />
               <p className="text-[11px] text-slate-500">
                 {t(
-                  'booking.programs.financial.hint',
-                  'Du kan udfylde begge felter og vælge i faktureringen, hvad du bruger i praksis.'
+                  'booking.programs.financial.packageHint',
+                  'Denne pris bruges i salg/fakturering, når klienten faktureres for hele forløbet.'
                 )}
               </p>
             </div>
-            {totalSessions > 0 && form.pricePerSession && (
+            {parseOptionalNumber(form.packagePrice) !== null && (
               <p className="mt-1 text-[11px] text-slate-600">
-                {t(
-                  'booking.programs.financial.estimate',
-                  'Estimeret omsætning pr. deltager ved sessionpris:'
-                )}{' '}
+                {t('booking.programs.financial.packageSummary', 'Pakkepris for forløbet:')}{' '}
                 <span className="font-semibold">
                   {currencyLabel}{' '}
-                  {(totalSessions * (Number(form.pricePerSession) || 0)).toLocaleString(locale, {
+                  {parseOptionalNumber(form.packagePrice)?.toLocaleString(locale, {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}
                 </span>
               </p>
@@ -424,7 +409,8 @@ function ForlobCreate({ onSave, isSaving = false }) {
 }
 
 function Forloeb() {
-  const { user } = useAuth();
+  const { user, workspaceUid, activeClinicId } = useAuth();
+  const clinicId = `${activeClinicId || ''}`.trim();
   const { t, locale } = useLanguage();
   const [isSaving, setIsSaving] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -434,38 +420,79 @@ function Forloeb() {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    if (!user?.uid) {
+    if (!clinicId && !workspaceUid) {
       setForloebList([]);
       setLoading(false);
       return undefined;
     }
     setLoading(true);
     setLoadError(null);
-    const ref = collection(db, 'users', user.uid, 'forloeb');
-    const q = query(ref, orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const mapped = snap.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            ...data,
-            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt,
-            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-          };
-        });
-        setForloebList(mapped);
-        setLoading(false);
-      },
-      (err) => {
-        console.error('[Forløb] load error', err);
-        setLoadError(t('booking.programs.errors.loadFailed', 'Kunne ikke hente forløb.'));
-        setLoading(false);
+    let cancelled = false;
+    let unsub = () => {};
+    const setUnsubscribe = (nextUnsubscribe) => {
+      let stopped = false;
+      unsub = () => {
+        if (stopped) return;
+        stopped = true;
+        nextUnsubscribe();
+      };
+    };
+    const attachListener = async () => {
+      if (clinicId && workspaceUid) {
+        try {
+          await migrateLegacyCollectionToClinic({
+            clinicId,
+            legacyOwnerUid: workspaceUid,
+            collectionName: 'forloeb',
+            transformDoc: ({ data }) => ({
+              clinicId,
+              createdByUid: data.createdByUid || data.therapistId || user?.uid || null,
+            }),
+          });
+        } catch (migrationError) {
+          console.error('[Forløb] migration error', migrationError);
+        }
       }
-    );
-    return () => unsub();
-  }, [user?.uid]);
+      if (cancelled) return;
+      const ref = clinicId
+        ? collection(db, 'clinics', clinicId, 'forloeb')
+        : collection(db, 'users', workspaceUid, 'forloeb');
+      const q = query(ref, orderBy('createdAt', 'desc'));
+      const stop = onSnapshot(
+        q,
+        (snap) => {
+          if (cancelled) return;
+          const mapped = snap.docs.map((d) => {
+            const data = d.data();
+            return {
+              id: d.id,
+              ...data,
+              createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt,
+              updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+            };
+          });
+          setForloebList(mapped);
+          setLoading(false);
+        },
+        (err) => {
+          if (cancelled) return;
+          console.error('[Forløb] load error', err);
+          setLoadError(t('booking.programs.errors.loadFailed', 'Kunne ikke hente forløb.'));
+          setLoading(false);
+        }
+      );
+      if (cancelled) {
+        stop();
+        return;
+      }
+      setUnsubscribe(stop);
+    };
+    void attachListener();
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [clinicId, t, user?.uid, workspaceUid]);
 
   const filteredForloeb = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -476,24 +503,13 @@ function Forloeb() {
       return name.includes(q) || condition.includes(q);
     });
   }, [searchQuery, forloebList]);
-
-  const conditionLabel = (value) => {
-    switch (value) {
-      case 'knee_oa':
-        return t('booking.programs.options.condition.kneeOa', 'Knæartrose');
-      case 'hip_oa':
-        return t('booking.programs.options.condition.hipOa', 'Hofteartrose');
-      case 'glad':
-        return t('booking.programs.options.condition.glad', 'GLAD-forløb');
-      case 'acl':
-        return t('booking.programs.options.condition.acl', 'Postoperativ ACL');
-      case 'shoulder':
-        return t('booking.programs.options.condition.shoulder', 'Skulder / impingement');
-      case 'low_back':
-        return t('booking.programs.options.condition.lowBack', 'Uspecifik lændesmerte');
-      default:
-        return t('booking.programs.options.condition.other', 'Andet');
-    }
+  const formatProgramPrice = (value) => {
+    const parsed = parseOptionalNumber(value);
+    if (parsed === null) return '—';
+    return `${t('booking.services.price.currency', 'DKK')} ${parsed.toLocaleString(locale, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   };
 
   const userIdentity = useMemo(() => {
@@ -592,7 +608,6 @@ function Forloeb() {
                             {item.name || t('booking.programs.list.untitled', 'Uden navn')}
                           </p>
                           <p className="text-[11px] text-slate-500">
-                            {conditionLabel(item.condition)} ·{' '}
                             {item.format === 'individual'
                               ? t('booking.programs.options.format.individualShort', 'Individuel')
                               : item.format === 'small_group'
@@ -634,20 +649,8 @@ function Forloeb() {
                           )}
                         </span>
                         <span>
-                          {t('booking.programs.list.pricePerSession', 'Pris pr. session:')}{' '}
-                          {item.pricePerSession
-                            ? `${t('booking.services.price.currency', 'DKK')} ${Number(item.pricePerSession).toLocaleString(locale, {
-                                minimumFractionDigits: 2,
-                              })}`
-                            : '—'}
-                        </span>
-                        <span>
                           {t('booking.programs.list.packagePrice', 'Pakkepris:')}{' '}
-                          {item.packagePrice
-                            ? `${t('booking.services.price.currency', 'DKK')} ${Number(item.packagePrice).toLocaleString(locale, {
-                                minimumFractionDigits: 2,
-                              })}`
-                            : '—'}
+                          {formatProgramPrice(item.packagePrice)}
                         </span>
                         <span>
                           {t(
@@ -711,16 +714,20 @@ function Forloeb() {
                   <ForlobCreate
                     isSaving={isSaving}
                     onSave={async (payload) => {
-                      if (!user?.uid) {
+                      if (!clinicId && !workspaceUid) {
                         alert(t('booking.programs.errors.notLoggedIn', 'Log ind for at gemme forløb.'));
                         return;
                       }
                       setIsSaving(true);
                       try {
-                        const collectionRef = collection(db, 'users', user.uid, 'forloeb');
+                        const collectionRef = clinicId
+                          ? collection(db, 'clinics', clinicId, 'forloeb')
+                          : collection(db, 'users', workspaceUid, 'forloeb');
                         const docPayload = {
                           ...payload,
-                          therapistId: user.uid,
+                          clinicId: clinicId || null,
+                          createdByUid: user?.uid || null,
+                          therapistId: user?.uid || null,
                           createdAt: serverTimestamp(),
                           updatedAt: serverTimestamp(),
                         };

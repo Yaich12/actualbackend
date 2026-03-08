@@ -13,6 +13,15 @@ const {
   setUserSubscription,
   updateUsersByEmail,
 } = require('../server/firestoreAccounts');
+const {
+  ReceiptServiceError,
+  SIGNED_URL_TTL_MS,
+  syncPaymentReceiptForSale,
+  ensurePaymentForSale,
+  findPaymentByAnyIdentifier,
+  ensureReceiptDownloadUrl,
+  resendReceiptEmailForPayment,
+} = require('../server/receipts/receiptService');
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey
@@ -603,6 +612,29 @@ const resolveUserClinicContext = async (uid) => {
   };
 };
 
+const hasClinicAccess = async ({ uid, clinicId, context }) => {
+  const normalizedClinicId = `${clinicId || ''}`.trim();
+  if (!uid || !normalizedClinicId) return false;
+
+  if (
+    normalizedClinicId === `${context?.clinicId || ''}`.trim() ||
+    normalizedClinicId === `${context?.accountId || ''}`.trim()
+  ) {
+    return true;
+  }
+
+  const db = getFirestore();
+  const [clinicMemberSnap, accountMemberSnap, clinicSnap] = await Promise.all([
+    db.collection('clinics').doc(normalizedClinicId).collection('members').doc(uid).get(),
+    db.collection('accounts').doc(normalizedClinicId).collection('members').doc(uid).get(),
+    db.collection('clinics').doc(normalizedClinicId).get(),
+  ]);
+
+  if (clinicMemberSnap.exists || accountMemberSnap.exists) return true;
+  const clinicData = clinicSnap.exists ? clinicSnap.data() || {} : {};
+  return `${clinicData?.ownerUid || ''}`.trim() === uid;
+};
+
 const createStripeConnectExpressAccount = async ({ clinicId, accountId, uid, email }) => {
   return stripe.accounts.create({
     type: 'express',
@@ -772,11 +804,15 @@ const fetchPendingSaleLookupRef = (sessionId) =>
 
 const mapPendingSaleToStripeMetadata = (payload = {}) => ({
   flow: 'connect_sale',
+  clinicId: payload.accountId || '',
   accountId: payload.accountId || '',
   ownerUid: payload.ownerUid || '',
+  patientId: payload.customerId || '',
+  therapistId: payload.employeeId || '',
   employeeId: payload.employeeId || '',
   employeeName: `${payload.employeeName || ''}`.slice(0, 120),
   appointmentId: payload.appointmentId || '',
+  serviceId: payload.items?.[0]?.referenceId || '',
   appointmentRef: `${payload.appointmentRef || ''}`.slice(0, 120),
   paymentMethodId: payload.paymentMethodId || '',
   paymentMethodLabel: `${payload.paymentMethodLabel || ''}`.slice(0, 120),
@@ -861,9 +897,15 @@ const toSalePayloadFromPending = ({ pendingData, session, connectedAccountId }) 
   const vat = toNumber(totals.vat);
   const paymentMethodLabel =
     pendingData?.paymentMethod?.label || session?.metadata?.paymentMethodLabel || 'Kort';
+  const stripePaymentIntentId =
+    typeof session?.payment_intent === 'string'
+      ? session.payment_intent
+      : session?.payment_intent?.id || null;
 
   return {
     status: 'completed',
+    paymentStatus: 'paid',
+    paymentId: stripePaymentIntentId || null,
     appointmentId: pendingData?.appointmentId || null,
     appointmentRef: pendingData?.appointmentRef || null,
     customerId: pendingData?.customer?.id || null,
@@ -886,10 +928,7 @@ const toSalePayloadFromPending = ({ pendingData, session, connectedAccountId }) 
       'Medarbejder',
     location: pendingData?.location || '',
     stripeCheckoutSessionId: session?.id || null,
-    stripePaymentIntentId:
-      typeof session?.payment_intent === 'string'
-        ? session.payment_intent
-        : session?.payment_intent?.id || null,
+    stripePaymentIntentId,
     stripeConnectedAccountId: connectedAccountId || null,
     currency: `${session?.currency || pendingData?.currency || session?.metadata?.currency || 'dkk'}`.toLowerCase(),
     saleNumber:
@@ -975,6 +1014,7 @@ const runConnectSalePostProcessing = async ({
   saleId,
   accountId,
   ownerUid,
+  clinicId,
 }) => {
   const sessionId = `${session?.id || ''}`.trim();
   if (!sessionId || !ownerUid) return;
@@ -983,12 +1023,7 @@ const runConnectSalePostProcessing = async ({
   const totalAmount = toNumber(pendingData?.totals?.total) || toNumber(session?.amount_total) / 100;
   const amountLabel = formatSaleAmount(totalAmount, currency);
   const appointmentRef = `${pendingData?.appointmentRef || ''}`.trim();
-  const saleNumber =
-    appointmentRef || `${sessionId}`.replace(/^cs_(test|live)_/i, '').slice(0, 12) || null;
-  const clinicName = await resolveConnectSaleClinicName({ accountId, ownerUid });
   const customerName = `${pendingData?.customer?.name || ''}`.trim();
-  const customerEmail = normalizeEmail(pendingData?.customer?.email || '');
-  const paidAt = new Date();
 
   if (!pendingData?.paymentNotificationCreatedAt) {
     try {
@@ -1022,39 +1057,92 @@ const runConnectSalePostProcessing = async ({
     }
   }
 
-  if (!pendingData?.patientReceiptEmailSentAt && customerEmail) {
-    const receiptResult = await sendConnectSaleReceiptEmail({
-      toEmail: customerEmail,
-      toName: customerName || 'der',
-      clinicName,
-      appointmentRef,
-      saleNumber,
-      amountLabel,
-      items: pendingData?.items || [],
-      currency,
-      paidAt,
+  try {
+    const receiptSyncResult = await syncPaymentReceiptForSale({
+      stripe,
+      connectedAccountId: session?.account || pendingData?.stripeConnectAccountId || null,
+      session,
+      pendingData,
+      accountId,
+      ownerUid,
+      saleId,
     });
 
-    if (receiptResult?.sent) {
-      await pendingRef.set(
+    const paymentId = `${receiptSyncResult?.paymentId || ''}`.trim() || null;
+    const receiptNumber = `${receiptSyncResult?.receiptNumber || ''}`.trim() || null;
+    const receiptPdfPath = `${receiptSyncResult?.receiptPdfPath || ''}`.trim() || null;
+    const receiptEmailStatus = `${receiptSyncResult?.receiptEmailStatus || ''}`.trim() || 'not_sent';
+    const stripeChargeId = `${receiptSyncResult?.stripeChargeId || ''}`.trim() || null;
+    const customerEmail = normalizeEmail(pendingData?.customer?.email || '');
+
+    await pendingRef.set(
+      {
+        paymentId,
+        receiptNumber,
+        receiptPdfPath,
+        receiptEmailStatus,
+        stripeChargeId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    if (saleId && (clinicId || ownerUid)) {
+      const saleRef = clinicId
+        ? db.collection('clinics').doc(clinicId).collection('sales').doc(saleId)
+        : db.collection('users').doc(ownerUid).collection('sales').doc(saleId);
+      await saleRef.set(
         {
-          patientReceiptEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
-          patientReceiptEmailTo: receiptResult.to || customerEmail,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-    } else if (receiptResult?.error) {
-      await pendingRef.set(
-        {
-          patientReceiptEmailError: `${receiptResult.error}`.slice(0, 400),
+          paymentId,
+          paymentStatus: 'paid',
+          receiptNumber,
+          receiptPdfPath,
+          receiptEmailStatus,
+          stripeChargeId,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
         { merge: true }
       );
     }
-  }
 
+    const emailResult = receiptSyncResult?.email || null;
+    if (emailResult?.sent) {
+      await pendingRef.set(
+        {
+          patientReceiptEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
+          patientReceiptEmailTo: emailResult.to || customerEmail || null,
+          patientReceiptEmailError: admin.firestore.FieldValue.delete(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } else if (emailResult?.error) {
+      await pendingRef.set(
+        {
+          patientReceiptEmailError: `${emailResult.error}`.slice(0, 400),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+  } catch (receiptError) {
+    await pendingRef.set(
+      {
+        patientReceiptEmailError: `${receiptError?.message || receiptError}`.slice(0, 400),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    console.warn('[stripe] connect sale receipt sync failed', {
+      sessionId,
+      accountId,
+      ownerUid,
+      appointmentRef: appointmentRef || null,
+      amountLabel,
+      customerName: customerName || null,
+      error: receiptError?.message || receiptError,
+    });
+  }
 };
 
 const upsertSaleFromCheckoutSession = async ({ session, connectedAccountId = null }) => {
@@ -1063,6 +1151,7 @@ const upsertSaleFromCheckoutSession = async ({ session, connectedAccountId = nul
   if (flow !== 'connect_sale') return;
 
   const accountId = `${metadata?.accountId || ''}`.trim();
+  const clinicIdFromMeta = `${metadata?.clinicId || ''}`.trim();
   const ownerUid = `${metadata?.ownerUid || ''}`.trim();
   const sessionId = `${session?.id || ''}`.trim();
   if (!accountId || !ownerUid || !sessionId) {
@@ -1084,6 +1173,7 @@ const upsertSaleFromCheckoutSession = async ({ session, connectedAccountId = nul
       saleId: pendingData.saleId,
       accountId,
       ownerUid,
+      clinicId: `${clinicIdFromMeta || pendingData?.accountId || accountId || ''}`.trim() || null,
     });
     return;
   }
@@ -1093,31 +1183,39 @@ const upsertSaleFromCheckoutSession = async ({ session, connectedAccountId = nul
     session,
     connectedAccountId: connectedAccountId || session?.account || null,
   });
+  const clinicId = `${clinicIdFromMeta || pendingData?.accountId || accountId || ''}`.trim() || null;
+  if (clinicId) {
+    salePayload.clinicId = clinicId;
+  }
 
-  const saleRef = db.collection('users').doc(ownerUid).collection('sales').doc();
+  const saleRef = clinicId
+    ? db.collection('clinics').doc(clinicId).collection('sales').doc()
+    : db.collection('users').doc(ownerUid).collection('sales').doc();
   await saleRef.set(salePayload, { merge: true });
 
   const appointmentId = pendingData?.appointmentId || null;
   if (appointmentId) {
-    await db
-      .collection('users')
-      .doc(ownerUid)
-      .collection('appointments')
-      .doc(appointmentId)
-      .set(
-        {
-          status: 'completed',
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
+    const appointmentRef = clinicId
+      ? db.collection('clinics').doc(clinicId).collection('appointments').doc(appointmentId)
+      : db.collection('users').doc(ownerUid).collection('appointments').doc(appointmentId);
+    await appointmentRef.set(
+      {
+        status: 'completed',
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
   }
 
   await pendingRef.set(
     {
       status: 'processed',
       saleId: saleRef.id,
+      stripePaymentIntentId:
+        typeof session?.payment_intent === 'string'
+          ? session.payment_intent
+          : session?.payment_intent?.id || null,
       stripeConnectedAccountId: connectedAccountId || session?.account || null,
       processedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1128,7 +1226,12 @@ const upsertSaleFromCheckoutSession = async ({ session, connectedAccountId = nul
     {
       accountId,
       ownerUid,
+      clinicId,
       saleId: saleRef.id,
+      stripePaymentIntentId:
+        typeof session?.payment_intent === 'string'
+          ? session.payment_intent
+          : session?.payment_intent?.id || null,
       stripeConnectAccountId: connectedAccountId || session?.account || null,
       paymentStatus: 'processed',
       processedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1149,6 +1252,7 @@ const upsertSaleFromCheckoutSession = async ({ session, connectedAccountId = nul
     saleId: saleRef.id,
     accountId,
     ownerUid,
+    clinicId,
   });
 };
 
@@ -1907,6 +2011,152 @@ router.post('/connect/sync-sale-session', verifyFirebaseToken, async (req, res) 
   }
 });
 
+const resolveAuthorizedPaymentLookup = async ({ uid, paymentId, saleId }) => {
+  const context = await resolveUserClinicContext(uid);
+  if (!context?.userDoc) {
+    throw new ReceiptServiceError('Bruger ikke fundet.', {
+      code: 'user_not_found',
+      statusCode: 404,
+    });
+  }
+
+  let paymentLookup = null;
+  const normalizedPaymentId = `${paymentId || ''}`.trim();
+  const normalizedSaleId = `${saleId || ''}`.trim();
+
+  if (normalizedPaymentId) {
+    paymentLookup = await findPaymentByAnyIdentifier({ paymentId: normalizedPaymentId });
+  }
+
+  if (!paymentLookup?.data && normalizedSaleId) {
+    const ownerUidCandidates = [
+      uid,
+      context?.userDoc?.id,
+      context?.clinic?.ownerUid,
+      context?.account?.ownerUid,
+    ]
+      .map((value) => `${value || ''}`.trim())
+      .filter(Boolean);
+
+    paymentLookup = await ensurePaymentForSale({
+      saleId: normalizedSaleId,
+      ownerUidCandidates,
+      fallbackClinicId: context?.clinicId || context?.accountId || null,
+      fallbackAccountId: context?.accountId || null,
+    });
+  }
+
+  if (!paymentLookup?.data) {
+    throw new ReceiptServiceError('Betalingen blev ikke fundet.', {
+      code: 'payment_not_found',
+      statusCode: 404,
+    });
+  }
+
+  const paymentClinicId =
+    `${paymentLookup.data?.clinicId || paymentLookup.data?.accountId || ''}`.trim();
+  if (!paymentClinicId) {
+    throw new ReceiptServiceError('Betalingen mangler clinicId.', {
+      code: 'missing_clinic_id',
+      statusCode: 500,
+    });
+  }
+
+  const authorized = await hasClinicAccess({
+    uid,
+    clinicId: paymentClinicId,
+    context,
+  });
+  if (!authorized) {
+    throw new ReceiptServiceError('Du har ikke adgang til denne kvittering.', {
+      code: 'forbidden',
+      statusCode: 403,
+    });
+  }
+
+  return { context, paymentLookup };
+};
+
+router.post('/connect/payments/get-receipt-download-url', verifyFirebaseToken, async (req, res) => {
+  try {
+    const { uid } = req.user || {};
+    if (!uid) {
+      return res.status(401).json({ error: 'Missing user context.' });
+    }
+
+    const paymentId = `${req.body?.paymentId || ''}`.trim();
+    const saleId = `${req.body?.saleId || ''}`.trim();
+    if (!paymentId && !saleId) {
+      return res.status(400).json({ error: 'Mangler paymentId eller saleId.' });
+    }
+
+    const { paymentLookup } = await resolveAuthorizedPaymentLookup({
+      uid,
+      paymentId,
+      saleId,
+    });
+    const download = await ensureReceiptDownloadUrl({
+      paymentLookup,
+    });
+
+    return res.json({
+      ok: true,
+      paymentId: paymentLookup.id,
+      receiptNumber: download?.payment?.receiptNumber || null,
+      url: download.url,
+      expiresAt: download.expiresAt ? new Date(download.expiresAt).toISOString() : null,
+      expiresInSeconds: Math.round(SIGNED_URL_TTL_MS / 1000),
+    });
+  } catch (error) {
+    const statusCode = error instanceof ReceiptServiceError ? error.statusCode : 500;
+    const message = error?.message || 'Server error';
+    return res.status(statusCode).json({
+      error: message,
+      code: error instanceof ReceiptServiceError ? error.code : 'internal_error',
+    });
+  }
+});
+
+router.post('/connect/payments/resend-receipt', verifyFirebaseToken, async (req, res) => {
+  try {
+    const { uid } = req.user || {};
+    if (!uid) {
+      return res.status(401).json({ error: 'Missing user context.' });
+    }
+
+    const paymentId = `${req.body?.paymentId || ''}`.trim();
+    const saleId = `${req.body?.saleId || ''}`.trim();
+    if (!paymentId && !saleId) {
+      return res.status(400).json({ error: 'Mangler paymentId eller saleId.' });
+    }
+
+    const { paymentLookup } = await resolveAuthorizedPaymentLookup({
+      uid,
+      paymentId,
+      saleId,
+    });
+    const resendResult = await resendReceiptEmailForPayment({
+      paymentLookup,
+    });
+
+    return res.json({
+      ok: true,
+      paymentId: paymentLookup.id,
+      receiptNumber: resendResult?.payment?.receiptNumber || null,
+      receiptEmailStatus: resendResult?.payment?.receiptEmailStatus || 'sent',
+      receiptSentAt: resendResult?.payment?.receiptSentAt || null,
+      messageId: resendResult?.emailResult?.messageId || null,
+    });
+  } catch (error) {
+    const statusCode = error instanceof ReceiptServiceError ? error.statusCode : 500;
+    const message = error?.message || 'Server error';
+    return res.status(statusCode).json({
+      error: message,
+      code: error instanceof ReceiptServiceError ? error.code : 'internal_error',
+    });
+  }
+});
+
 router.post('/create-checkout-session', async (req, res) => {
   try {
     if (!stripe) {
@@ -2291,6 +2541,82 @@ const webhookHandler = async (req, res) => {
             cancelAtPeriodEnd,
             canceledAt,
             createdAt,
+          });
+        }
+        break;
+      }
+      case 'payment_intent.succeeded': {
+        const paymentIntent = event.data.object;
+        const flow = `${paymentIntent?.metadata?.flow || ''}`.trim();
+        if (flow !== 'connect_sale') {
+          break;
+        }
+
+        const connectedAccountId = event?.account || null;
+        let checkoutSession = null;
+        try {
+          const sessionList = await stripe.checkout.sessions.list(
+            {
+              payment_intent: paymentIntent?.id,
+              limit: 1,
+            },
+            connectedAccountId ? { stripeAccount: connectedAccountId } : undefined
+          );
+          checkoutSession = Array.isArray(sessionList?.data) ? sessionList.data[0] : null;
+        } catch (lookupError) {
+          console.warn('[stripe] payment_intent.succeeded session lookup failed', {
+            paymentIntentId: paymentIntent?.id || null,
+            connectedAccountId: connectedAccountId || null,
+            error: lookupError?.message || lookupError,
+          });
+        }
+
+        if (checkoutSession) {
+          await upsertSaleFromCheckoutSession({
+            session: checkoutSession,
+            connectedAccountId: connectedAccountId || checkoutSession?.account || null,
+          });
+          break;
+        }
+
+        const metadata = paymentIntent?.metadata || {};
+        const accountId = `${metadata?.accountId || ''}`.trim();
+        const ownerUid = `${metadata?.ownerUid || ''}`.trim();
+        if (accountId && ownerUid) {
+          await syncPaymentReceiptForSale({
+            stripe,
+            connectedAccountId,
+            session: {
+              id: `pi_${paymentIntent?.id || Date.now()}`,
+              metadata,
+              currency: paymentIntent?.currency || STRIPE_CONNECT_DEFAULT_CURRENCY,
+              amount_total: paymentIntent?.amount_received || paymentIntent?.amount || 0,
+              payment_intent: paymentIntent?.id || null,
+              created: paymentIntent?.created || null,
+            },
+            pendingData: {
+              accountId,
+              ownerUid,
+              appointmentId: `${metadata?.appointmentId || ''}`.trim() || null,
+              appointmentRef: `${metadata?.appointmentRef || ''}`.trim() || null,
+              employeeId: `${metadata?.employeeId || ''}`.trim() || ownerUid,
+              employeeName: `${metadata?.employeeName || ''}`.trim() || 'Behandler',
+              paymentMethod: {
+                id: `${metadata?.paymentMethodId || ''}`.trim() || null,
+                label: `${metadata?.paymentMethodLabel || ''}`.trim() || 'Kortbetaling',
+              },
+              totals: {
+                subtotal: toNumber(paymentIntent?.amount_received || paymentIntent?.amount) / 100,
+                vat: 0,
+                total: toNumber(paymentIntent?.amount_received || paymentIntent?.amount) / 100,
+              },
+              currency: `${paymentIntent?.currency || STRIPE_CONNECT_DEFAULT_CURRENCY}`.toLowerCase(),
+              items: [],
+              customer: {},
+            },
+            accountId,
+            ownerUid,
+            saleId: null,
           });
         }
         break;

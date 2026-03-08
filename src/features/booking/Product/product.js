@@ -4,6 +4,7 @@ import './product.css';
 import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayout';
 import { useAuth } from '../../../AuthContext';
 import { useLanguage } from '../../../LanguageContext';
+import { migrateLegacyCollectionToClinic } from '../../../utils/workspaceContext';
 import {
   addDoc,
   collection,
@@ -16,20 +17,14 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { db } from '../../../firebase';
-import { ChevronDown, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 
 const DEFAULT_FORM_VALUES = {
   name: '',
-  sku: '',
-  brand: '',
-  unit: 'ml',
-  amount: '',
-  shortDescription: '',
-  description: '',
   category: '',
+  unit: 'stk',
+  amount: '',
   price: '',
-  costPrice: '',
-  currency: 'DKK',
 };
 
 const UNIT_OPTIONS = [
@@ -39,13 +34,39 @@ const UNIT_OPTIONS = [
   { value: 'pakke', label: 'Pakke' },
 ];
 
-const CURRENCY_OPTIONS = ['DKK', 'EUR', 'USD'];
+const SORT_OPTIONS = [
+  {
+    value: 'updated_desc',
+    labelKey: 'booking.products.list.actions.sortNewest',
+    fallback: 'Opdateret (nyeste først)',
+  },
+  {
+    value: 'updated_asc',
+    labelKey: 'booking.products.list.actions.sortOldest',
+    fallback: 'Opdateret (ældste først)',
+  },
+];
 
 const parseNumber = (value) => {
   if (value === '' || value === null || value === undefined) return null;
   const normalized = String(value).replace(',', '.');
   const parsed = Number.parseFloat(normalized);
   return Number.isNaN(parsed) ? null : parsed;
+};
+
+const toTimestamp = (value) => {
+  if (!value) return 0;
+  if (typeof value === 'number') return value;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  if (typeof value === 'object' && typeof value.toDate === 'function') {
+    const date = value.toDate();
+    return date instanceof Date ? date.getTime() : 0;
+  }
+  return 0;
 };
 
 const mapDocToProduct = (docSnap) => {
@@ -149,7 +170,8 @@ function ProductEmptyState({ onStart }) {
 }
 
 function ProductEditor({ isOpen, mode, initialProduct, onClose, onSaved }) {
-  const { user } = useAuth();
+  const { workspaceUid, activeClinicId, user } = useAuth();
+  const clinicId = `${activeClinicId || ''}`.trim();
   const { t } = useLanguage();
   const [formValues, setFormValues] = useState(DEFAULT_FORM_VALUES);
   const [isSaving, setIsSaving] = useState(false);
@@ -160,16 +182,10 @@ function ProductEditor({ isOpen, mode, initialProduct, onClose, onSaved }) {
     if (mode === 'edit' && initialProduct) {
       setFormValues({
         name: initialProduct.name || '',
-        sku: initialProduct.sku || '',
-        brand: initialProduct.brand || '',
-        unit: initialProduct.unit || 'ml',
-        amount: initialProduct.amount ?? '',
-        shortDescription: initialProduct.shortDescription || '',
-        description: initialProduct.description || '',
         category: initialProduct.category || '',
+        unit: initialProduct.unit || 'stk',
+        amount: initialProduct.amount ?? '',
         price: initialProduct.price ?? '',
-        costPrice: initialProduct.costPrice ?? '',
-        currency: initialProduct.currency || 'DKK',
       });
     } else {
       setFormValues(DEFAULT_FORM_VALUES);
@@ -193,7 +209,7 @@ function ProductEditor({ isOpen, mode, initialProduct, onClose, onSaved }) {
     event.preventDefault();
     if (isSaving) return;
 
-    if (!user?.uid) {
+    if (!clinicId && !workspaceUid) {
       setSaveError(
         t('booking.products.editor.errors.notLoggedIn', 'Log ind for at gemme et produkt.')
       );
@@ -212,29 +228,29 @@ function ProductEditor({ isOpen, mode, initialProduct, onClose, onSaved }) {
 
     try {
       const priceValue = parseNumber(formValues.price);
-      const costValue = parseNumber(formValues.costPrice);
       const amountValue = parseNumber(formValues.amount);
 
       const payload = {
         name: formValues.name.trim(),
-        sku: formValues.sku.trim() || null,
-        brand: formValues.brand.trim() || null,
+        category: formValues.category.trim() || null,
         unit: formValues.unit || null,
         amount: amountValue ?? null,
-        shortDescription: formValues.shortDescription.trim() || null,
-        description: formValues.description.trim() || null,
-        category: formValues.category.trim() || null,
         price: priceValue ?? 0,
-        costPrice: costValue ?? 0,
-        currency: formValues.currency || 'DKK',
+        clinicId: clinicId || null,
+        createdByUid: user?.uid || null,
+        currency: 'DKK',
         updatedAt: serverTimestamp(),
       };
 
       if (mode === 'edit' && initialProduct?.id) {
-        const productRef = doc(db, 'users', user.uid, 'products', initialProduct.id);
+        const productRef = clinicId
+          ? doc(db, 'clinics', clinicId, 'products', initialProduct.id)
+          : doc(db, 'users', workspaceUid, 'products', initialProduct.id);
         await updateDoc(productRef, payload);
       } else {
-        const productCollection = collection(db, 'users', user.uid, 'products');
+        const productCollection = clinicId
+          ? collection(db, 'clinics', clinicId, 'products')
+          : collection(db, 'users', workspaceUid, 'products');
         await addDoc(productCollection, {
           ...payload,
           createdAt: serverTimestamp(),
@@ -280,10 +296,10 @@ function ProductEditor({ isOpen, mode, initialProduct, onClose, onSaved }) {
         </div>
 
         <form id="product-editor-form" className="product-form" onSubmit={handleSubmit}>
-          <div className="product-form-body">
-            <div className="product-form-section">
+          <div className="product-form-body product-form-body-simple">
+            <div className="product-form-section product-form-section-simple">
               <h3>{t('booking.products.editor.sections.basic', 'Grundlæggende oplysninger')}</h3>
-              <div className="product-form-grid">
+              <div className="product-form-grid product-form-grid-simple">
                 <div className="product-field full-width">
                   <label>{t('booking.products.editor.fields.name', 'Produktnavn')}</label>
                   <input
@@ -293,27 +309,29 @@ function ProductEditor({ isOpen, mode, initialProduct, onClose, onSaved }) {
                     placeholder={t('booking.products.editor.placeholders.name', 'F.eks. Recovery Shampoo')}
                   />
                 </div>
-                <div className="product-field">
+                <div className="product-field full-width">
                   <label>
-                    {t('booking.products.editor.fields.sku', 'Produktstregkode')}
+                    {t('booking.products.editor.fields.category', 'Produktkategori')}
                     <span className="product-field-hint">
                       {t('booking.products.editor.optional', '(Valgfrit)')}
                     </span>
                   </label>
                   <input
                     type="text"
-                    value={formValues.sku}
-                    onChange={handleChange('sku')}
-                    placeholder="UPC, EAN, GTIN"
+                    value={formValues.category}
+                    onChange={handleChange('category')}
+                    placeholder={t('booking.products.editor.placeholders.category', 'Vælg en kategori')}
                   />
                 </div>
                 <div className="product-field">
-                  <label>{t('booking.products.editor.fields.brand', 'Produktmærke')}</label>
+                  <label>{t('booking.products.editor.fields.amount', 'Beløb')}</label>
                   <input
-                    type="text"
-                    value={formValues.brand}
-                    onChange={handleChange('brand')}
-                    placeholder={t('booking.products.editor.placeholders.brand', 'Vælg et mærke')}
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formValues.amount}
+                    onChange={handleChange('amount')}
+                    placeholder="0"
                   />
                 </div>
                 <div className="product-field">
@@ -326,101 +344,16 @@ function ProductEditor({ isOpen, mode, initialProduct, onClose, onSaved }) {
                     ))}
                   </select>
                 </div>
-                <div className="product-field">
-                  <label>{t('booking.products.editor.fields.amount', 'Beløb')}</label>
+                <div className="product-field full-width">
+                  <label>{t('booking.products.editor.fields.salePrice', 'Salgspris')} (DKK)</label>
                   <input
                     type="number"
                     min="0"
-                    value={formValues.amount}
-                    onChange={handleChange('amount')}
-                    placeholder="0.00"
-                  />
-                </div>
-                <div className="product-field full-width">
-                  <div className="product-field-meta">
-                    <label>{t('booking.products.editor.fields.shortDescription', 'Kort beskrivelse')}</label>
-                    <span className="product-field-counter">
-                      {formValues.shortDescription.length}/100
-                    </span>
-                  </div>
-                  <input
-                    type="text"
-                    maxLength={100}
-                    value={formValues.shortDescription}
-                    onChange={handleChange('shortDescription')}
-                    placeholder={t('booking.products.editor.placeholders.shortDescription', 'Kort summary af produktet')}
-                  />
-                </div>
-                <div className="product-field full-width">
-                  <div className="product-field-meta">
-                    <label>{t('booking.products.editor.fields.description', 'Produktbeskrivelse')}</label>
-                    <span className="product-field-counter">
-                      {formValues.description.length}/1000
-                    </span>
-                  </div>
-                  <textarea
-                    rows="4"
-                    maxLength={1000}
-                    value={formValues.description}
-                    onChange={handleChange('description')}
-                    placeholder={t(
-                      'booking.products.editor.placeholders.description',
-                      'Beskriv hvad produktet bruges til, ingredienser, effekter osv.'
-                    )}
-                  />
-                </div>
-                <div className="product-field full-width">
-                  <label>{t('booking.products.editor.fields.category', 'Produktkategori')}</label>
-                  <input
-                    type="text"
-                    value={formValues.category}
-                    onChange={handleChange('category')}
-                    placeholder={t('booking.products.editor.placeholders.category', 'Vælg en kategori')}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="product-form-aside">
-              <div className="product-photo-card">
-                <h4>{t('booking.products.editor.sections.photo', 'Produktfotografier')}</h4>
-                <p>{t('booking.products.editor.photoHint', 'Træk og slip et foto for at ændre rækkefølgen.')}</p>
-                <div className="product-photo-placeholder">
-                  <span>+</span>
-                  <span>{t('booking.products.editor.photoCta', 'Tilføj et foto')}</span>
-                </div>
-              </div>
-              <div className="product-form-section compact">
-                <h3>{t('booking.products.editor.sections.pricing', 'Priser')}</h3>
-                <div className="product-field">
-                  <label>{t('booking.products.editor.fields.costPrice', 'Indkøbspris')}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formValues.costPrice}
-                    onChange={handleChange('costPrice')}
-                    placeholder="0.00"
-                  />
-                </div>
-                <div className="product-field">
-                  <label>{t('booking.products.editor.fields.salePrice', 'Salgspris')}</label>
-                  <input
-                    type="number"
-                    min="0"
+                    step="0.5"
                     value={formValues.price}
                     onChange={handleChange('price')}
                     placeholder="0.00"
                   />
-                </div>
-                <div className="product-field">
-                  <label>{t('booking.products.editor.fields.currency', 'Valuta')}</label>
-                  <select value={formValues.currency} onChange={handleChange('currency')}>
-                    {CURRENCY_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
                 </div>
               </div>
             </div>
@@ -434,7 +367,8 @@ function ProductEditor({ isOpen, mode, initialProduct, onClose, onSaved }) {
 }
 
 function Product() {
-  const { user } = useAuth();
+  const { workspaceUid, activeClinicId, user } = useAuth();
+  const clinicId = `${activeClinicId || ''}`.trim();
   const { t, locale } = useLanguage();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -444,9 +378,10 @@ function Product() {
   const [editorMode, setEditorMode] = useState('create');
   const [editingProduct, setEditingProduct] = useState(null);
   const [showLearnMore, setShowLearnMore] = useState(false);
+  const [sortOrder, setSortOrder] = useState('updated_desc');
 
   useEffect(() => {
-    if (!user?.uid) {
+    if (!clinicId && !workspaceUid) {
       setProducts([]);
       setLoading(false);
       setLoadError('');
@@ -455,23 +390,64 @@ function Product() {
 
     setLoading(true);
     setLoadError('');
-    const productsRef = collection(db, 'users', user.uid, 'products');
-    const productsQuery = query(productsRef, orderBy('updatedAt', 'desc'));
-    const unsubscribe = onSnapshot(
-      productsQuery,
-      (snapshot) => {
-        setProducts(snapshot.docs.map((docSnap) => mapDocToProduct(docSnap)));
-        setLoading(false);
-      },
-      (error) => {
-        console.error('[Product] load error', error);
-        setLoadError(t('booking.products.errors.loadFailed', 'Kunne ikke hente produkter.'));
-        setLoading(false);
+    let cancelled = false;
+    let unsubscribe = () => {};
+    const setUnsubscribe = (nextUnsubscribe) => {
+      let stopped = false;
+      unsubscribe = () => {
+        if (stopped) return;
+        stopped = true;
+        nextUnsubscribe();
+      };
+    };
+    const attachListener = async () => {
+      if (clinicId && workspaceUid) {
+        try {
+          await migrateLegacyCollectionToClinic({
+            clinicId,
+            legacyOwnerUid: workspaceUid,
+            collectionName: 'products',
+            transformDoc: ({ data }) => ({
+              clinicId,
+              createdByUid: data.createdByUid || user?.uid || null,
+            }),
+          });
+        } catch (migrationError) {
+          console.error('[Product] migration error', migrationError);
+        }
       }
-    );
+      if (cancelled) return;
+      const productsRef = clinicId
+        ? collection(db, 'clinics', clinicId, 'products')
+        : collection(db, 'users', workspaceUid, 'products');
+      const productsQuery = query(productsRef, orderBy('updatedAt', 'desc'));
+      const stop = onSnapshot(
+        productsQuery,
+        (snapshot) => {
+          if (cancelled) return;
+          setProducts(snapshot.docs.map((docSnap) => mapDocToProduct(docSnap)));
+          setLoading(false);
+        },
+        (error) => {
+          if (cancelled) return;
+          console.error('[Product] load error', error);
+          setLoadError(t('booking.products.errors.loadFailed', 'Kunne ikke hente produkter.'));
+          setLoading(false);
+        }
+      );
+      if (cancelled) {
+        stop();
+        return;
+      }
+      setUnsubscribe(stop);
+    };
+    void attachListener();
 
-    return () => unsubscribe();
-  }, [t, user?.uid]);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [clinicId, t, user?.uid, workspaceUid]);
 
   const filteredProducts = useMemo(() => {
     const queryValue = searchQuery.trim().toLowerCase();
@@ -483,6 +459,24 @@ function Product() {
       return fields.some((value) => value.includes(queryValue));
     });
   }, [products, searchQuery]);
+
+  const sortedProducts = useMemo(() => {
+    const nextProducts = [...filteredProducts];
+    nextProducts.sort((productA, productB) => {
+      const productATime =
+        toTimestamp(productA.updatedAt) ||
+        toTimestamp(productA.createdAt);
+      const productBTime =
+        toTimestamp(productB.updatedAt) ||
+        toTimestamp(productB.createdAt);
+
+      if (sortOrder === 'updated_asc') {
+        return productATime - productBTime;
+      }
+      return productBTime - productATime;
+    });
+    return nextProducts;
+  }, [filteredProducts, sortOrder]);
 
   const formatCurrency = (amount, currency) => {
     const value = Number(amount) || 0;
@@ -515,13 +509,17 @@ function Product() {
   };
 
   const handleDelete = async (product) => {
-    if (!user?.uid || !product?.id) return;
+    if ((!clinicId && !workspaceUid) || !product?.id) return;
     const confirmed = window.confirm(
       t('booking.products.actions.confirmDelete', 'Slet produktet?')
     );
     if (!confirmed) return;
     try {
-      await deleteDoc(doc(db, 'users', user.uid, 'products', product.id));
+      if (clinicId) {
+        await deleteDoc(doc(db, 'clinics', clinicId, 'products', product.id));
+      } else {
+        await deleteDoc(doc(db, 'users', workspaceUid, 'products', product.id));
+      }
     } catch (error) {
       console.error('[Product] delete error', error);
       alert(
@@ -574,10 +572,6 @@ function Product() {
                     </p>
                   </div>
                   <div className="product-header-actions">
-                    <button type="button" className="toolbar-pill toolbar-static">
-                      {t('booking.products.list.actions.options', 'Muligheder')}
-                      <ChevronDown className="toolbar-caret" />
-                    </button>
                     <button type="button" className="toolbar-pill toolbar-primary" onClick={openCreate}>
                       {t('booking.products.list.actions.add', 'Tilføj')}
                     </button>
@@ -597,20 +591,24 @@ function Product() {
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
                   </div>
-                  <button type="button" className="toolbar-pill toolbar-static">
-                    {t('booking.products.list.actions.filter', 'Filtre')}
-                  </button>
-                  <button type="button" className="product-sort">
-                    {t('booking.products.list.actions.sort', 'Opdateret (nyeste først)')}
-                    <ChevronDown />
-                  </button>
+                  <div className="product-sort-wrap">
+                    <select
+                      className="product-sort-select"
+                      value={sortOrder}
+                      onChange={(event) => setSortOrder(event.target.value)}
+                      aria-label={t('booking.products.list.actions.sortLabel', 'Sorter produkter')}
+                    >
+                      {SORT_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {t(option.labelKey, option.fallback)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div className="product-table">
                   <div className="product-table-head">
-                    <div className="product-cell checkbox">
-                      <input type="checkbox" disabled />
-                    </div>
                     <div className="product-cell">{t('booking.products.list.columns.name', 'Produktnavn')}</div>
                     <div className="product-cell">{t('booking.products.list.columns.category', 'Kategori')}</div>
                     <div className="product-cell">{t('booking.products.list.columns.amount', 'Mængde')}</div>
@@ -620,16 +618,13 @@ function Product() {
                     </div>
                   </div>
                   <div className="product-table-body">
-                    {filteredProducts.length === 0 ? (
+                    {sortedProducts.length === 0 ? (
                       <div className="product-empty-row">
                         {t('booking.products.list.emptyFiltered', 'Ingen produkter matcher din søgning.')}
                       </div>
                     ) : (
-                      filteredProducts.map((product) => (
+                      sortedProducts.map((product) => (
                         <div className="product-table-row" key={product.id}>
-                          <div className="product-cell checkbox">
-                            <input type="checkbox" />
-                          </div>
                           <div className="product-cell name">
                             <div className="product-name">{product.name || t('booking.products.list.untitled', 'Uden navn')}</div>
                             <div className="product-meta">

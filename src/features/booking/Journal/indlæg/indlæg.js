@@ -15,9 +15,6 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import './indlæg.css';
-import { RainbowButton } from '../../../../components/ui/rainbow-button';
-import AnimatedGenerateButton from '../../../../components/ui/animated-generate-button-shadcn-tailwind';
-import { GradientButton } from '../../../../components/ui/gradient-button';
 import { QuantumPulseLoader } from '../../../../components/ui/quantum-pulse-loade';
 import CortiAssistantPanel, { parseAssistantSections } from '../../components/CortiAssistantPanel';
 import { db } from '../../../../firebase';
@@ -322,7 +319,8 @@ function Indlæg({
     })
   );
 
-  const { user, userDoc } = useAuth();
+  const { user, userDoc, workspaceUid, activeClinicId } = useAuth();
+  const activeClinicWorkspaceId = `${activeClinicId || ''}`.trim();
   const { language, preferredLanguage, locale, t } = useLanguage();
   const resolvedLanguage = preferredLanguage || DEFAULT_LANGUAGE;
   const browserLocale = typeof navigator !== 'undefined' ? navigator.language : '';
@@ -619,6 +617,22 @@ function Indlæg({
 
   const isDictationMode = transcribeMode === MODE_DICTATE;
   const isWorkspaceModeSelected = transcribeMode !== MODE_NONE;
+  const hasSharedScope = Boolean(activeClinicWorkspaceId || workspaceUid);
+
+  const getClientJournalEntriesRef = useCallback(
+    (resolvedClientId) => {
+      const safeClientId = `${resolvedClientId || ''}`.trim();
+      if (!safeClientId) return null;
+      if (activeClinicWorkspaceId) {
+        return collection(db, 'clinics', activeClinicWorkspaceId, 'clients', safeClientId, 'journalEntries');
+      }
+      if (workspaceUid) {
+        return collection(db, 'users', workspaceUid, 'clients', safeClientId, 'journalEntries');
+      }
+      return null;
+    },
+    [activeClinicWorkspaceId, workspaceUid]
+  );
 
   const handleModeToggle = (mode) => {
     setTranscribeMode((prev) => {
@@ -706,18 +720,28 @@ function Indlæg({
   );
 
   const getAssistantMessagesRef = useCallback(() => {
-    if (!user?.uid || !resolvedAppointmentId) {
+    if (!resolvedAppointmentId || !hasSharedScope) {
       return null;
+    }
+    if (activeClinicWorkspaceId) {
+      return collection(
+        db,
+        'clinics',
+        activeClinicWorkspaceId,
+        'appointments',
+        resolvedAppointmentId,
+        'assistantChats'
+      );
     }
     return collection(
       db,
       'users',
-      user.uid,
+      workspaceUid,
       'appointments',
       resolvedAppointmentId,
       'assistantChats'
     );
-  }, [resolvedAppointmentId, user?.uid]);
+  }, [activeClinicWorkspaceId, hasSharedScope, resolvedAppointmentId, workspaceUid]);
 
   const appendAssistantMessage = useCallback(
     async (message) => {
@@ -1030,11 +1054,15 @@ function Indlæg({
 
   useEffect(() => {
     const loadRecent = async () => {
-      if (!user?.uid || !clientId) return;
+      if (!hasSharedScope || !clientId) return;
       setIsLoadingHistory(true);
       setHistoryError('');
       try {
-        const entriesRef = collection(db, 'users', user.uid, 'clients', clientId, 'journalEntries');
+        const entriesRef = getClientJournalEntriesRef(clientId);
+        if (!entriesRef) {
+          setRecentEntries([]);
+          return;
+        }
         const entriesQuery = query(entriesRef, orderBy('createdAt', 'desc'), limit(10));
         const snapshot = await getDocs(entriesQuery);
         const mapped = snapshot.docs.map((docSnap) => {
@@ -1064,7 +1092,7 @@ function Indlæg({
     };
 
     loadRecent();
-  }, [user?.uid, clientId, t]);
+  }, [clientId, getClientJournalEntriesRef, hasSharedScope, t]);
 
   const persistDictationLanguage = useCallback(
     async (nextLanguage) => {
@@ -1996,6 +2024,13 @@ function Indlæg({
         return { ok: false };
       }
 
+      if (!hasSharedScope) {
+        if (!silent) {
+          setSaveError(t('indlaeg.errors.mustBeLoggedIn', 'You must be logged in to save.'));
+        }
+        return { ok: false };
+      }
+
       const nowIso = new Date().toISOString();
       const ownerIdentifier = deriveUserIdentifier(user);
       const templateTitle =
@@ -2010,12 +2045,13 @@ function Indlæg({
         date,
         content: content.trim(),
         contentRich: contentRich || plainTextToRichContent(content),
+        clinicId: activeClinicWorkspaceId || null,
         isPrivate: false,
         isStarred: false,
         isLocked: false,
         clientName,
         clientId,
-        ownerUid: user.uid,
+        ownerUid: user?.uid || null,
         ownerEmail: user.email ?? null,
         ownerIdentifier,
         createdAtIso: nowIso,
@@ -2037,15 +2073,25 @@ function Indlæg({
 
         if (targetEntry?.id) {
           // Update existing entry
-          const entryRef = doc(
-            db,
-            'users',
-            user.uid,
-            'clients',
-            clientId,
-            'journalEntries',
-            targetEntry.id
-          );
+          const entryRef = activeClinicWorkspaceId
+            ? doc(
+                db,
+                'clinics',
+                activeClinicWorkspaceId,
+                'clients',
+                clientId,
+                'journalEntries',
+                targetEntry.id
+              )
+            : doc(
+                db,
+                'users',
+                workspaceUid,
+                'clients',
+                clientId,
+                'journalEntries',
+                targetEntry.id
+              );
           await updateDoc(entryRef, {
             ...entryPayload,
             updatedAt: serverTimestamp(),
@@ -2059,14 +2105,23 @@ function Indlæg({
           };
         } else {
           // Create new entry
-          const entriesCollection = collection(
-            db,
-            'users',
-            user.uid,
-            'clients',
-            clientId,
-            'journalEntries'
-          );
+          const entriesCollection = activeClinicWorkspaceId
+            ? collection(
+                db,
+                'clinics',
+                activeClinicWorkspaceId,
+                'clients',
+                clientId,
+                'journalEntries'
+              )
+            : collection(
+                db,
+                'users',
+                workspaceUid,
+                'clients',
+                clientId,
+                'journalEntries'
+              );
           const docRef = await addDoc(entriesCollection, {
             ...entryPayload,
             createdAt: serverTimestamp(),
@@ -2282,7 +2337,7 @@ function Indlæg({
           <div className={`indlæg-content${isAssistantOpen ? ' indlæg-content--drawer-open' : ''}`}>
             <div className="indlæg-workspace">
               <aside className="indlæg-column indlæg-column--left">
-                <div className="indlæg-header-actions">
+                <div className="indlæg-left-top">
                   <button
                     type="button"
                     className="indlæg-close-btn"
@@ -2292,118 +2347,118 @@ function Indlæg({
                   >
                     ←
                   </button>
-                </div>
-                <div className="indlæg-card">
-                  <div className="indlæg-card-body indlæg-recent-summary">
-                    <div className="indlæg-title-block">
-                      <h2 className="indlæg-title">
-                        {clientName || t('indlaeg.unknownClient', 'Unknown client')}
-                      </h2>
-                      <span className="indlæg-title-date">{date || '—'}</span>
+                  <div className="indlæg-card">
+                    <div className="indlæg-card-body indlæg-recent-summary">
+                      <div className="indlæg-title-block">
+                        <h2 className="indlæg-title">
+                          {clientName || t('indlaeg.unknownClient', 'Unknown client')}
+                        </h2>
+                        <span className="indlæg-title-date">{date || '—'}</span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="indlæg-card-header indlæg-card-header--row">
-                    <h3 className="indlæg-card-title">
-                      {t('indlaeg.recentSessions', 'Recent sessions')}
-                    </h3>
-                    {true && (
-                      <button
-                        type="button"
-                        className="indlæg-history-link"
-                        onClick={async () => {
-                          const saveResult = await handleSave({ silent: true });
-                          if (saveResult?.ok === false) return;
-                          // Always return to the originally opened entry if it exists
-                          const target =
-                            originalEntryRef.current ||
-                            initialEntry ||
-                            previousEntryRef.current ||
-                            previousDraftRef.current;
-                          if (!target) return;
+                    <div className="indlæg-card-header indlæg-card-header--row">
+                      <h3 className="indlæg-card-title">
+                        {t('indlaeg.recentSessions', 'Recent sessions')}
+                      </h3>
+                      {true && (
+                        <button
+                          type="button"
+                          className="indlæg-history-link"
+                          onClick={async () => {
+                            const saveResult = await handleSave({ silent: true });
+                            if (saveResult?.ok === false) return;
+                            // Always return to the originally opened entry if it exists
+                            const target =
+                              originalEntryRef.current ||
+                              initialEntry ||
+                              previousEntryRef.current ||
+                              previousDraftRef.current;
+                            if (!target) return;
 
-                          if (target.draft) {
-                            // restore unsaved draft
-                            setActiveEntry(null);
-                            setSelectedTemplateKey(target.templateKey || '');
-                            setDate(target.date || initialDate || '');
-                            setContent(target.content || '');
-                            setContentRich(
-                              target.contentRich || plainTextToRichContent(target.content || '')
-                            );
-                            setNoteTextFormat('normal');
-                          } else {
-                            setActiveEntry(target);
-                            setSelectedTemplateKey(target?.templateKey || '');
-                            setDate(target?.date || initialDate || '');
-                            const targetPlain = getEntryPlainContent(target);
-                            setContent(targetPlain);
-                            setContentRich(getEntryRichContent(target));
-                            setNoteTextFormat('normal');
-                          }
-                        }}
-                      >
-                        {t('indlaeg.backToCurrent', 'Back to current')}
-                      </button>
-                    )}
-                  </div>
-                  <div className="indlæg-card-body">
-                    {isLoadingHistory && (
-                      <p className="indlæg-history-status">
-                        {t('indlaeg.loadingSessions', 'Loading recent sessions...')}
-                      </p>
-                    )}
-
-                    {historyError && !isLoadingHistory && (
-                      <p className="indlæg-history-error">{historyError}</p>
-                    )}
-
-                    {!isLoadingHistory && !historyError && recentEntries.length === 0 && (
-                      <p className="indlæg-history-empty">
-                        {t('indlaeg.noSessions', 'No previous sessions for this client yet.')}
-                      </p>
-                    )}
-
-                    {!isLoadingHistory && !historyError && recentEntries.length > 0 && (
-                      <ul className="indlæg-history-list">
-                        {recentEntries.map((entry) => (
-                          <li
-                            key={entry.id}
-                            className="indlæg-history-item"
-                            onClick={async () => {
-                              const saveResult = await handleSave({ silent: true });
-                              if (saveResult?.ok === false) return;
-                              // remember where we came from to allow "Tilbage til nuværende"
-                              const current = activeEntry || originalEntryRef.current;
-                              if (current) {
-                                previousEntryRef.current = current;
-                              } else if (!previousDraftRef.current) {
-                                // store the unsaved draft state
-                                previousDraftRef.current = {
-                                  draft: true,
-                                  date,
-                                  content,
-                                  contentRich,
-                                  templateKey: selectedTemplateKey,
-                                };
-                              }
-                              setActiveEntry(entry);
-                              setSelectedTemplateKey(entry.templateKey || '');
-                              setDate(entry.date || initialDate || '');
-                              const entryPlain = getEntryPlainContent(entry);
-                              setContent(entryPlain);
-                              setContentRich(getEntryRichContent(entry));
+                            if (target.draft) {
+                              // restore unsaved draft
+                              setActiveEntry(null);
+                              setSelectedTemplateKey(target.templateKey || '');
+                              setDate(target.date || initialDate || '');
+                              setContent(target.content || '');
+                              setContentRich(
+                                target.contentRich || plainTextToRichContent(target.content || '')
+                              );
                               setNoteTextFormat('normal');
-                            }}
-                          >
-                            <div className="indlæg-history-item-main indlæg-history-item-main--date">
-                              <span className="indlæg-history-date indlæg-history-date--only">
-                                {formatDateOnly(entry.date)}
-                              </span>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                            } else {
+                              setActiveEntry(target);
+                              setSelectedTemplateKey(target?.templateKey || '');
+                              setDate(target?.date || initialDate || '');
+                              const targetPlain = getEntryPlainContent(target);
+                              setContent(targetPlain);
+                              setContentRich(getEntryRichContent(target));
+                              setNoteTextFormat('normal');
+                            }
+                          }}
+                        >
+                          {t('indlaeg.backToCurrent', 'Back to current')}
+                        </button>
+                      )}
+                    </div>
+                    <div className="indlæg-card-body">
+                      {isLoadingHistory && (
+                        <p className="indlæg-history-status">
+                          {t('indlaeg.loadingSessions', 'Loading recent sessions...')}
+                        </p>
+                      )}
+
+                      {historyError && !isLoadingHistory && (
+                        <p className="indlæg-history-error">{historyError}</p>
+                      )}
+
+                      {!isLoadingHistory && !historyError && recentEntries.length === 0 && (
+                        <p className="indlæg-history-empty">
+                          {t('indlaeg.noSessions', 'No previous sessions for this client yet.')}
+                        </p>
+                      )}
+
+                      {!isLoadingHistory && !historyError && recentEntries.length > 0 && (
+                        <ul className="indlæg-history-list">
+                          {recentEntries.map((entry) => (
+                            <li
+                              key={entry.id}
+                              className="indlæg-history-item"
+                              onClick={async () => {
+                                const saveResult = await handleSave({ silent: true });
+                                if (saveResult?.ok === false) return;
+                                // remember where we came from to allow "Tilbage til nuværende"
+                                const current = activeEntry || originalEntryRef.current;
+                                if (current) {
+                                  previousEntryRef.current = current;
+                                } else if (!previousDraftRef.current) {
+                                  // store the unsaved draft state
+                                  previousDraftRef.current = {
+                                    draft: true,
+                                    date,
+                                    content,
+                                    contentRich,
+                                    templateKey: selectedTemplateKey,
+                                  };
+                                }
+                                setActiveEntry(entry);
+                                setSelectedTemplateKey(entry.templateKey || '');
+                                setDate(entry.date || initialDate || '');
+                                const entryPlain = getEntryPlainContent(entry);
+                                setContent(entryPlain);
+                                setContentRich(getEntryRichContent(entry));
+                                setNoteTextFormat('normal');
+                              }}
+                            >
+                              <div className="indlæg-history-item-main indlæg-history-item-main--date">
+                                <span className="indlæg-history-date indlæg-history-date--only">
+                                  {formatDateOnly(entry.date)}
+                                </span>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   </div>
                 </div>
               </aside>
@@ -2451,7 +2506,7 @@ function Indlæg({
                       </button>
                       <button
                         type="button"
-                        className="indlæg-action-btn"
+                        className="indlæg-action-btn indlæg-action-btn--primary"
                         onClick={handleManualSave}
                         data-skip-autosave="true"
                         disabled={isSaving}
@@ -2609,27 +2664,36 @@ function Indlæg({
                 <div className="indlæg-sideStack">
                   <div className="indlæg-card">
                     <div className="indlæg-card-body indlæg-mode-options">
-                      <GradientButton
+                      <button
                         type="button"
-                        className={`w-full${transcribeMode === MODE_TRANSCRIBE ? ' indlæg-mode-gradient-active' : ''}`}
+                        className={`indlæg-mode-option${
+                          transcribeMode === MODE_TRANSCRIBE ? ' active' : ''
+                        }`}
                         onClick={() => handleModeToggle(MODE_TRANSCRIBE)}
                         aria-pressed={transcribeMode === MODE_TRANSCRIBE}
                       >
                         {t('indlaeg.transcription', 'Transcription')}
-                      </GradientButton>
-                      <GradientButton
+                      </button>
+                      <button
                         type="button"
-                        className={`w-full${transcribeMode === MODE_DICTATE ? ' indlæg-mode-gradient-active' : ''}`}
+                        className={`indlæg-mode-option${
+                          transcribeMode === MODE_DICTATE ? ' active' : ''
+                        }`}
                         onClick={() => handleModeToggle(MODE_DICTATE)}
                         aria-pressed={transcribeMode === MODE_DICTATE}
                       >
                         {t('indlaeg.dictation', 'Dictation')}
-                      </GradientButton>
+                      </button>
+                      {transcribeMode === MODE_NONE && (
+                        <p className="indlæg-muted indlæg-mode-hint">
+                          {t('indlaeg.chooseMode', 'Choose a mode to record or transcribe.')}
+                        </p>
+                      )}
                     </div>
                   </div>
 
-                  <div className="indlæg-card">
-                    {transcribeMode !== MODE_NONE ? (
+                  {transcribeMode !== MODE_NONE && (
+                    <div className="indlæg-card">
                       <div className="indlæg-card-header">
                         <h3 className="indlæg-card-title">
                           {isDictationMode
@@ -2640,28 +2704,7 @@ function Indlæg({
                           {modeStatusLabel}
                         </span>
                       </div>
-                    ) : null}
-                    <div className="indlæg-card-body">
-                      {transcribeMode === MODE_NONE && (
-                        <p className="indlæg-muted">
-                          {t('indlaeg.chooseMode', 'Choose a mode to record or transcribe.')}
-                        </p>
-                      )}
-
-                      {transcribeMode === MODE_NONE && (
-                        <div className="indlæg-selma-launch indlæg-selma-launch--after-hint">
-                          <AnimatedGenerateButton
-                            type="button"
-                            className="indlæg-selma-btn w-full"
-                            labelIdle="Selma"
-                            labelActive="Selma"
-                            onClick={handleOpenAssistant}
-                            disabled={isAssistantOpen}
-                          >
-                          </AnimatedGenerateButton>
-                        </div>
-                      )}
-
+                      <div className="indlæg-card-body">
                       {transcribeMode === MODE_TRANSCRIBE && (
                         <>
                           <div className="indlæg-record-actions">
@@ -2679,7 +2722,7 @@ function Indlæg({
                                 </div>
                               </div>
                             ) : (
-                              <RainbowButton
+                              <button
                                 type="button"
                                 className={`indlæg-mikrofon-btn${isRecording ? ' active' : ''}`}
                                 onClick={() => (isRecording ? stopRecording() : startRecording())}
@@ -2688,7 +2731,7 @@ function Indlæg({
                                 {isRecording
                                   ? t('indlaeg.stop', 'Stop')
                                   : t('indlaeg.startConsultation', 'Start consultation')}
-                              </RainbowButton>
+                              </button>
                             )}
                             <button
                               type="button"
@@ -2740,7 +2783,7 @@ function Indlæg({
                                 </div>
                               </div>
                             ) : (
-                              <RainbowButton
+                              <button
                                 type="button"
                                 className={`indlæg-mikrofon-btn${
                                   dictationStatus === DICTATION_STATUS.recording ? ' active' : ''
@@ -2759,7 +2802,7 @@ function Indlæg({
                                 {dictationStatus === DICTATION_STATUS.recording
                                   ? t('indlaeg.stop', 'Stop')
                                   : t('indlaeg.startConsultation', 'Start consultation')}
-                              </RainbowButton>
+                              </button>
                             )}
                             <button
                               type="button"
@@ -2805,20 +2848,22 @@ function Indlæg({
                           )}
                         </p>
                       )}
+                      </div>
+                    </div>
+                  )}
 
-                      {transcribeMode !== MODE_NONE && (
-                        <div className="indlæg-selma-launch indlæg-selma-launch--after-hint">
-                          <AnimatedGenerateButton
-                            type="button"
-                            className="indlæg-selma-btn w-full"
-                            labelIdle="Selma"
-                            labelActive="Selma"
-                            onClick={handleOpenAssistant}
-                            disabled={isAssistantOpen}
-                          >
-                          </AnimatedGenerateButton>
-                        </div>
-                      )}
+                  <div className="indlæg-card">
+                    <div className="indlæg-card-body">
+                      <div className="indlæg-selma-launch indlæg-selma-launch--after-hint">
+                        <button
+                          type="button"
+                          className="indlæg-selma-plain-btn"
+                          onClick={handleOpenAssistant}
+                          disabled={isAssistantOpen}
+                        >
+                          Selma
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -2,8 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 import { consumePostAuthRedirectTarget } from "./utils/postAuthRedirect";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "./firebase";
+import { resolveWorkspaceContext } from "./utils/workspaceContext";
 
 function PostAuthRedirect() {
   const { user, loading } = useAuth();
@@ -18,20 +17,36 @@ function PostAuthRedirect() {
     if (target) {
       const run = async () => {
         let resolvedTarget = target;
+        let reason = "stored-target";
+        console.info("[REDIRECT DEBUG] PostAuthRedirect evaluating target", {
+          uid: user?.uid || null,
+          target,
+        });
 
         if (target.startsWith("/welcome") && user?.uid) {
           try {
-            const snap = await getDoc(doc(db, "users", user.uid));
-            const data = snap.exists() ? snap.data() : null;
-            if (data?.onboardingComplete === true) {
+            const workspace = await resolveWorkspaceContext(user);
+            console.info("[WORKSPACE RESOLVE] PostAuthRedirect resolve result", {
+              uid: user.uid,
+              workspace,
+            });
+            if (workspace?.hasWorkspace) {
               resolvedTarget = "/booking";
+              reason = "workspace-found";
+            } else {
+              reason = `workspace-missing:${workspace?.source || "unknown"}`;
             }
           } catch (error) {
-            console.error("[PostAuthRedirect] Failed to resolve onboarding state", error);
+            console.error("[PostAuthRedirect] Failed to resolve user workspace", error);
+            reason = "workspace-resolve-error";
           }
         }
 
-        console.log("[PostAuthRedirect] redirecting to stored target:", resolvedTarget);
+        console.info("[REDIRECT DEBUG] PostAuthRedirect redirecting", {
+          uid: user?.uid || null,
+          target: resolvedTarget,
+          reason,
+        });
         navigate(resolvedTarget, { replace: true });
       };
 
@@ -43,4 +58,3 @@ function PostAuthRedirect() {
 }
 
 export default PostAuthRedirect;
-

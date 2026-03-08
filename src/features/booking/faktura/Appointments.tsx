@@ -348,9 +348,114 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 2,
   }).format(value || 0);
 
+const normalizeText = (value: any) => String(value || "").trim().toLowerCase();
+
+const getAppointmentParticipantKey = (appointment: any) => {
+  const participants = Array.isArray(appointment?.participants) ? appointment.participants : [];
+  const participantKeys = participants
+    .map((participant: any) => {
+      const id = normalizeText(participant?.id);
+      if (id) return `id:${id}`;
+      const email = normalizeText(participant?.email);
+      if (email) return `email:${email}`;
+      const name = normalizeText(participant?.name);
+      if (name) return `name:${name}`;
+      return "";
+    })
+    .filter(Boolean)
+    .sort();
+
+  if (participantKeys.length > 0) {
+    return participantKeys.join("|");
+  }
+
+  const clientId = normalizeText(appointment?.clientId);
+  if (clientId) return `client:${clientId}`;
+
+  const clientEmail = normalizeText(appointment?.clientEmail);
+  if (clientEmail) return `email:${clientEmail}`;
+
+  const clientName = normalizeText(appointment?.client);
+  if (clientName) return `name:${clientName}`;
+
+  return "participant:unknown";
+};
+
+const buildRecurringBillingKey = (appointment: any) => {
+  const serviceType = normalizeText(appointment?.serviceType);
+  const serviceId = normalizeText(appointment?.serviceId);
+  const forloebId = normalizeText(appointment?.forloebId);
+
+  const looksLikeProgram =
+    serviceType === "forloeb" ||
+    Boolean(appointment?.recurrenceGroupId) ||
+    Boolean(forloebId) ||
+    serviceId.startsWith("forloeb:");
+
+  if (!looksLikeProgram) return null;
+
+  if (appointment?.recurrenceGroupId) {
+    return `series:${appointment.recurrenceGroupId}`;
+  }
+
+  const serviceKey = forloebId || serviceId || normalizeText(appointment?.service) || "forloeb";
+  const ownerKey =
+    normalizeText(appointment?.calendarOwnerId) ||
+    normalizeText(appointment?.calendarOwner) ||
+    "owner:unknown";
+  const participantKey = getAppointmentParticipantKey(appointment);
+  const createdAt = resolveDateValue(appointment?.createdAt) || resolveDateValue(appointment?.updatedAt);
+  const createdBucket = createdAt
+    ? Math.floor(createdAt.getTime() / 60000)
+    : normalizeText(appointment?.recurrenceAnchorDate || appointment?.startDate || appointment?.id);
+
+  return `legacy:${serviceKey}|${participantKey}|${ownerKey}|${createdBucket}`;
+};
+
+const collapseRecurringProgramAppointments = (appointments: any[]) => {
+  const standalone: any[] = [];
+  const groups = new Map<string, any[]>();
+
+  appointments.forEach((appointment) => {
+    const recurringKey = buildRecurringBillingKey(appointment);
+    if (!recurringKey) {
+      standalone.push(appointment);
+      return;
+    }
+
+    const existing = groups.get(recurringKey) || [];
+    existing.push(appointment);
+    groups.set(recurringKey, existing);
+  });
+
+  const collapsedRecurring = Array.from(groups.values()).map((group) => {
+    return [...group].sort((left, right) => {
+      const leftIndex =
+        typeof left?.recurrenceIndex === "number" ? left.recurrenceIndex : Number.POSITIVE_INFINITY;
+      const rightIndex =
+        typeof right?.recurrenceIndex === "number" ? right.recurrenceIndex : Number.POSITIVE_INFINITY;
+      if (leftIndex !== rightIndex) {
+        return leftIndex - rightIndex;
+      }
+
+      const leftTime =
+        resolveAppointmentDateTime(left)?.getTime() ||
+        resolveDateValue(left?.createdAt)?.getTime() ||
+        0;
+      const rightTime =
+        resolveAppointmentDateTime(right)?.getTime() ||
+        resolveDateValue(right?.createdAt)?.getTime() ||
+        0;
+      return leftTime - rightTime;
+    })[0];
+  });
+
+  return [...standalone, ...collapsedRecurring];
+};
+
 export default function Appointments() {
-  const { user } = useAuth();
-  const { appointments, loading, error } = useAppointments(user?.uid || null);
+  const { workspaceUid, activeClinicId } = useAuth();
+  const { appointments, loading, error } = useAppointments(activeClinicId || workspaceUid || null);
   const { services } = useUserServices();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
@@ -385,19 +490,23 @@ export default function Appointments() {
   const [draftChannel, setDraftChannel] = useState("Alle kanaler");
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
+  const billableAppointments = useMemo(
+    () => collapseRecurringProgramAppointments(appointments),
+    [appointments]
+  );
 
   const earliestAppointmentDate = useMemo(() => {
-    const dates = appointments
+    const dates = billableAppointments
       .map((appointment: any) => resolveAppointmentDate(appointment))
       .filter((value): value is Date => Boolean(value));
     if (dates.length === 0) return null;
     const earliestTime = Math.min(...dates.map((date) => date.getTime()));
     return new Date(earliestTime);
-  }, [appointments]);
+  }, [billableAppointments]);
 
   const employeeOptions = useMemo(() => {
     const names = new Set<string>();
-    appointments.forEach((appointment: any) => {
+    billableAppointments.forEach((appointment: any) => {
       const name = appointment.calendarOwner || appointment.staffName || "";
       if (name) names.add(name);
     });
@@ -405,7 +514,7 @@ export default function Appointments() {
       return ["geg ded", "fælles konto", "Wendy Smith (Demo)"];
     }
     return Array.from(names).sort((a, b) => a.localeCompare(b, "da-DK"));
-  }, [appointments]);
+  }, [billableAppointments]);
 
   const employeeSelectOptions = useMemo(
     () => [defaultEmployeeFilter, ...employeeOptions],
@@ -678,8 +787,8 @@ export default function Appointments() {
   const rangeEnd = dateRange.end ? endOfDay(dateRange.end) : null;
 
   const filteredAppointments = useMemo(() => {
-    if (!normalizedSearch) return appointments;
-    return appointments.filter((appointment: any) => {
+    if (!normalizedSearch) return billableAppointments;
+    return billableAppointments.filter((appointment: any) => {
       const refRaw = appointment.referenceNumber || appointment.id || "";
       const queryFields = [
         String(refRaw),
@@ -691,7 +800,7 @@ export default function Appointments() {
         value.toLowerCase().includes(normalizedSearch)
       );
     });
-  }, [appointments, normalizedSearch]);
+  }, [billableAppointments, normalizedSearch]);
 
   const visibleAppointments = useMemo(() => {
     return filteredAppointments.filter((appointment: any) => {
@@ -1371,7 +1480,7 @@ export default function Appointments() {
             </table>
           </div>
           <div className="border-t border-slate-100 py-4 text-center text-xs text-slate-400">
-            Viser {sortedAppointments.length} af {appointments.length} resultater
+            Viser {sortedAppointments.length} af {billableAppointments.length} resultater
           </div>
         </div>
       </div>

@@ -11,7 +11,8 @@ function SeHistorik({ clientId, clientName, onClose, onOpenEntry }) {
   const [readingEntry, setReadingEntry] = useState(null); // Entry being read in detail view
   const [deletingEntryId, setDeletingEntryId] = useState(null);
   const [entryActionError, setEntryActionError] = useState('');
-  const { user } = useAuth();
+  const { user, workspaceUid, activeClinicId } = useAuth();
+  const clinicId = `${activeClinicId || ''}`.trim();
 
   // Format date
   const formatDate = (dateStr) => {
@@ -42,14 +43,16 @@ function SeHistorik({ clientId, clientName, onClose, onOpenEntry }) {
   };
 
   const handleDeleteNotat = async (entry) => {
-    if (!entry?.id || !user?.uid || !clientId) return;
+    if (!entry?.id || (!clinicId && !workspaceUid) || !clientId) return;
     const confirmed = window.confirm('Er du sikker på, at du vil slette dette notat?');
     if (!confirmed) return;
 
     setEntryActionError('');
     setDeletingEntryId(entry.id);
     try {
-      const entryRef = doc(db, 'users', user.uid, 'clients', clientId, 'journalEntries', entry.id);
+      const entryRef = clinicId
+        ? doc(db, 'clinics', clinicId, 'clients', clientId, 'journalEntries', entry.id)
+        : doc(db, 'users', workspaceUid, 'clients', clientId, 'journalEntries', entry.id);
       await deleteDoc(entryRef);
     } catch (err) {
       console.error('Kunne ikke slette notatet', err);
@@ -85,14 +88,23 @@ function SeHistorik({ clientId, clientName, onClose, onOpenEntry }) {
     setIsLoadingEntries(true);
     setLoadError('');
 
-    const entriesRef = collection(
-      db,
-      'users',
-      user.uid,
-      'clients',
-      clientId,
-      'journalEntries'
-    );
+    const entriesRef = clinicId
+      ? collection(
+          db,
+          'clinics',
+          clinicId,
+          'clients',
+          clientId,
+          'journalEntries'
+        )
+      : collection(
+          db,
+          'users',
+          workspaceUid,
+          'clients',
+          clientId,
+          'journalEntries'
+        );
     const entriesQuery = query(entriesRef, orderBy('createdAt', 'desc'));
 
     const unsubscribe = onSnapshot(
@@ -124,7 +136,7 @@ function SeHistorik({ clientId, clientName, onClose, onOpenEntry }) {
     return () => {
       unsubscribe();
     };
-  }, [user, clientId]);
+  }, [clinicId, user, clientId, workspaceUid]);
 
   // If reading an entry, show read-only detail view
   if (readingEntry) {

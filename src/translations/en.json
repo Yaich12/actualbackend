@@ -255,7 +255,14 @@
       "viewJournal": "View journal",
       "openNote": "Open note",
       "createEntry": "Create entry",
+      "closePanel": "Close panel",
+      "dateLabel": "Date",
+      "timeLabel": "Time",
+      "serviceLabel": "Service",
+      "priceLabel": "Price",
       "createNextAppointment": "Create next appointment",
+      "cancelAppointment": "Cancel appointment",
+      "confirmCancel": "Are you sure you want to cancel this appointment?",
       "deleteAppointment": "Delete appointment",
       "confirmDelete": "Are you sure you want to delete this appointment? This cannot be undone.",
       "suggestedNoteTitle": "AI suggestion for next appointment",
@@ -364,7 +371,7 @@
       "colors": {
         "amber": "Amber",
         "teal": "Teal",
-        "softBlue": "Soft blue",
+        "softBlue": "Blue",
         "violet": "Violet",
         "red": "Red",
         "pink": "Pink"
@@ -515,7 +522,9 @@
         "sessionPrice": "Price per session ({currency})",
         "packagePrice": "Package price for full program ({currency})",
         "hint": "You can fill in both fields and choose in invoicing which you use in practice.",
-        "estimate": "Estimated revenue per participant at session price:"
+        "estimate": "Estimated revenue per participant at session price:",
+        "packageHint": "This price is used in sales/invoicing when the client is billed for the full program.",
+        "packageSummary": "Package price for the program:"
       },
       "actions": {
         "saving": "Saving...",
@@ -701,7 +710,9 @@
       "fullNamePlaceholder": "Enter your full name",
       "email": "Email",
       "clinicName": "Clinic name",
-      "clinicPlaceholder": "Enter the clinic name"
+      "clinicPlaceholder": "Enter the clinic name",
+      "cvr": "CVR",
+      "cvrPlaceholder": "Enter CVR number"
     },
     "account": {
       "title": "Account setup",
@@ -721,6 +732,7 @@
     },
     "language": {
       "title": "Language",
+      "description": "Choose default language, dictation language, and currency for your clinic.",
       "label": "Preferred language",
       "dictationLabel": "Dictation language",
       "dictationAuto": "Auto (recommended)"
@@ -797,6 +809,7 @@
     },
     "ai": {
       "title": "AI settings",
+      "description": "Manage how long audio, transcripts, and AI-generated communication are retained.",
       "audio": {
         "title": "Audio recording",
         "description": "The audio as captured by the microphone. The audio file can be helpful if we later need to listen for specific words, pronunciations, or dialects we may misunderstand."

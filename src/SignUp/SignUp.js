@@ -12,11 +12,10 @@ import {
   createUserWithEmailAndPassword,
   fetchSignInMethodsForEmail,
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { auth } from "../firebase";
 import { signInWithGoogle } from "../googleauth";
 import { useAuth } from "../AuthContext";
-import { Gem } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { SignInPage } from "../components/ui/sign-in";
 import { ensureUserProfile } from "../services/userService";
 import {
@@ -25,6 +24,12 @@ import {
   setPostAuthRedirectTarget,
 } from "../utils/postAuthRedirect";
 import { getPublicAssetUrl } from "../utils/publicAssets";
+import {
+  buildTeamLoginEmail,
+  normalizeTeamLoginUsername,
+} from "../utils/teamLogin";
+import { ensureMemberWorkspaceGuard } from "../utils/employeeWorkspace";
+import { resolveWorkspaceContext } from "../utils/workspaceContext";
 import { useLanguage } from "../unAuth/language/LanguageProvider";
 import "./SignUp.css";
 
@@ -39,7 +44,9 @@ function SignUp() {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const [lastEmail, setLastEmail] = useState("");
+  const [authMode, setAuthMode] = useState("login");
   const [loginMethod, setLoginMethod] = useState("email");
+  const [employeeUsername, setEmployeeUsername] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [smsCode, setSmsCode] = useState("");
   const [phoneStep, setPhoneStep] = useState("enterPhone");
@@ -129,10 +136,24 @@ function SignUp() {
       setSmsCode("");
       setConfirmationResult(null);
       resetRecaptcha();
+      if (loginMethod !== "employee") {
+        setEmployeeUsername("");
+      }
       return;
     }
     setPhoneStep("enterPhone");
   }, [loginMethod, resetRecaptcha]);
+
+  useEffect(() => {
+    if (loginMethod === "employee" && authMode !== "login") {
+      setAuthMode("login");
+    }
+  }, [authMode, loginMethod]);
+
+  useEffect(() => {
+    setStatusMessage(null);
+    setStatus(null);
+  }, [authMode]);
 
   useEffect(() => {
     if (loginMethod !== "phone") {
@@ -159,18 +180,38 @@ function SignUp() {
     async (authUser) => {
       const storedTarget = consumePostAuthRedirectTarget();
       let resolvedTarget = storedTarget || "/welcome";
+      let redirectReason = storedTarget ? "stored-target" : "default-welcome";
+      console.info("[REDIRECT DEBUG] evaluating post-login route", {
+        uid: authUser?.uid || null,
+        email: authUser?.email || null,
+        storedTarget: storedTarget || null,
+        initialTarget: resolvedTarget,
+      });
 
       if (resolvedTarget.startsWith("/welcome") && authUser?.uid) {
         try {
-          const snap = await getDoc(doc(db, "users", authUser.uid));
-          const data = snap.exists() ? snap.data() : null;
-          if (data?.onboardingComplete === true) {
+          const workspaceContext = await resolveWorkspaceContext(authUser);
+          console.info("[WORKSPACE RESOLVE] SignUp resolvePostLoginRoute result", {
+            uid: authUser.uid,
+            workspaceContext,
+          });
+          if (workspaceContext?.hasWorkspace) {
             resolvedTarget = "/booking";
+            redirectReason = "workspace-found";
+          } else {
+            redirectReason = `workspace-missing:${workspaceContext?.source || "unknown"}`;
           }
         } catch (error) {
-          console.error("[SignUp] Failed to resolve onboarding state:", error);
+          console.error("[SignUp] Failed to resolve user workspace:", error);
+          redirectReason = "workspace-resolve-error";
         }
       }
+
+      console.info("[REDIRECT DEBUG] chosen post-login route", {
+        uid: authUser?.uid || null,
+        target: resolvedTarget,
+        reason: redirectReason,
+      });
 
       return resolvedTarget;
     },
@@ -183,6 +224,10 @@ function SignUp() {
       if (!target) {
         return;
       }
+      console.info("[REDIRECT DEBUG] navigating after auth", {
+        uid: authUser?.uid || null,
+        target,
+      });
       navigate(target, { replace: true });
     },
     [navigate, resolvePostLoginRoute]
@@ -247,7 +292,7 @@ function SignUp() {
     return () => {
       isMounted = false;
     };
-  }, [persistUserProfile, redirectAfterAuth]);
+  }, [persistUserProfile, redirectAfterAuth, t]);
 
   useEffect(() => {
     const finishSignInFromLink = async () => {
@@ -298,7 +343,7 @@ function SignUp() {
     };
 
     finishSignInFromLink();
-  }, [persistUserProfile, redirectAfterAuth]);
+  }, [persistUserProfile, redirectAfterAuth, t]);
 
   const handleGoogleSignIn = async () => {
     setStatus(null);
@@ -333,6 +378,10 @@ function SignUp() {
 
   const handleSmsCodeChange = (value) => {
     setSmsCode(normalizeSmsCode(value));
+  };
+
+  const handleEmployeeUsernameChange = (value) => {
+    setEmployeeUsername(normalizeTeamLoginUsername(value));
   };
 
   const handleSendCode = async () => {
@@ -467,65 +516,12 @@ function SignUp() {
         return;
       }
 
-      const methods = await fetchSignInMethodsForEmail(auth, emailInput);
-      const credential =
-        methods.length === 0
-          ? await createUserWithEmailAndPassword(auth, emailInput, passwordInput)
-          : await signInWithEmailAndPassword(auth, emailInput, passwordInput);
+      const credential = await signInWithEmailAndPassword(auth, emailInput, passwordInput);
 
       await persistUserProfile(credential.user);
       await redirectAfterAuth(credential.user);
     } catch (error) {
       console.error("[SignUp] email/password sign-in failed:", error);
-      if (error?.code === "auth/wrong-password" || error?.code === "auth/invalid-credential") {
-        setStatusMessage(t("login.errors.wrongPassword"));
-        return;
-      }
-      if (error?.code === "auth/weak-password") {
-        setStatusMessage(t("login.errors.weakPassword"));
-        return;
-      }
-      if (error?.code === "auth/invalid-email") {
-        setStatusMessage(t("login.errors.invalidEmail"));
-        return;
-      }
-      if (error?.code === "auth/email-already-in-use") {
-        setStatusMessage(t("login.errors.emailInUse"));
-        return;
-      }
-      setStatusMessage(t("login.errors.authFailed"));
-    } finally {
-      setProcessingLink(false);
-      setStatus(null);
-    }
-  };
-
-  const handleEmailPasswordLoginOnly = async () => {
-    if (!auth) return;
-    setStatusMessage(null);
-    setPostAuthRedirectTarget("/welcome");
-    setStatus({
-      type: "success",
-      message: t("login.status.signingIn"),
-    });
-    setProcessingLink(true);
-
-    const emailInput = (document.querySelector('input[name="email"]')?.value || "")
-      .toString()
-      .trim();
-    const passwordInput = (document.querySelector('input[name="password"]')?.value || "").toString();
-
-    try {
-      if (!emailInput || !passwordInput) {
-        setStatusMessage(t("login.errors.emailPasswordFirst"));
-        return;
-      }
-
-      const credential = await signInWithEmailAndPassword(auth, emailInput, passwordInput);
-      await persistUserProfile(credential.user);
-      await redirectAfterAuth(credential.user);
-    } catch (error) {
-      console.error("[SignUp] login-only failed:", error);
       if (error?.code === "auth/user-not-found") {
         setStatusMessage(t("login.errors.userNotFound"));
         return;
@@ -538,6 +534,10 @@ function SignUp() {
         setStatusMessage(t("login.errors.invalidEmail"));
         return;
       }
+      if (error?.code === "auth/too-many-requests") {
+        setStatusMessage(t("login.errors.tooManyRequests"));
+        return;
+      }
       setStatusMessage(t("login.errors.loginFailed"));
     } finally {
       setProcessingLink(false);
@@ -545,34 +545,131 @@ function SignUp() {
     }
   };
 
-  const handleCreateAccount = async () => {
+  const handleEmployeeSignIn = async (event) => {
+    event.preventDefault();
+    if (!auth) return;
+    setStatusMessage(null);
+    // Employee login should prefer workspace entry-point while member guard resolves.
+    setPostAuthRedirectTarget("/booking");
+    setStatus({
+      type: "success",
+      message: t("login.status.signingIn"),
+    });
+    setProcessingLink(true);
+
+    const formData = new FormData(event.currentTarget);
+    const usernameInput = normalizeTeamLoginUsername(
+      (formData.get("employeeUsername") || employeeUsername || "").toString()
+    );
+    const passwordInput = (formData.get("employeePassword") || "").toString();
+    setEmployeeUsername(usernameInput);
+
+    try {
+      if (!usernameInput) {
+        setStatusMessage(t("login.errors.employeeUsernameRequired"));
+        return;
+      }
+      if (!passwordInput) {
+        setStatusMessage(t("login.errors.emailPasswordRequired"));
+        return;
+      }
+
+      const authEmail = buildTeamLoginEmail(usernameInput);
+      if (!authEmail) {
+        setStatusMessage(t("login.errors.employeeUsernameRequired"));
+        return;
+      }
+
+      const credential = await signInWithEmailAndPassword(auth, authEmail, passwordInput);
+      console.info("[EMPLOYEE LOGIN] employee sign-in success", {
+        uid: credential?.user?.uid || null,
+        email: credential?.user?.email || null,
+        loginMethod: "employee",
+        username: usernameInput,
+      });
+      const memberGuard = await ensureMemberWorkspaceGuard(credential.user, {
+        context: "employee-login",
+      });
+      console.info("[MEMBER GUARD] employee-login guard result", {
+        uid: credential?.user?.uid || null,
+        username: usernameInput,
+        result: memberGuard,
+      });
+      if (memberGuard?.isMember && memberGuard?.workspace?.clinicId) {
+        setPostAuthRedirectTarget("/booking");
+      } else {
+        setPostAuthRedirectTarget("/welcome");
+      }
+      await persistUserProfile(credential.user);
+      try {
+        const workspace = await resolveWorkspaceContext(credential.user);
+        console.info("[WORKSPACE RESOLVE] employee login explicit resolve result", {
+          uid: credential?.user?.uid || null,
+          workspace,
+        });
+      } catch (syncError) {
+        console.error("[SignUp] Failed to resolve employee workspace:", syncError);
+      }
+      await redirectAfterAuth(credential.user);
+    } catch (error) {
+      console.error("[SignUp] employee login failed:", error);
+      if (error?.code === "auth/user-not-found") {
+        setStatusMessage(t("login.errors.userNotFound"));
+        return;
+      }
+      if (error?.code === "auth/wrong-password" || error?.code === "auth/invalid-credential") {
+        setStatusMessage(t("login.errors.wrongPassword"));
+        return;
+      }
+      if (error?.code === "auth/too-many-requests") {
+        setStatusMessage(t("login.errors.tooManyRequests"));
+        return;
+      }
+      setStatusMessage(t("login.errors.employeeLoginFailed"));
+    } finally {
+      setProcessingLink(false);
+      setStatus(null);
+    }
+  };
+
+  const handleCreateAccount = async (event) => {
+    event.preventDefault();
     if (!auth) return;
     setStatusMessage(null);
     setPostAuthRedirectTarget("/welcome");
-    // Use current form values (works even if user didn't press "Sign In" first)
-    const emailInput =
-      (document.querySelector('input[name="email"]')?.value || "").toString().trim() || lastEmail;
-    const formPassword = (document.querySelector('input[name="password"]')?.value || "").toString();
+    setStatus({
+      type: "success",
+      message: t("login.status.signingIn"),
+    });
+    setProcessingLink(true);
+    const formData = new FormData(event.currentTarget);
+    const emailInput = ((formData.get("email") || "").toString().trim() || lastEmail).trim();
+    const formPassword = (formData.get("password") || "").toString();
+    const confirmPassword = (formData.get("confirmPassword") || "").toString();
+    setLastEmail(emailInput);
 
-    if (!emailInput || !formPassword) {
-      setStatusMessage(t("login.errors.emailPasswordFirst"));
-      return;
-    }
     try {
+      if (!emailInput || !formPassword || !confirmPassword) {
+        setStatusMessage(t("login.errors.signupFieldsRequired"));
+        return;
+      }
+      if (formPassword !== confirmPassword) {
+        setStatusMessage(t("login.errors.passwordMismatch"));
+        return;
+      }
+
       const methods = await fetchSignInMethodsForEmail(auth, emailInput);
-      const credential =
-        methods.length === 0
-          ? await createUserWithEmailAndPassword(auth, emailInput, formPassword)
-          : await signInWithEmailAndPassword(auth, emailInput, formPassword);
+      if (methods.length > 0) {
+        setStatusMessage(t("login.errors.emailInUse"));
+        return;
+      }
+
+      const credential = await createUserWithEmailAndPassword(auth, emailInput, formPassword);
 
       await persistUserProfile(credential.user);
       await redirectAfterAuth(credential.user);
     } catch (error) {
       console.error("[SignUp] create account failed:", error);
-      if (error?.code === "auth/wrong-password" || error?.code === "auth/invalid-credential") {
-        setStatusMessage(t("login.errors.wrongPassword"));
-        return;
-      }
       if (error?.code === "auth/weak-password") {
         setStatusMessage(t("login.errors.weakPassword"));
         return;
@@ -581,22 +678,44 @@ function SignUp() {
         setStatusMessage(t("login.errors.invalidEmail"));
         return;
       }
+      if (error?.code === "auth/email-already-in-use") {
+        setStatusMessage(t("login.errors.emailInUse"));
+        return;
+      }
       setStatusMessage(t("login.errors.signupFailed"));
+    } finally {
+      setProcessingLink(false);
+      setStatus(null);
     }
   };
 
   const handleResetPassword = async () => {
     if (!auth) return;
-    const emailInput = lastEmail || document.querySelector('input[name="email"]')?.value || "";
+    if (authMode !== "login") return;
+    const emailFromField = (document.querySelector('input[name="email"]')?.value || "").toString().trim();
+    const emailInput = (emailFromField || lastEmail || "").trim();
     if (!emailInput) {
       setStatusMessage(t("login.errors.resetMissingEmail"));
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput)) {
+      setStatusMessage(t("login.errors.invalidEmail"));
+      return;
+    }
+    setLastEmail(emailInput);
     try {
       await sendPasswordResetEmail(auth, emailInput);
       setStatusMessage(t("login.status.resetSent"));
     } catch (error) {
       console.error("[SignUp] reset password failed:", error);
+      if (error?.code === "auth/user-not-found") {
+        setStatusMessage(t("login.errors.userNotFound"));
+        return;
+      }
+      if (error?.code === "auth/invalid-email") {
+        setStatusMessage(t("login.errors.invalidEmail"));
+        return;
+      }
       setStatusMessage(t("login.errors.resetFailed"));
     }
   };
@@ -606,37 +725,38 @@ function SignUp() {
       <section className="signup-auth-wrapper" aria-busy={sending || processingLink}>
         <div className="signup-logo-chip">
           <Link to="/" aria-label={t("login.aria.backHome")}>
-            <Gem className="h-4 w-4 text-white" />
+            <span className="signup-back-link">
+              <ArrowLeft className="signup-back-link__icon" aria-hidden="true" />
+              <span>{t("common.back")}</span>
+            </span>
           </Link>
         </div>
         <SignInPage
           heroImageSrc={getPublicAssetUrl("hero/pexels-yankrukov-5794028.jpg")}
           testimonials={[]}
+          statusMessage={statusMessage}
+          authMode={authMode}
+          onAuthModeChange={setAuthMode}
           loginMethod={loginMethod}
           onLoginMethodChange={setLoginMethod}
           phoneNumber={phoneNumber}
           smsCode={smsCode}
+          employeeUsername={employeeUsername}
           phoneStep={phoneStep}
           onPhoneNumberChange={handlePhoneNumberChange}
           onSmsCodeChange={handleSmsCodeChange}
+          onEmployeeUsernameChange={handleEmployeeUsernameChange}
           onSendCode={handleSendCode}
           onConfirmCode={handleConfirmCode}
+          onEmployeeSignIn={handleEmployeeSignIn}
           onSignIn={handleEmailPasswordSignIn}
+          onSignUpSubmit={handleCreateAccount}
           onGoogleSignIn={handleGoogleSignIn}
           onResetPassword={handleResetPassword}
-          onLoginLink={handleEmailPasswordLoginOnly}
-          onSignUp={handleCreateAccount}
-          title={<span className="font-light">{t("login.title")}</span>}
-          description={t("login.description")}
         />
         {status && (
           <p className={`signup-status ${status.type}`} style={{ maxWidth: '480px', margin: '1rem auto' }}>
             {status.message}
-          </p>
-        )}
-        {statusMessage && (
-          <p className="signup-status" style={{ maxWidth: '480px', margin: '1rem auto', background: '#e0e7ff', color: '#1e3a8a' }}>
-            {statusMessage}
           </p>
         )}
       </section>

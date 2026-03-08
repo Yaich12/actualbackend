@@ -74,7 +74,7 @@
   margin: 0 auto;
   padding: 0 2rem;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 3rem;
 }
 
@@ -109,11 +109,12 @@
   text-decoration: none;
   font-size: 0.95rem;
   line-height: 1.5;
-  transition: color 0.2s ease;
+  transition: color 0.2s ease, opacity 0.2s ease;
 }
 
 .footer-column-list a:hover {
   color: #212529;
+  opacity: 0.95;
 }
 
 @media (max-width: 968px) {

@@ -5,28 +5,9 @@ import { collection, doc, getDoc, serverTimestamp, setDoc, writeBatch } from 'fi
 import { useAuth } from '../../AuthContext';
 import { useLanguage } from '../../LanguageContext';
 import { db } from '../../firebase';
-import { getPublicAssetUrl } from '../../utils/publicAssets';
+import { ensureMemberWorkspaceGuard } from '../../utils/employeeWorkspace';
+import { resolveWorkspaceContext } from '../../utils/workspaceContext';
 import './costum.css';
-
-const CATEGORY_CARDS = [
-  {
-    value: 'Physiotherapist',
-    fallbackLabel: 'Physiotherapist',
-    image: getPublicAssetUrl('hero-3/pexels-cottonbro-3998012.jpg'),
-  },
-  {
-    value: 'Osteopath',
-    fallbackLabel: 'Osteopath',
-    image: getPublicAssetUrl('hero-3/pexels-karola-g-4506208.jpg'),
-  },
-  {
-    value: 'Chiropractor',
-    fallbackLabel: 'Chiropractor',
-    image: getPublicAssetUrl('hero-3/pexels-yankrukov-5793798-1.jpg'),
-  },
-];
-
-const DEFAULT_CATEGORY_LABELS = CATEGORY_CARDS.map((card) => card.fallbackLabel);
 
 const DEFAULT_TEAM_SIZE_OPTIONS = ['2-5 personer', '6-10 personer', '11+ personer'];
 
@@ -70,8 +51,6 @@ const CURRENCY_OPTIONS = [
   { value: 'AED', label: 'AED' },
 ];
 
-const MAX_CATEGORIES = 1;
-
 const FormLabel = ({ children }) => (
   <label className="onboarding-label">{children}</label>
 );
@@ -101,7 +80,6 @@ function OnboardingSlides() {
     language: language || 'da',
     currency: '',
     clinicName: '',
-    categories: [],
     accountType: '',
     teamSize: '',
     address: '',
@@ -117,18 +95,6 @@ function OnboardingSlides() {
     );
   }, [language]);
 
-  const categoryLabels = useMemo(
-    () => getArray('onboarding.steps.categories.options', DEFAULT_CATEGORY_LABELS),
-    [getArray]
-  );
-  const categoryCards = useMemo(
-    () =>
-      CATEGORY_CARDS.map((card, index) => ({
-        ...card,
-        label: categoryLabels[index] || card.fallbackLabel,
-      })),
-    [categoryLabels]
-  );
   const teamSizeOptions = useMemo(
     () => getArray('onboarding.steps.teamSize.options', DEFAULT_TEAM_SIZE_OPTIONS),
     [getArray]
@@ -145,19 +111,47 @@ function OnboardingSlides() {
 
     const run = async () => {
       if (!user?.uid) {
+        console.info('[ONBOARDING DEBUG] no authenticated user in onboarding guard', {
+          uid: null,
+          target: '/signup',
+          reason: 'missing-user',
+        });
         setIsCheckingOnboarding(false);
         return;
       }
 
       try {
-        const snap = await getDoc(doc(db, 'users', user.uid));
-        const data = snap.exists() ? snap.data() : null;
-        if (data?.onboardingComplete === true) {
+        const memberGuard = await ensureMemberWorkspaceGuard(user, {
+          context: 'onboarding-guard',
+        });
+        if (memberGuard?.isMember && memberGuard?.workspace?.clinicId) {
+          console.info('[MEMBER GUARD] onboarding guard matched member', {
+            uid: user.uid,
+            workspace: memberGuard.workspace,
+          });
+          navigate('/booking', { replace: true });
+          return;
+        }
+        console.info('[ONBOARDING DEBUG] running onboarding workspace guard', {
+          uid: user.uid,
+          email: user.email || null,
+        });
+        const workspace = await resolveWorkspaceContext(user);
+        console.info('[ONBOARDING DEBUG] onboarding workspace guard result', {
+          uid: user.uid,
+          workspace,
+        });
+        if (workspace?.hasWorkspace) {
+          console.info('[ONBOARDING DEBUG] redirecting away from onboarding', {
+            uid: user.uid,
+            target: '/booking',
+            reason: `workspace-found:${workspace?.source || 'unknown'}`,
+          });
           navigate('/booking', { replace: true });
           return;
         }
       } catch (error) {
-        console.error('[OnboardingSlides] Failed to check onboarding status', error);
+        console.error('[OnboardingSlides] Failed to resolve workspace before onboarding', error);
       } finally {
         if (isMounted) {
           setIsCheckingOnboarding(false);
@@ -175,12 +169,17 @@ function OnboardingSlides() {
   useEffect(() => {
     if (loading) return;
     if (!user) {
+      console.info('[ONBOARDING DEBUG] redirecting to signup from onboarding', {
+        uid: null,
+        target: '/signup',
+        reason: 'not-authenticated',
+      });
       navigate('/signup', { replace: true });
     }
   }, [loading, navigate, user]);
 
   const steps = useMemo(() => {
-    const flow = ['language', 'business', 'categories', 'accountType'];
+    const flow = ['language', 'business', 'accountType'];
     if (formData.accountType === 'team') {
       flow.push('teamSize');
     }
@@ -265,8 +264,6 @@ function OnboardingSlides() {
         return Boolean(formData.language && formData.currency);
       case 'business':
         return formData.clinicName.trim().length > 1;
-      case 'categories':
-        return formData.categories.length > 0;
       case 'accountType':
         return Boolean(formData.accountType);
       case 'teamSize':
@@ -293,10 +290,6 @@ function OnboardingSlides() {
     const trimmedAddress = formData.address.trim();
 
     if (trimmedClinicName) update.clinicName = trimmedClinicName;
-    if (formData.categories.length) {
-      update.categories = formData.categories;
-      update.jobTitle = formData.categories[0];
-    }
     if (formData.currency) update.currency = formData.currency;
     if (formData.accountType) update.accountType = formData.accountType;
     if (formData.teamSize) update.teamSize = formData.teamSize;
@@ -313,6 +306,18 @@ function OnboardingSlides() {
 
   const ensureClinicBootstrap = async (accountTypeValue = formData.accountType) => {
     if (!user?.uid || !accountTypeValue) return null;
+    const memberGuard = await ensureMemberWorkspaceGuard(user, {
+      context: 'onboarding-bootstrap',
+    });
+    if (memberGuard?.isMember && memberGuard?.workspace?.clinicId) {
+      console.info('[SOLO BOOTSTRAP BLOCKED] member already belongs to clinic workspace', {
+        uid: user.uid,
+        requestedAccountType: accountTypeValue,
+        clinicId: memberGuard.workspace.clinicId,
+        ownerUid: memberGuard.workspace.ownerUid || null,
+      });
+      return memberGuard.workspace.clinicId;
+    }
     const clinicType = accountTypeValue === 'team' ? 'team' : 'solo';
     const userRef = doc(db, 'users', user.uid);
     const userSnap = await getDoc(userRef);
@@ -379,9 +384,60 @@ function OnboardingSlides() {
   const persistProfile = async (markComplete) => {
     if (!user?.uid) return;
     const update = buildProfileUpdate(markComplete);
+    const memberGuard = await ensureMemberWorkspaceGuard(user, {
+      context: 'onboarding-persist',
+    });
+    if (memberGuard?.isMember && memberGuard?.workspace?.clinicId) {
+      const ownerUid = `${memberGuard.workspace.ownerUid || ''}`.trim();
+      update.activeClinicId = memberGuard.workspace.clinicId;
+      update.clinicId = memberGuard.workspace.clinicId;
+      update.role = 'member';
+      update.accountType = 'team';
+      update.hasTeam = true;
+      if (ownerUid) {
+        update.clinicOwnerUid = ownerUid;
+        update.dataOwnerUid = ownerUid;
+      }
+      console.info('[SOLO BOOTSTRAP BLOCKED] onboarding persist forced to member workspace', {
+        uid: user.uid,
+        clinicId: memberGuard.workspace.clinicId,
+        ownerUid: ownerUid || null,
+      });
+      await setDoc(doc(db, 'users', user.uid), update, { merge: true });
+      return;
+    }
     const clinicId = await ensureClinicBootstrap(formData.accountType);
     if (clinicId) {
       update.activeClinicId = clinicId;
+      const trimmedClinicName = formData.clinicName.trim();
+      const trimmedAddress = formData.address.trim();
+      const trimmedCurrency = formData.currency.trim();
+      const batch = writeBatch(db);
+
+      batch.set(doc(db, 'users', user.uid), update, { merge: true });
+      batch.set(
+        doc(db, 'clinics', clinicId),
+        {
+          name: trimmedClinicName || '',
+          clinicName: trimmedClinicName || '',
+          address: trimmedAddress,
+          currency: trimmedCurrency || '',
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      batch.set(
+        doc(db, 'clinics', clinicId, 'settings', 'general'),
+        {
+          clinicName: trimmedClinicName || '',
+          address: trimmedAddress,
+          currency: trimmedCurrency || '',
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      await batch.commit();
+      return;
     }
     await setDoc(doc(db, 'users', user.uid), update, { merge: true });
   };
@@ -395,7 +451,7 @@ function OnboardingSlides() {
       console.error('[OnboardingSlides] Failed to save onboarding progress', error);
     } finally {
       setIsPersisting(false);
-      navigate('/booking');
+      navigate('/', { replace: true });
     }
   };
 
@@ -437,16 +493,6 @@ function OnboardingSlides() {
   const handleBack = () => {
     if (stepIndex === 0) return;
     setStepIndex((prev) => Math.max(prev - 1, 0));
-  };
-
-  const toggleCategory = (category) => {
-    setFormData((prev) => {
-      const exists = prev.categories.includes(category);
-      if (exists) {
-        return { ...prev, categories: [] };
-      }
-      return { ...prev, categories: [category] };
-    });
   };
 
   const selectAccountType = (type) => {
@@ -502,12 +548,6 @@ function OnboardingSlides() {
     <div className="onboarding-content">
       <p className="onboarding-eyebrow">{t('onboarding.eyebrow', 'Kontoopsætning')}</p>
       <h1 className="onboarding-title">{t('onboarding.steps.business.title', 'Hvad hedder din klinik?')}</h1>
-      <p className="onboarding-subtitle">
-        {t(
-          'onboarding.steps.business.subtitle',
-          'Dette er det varemærke, dine kunder vil se. Din fakturering og dit juridiske navn kan tilføjes senere.'
-        )}
-      </p>
       <div className="onboarding-form">
         <FormLabel>{t('onboarding.steps.business.nameLabel', 'Klinikkens navn')}</FormLabel>
         <input
@@ -520,46 +560,10 @@ function OnboardingSlides() {
     </div>
   );
 
-  const renderCategoriesStep = () => (
-    <div className="onboarding-content">
-      <p className="onboarding-eyebrow">{t('onboarding.eyebrow', 'Kontoopsætning')}</p>
-      <h1 className="onboarding-title">
-        {t('onboarding.steps.categories.title', 'Vælg den mulighed der passer bedst til din virksomhed')}
-      </h1>
-      <p className="onboarding-subtitle">{t('onboarding.steps.categories.subtitle', 'Du kan ændre dette senere')}</p>
-      <div className="category-hero">
-        {categoryCards.map((card) => (
-          <button
-            key={card.value}
-            type="button"
-            onClick={() => toggleCategory(card.value)}
-            className={`category-hero-card ${
-              formData.categories.includes(card.value) ? 'is-selected' : ''
-            }`}
-          >
-            <div
-              className="category-hero-img"
-              style={{ backgroundImage: `url('${card.image}')` }}
-              role="img"
-              aria-label={card.label}
-            />
-            <span className="category-hero-label">{card.label}</span>
-          </button>
-        ))}
-      </div>
-      <div className="onboarding-hint">
-        {t('onboarding.steps.categories.hint', '{count}/{max} valgt', {
-          count: formData.categories.length,
-          max: MAX_CATEGORIES,
-        })}
-      </div>
-    </div>
-  );
-
   const renderAccountTypeStep = () => (
     <div className="onboarding-content">
       <p className="onboarding-eyebrow">{t('onboarding.eyebrow', 'Kontoopsætning')}</p>
-      <h1 className="onboarding-title">{t('onboarding.steps.accountType.title', 'Vælg kontotype')}</h1>
+      <h1 className="onboarding-title">{t('onboarding.steps.accountType.title', 'Vælg størrelse')}</h1>
       <p className="onboarding-subtitle">
         {t('onboarding.steps.accountType.subtitle', 'Dette hjælper os med at konfigurere din konto korrekt')}
       </p>
@@ -583,7 +587,10 @@ function OnboardingSlides() {
   const renderTeamSizeStep = () => (
     <div className="onboarding-content">
       <p className="onboarding-eyebrow">{t('onboarding.eyebrow', 'Kontoopsætning')}</p>
-      <h1 className="onboarding-title">{t('onboarding.steps.teamSize.title', 'Hvor mange medarbejdere har du')}</h1>
+      <h1 className="onboarding-title">{t('onboarding.steps.teamSize.title', 'Hvor mange er i')}</h1>
+      <p className="onboarding-subtitle">
+        {t('onboarding.steps.teamSize.subtitle', 'Det er muligt at tilføje flere senere hen')}
+      </p>
       <div className="onboarding-stack">
         {teamSizeOptions.map((option) => (
           <OptionCard
@@ -601,11 +608,11 @@ function OnboardingSlides() {
   const renderAddressStep = () => (
     <div className="onboarding-content">
       <p className="onboarding-eyebrow">{t('onboarding.eyebrow', 'Kontoopsætning')}</p>
-      <h1 className="onboarding-title">{t('onboarding.steps.address.title', 'Angiv din virksomheds fysiske placering')}</h1>
+      <h1 className="onboarding-title">{t('onboarding.steps.address.title', 'Angiv virksomhedens adresse')}</h1>
       <p className="onboarding-subtitle">
         {t(
           'onboarding.steps.address.subtitle',
-          'Tilføj din primære virksomhedsplacering, så kunderne nemt kan finde dig. Du kan tilføje flere steder senere.'
+          'Adresse bruges til fakturering, betaling og opsætning af bookingsystemet til jeres/ din praksis'
         )}
       </p>
       <div className="onboarding-form single">
@@ -647,8 +654,6 @@ function OnboardingSlides() {
         return renderLanguageStep();
       case 'business':
         return renderBusinessStep();
-      case 'categories':
-        return renderCategoriesStep();
       case 'accountType':
         return renderAccountTypeStep();
       case 'teamSize':

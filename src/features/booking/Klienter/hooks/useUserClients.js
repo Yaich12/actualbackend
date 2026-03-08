@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, getDocs, limit, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../../../../firebase';
 import { useAuth } from '../../../../AuthContext';
+import { deriveLegacyOwnerUid, migrateLegacyCollectionToClinic } from '../../../../utils/workspaceContext';
+
+const normalizeId = (value) => `${value || ''}`.trim();
 
 const mapDocToClient = (doc) => {
   const data = typeof doc.data === 'function' ? doc.data() : doc;
@@ -31,61 +34,137 @@ const mapDocToClient = (doc) => {
 };
 
 export function useUserClients() {
-  const { user } = useAuth();
+  const { workspaceUid, activeClinicId, userDoc, sessionUid } = useAuth();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const clinicId = normalizeId(activeClinicId || userDoc?.activeClinicId || userDoc?.clinicId || '');
+  const legacyOwnerUid = deriveLegacyOwnerUid(userDoc, workspaceUid || sessionUid || '');
 
   useEffect(() => {
-    if (!user?.uid) {
+    if (!clinicId && !legacyOwnerUid) {
       setClients([]);
       setLoading(false);
       setError(null);
       return;
     }
 
-    const clientsRef = collection(db, 'users', user.uid, 'clients');
+    let cancelled = false;
     let unsubscribe = () => {};
-    let fallbackSubscribed = false;
+    const setUnsubscribe = (nextUnsubscribe) => {
+      let stopped = false;
+      unsubscribe = () => {
+        if (stopped) return;
+        stopped = true;
+        nextUnsubscribe();
+      };
+    };
+    const bootstrap = async () => {
+      const candidates = [];
+      if (clinicId) {
+        if (legacyOwnerUid) {
+          try {
+            await migrateLegacyCollectionToClinic({
+              clinicId,
+              legacyOwnerUid,
+              collectionName: 'clients',
+              transformDoc: ({ data }) => ({
+                clinicId,
+                createdByUid: data.createdByUid || data.ownerUid || sessionUid || null,
+              }),
+            });
+          } catch (migrationError) {
+            console.error('[useUserClients] Legacy migration failed:', migrationError);
+          }
+        }
+        if (cancelled) return;
+        candidates.push({
+          source: 'clinic',
+          pathLabel: `clinics/${clinicId}/clients`,
+          ref: collection(db, 'clinics', clinicId, 'clients'),
+        });
+      }
+      if (legacyOwnerUid) {
+        if (cancelled) return;
+        candidates.push({
+          source: 'legacy',
+          pathLabel: `users/${legacyOwnerUid}/clients`,
+          ref: collection(db, 'users', legacyOwnerUid, 'clients'),
+        });
+      }
 
-    const attachListener = (useOrderedQuery) => {
-      const source = useOrderedQuery
-        ? query(clientsRef, orderBy('createdAt', 'asc'))
-        : clientsRef;
+      if (candidates.length === 0) {
+        setClients([]);
+        setLoading(false);
+        setError(null);
+        return;
+      }
 
-      unsubscribe = onSnapshot(
-        source,
+      let selectedCandidate = null;
+      for (const candidate of candidates) {
+        if (cancelled) return;
+        try {
+          // Keep one stable snapshot listener; preflight read picks best path.
+          // eslint-disable-next-line no-await-in-loop
+          await getDocs(query(candidate.ref, limit(1)));
+          if (cancelled) return;
+          selectedCandidate = candidate;
+          break;
+        } catch (probeError) {
+          console.warn('[useUserClients] probe failed for candidate', candidate, probeError);
+        }
+      }
+
+      if (!selectedCandidate) {
+        selectedCandidate = candidates[0];
+      }
+
+      setLoading(true);
+      setError(null);
+      if (cancelled) return;
+      console.log(
+        '[useUserClients] subscribing path=%s source=%s',
+        selectedCandidate.pathLabel,
+        selectedCandidate.source
+      );
+      const stop = onSnapshot(
+        selectedCandidate.ref,
         (snapshot) => {
-          const mapped = snapshot.docs.map((clientDoc) =>
-            mapDocToClient(clientDoc)
-          );
-          setClients(mapped);
+          if (cancelled) return;
+          const mapped = snapshot.docs.map((clientDoc) => mapDocToClient(clientDoc));
+          const sorted = mapped.slice().sort((a, b) => {
+            const aTime = a?.createdAt ? Date.parse(a.createdAt) : Number.POSITIVE_INFINITY;
+            const bTime = b?.createdAt ? Date.parse(b.createdAt) : Number.POSITIVE_INFINITY;
+            if (!Number.isFinite(aTime) && !Number.isFinite(bTime)) return 0;
+            if (!Number.isFinite(aTime)) return 1;
+            if (!Number.isFinite(bTime)) return -1;
+            return aTime - bTime;
+          });
+          setClients(sorted);
           setLoading(false);
           setError(null);
         },
         (snapshotError) => {
-          console.error('[useUserClients] Error loading clients:', snapshotError);
-          if (useOrderedQuery && !fallbackSubscribed) {
-            fallbackSubscribed = true;
-            unsubscribe();
-            attachListener(false);
-            return;
-          }
+          if (cancelled) return;
+          console.error('[useUserClients] Error loading clients:', snapshotError, selectedCandidate);
           setClients([]);
           setError('Kunne ikke hente klienter. Prøv igen senere.');
           setLoading(false);
         }
       );
+      if (cancelled) {
+        stop();
+        return;
+      }
+      setUnsubscribe(stop);
     };
-
-    setLoading(true);
-    setError(null);
-    attachListener(true);
+    void bootstrap();
 
     return () => {
+      cancelled = true;
       unsubscribe();
     };
-  }, [user?.uid]);
+  }, [clinicId, legacyOwnerUid, sessionUid]);
 
   return { clients, loading, error };
 }

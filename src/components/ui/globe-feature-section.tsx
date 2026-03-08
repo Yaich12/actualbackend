@@ -15,8 +15,7 @@ export default function Featured_05() {
           <div className="z-10 max-w-xl text-left">
             <h1 className="text-3xl font-normal text-gray-900 dark:text-white leading-tight">
               <span className="block font-semibold text-gray-900 dark:text-white">
-                {t("landing.globeFeature.titlePrefix")}{" "}
-                <span className="text-primary">{t("common.brandName")}</span>
+                {t("landing.globeFeature.title")}
               </span>
               <span className="mt-3 block text-gray-500 dark:text-gray-400">
                 {t("landing.globeFeature.subtitle")}

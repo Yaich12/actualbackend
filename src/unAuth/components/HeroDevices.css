@@ -122,22 +122,54 @@
 .hero-devices__button {
   display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.9rem 1.3rem;
-  border-radius: 999px;
-  border: none;
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  justify-content: center;
+  align-self: flex-start;
+  gap: 0.55rem;
+  min-height: 56px;
+  padding: 0.95rem 1.5rem;
+  border-radius: 16px;
+  border: 1px solid rgba(30, 64, 175, 0.35);
+  background: linear-gradient(145deg, #0b1324 0%, #14316f 58%, #1d4ed8 100%);
   color: #ffffff;
-  font-weight: 700;
+  font-weight: 800;
   font-size: 1rem;
-  box-shadow: 0 14px 28px rgba(79, 70, 229, 0.28);
+  letter-spacing: 0.01em;
+  box-shadow:
+    0 14px 28px rgba(15, 23, 42, 0.24),
+    0 8px 14px rgba(29, 78, 216, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.2s ease;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.hero-devices__button::after {
+  content: "→";
+  font-size: 1.04rem;
+  line-height: 1;
+  opacity: 0.92;
+  transform: translateX(0);
+  transition: transform 0.2s ease, opacity 0.2s ease;
 }
 
 .hero-devices__button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 18px 32px rgba(79, 70, 229, 0.36);
+  filter: brightness(1.03);
+  box-shadow:
+    0 18px 34px rgba(15, 23, 42, 0.28),
+    0 10px 18px rgba(29, 78, 216, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.hero-devices__button:hover::after {
+  transform: translateX(2px);
+}
+
+.hero-devices__button:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(191, 219, 254, 0.95),
+    0 0 0 6px rgba(37, 99, 235, 0.34),
+    0 14px 28px rgba(15, 23, 42, 0.24);
 }
 
 .hero-devices__hint {
@@ -701,6 +733,10 @@
 @media (max-width: 600px) {
   .hero-tablet {
     transform: rotate(-6deg) scale(0.92);
+  }
+
+  .hero-devices__button {
+    width: 100%;
   }
 }
 

@@ -16,29 +16,24 @@ import { useLanguage } from "../../unAuth/language/LanguageProvider";
 const PLAN_CONFIG = [
   {
     id: "starter",
-    priceByLanguage: { da: 499, en: 75 },
+    priceByLanguage: { da: 399, en: 59 },
     buttonVariant: "outline" as const,
+    popular: false,
     checkoutPlan: "solo" as const,
-  },
-  {
-    id: "business",
-    priceByLanguage: { da: 799, en: 119 },
-    buttonVariant: "default" as const,
-    popular: true,
-    checkoutPlan: "duo" as const,
   },
   {
     id: "enterprise",
     priceByLanguage: null,
     price: null,
     buttonVariant: "outline" as const,
+    popular: false,
     checkoutPlan: null,
   },
 ];
 
 type PricingSectionProps = {
   mode?: "marketing" | "subscribe";
-  initialPlan?: "solo" | "duo" | null;
+  initialPlan?: "solo" | null;
   disableCheckout?: boolean;
 };
 
@@ -51,12 +46,16 @@ export default function PricingSection5({
   const { user } = useAuth();
   const navigate = useNavigate();
   const pricingRef = useRef<HTMLDivElement>(null);
-  const [activeCheckoutPlan, setActiveCheckoutPlan] = useState<"solo" | "duo" | null>(null);
+  const [activeCheckoutPlan, setActiveCheckoutPlan] = useState<"solo" | null>(null);
   const [checkoutError, setCheckoutError] = useState("");
-  const [selectedPlan, setSelectedPlan] = useState<"solo" | "duo" | null>(initialPlan);
+  const [selectedPlan, setSelectedPlan] = useState<"solo" | null>(initialPlan);
   const isDanish = language === "da";
   const currencyPrefix = isDanish ? "" : "$";
-  const currencySuffix = isDanish ? " DKK" : "";
+  const currencySuffix = isDanish ? " kr" : "";
+  const getOptionalText = (key: string) => {
+    const value = t(key);
+    return value === key ? "" : value;
+  };
   const plans = PLAN_CONFIG.map((plan) => ({
     ...plan,
     price:
@@ -67,7 +66,10 @@ export default function PricingSection5({
     description: t(`pricing.plans.${plan.id}.description`),
     buttonText: t(`pricing.plans.${plan.id}.buttonText`),
     includes: getArray(`pricing.plans.${plan.id}.includes`, []),
+    priceNote: getOptionalText(`pricing.plans.${plan.id}.priceNote`),
+    featureNote: getOptionalText(`pricing.plans.${plan.id}.featureNote`),
   }));
+  const trustItems = getArray("pricing.trust", []);
 
   useEffect(() => {
     if (initialPlan) {
@@ -75,7 +77,7 @@ export default function PricingSection5({
     }
   }, [initialPlan]);
 
-  const startCheckout = async (plan: "solo" | "duo") => {
+  const startCheckout = async (plan: "solo") => {
     setCheckoutError("");
     setSelectedPlan(plan);
 
@@ -153,15 +155,15 @@ export default function PricingSection5({
   };
 
   return (
-    <div className="px-4 pt-20 min-h-screen max-w-7xl mx-auto relative" ref={pricingRef}>
-      <article className="text-left mb-6 space-y-4 max-w-2xl">
-        <h2 className="md:text-6xl text-4xl capitalize font-medium text-gray-900 mb-4">
+    <div className="px-4 pt-20 pb-10 min-h-screen max-w-7xl mx-auto relative" ref={pricingRef}>
+      <article className="text-left mb-7 space-y-4 max-w-6xl">
+        <h2 className="xl:text-6xl md:text-5xl text-4xl font-medium text-gray-900 mb-4 xl:whitespace-nowrap">
           <VerticalCutReveal
             splitBy="words"
             staggerDuration={0.15}
             staggerFrom="first"
             reverse={true}
-            containerClassName="justify-start"
+            containerClassName="justify-start xl:!flex-nowrap"
             transition={{
               type: "spring",
               stiffness: 250,
@@ -178,14 +180,14 @@ export default function PricingSection5({
           animationNum={0}
           timelineRef={pricingRef}
           customVariants={revealVariants}
-          className="md:text-base text-sm text-gray-600 w-[80%]"
+          className="md:text-lg text-base text-gray-600 max-w-3xl"
         >
           {t("pricing.description")}
         </TimelineContent>
 
       </article>
 
-      <div className="grid md:grid-cols-3 gap-4 py-6">
+      <div className="grid md:grid-cols-2 gap-5 py-6">
         {plans.map((plan, index) => {
           const isCheckoutLoading = plan.checkoutPlan
             ? activeCheckoutPlan === plan.checkoutPlan
@@ -205,13 +207,13 @@ export default function PricingSection5({
               customVariants={revealVariants}
             >
               <Card
-                className={`relative border border-neutral-200 ${
-                  plan.popular ? "ring-2 ring-orange-500 bg-orange-50" : "bg-white"
-                } ${isSelected ? "ring-2 ring-emerald-400" : ""}`}
+                className={`relative h-full flex flex-col border border-slate-200 bg-white rounded-2xl shadow-sm ${
+                  isSelected ? "ring-2 ring-emerald-400" : ""
+                }`}
               >
-                <CardHeader className="text-left">
+                <CardHeader className="text-left min-h-[230px] pb-5">
                   <div className="flex justify-between">
-                    <h3 className="xl:text-3xl md:text-2xl text-3xl font-semibold text-gray-900 mb-2">
+                    <h3 className="xl:text-4xl md:text-3xl text-3xl font-semibold text-gray-900 mb-2 leading-tight">
                       {t("pricing.planTitle", { name: plan.name })}
                     </h3>
                     {plan.popular && (
@@ -222,40 +224,43 @@ export default function PricingSection5({
                       </div>
                     )}
                   </div>
-                  <p className="xl:text-sm md:text-xs text-sm text-gray-600 mb-4">
+                  <p className="xl:text-base md:text-sm text-base text-gray-600 mb-5">
                     {plan.description}
                   </p>
                   <div className="flex items-baseline">
                     {plan.price === null ? (
-                      <span className="text-4xl font-semibold text-gray-900">
+                      <span className="text-4xl font-semibold text-gray-900 leading-none">
                         {t("pricing.labels.contactForPrice")}
                       </span>
                     ) : (
                       <>
-                        <span className="text-4xl font-semibold text-gray-900">
+                        <span className="text-4xl font-semibold text-gray-900 leading-none">
                           {currencyPrefix}
                           <NumberFlow
                             value={plan.price}
-                            className="text-4xl font-semibold"
+                            className="text-4xl font-semibold leading-none"
                           />
                           {currencySuffix}
                         </span>
-                        <span className="text-gray-600 ml-1">/{t("pricing.labels.month")}</span>
+                        <span className="text-gray-600 ml-2 text-base">/{t("pricing.labels.month")}</span>
                       </>
                     )}
                   </div>
+                  <p
+                    className={`text-base mt-3 min-h-6 ${
+                      plan.price !== null && plan.priceNote ? "text-gray-600" : "text-transparent"
+                    }`}
+                  >
+                    {plan.price !== null && plan.priceNote ? plan.priceNote : "placeholder"}
+                  </p>
                 </CardHeader>
 
-                <CardContent className="pt-0">
+                <CardContent className="pt-0 flex-1 flex flex-col">
                   <button
                     type="button"
-                    className={`w-full mb-6 p-4 text-xl rounded-xl ${
-                      plan.popular
-                        ? "bg-gradient-to-t from-orange-500 to-orange-600 shadow-lg shadow-orange-500 border border-orange-400 text-white"
-                        : plan.buttonVariant === "outline"
-                          ? "bg-gradient-to-t from-neutral-900 to-neutral-600 shadow-lg shadow-neutral-900 border border-neutral-700 text-white"
-                          : ""
-                    } ${isCheckoutLoading ? "opacity-80 cursor-wait" : ""}`}
+                    className={`w-full mb-3 py-4 text-xl rounded-xl border border-slate-900 bg-slate-900 text-white shadow-sm transition-colors ${
+                      isCheckoutLoading ? "opacity-80 cursor-wait" : "hover:bg-slate-800"
+                    }`}
                     onClick={
                       plan.checkoutPlan ? () => startCheckout(plan.checkoutPlan) : undefined
                     }
@@ -264,27 +269,47 @@ export default function PricingSection5({
                   >
                     {plan.buttonText}
                   </button>
-                  <button className="w-full mb-6 p-4 text-xl rounded-xl bg-white text-black border border-gray-200 shadow-lg shadow-gray-200">
+                  <button className="w-full mb-6 py-4 text-xl rounded-xl bg-white text-slate-900 border border-slate-200 shadow-sm transition-colors hover:bg-slate-50">
                     {t("pricing.secondaryCta")}
                   </button>
 
-                  <div className="space-y-3 pt-4 border-t border-neutral-200">
-                    <h2 className="text-xl font-semibold uppercase text-gray-900 mb-3">
+                  <div className="space-y-3 pt-5 border-t border-slate-200 flex-1">
+                    <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-900 mb-2">
                       {t("pricing.labels.features")}
                     </h2>
-                    <h4 className="font-medium text-base text-gray-900 mb-3">
+                    <h4 className="font-medium text-lg text-gray-900 mb-4">
                       {plan.includes[0] || ""}
                     </h4>
-                    <ul className="space-y-2 font-semibold">
-                      {plan.includes.slice(1).map((feature, featureIndex) => (
-                        <li key={featureIndex} className="flex items-center">
-                          <span className="h-6 w-6 bg-white border border-orange-500 rounded-full grid place-content-center mt-0.5 mr-3">
-                            <CheckCheck className="h-4 w-4 text-orange-500" />
-                          </span>
-                          <span className="text-sm text-gray-600">{feature}</span>
-                        </li>
-                      ))}
+                    <ul className="space-y-3 font-semibold">
+                      {plan.includes.slice(1).map((feature, featureIndex) => {
+                        const isSubItem =
+                          feature.trim().startsWith("–") || feature.trim().startsWith("-");
+                        return (
+                          <li
+                            key={featureIndex}
+                            className={isSubItem ? "pl-9" : "flex items-start"}
+                          >
+                            {isSubItem ? null : (
+                              <span className="h-5 w-5 bg-white border border-orange-500 rounded-full grid place-content-center mt-1 mr-3 shrink-0">
+                                <CheckCheck className="h-3 w-3 text-orange-500" />
+                              </span>
+                            )}
+                            <span
+                              className={`leading-8 ${
+                                isSubItem ? "text-base text-slate-500" : "text-base md:text-lg text-slate-600"
+                              }`}
+                            >
+                              {feature}
+                            </span>
+                          </li>
+                        );
+                      })}
                     </ul>
+                    {plan.featureNote ? (
+                      <p className="text-sm leading-relaxed text-slate-500 whitespace-pre-line pt-3">
+                        {plan.featureNote}
+                      </p>
+                    ) : null}
                   </div>
                 </CardContent>
               </Card>
@@ -292,6 +317,20 @@ export default function PricingSection5({
           );
         })}
       </div>
+      {trustItems.length ? (
+        <div className="pt-2 pb-2 border-t border-slate-200">
+          <ul className="flex flex-col md:flex-row md:flex-wrap gap-x-8 gap-y-3 font-semibold">
+            {trustItems.map((item, index) => (
+              <li key={`${item}-${index}`} className="flex items-center">
+                <span className="h-5 w-5 bg-white border border-orange-500 rounded-full grid place-content-center mt-0.5 mr-3">
+                  <CheckCheck className="h-3 w-3 text-orange-500" />
+                </span>
+                <span className="text-base md:text-lg text-slate-600">{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {checkoutError ? (
         <div className="mt-2 text-sm text-rose-600">
           {checkoutError}

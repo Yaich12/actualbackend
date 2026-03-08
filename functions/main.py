@@ -63,6 +63,182 @@ def get_db():
     db = firestore.client(database_id=database_id, app=app)
     return db
 
+
+def _resolve_workspace_clinic_id(uid: str, db_client=None) -> str:
+    safe_uid = str(uid or "").strip()
+    if not safe_uid:
+        return ""
+    db_ref = db_client or get_db()
+    try:
+        user_snap = db_ref.collection("users").document(safe_uid).get()
+        if user_snap.exists:
+            user_data = user_snap.to_dict() or {}
+            active_clinic_id = str(
+                user_data.get("activeClinicId") or user_data.get("clinicId") or ""
+            ).strip()
+            if active_clinic_id:
+                return active_clinic_id
+    except Exception:
+        pass
+
+    try:
+        owner_clinic = list(
+            db_ref.collection("clinics")
+            .where("ownerUid", "==", safe_uid)
+            .limit(1)
+            .stream()
+        )
+        if owner_clinic:
+            return owner_clinic[0].id
+    except Exception:
+        pass
+
+    try:
+        member_docs = list(
+            db_ref.collection_group("members")
+            .where("memberUid", "==", safe_uid)
+            .limit(1)
+            .stream()
+        )
+        if not member_docs:
+            member_docs = list(
+                db_ref.collection_group("members")
+                .where("uid", "==", safe_uid)
+                .limit(1)
+                .stream()
+            )
+        if member_docs:
+            clinic_ref = member_docs[0].reference.parent.parent
+            if clinic_ref:
+                return str(clinic_ref.id or "").strip()
+    except Exception:
+        pass
+
+    return ""
+
+
+def _resolve_clients_collection(uid: str, db_client=None):
+    db_ref = db_client or get_db()
+    clinic_id = _resolve_workspace_clinic_id(uid, db_ref)
+    if clinic_id:
+        return db_ref.collection("clinics").document(clinic_id).collection("clients"), clinic_id
+    return db_ref.collection("users").document(uid).collection("clients"), ""
+
+
+def _resolve_client_document_ref(uid: str, client_id: str, db_client=None):
+    clients_col, clinic_id = _resolve_clients_collection(uid, db_client)
+    return clients_col.document(client_id), clinic_id
+
+
+def _resolve_services_collection(uid: str, db_client=None):
+    db_ref = db_client or get_db()
+    clinic_id = _resolve_workspace_clinic_id(uid, db_ref)
+    if clinic_id:
+        return db_ref.collection("clinics").document(clinic_id).collection("services"), clinic_id
+    return db_ref.collection("users").document(uid).collection("services"), ""
+
+
+def _resolve_appointments_collection(uid: str, db_client=None):
+    db_ref = db_client or get_db()
+    clinic_id = _resolve_workspace_clinic_id(uid, db_ref)
+    if clinic_id:
+        return db_ref.collection("clinics").document(clinic_id).collection("appointments"), clinic_id
+    return db_ref.collection("users").document(uid).collection("appointments"), ""
+
+
+def _find_clinic_member_document(
+    clinic_id: str | None, member_uid: str | None, db_client=None
+):
+    safe_clinic_id = str(clinic_id or "").strip()
+    safe_member_uid = str(member_uid or "").strip()
+    if not safe_clinic_id or not safe_member_uid:
+        return None, ""
+
+    db_ref = db_client or get_db()
+    members_ref = db_ref.collection("clinics").document(safe_clinic_id).collection("members")
+
+    direct_snap = members_ref.document(safe_member_uid).get()
+    if direct_snap.exists:
+        return direct_snap, direct_snap.id
+
+    for field_name in ("memberUid", "uid"):
+        matches = list(members_ref.where(field_name, "==", safe_member_uid).limit(1).stream())
+        if matches:
+            return matches[0], matches[0].id
+
+    return None, ""
+
+
+def _resolve_public_staff_record(
+    owner_uid: str, clinic_id: str | None, staff_uid: str, db_client=None
+) -> tuple[Dict[str, Any], str, str]:
+    db_ref = db_client or get_db()
+    safe_staff_uid = str(staff_uid or "").strip()
+    safe_owner_uid = str(owner_uid or "").strip()
+
+    clinic_member_snap, clinic_member_doc_id = _find_clinic_member_document(
+        clinic_id, safe_staff_uid, db_ref
+    )
+    if clinic_member_snap and clinic_member_snap.exists:
+        clinic_member_data = clinic_member_snap.to_dict() or {}
+        resolved_member_uid = str(
+            clinic_member_data.get("memberUid")
+            or clinic_member_data.get("uid")
+            or safe_staff_uid
+        ).strip()
+        return clinic_member_data, resolved_member_uid or safe_staff_uid, clinic_member_doc_id
+
+    legacy_snap = (
+        db_ref.collection("users")
+        .document(safe_owner_uid)
+        .collection("team")
+        .document(safe_staff_uid)
+        .get()
+    )
+    if legacy_snap.exists:
+        legacy_data = legacy_snap.to_dict() or {}
+        resolved_member_uid = str(
+            legacy_data.get("memberUid") or legacy_data.get("uid") or safe_staff_uid
+        ).strip()
+        return legacy_data, resolved_member_uid or safe_staff_uid, legacy_snap.id
+
+    return {}, safe_staff_uid, safe_staff_uid
+
+
+def _build_public_staff_entry(
+    member_data: Dict[str, Any], doc_id: str, owner_uid: str
+) -> Dict[str, Any]:
+    member_uid = str(
+        member_data.get("memberUid") or member_data.get("uid") or doc_id or ""
+    ).strip()
+    first_name = member_data.get("firstName") or member_data.get("fornavn") or ""
+    last_name = member_data.get("lastName") or member_data.get("efternavn") or ""
+    is_owner_member = (
+        str(doc_id or "").strip() == str(owner_uid or "").strip()
+        or member_uid == str(owner_uid or "").strip()
+        or member_data.get("isOwner") is True
+        or str(member_data.get("role") or "").strip().lower() == "owner"
+    )
+    normalized_member_id = str(owner_uid or "").strip() if is_owner_member else (
+        member_uid or str(doc_id or "").strip()
+    )
+    member_name = (
+        member_data.get("name")
+        or f"{first_name} {last_name}".strip()
+        or ("Clinician" if is_owner_member else "")
+    )
+    return {
+        "id": normalized_member_id,
+        "name": member_name,
+        "firstName": first_name,
+        "lastName": last_name,
+        "role": member_data.get("role") or ("owner" if is_owner_member else ""),
+        "avatarText": member_data.get("avatarText") or "",
+        "calendarColor": member_data.get("calendarColor") or member_data.get("avatarColor") or "",
+        "memberUid": member_uid or None,
+        "isOwner": is_owner_member,
+    }
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_TRANSCRIBE_URL = "https://api.openai.com/v1/audio/transcriptions"
 DEFAULT_TRANSCRIBE_MODEL = os.getenv("OPENAI_TRANSCRIBE_MODEL", "gpt-4o-mini-transcribe")
@@ -805,6 +981,8 @@ def _appointment_matches_staff(
     staff_name: str,
     owner_uid: str,
 ) -> bool:
+    if appointment.get("assignedToUid") == staff_uid:
+        return True
     if appointment.get("staffUid") == staff_uid:
         return True
     if appointment.get("calendarOwnerId") == staff_uid:
@@ -1465,12 +1643,11 @@ def agent_chat(req: https_fn.Request) -> https_fn.Response:
 
         db_client = get_db()
 
+        client_doc_ref, workspace_clinic_id = _resolve_client_document_ref(
+            uid, client_id, db_client
+        )
         messages_col = (
-            db_client.collection("users")
-            .document(uid)
-            .collection("clients")
-            .document(client_id)
-            .collection("aiChats")
+            client_doc_ref.collection("aiChats")
             .document("shared")
             .collection("messages")
         )
@@ -1485,6 +1662,7 @@ def agent_chat(req: https_fn.Request) -> https_fn.Response:
                     "createdAtMs": now_ms,
                     "createdAtIso": now_iso,
                     "ownerUid": uid,
+                    "clinicId": workspace_clinic_id or None,
                 }
             )
 
@@ -1509,17 +1687,11 @@ def agent_chat(req: https_fn.Request) -> https_fn.Response:
         shared_history = "\n".join([fmt_history(m) for m in history_items])
 
         # 3) Client + recent journal (optional)
-        client_doc = (
-            db_client.collection("users").document(uid).collection("clients").document(client_id).get()
-        )
+        client_doc = client_doc_ref.get()
         client_data = client_doc.to_dict() if client_doc and client_doc.exists else {}
 
         journal_snap = (
-            db_client.collection("users")
-            .document(uid)
-            .collection("clients")
-            .document(client_id)
-            .collection("journalEntries")
+            client_doc_ref.collection("journalEntries")
             .order_by("createdAt", direction=firestore.Query.DESCENDING)
             .limit(3)
             .stream()
@@ -1569,6 +1741,7 @@ def agent_chat(req: https_fn.Request) -> https_fn.Response:
                 "createdAtMs": out_ms,
                 "createdAtIso": out_iso,
                 "ownerUid": uid,
+                "clinicId": workspace_clinic_id or None,
             }
             if blocks:
                 payload_to_store["blocks"] = blocks
@@ -1730,9 +1903,7 @@ def createClientFromBooking(req: https_fn.Request) -> https_fn.Response:
     if not owner_uid:
         return _booking_error("Clinic owner missing.", status=404, origin=origin)
 
-    clients_ref = (
-        get_db().collection("users").document(owner_uid).collection("clients")
-    )
+    clients_ref, clinic_workspace_id = _resolve_clients_collection(owner_uid, get_db())
 
     existing_docs = list(
         clients_ref.where("emailLower", "==", email_lower).limit(1).stream()
@@ -1774,6 +1945,7 @@ def createClientFromBooking(req: https_fn.Request) -> https_fn.Response:
             "telefonKomplet": telefon_komplet,
             "status": "Aktiv",
             "ownerUid": owner_uid,
+            "clinicId": clinic_workspace_id or None,
             "source": "publicBooking",
             "clinicSlug": clinic_slug,
             "createdAt": firestore.SERVER_TIMESTAMP,
@@ -1893,13 +2065,14 @@ def publicBookAppointment(req: https_fn.Request) -> https_fn.Response:
     if not owner_uid:
         return _public_booking_error(req, "Clinic owner missing.", status=404)
 
-    service_ref = (
-        get_db()
-        .collection("users")
-        .document(owner_uid)
-        .collection("services")
-        .document(service_id)
-    )
+    clinic_workspace_id = str(
+        clinic_data.get("clinicId") or _resolve_workspace_clinic_id(owner_uid, get_db()) or ""
+    ).strip()
+
+    services_ref, resolved_services_clinic_id = _resolve_services_collection(owner_uid, get_db())
+    if not clinic_workspace_id:
+        clinic_workspace_id = resolved_services_clinic_id or clinic_workspace_id
+    service_ref = services_ref.document(service_id)
     service_snap = service_ref.get()
     if not service_snap.exists:
         return _public_booking_error(req, "Unknown serviceId.", status=400)
@@ -1928,19 +2101,16 @@ def publicBookAppointment(req: https_fn.Request) -> https_fn.Response:
         tzinfo = timezone.utc
         timezone_name = "UTC"
 
-    staff_doc = (
-        get_db()
-        .collection("users")
-        .document(owner_uid)
-        .collection("team")
-        .document(staff_uid)
-        .get()
+    staff_data, resolved_staff_uid, _resolved_staff_doc_id = _resolve_public_staff_record(
+        owner_uid,
+        clinic_workspace_id,
+        staff_uid,
+        get_db(),
     )
-    staff_data = staff_doc.to_dict() if staff_doc.exists else {}
     staff_name = staff_data.get("name") or ""
     if not staff_name:
         staff_name = f"{staff_data.get('firstName') or ''} {staff_data.get('lastName') or ''}".strip()
-    if not staff_name and staff_uid == owner_uid:
+    if not staff_name and (resolved_staff_uid == owner_uid or staff_uid == owner_uid):
         owner_staff_doc = get_db().collection("users").document(owner_uid).get()
         owner_staff_data = owner_staff_doc.to_dict() if owner_staff_doc.exists else {}
         owner_staff_first = owner_staff_data.get("fornavn") or owner_staff_data.get("firstName") or ""
@@ -1952,8 +2122,8 @@ def publicBookAppointment(req: https_fn.Request) -> https_fn.Response:
             or f"{owner_staff_first} {owner_staff_last}".strip()
         )
 
-    work_hours, work_hours_exceptions, _ = _resolve_staff_work_schedule(
-        clinic_data, staff_uid, staff_data
+    work_hours, work_hours_exceptions, resolved_schedule_uid = _resolve_staff_work_schedule(
+        clinic_data, resolved_staff_uid or staff_uid, staff_data
     )
     start_local = start_dt.astimezone(tzinfo)
     end_local = end_dt.astimezone(tzinfo)
@@ -1984,18 +2154,17 @@ def publicBookAppointment(req: https_fn.Request) -> https_fn.Response:
     if start_local < work_start or end_local > work_end:
         return _public_booking_error(req, "Outside working hours", status=400)
 
-    calendar_owner_id = staff_uid or owner_uid
-
     day_start = start_dt.astimezone(timezone.utc).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
     day_end = day_start + timedelta(days=1)
-
-    appointments_ref = (
-        get_db()
-        .collection("users")
-        .document(owner_uid)
-        .collection("appointments")
+    appointments_ref, resolved_appointments_clinic_id = _resolve_appointments_collection(
+        owner_uid, get_db()
+    )
+    if not clinic_workspace_id:
+        clinic_workspace_id = resolved_appointments_clinic_id or clinic_workspace_id
+    calendar_owner_id = (
+        str(resolved_schedule_uid or resolved_staff_uid or staff_uid or owner_uid).strip() or owner_uid
     )
     overlapping_docs = appointments_ref.where("start", ">=", _to_utc_iso(day_start)).where(
         "start", "<", _to_utc_iso(day_end)
@@ -2003,7 +2172,7 @@ def publicBookAppointment(req: https_fn.Request) -> https_fn.Response:
 
     for doc in overlapping_docs:
         appt = doc.to_dict() or {}
-        if not _appointment_matches_staff(appt, staff_uid, staff_name, owner_uid):
+        if not _appointment_matches_staff(appt, calendar_owner_id, staff_name, owner_uid):
             continue
         appt_start = _parse_iso_datetime(appt.get("start") or appt.get("startIso"))
         appt_end = _parse_iso_datetime(appt.get("end") or appt.get("endIso"))
@@ -2053,8 +2222,8 @@ def publicBookAppointment(req: https_fn.Request) -> https_fn.Response:
 
     client_upsert_action = "created"
     client_id = None
-    clients_ref = (
-        get_db().collection("users").document(calendar_owner_id).collection("clients")
+    clients_ref, clinic_workspace_for_client = _resolve_clients_collection(
+        calendar_owner_id, get_db()
     )
     existing_client = None
     if phone_norm:
@@ -2107,6 +2276,7 @@ def publicBookAppointment(req: https_fn.Request) -> https_fn.Response:
             "telefonKomplet": telefon_komplet,
             "phoneNorm": phone_norm,
             "ownerUid": calendar_owner_id,
+            "clinicId": clinic_workspace_for_client or clinic_workspace_id or None,
             "ownerEmail": owner_email,
             "ownerIdentifier": owner_identifier,
             "status": "Aktiv",
@@ -2141,11 +2311,14 @@ def publicBookAppointment(req: https_fn.Request) -> https_fn.Response:
     appointment_payload = {
         "clinicSlug": clinic_slug,
         "clinicName": clinic_data.get("clinicName") or clinic_slug,
+        "clinicId": clinic_workspace_id or None,
         "ownerUid": owner_uid,
-        "staffUid": staff_uid,
+        "staffUid": calendar_owner_id,
+        "assignedToUid": calendar_owner_id,
+        "createdByUid": "publicBooking",
         "source": "publicBooking",
         "createdBy": "publicBooking",
-        "calendarOwnerId": staff_uid,
+        "calendarOwnerId": calendar_owner_id,
         "calendarOwner": staff_name or clinic_data.get("clinicName") or "Clinician",
         "title": service_name or full_name or "Booking",
         "client": full_name,
@@ -2292,6 +2465,10 @@ def publicGetAvailability(req: https_fn.Request) -> https_fn.Response:
     if not owner_uid:
         return _public_booking_error(req, "Clinic owner missing.", status=404)
 
+    clinic_workspace_id = str(
+        clinic_data.get("clinicId") or _resolve_workspace_clinic_id(owner_uid, get_db()) or ""
+    ).strip()
+
     timezone_name = WORK_HOURS_TIMEZONE
     try:
         tzinfo = ZoneInfo(WORK_HOURS_TIMEZONE)
@@ -2320,13 +2497,10 @@ def publicGetAvailability(req: https_fn.Request) -> https_fn.Response:
     if slot_minutes <= 0:
         slot_minutes = 15
 
-    service_ref = (
-        get_db()
-        .collection("users")
-        .document(owner_uid)
-        .collection("services")
-        .document(service_id)
-    )
+    services_ref, resolved_services_clinic_id = _resolve_services_collection(owner_uid, get_db())
+    if not clinic_workspace_id:
+        clinic_workspace_id = resolved_services_clinic_id or clinic_workspace_id
+    service_ref = services_ref.document(service_id)
     service_snap = service_ref.get()
     if not service_snap.exists:
         return _public_booking_error(
@@ -2341,19 +2515,16 @@ def publicGetAvailability(req: https_fn.Request) -> https_fn.Response:
         context=f"serviceId:{service_id}",
     )
 
-    staff_doc = (
-        get_db()
-        .collection("users")
-        .document(owner_uid)
-        .collection("team")
-        .document(staff_uid)
-        .get()
+    staff_data, resolved_staff_uid, _resolved_staff_doc_id = _resolve_public_staff_record(
+        owner_uid,
+        clinic_workspace_id,
+        staff_uid,
+        get_db(),
     )
-    staff_data = staff_doc.to_dict() if staff_doc.exists else {}
 
     day_key = _get_weekday_key_long(parsed_date)
     work_hours, work_hours_exceptions, resolved_staff_uid = _resolve_staff_work_schedule(
-        clinic_data, staff_uid, staff_data
+        clinic_data, resolved_staff_uid or staff_uid, staff_data
     )
     start_minutes, end_minutes, work_window_source = _resolve_effective_work_window(
         parsed_date, work_hours, work_hours_exceptions
@@ -2413,12 +2584,11 @@ def publicGetAvailability(req: https_fn.Request) -> https_fn.Response:
         last = staff_data.get("lastName") or ""
         staff_name = f"{first} {last}".strip()
 
-    appointments_ref = (
-        get_db()
-        .collection("users")
-        .document(owner_uid)
-        .collection("appointments")
+    appointments_ref, resolved_appointments_clinic_id = _resolve_appointments_collection(
+        owner_uid, get_db()
     )
+    if not clinic_workspace_id:
+        clinic_workspace_id = resolved_appointments_clinic_id or clinic_workspace_id
     appointment_docs = appointments_ref.where("start", ">=", day_start_iso).where(
         "start", "<", day_end_iso
     ).stream()
@@ -2426,7 +2596,12 @@ def publicGetAvailability(req: https_fn.Request) -> https_fn.Response:
     busy_ranges = []
     for doc in appointment_docs:
         appt = doc.to_dict() or {}
-        if not _appointment_matches_staff(appt, staff_uid, staff_name, owner_uid):
+        if not _appointment_matches_staff(
+            appt,
+            str(resolved_staff_uid or staff_uid or "").strip(),
+            staff_name,
+            owner_uid,
+        ):
             continue
         appt_start = _parse_iso_datetime(appt.get("start") or appt.get("startIso"))
         appt_end = _parse_iso_datetime(appt.get("end") or appt.get("endIso"))
@@ -2524,6 +2699,10 @@ def getClinicStaffPublic(req: https_fn.Request) -> https_fn.Response:
     if not owner_uid:
         return _public_booking_error(req, "Clinic owner missing.", status=404)
 
+    clinic_workspace_id = str(
+        clinic_data.get("clinicId") or _resolve_workspace_clinic_id(owner_uid, get_db()) or ""
+    ).strip()
+
     owner_doc = get_db().collection("users").document(owner_uid).get()
     owner_data = owner_doc.to_dict() if owner_doc.exists else {}
     owner_first_name = owner_data.get("fornavn") or owner_data.get("firstName") or ""
@@ -2547,43 +2726,34 @@ def getClinicStaffPublic(req: https_fn.Request) -> https_fn.Response:
         "isOwner": True,
     }
 
-    team_docs = (
-        get_db()
-        .collection("users")
-        .document(owner_uid)
-        .collection("team")
-        .stream()
-    )
     staff = []
-    for doc in team_docs:
-        member = doc.to_dict() or {}
-        member_uid = str(member.get("memberUid") or member.get("uid") or "").strip()
-        first_name = member.get("firstName") or member.get("fornavn") or ""
-        last_name = member.get("lastName") or member.get("efternavn") or ""
-        member_name = (
-            member.get("name")
-            or f"{first_name} {last_name}".strip()
-            or (owner_name if doc.id == owner_uid or member_uid == owner_uid else "")
+    if clinic_workspace_id:
+        clinic_member_docs = (
+            get_db()
+            .collection("clinics")
+            .document(clinic_workspace_id)
+            .collection("members")
+            .stream()
         )
-        is_owner_member = (
-            doc.id == owner_uid
-            or member_uid == owner_uid
-            or member.get("isOwner") is True
+        for doc in clinic_member_docs:
+            member = doc.to_dict() or {}
+            entry = _build_public_staff_entry(member, doc.id, owner_uid)
+            if entry.get("name") or entry.get("id"):
+                staff.append(entry)
+
+    if not staff:
+        legacy_team_docs = (
+            get_db()
+            .collection("users")
+            .document(owner_uid)
+            .collection("team")
+            .stream()
         )
-        normalized_member_id = owner_uid if is_owner_member else doc.id
-        staff.append(
-            {
-                "id": normalized_member_id,
-                "name": member_name,
-                "firstName": first_name,
-                "lastName": last_name,
-                "role": member.get("role") or ("owner" if is_owner_member else ""),
-                "avatarText": member.get("avatarText") or "",
-                "calendarColor": member.get("calendarColor") or "",
-                "memberUid": member_uid or None,
-                "isOwner": is_owner_member,
-            }
-        )
+        for doc in legacy_team_docs:
+            member = doc.to_dict() or {}
+            entry = _build_public_staff_entry(member, doc.id, owner_uid)
+            if entry.get("name") or entry.get("id"):
+                staff.append(entry)
 
     deduped_staff: List[Dict[str, Any]] = []
     seen_staff_ids: set[str] = set()
@@ -2659,13 +2829,7 @@ def getClinicServicesPublic(req: https_fn.Request) -> https_fn.Response:
     if not owner_uid:
         return _public_booking_error(req, "publicClinics is missing ownerUid", status=500)
 
-    service_docs = (
-        get_db()
-        .collection("users")
-        .document(owner_uid)
-        .collection("services")
-        .stream()
-    )
+    service_docs = _resolve_services_collection(owner_uid, get_db())[0].stream()
     services = []
     for doc in service_docs:
         data = doc.to_dict() or {}
@@ -2736,13 +2900,7 @@ def publicGetServices(req: https_fn.Request) -> https_fn.Response:
     if not owner_uid:
         return _public_booking_error(req, "publicClinics is missing ownerUid", status=500)
 
-    service_docs = (
-        get_db()
-        .collection("users")
-        .document(owner_uid)
-        .collection("services")
-        .stream()
-    )
+    service_docs = _resolve_services_collection(owner_uid, get_db())[0].stream()
 
     services = []
     for doc in service_docs:

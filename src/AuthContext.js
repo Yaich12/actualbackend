@@ -3,6 +3,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -14,21 +15,32 @@ import {
 import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { ensureUserProfile } from "./services/userService";
+import { resolveWorkspaceContext } from "./utils/workspaceContext";
 
 const AuthContext = createContext({
   user: null,
   loading: true,
+  authLoading: true,
   userDoc: null,
+  sessionUid: null,
+  workspaceUid: null,
+  activeClinicId: null,
+  workspaceRole: null,
+  hasWorkspace: false,
+  isDelegatedWorkspace: false,
   profileLoading: true,
+  workspaceLoading: false,
   signOutUser: () => Promise.resolve(),
   updateUserProfile: () => Promise.resolve(),
 });
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
   const [userDoc, setUserDoc] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const resolvedWorkspaceForUidRef = useRef(new Set());
 
   useEffect(() => {
     let isMounted = true;
@@ -54,7 +66,7 @@ export function AuthProvider({ children }) {
         user: firebaseUser ? { uid: firebaseUser.uid, email: firebaseUser.email } : null,
       });
       setUser(firebaseUser);
-      setLoading(false);
+      setAuthLoading(false);
     });
 
     void resolveRedirectLogin();
@@ -66,12 +78,14 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (loading) {
+    if (authLoading) {
       return undefined;
     }
     if (!user) {
+      resolvedWorkspaceForUidRef.current.clear();
       setUserDoc(null);
       setProfileLoading(false);
+      setWorkspaceLoading(false);
       return undefined;
     }
 
@@ -108,9 +122,78 @@ export function AuthProvider({ children }) {
       isMounted = false;
       unsubscribe();
     };
-  }, [user, loading]);
+  }, [user, authLoading]);
+
+  useEffect(() => {
+    if (authLoading || profileLoading || !user?.uid) {
+      if (!user?.uid) {
+        setWorkspaceLoading(false);
+      }
+      return undefined;
+    }
+
+    const uid = String(user.uid || "").trim();
+    if (!uid) {
+      setWorkspaceLoading(false);
+      return undefined;
+    }
+
+    if (resolvedWorkspaceForUidRef.current.has(uid)) {
+      setWorkspaceLoading(false);
+      return undefined;
+    }
+    resolvedWorkspaceForUidRef.current.add(uid);
+
+    let cancelled = false;
+    setWorkspaceLoading(true);
+    const runWorkspaceResolution = async () => {
+      try {
+        const workspace = await resolveWorkspaceContext(user);
+        if (cancelled) return;
+        if (process.env.NODE_ENV !== "production") {
+          // eslint-disable-next-line no-console
+          console.info("[WORKSPACE RESOLVE] AuthContext bootstrap result", {
+            uid,
+            workspace,
+          });
+        }
+      } catch (error) {
+        if (cancelled) return;
+        console.error("[AuthContext] Failed to resolve workspace on bootstrap", error);
+      } finally {
+        if (!cancelled) {
+          setWorkspaceLoading(false);
+        }
+      }
+    };
+
+    void runWorkspaceResolution();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, profileLoading, user]);
 
   const signOutUser = () => signOut(auth);
+  const loading = authLoading || profileLoading || workspaceLoading;
+
+  const sessionUid = user?.uid || null;
+  const activeClinicId = useMemo(() => {
+    const raw = `${userDoc?.activeClinicId || userDoc?.clinicId || ""}`.trim();
+    return raw || null;
+  }, [userDoc?.activeClinicId, userDoc?.clinicId]);
+  const workspaceRole = useMemo(() => {
+    const rawRole = `${userDoc?.role || ""}`.trim().toLowerCase();
+    if (rawRole === "owner" || rawRole === "member") return rawRole;
+    return null;
+  }, [userDoc?.role]);
+  const hasWorkspace = Boolean(activeClinicId);
+  const workspaceUid = useMemo(() => {
+    const mappedUid = `${userDoc?.dataOwnerUid || userDoc?.clinicOwnerUid || ''}`.trim();
+    if (mappedUid) return mappedUid;
+    return sessionUid;
+  }, [sessionUid, userDoc?.clinicOwnerUid, userDoc?.dataOwnerUid]);
+  const isDelegatedWorkspace = Boolean(sessionUid && workspaceUid && sessionUid !== workspaceUid);
 
   const updateUserProfile = async ({ fullName, jobTitle }) => {
     const currentUser = auth.currentUser;
@@ -146,12 +229,33 @@ export function AuthProvider({ children }) {
     () => ({
       user,
       loading,
+      authLoading,
       userDoc,
+      sessionUid,
+      workspaceUid,
+      activeClinicId,
+      workspaceRole,
+      hasWorkspace,
+      isDelegatedWorkspace,
       profileLoading,
+      workspaceLoading,
       signOutUser,
       updateUserProfile,
     }),
-    [user, loading, userDoc, profileLoading]
+    [
+      user,
+      loading,
+      authLoading,
+      userDoc,
+      sessionUid,
+      workspaceUid,
+      activeClinicId,
+      workspaceRole,
+      hasWorkspace,
+      isDelegatedWorkspace,
+      profileLoading,
+      workspaceLoading,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

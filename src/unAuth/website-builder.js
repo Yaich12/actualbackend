@@ -8,26 +8,41 @@ import BookingPaymentFlowHero from './components/BookingPaymentFlowHero';
 
 function WebsiteBuilderPage() {
   const { t, getArray } = useLanguage();
-  const brandShort = t('common.brandShort');
   const showLiveBuilder = false;
   const importanceBullets = getArray('features.websiteBuilder.whyMatters.bullets', []);
   const aiFeatures = getArray('features.websiteBuilder.ai.features', []);
-  const getPaymentLogo = (method) => {
-    const name = String(method || '').toLowerCase();
-    if (name.includes('mobile')) {
-      return { src: "/hero-5/MobilePay-1200x627.jpg", alt: "MobilePay" };
-    }
-    if (name.includes('apple')) {
-      return { src: "/hero-5/apple-pay-logo-coopbank.webp", alt: "Apple Pay" };
-    }
-    if (name.includes('visa')) {
-      return { src: "/hero-5/Visa_Grey.avif", alt: "Visa" };
-    }
-    if (name.includes('mastercard')) {
-      return { src: "/hero-5/Mastercard_2019_logo.svg", alt: "Mastercard" };
-    }
-    return { src: "/hero-5/unnamed.jpg", alt: String(method || "Payment") };
-  };
+  const [monthlyRevenue, setMonthlyRevenue] = React.useState(40000);
+  const [averageTreatmentPrice, setAverageTreatmentPrice] = React.useState(500);
+
+  const calculations = React.useMemo(() => {
+    const safeMonthlyRevenue = Number.isFinite(monthlyRevenue) ? Math.max(monthlyRevenue, 0) : 0;
+    const safeAverageTreatmentPrice = Number.isFinite(averageTreatmentPrice)
+      ? Math.max(averageTreatmentPrice, 1)
+      : 1;
+
+    const paymentsPerMonth = safeMonthlyRevenue / safeAverageTreatmentPrice;
+    const typicalMonthly = (safeMonthlyRevenue * 0.019) + (paymentsPerMonth * 1.5);
+    const selmaPayMonthly = (safeMonthlyRevenue * 0.015) + (paymentsPerMonth * 1.8);
+    const typicalAnnual = typicalMonthly * 12;
+    const selmaPayAnnual = selmaPayMonthly * 12;
+    const annualSavings = Math.max(typicalAnnual - selmaPayAnnual, 0);
+
+    return {
+      typicalAnnual,
+      selmaPayAnnual,
+      annualSavings,
+    };
+  }, [monthlyRevenue, averageTreatmentPrice]);
+
+  const currencyFormatter = React.useMemo(
+    () =>
+      new Intl.NumberFormat('da-DK', {
+        maximumFractionDigits: 0,
+      }),
+    []
+  );
+
+  const formatDkk = (value) => `${currencyFormatter.format(Math.round(value))} kr`;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 text-white">
@@ -141,7 +156,7 @@ function WebsiteBuilderPage() {
                 <h2 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
                   {t('features.websiteBuilder.growth.title')}
                 </h2>
-                <p className="mt-4 text-base text-slate-600">
+                <p className="mt-4 whitespace-pre-line text-base leading-relaxed text-slate-600">
                   {t('features.websiteBuilder.growth.description')}
                 </p>
 
@@ -175,6 +190,10 @@ function WebsiteBuilderPage() {
                     </span>
                   ))}
                 </div>
+
+                <p className="mt-6 text-sm font-semibold text-slate-900">
+                  {t('features.websiteBuilder.growth.cta')}
+                </p>
               </div>
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
                 <h3 className="text-lg font-semibold text-slate-900">
@@ -184,20 +203,118 @@ function WebsiteBuilderPage() {
                   {t('features.websiteBuilder.growth.cardDescription')}
                 </p>
 
-                <div className="mt-5 inline-flex items-center gap-3 rounded-full bg-slate-900 px-4 py-2 shadow-lg shadow-slate-900/20">
-                  <img
-                    src="/hero-5/selma-logo-final.jpg"
-                    alt="Selma+"
-                    className="h-5 w-5 rounded-full bg-white p-[3px]"
-                    loading="lazy"
-                  />
-                  <span className="text-sm font-semibold text-white/80">×</span>
-                  <img
-                    src="/hero-5/unnamed.webp"
-                    alt="Stripe"
-                    className="h-5 w-auto"
-                    loading="lazy"
-                  />
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      {t('features.websiteBuilder.growth.comparison.typicalTitle')}
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">
+                      {t('features.websiteBuilder.growth.comparison.typicalFee')}
+                    </p>
+                    <p className="mt-3 text-2xl font-bold text-slate-900">
+                      {formatDkk(calculations.typicalAnnual)}
+                    </p>
+                    <p className="text-xs font-medium text-slate-500">
+                      {t('features.websiteBuilder.growth.comparison.perYear')}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-blue-200 bg-blue-50/60 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-700">
+                      {t('features.websiteBuilder.growth.comparison.selmaTitle')}
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">
+                      {t('features.websiteBuilder.growth.comparison.selmaFee')}
+                    </p>
+                    <p className="mt-3 text-2xl font-bold text-slate-900">
+                      {formatDkk(calculations.selmaPayAnnual)}
+                    </p>
+                    <p className="text-xs font-medium text-slate-500">
+                      {t('features.websiteBuilder.growth.comparison.perYear')}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-emerald-300 bg-emerald-50 p-4">
+                  <div className="flex items-center gap-2 text-emerald-800">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">
+                      {t('features.websiteBuilder.growth.comparison.savingsTitle')}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-3xl font-bold text-emerald-700">
+                    {formatDkk(calculations.annualSavings)}
+                  </p>
+                  <p className="text-sm font-medium text-emerald-800">
+                    {t('features.websiteBuilder.growth.comparison.perYear')}
+                  </p>
+                </div>
+
+                <p className="mt-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  {t('features.websiteBuilder.growth.comparison.noHiddenFees')}
+                </p>
+
+                <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
+                  <h4 className="text-sm font-semibold text-slate-900">
+                    {t('features.websiteBuilder.growth.calculator.title')}
+                  </h4>
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-medium text-slate-600">
+                        {t('features.websiteBuilder.growth.calculator.monthlyRevenue')}
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="100"
+                        value={monthlyRevenue}
+                        onChange={(event) => setMonthlyRevenue(Number(event.target.value))}
+                        className="h-10 rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-300/40"
+                      />
+                    </label>
+
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-medium text-slate-600">
+                        {t('features.websiteBuilder.growth.calculator.averagePrice')}
+                      </span>
+                      <input
+                        type="number"
+                        min="1"
+                        step="10"
+                        value={averageTreatmentPrice}
+                        onChange={(event) => setAverageTreatmentPrice(Number(event.target.value))}
+                        className="h-10 rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-300/40"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="mt-4 rounded-xl bg-slate-50 p-3">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-slate-600">
+                        {t('features.websiteBuilder.growth.calculator.typicalAnnual')}
+                      </span>
+                      <span className="font-semibold text-slate-900">
+                        {formatDkk(calculations.typicalAnnual)}/år
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+                      <span className="text-slate-600">
+                        {t('features.websiteBuilder.growth.calculator.selmaAnnual')}
+                      </span>
+                      <span className="font-semibold text-slate-900">
+                        {formatDkk(calculations.selmaPayAnnual)}/år
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+                      <span className="font-semibold text-emerald-700">
+                        {t('features.websiteBuilder.growth.calculator.savingsAnnual')}
+                      </span>
+                      <span className="text-lg font-bold text-emerald-700">
+                        {formatDkk(calculations.annualSavings)}/år
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

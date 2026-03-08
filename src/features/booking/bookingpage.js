@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './bookingpage.css';
 import { BookingSidebarLayout } from '../../components/ui/BookingSidebarLayout';
@@ -8,7 +8,7 @@ import Indlæg from './Journal/indlæg/indlæg';
 import AddKlient from './Klienter/addklient/addklient';
 import { useAuth } from '../../AuthContext';
 import { useLanguage } from '../../LanguageContext';
-import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, where, getDocs, writeBatch, query, limit, onSnapshot } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, where, getDocs, writeBatch, query, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import useAppointments from '../../hooks/useAppointments';
 import { combineDateAndTimeToIso, parseDateString } from '../../utils/appointmentFormat';
@@ -20,8 +20,15 @@ import { formatServiceDuration } from '../../utils/serviceLabels';
 import { useUserClients } from './Klienter/hooks/useUserClients';
 import { useUserServices } from './Ydelser/hooks/useUserServices';
 import Dropdown from './dropdown/dropdown';
+import {
+  dedupeClinicMembers,
+  isOwnerMemberForUid,
+  mapClinicMemberDoc,
+} from './team/clinicMembers';
+import { resolveUserWorkspace } from '../../utils/employeeWorkspace';
 import { EventTimeTooltip, useEventTimeTooltip } from '../../components/calendar/EventTimeTooltip';
 import {
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -29,9 +36,8 @@ import {
   RefreshCw,
   Search,
   Settings,
-  SlidersHorizontal,
-  Snowflake,
   UserPlus,
+  Users,
   X,
 } from 'lucide-react';
 
@@ -50,11 +56,13 @@ const getInitials = (value) => {
 
 function BookingPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, workspaceUid } = useAuth();
+  const sessionUid = user?.uid || null;
   const { t, locale } = useLanguage();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentView, setCurrentView] = useState('week'); // 'month' | 'week' | 'day'
   const [now, setNow] = useState(new Date());
+  const [refreshSpinTick, setRefreshSpinTick] = useState(0);
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState(null);
   const [nextAppointmentTemplate, setNextAppointmentTemplate] = useState(null);
@@ -80,6 +88,7 @@ function BookingPage() {
   const [serviceQuery, setServiceQuery] = useState('');
   const [clientQuery, setClientQuery] = useState('');
   const [hoverSlot, setHoverSlot] = useState(null);
+  const [teamWeekOverflow, setTeamWeekOverflow] = useState(null);
   const eventTimeTooltip = useEventTimeTooltip();
   const isDev = process.env.NODE_ENV !== 'production';
   const ownerNameFallback = useMemo(
@@ -108,9 +117,16 @@ function BookingPage() {
   const [teamFilter, setTeamFilter] = useState('all'); // 'all' | 'custom'
   const [selectedTeamMembers, setSelectedTeamMembers] = useState([ownerEntry.name]);
   const [hasTeamAccess, setHasTeamAccess] = useState(false);
+  const [activeClinicId, setActiveClinicId] = useState(null);
+  const [viewportHeight, setViewportHeight] = useState(() =>
+    typeof window !== 'undefined' ? window.innerHeight : 900
+  );
+  const [calendarViewportHeight, setCalendarViewportHeight] = useState(0);
   const teamMenuRef = useRef(null);
+  const teamWeekOverflowRef = useRef(null);
+  const calendarContainerRef = useRef(null);
   const daysContainerRef = React.useRef(null);
-  const { appointments = [] } = useAppointments(user?.uid || null);
+  const { appointments = [] } = useAppointments(activeClinicId || workspaceUid || null);
   const { clients, loading: clientsLoading, error: clientsError } = useUserClients();
   const {
     services,
@@ -123,6 +139,17 @@ function BookingPage() {
   const END_HOUR = 19;
   const VISIBLE_HOURS = END_HOUR - START_HOUR;
   const HOUR_HEIGHT = 64;
+  const MAX_VISIBLE_TEAM_WEEK_MEMBERS = 5;
+  const TEAM_WEEK_CONTAINER_PADDING = 20;
+  const TEAM_WEEK_VIEWPORT_OFFSET = 280;
+  const TEAM_WEEK_HEADER_HEIGHT = 68;
+  const TEAM_WEEK_MIN_GRID_HEIGHT = 420;
+  const TEAM_WEEK_MIN_HOUR_HEIGHT = 7;
+  const TEAM_WEEK_SUMMARY_ITEM_HEIGHT = 28;
+  const TEAM_WEEK_SUMMARY_ITEM_GAP = 5;
+  const TEAM_WEEK_SUMMARY_VERTICAL_PADDING = 16;
+  const TEAM_WEEK_OVERFLOW_PANEL_WIDTH = 320;
+  const TEAM_WEEK_OVERFLOW_PANEL_HEIGHT = 420;
   const TOTAL_MINUTES = VISIBLE_HOURS * 60;
   const CALENDAR_SLOT_STEP = 10;
   const DEFAULT_SERVICE_MINUTES = 60;
@@ -130,7 +157,110 @@ function BookingPage() {
     String(value || '')
       .trim()
       .toLowerCase();
+  const getMemberPrimaryId = (member) =>
+    String(member?.memberUid || member?.id || '').trim();
+  const getMemberIdentityIds = (member) =>
+    Array.from(
+      new Set(
+        [member?.memberUid, member?.id]
+          .map((value) => String(value || '').trim())
+          .filter(Boolean)
+      )
+    );
   const normalizePhone = (value) => normalizeValue(value).replace(/[^\d+]/g, '');
+  const toDateFromUnknown = (value) => {
+    if (!value) return null;
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+    if (typeof value?.toDate === 'function') {
+      const converted = value.toDate();
+      return converted instanceof Date && !Number.isNaN(converted.getTime()) ? converted : null;
+    }
+    if (typeof value === 'object' && typeof value.seconds === 'number') {
+      const parsed = new Date(value.seconds * 1000 + Math.floor((value.nanoseconds || 0) / 1e6));
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    if (typeof value === 'string' || typeof value === 'number') {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    return null;
+  };
+  const formatDateKeyFromDate = (date) => {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+      date.getDate()
+    ).padStart(2, '0')}`;
+  };
+  const toScheduledIsoFromAppointment = (appointment) => {
+    if (!appointment) return null;
+    const startValue = appointment.start || appointment.startIso || null;
+    if (typeof startValue === 'string' && startValue.trim()) {
+      return startValue.trim();
+    }
+    const parsedStartDate = toDateFromUnknown(startValue);
+    if (parsedStartDate) return parsedStartDate.toISOString();
+    const startDate = typeof appointment.startDate === 'string' ? appointment.startDate : '';
+    const startTime = typeof appointment.startTime === 'string' ? appointment.startTime : '';
+    return combineDateAndTimeToIso(startDate, startTime) || null;
+  };
+  const toDateKeyFromAppointment = (appointment) => {
+    if (!appointment) return '';
+    const startDate = typeof appointment.startDate === 'string' ? appointment.startDate.trim() : '';
+    if (startDate) {
+      const dmyMatch = startDate.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+      if (dmyMatch) {
+        const [, day, month, year] = dmyMatch;
+        return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+      const ymdMatch = startDate.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if (ymdMatch) {
+        const [, year, month, day] = ymdMatch;
+        return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+    }
+    const scheduledValue = toScheduledIsoFromAppointment(appointment);
+    const parsed = toDateFromUnknown(scheduledValue);
+    return parsed ? formatDateKeyFromDate(parsed) : '';
+  };
+  const buildCancellationPayload = (appointment) => {
+    const scheduledAtIso = toScheduledIsoFromAppointment(appointment);
+    const scheduledDateKey = toDateKeyFromAppointment(appointment);
+    return {
+      clinicId: activeClinicId || null,
+      appointmentId: appointment?.id || null,
+      referenceNumber:
+        appointment?.referenceNumber ||
+        appointment?.appointmentRef ||
+        appointment?.appointmentReference ||
+        null,
+      assignedToUid:
+        appointment?.assignedToUid ||
+        appointment?.calendarOwnerId ||
+        appointment?.staffUid ||
+        appointment?.therapistId ||
+        null,
+      createdByUid: appointment?.createdByUid || appointment?.createdBy || sessionUid || null,
+      calendarOwner: appointment?.calendarOwner || appointment?.ownerName || '',
+      calendarOwnerId:
+        appointment?.calendarOwnerId || appointment?.staffUid || appointment?.therapistId || null,
+      clientId: appointment?.clientId || null,
+      client: appointment?.client || appointment?.title || '',
+      clientEmail: appointment?.clientEmail || '',
+      clientPhone: appointment?.clientPhone || '',
+      serviceId: appointment?.serviceId || null,
+      service: appointment?.service || '',
+      serviceType: appointment?.serviceType || '',
+      scheduledAtIso: scheduledAtIso || null,
+      scheduledDateKey: scheduledDateKey || null,
+      scheduledStartDate: appointment?.startDate || '',
+      scheduledStartTime: appointment?.startTime || '',
+      statusBeforeDelete: appointment?.status || 'booked',
+      cancellationSource: 'calendar_delete',
+      cancelledByUid: sessionUid || null,
+      cancelledAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+    };
+  };
   const resolveClientMatch = (appointment) => {
     if (!appointment || !clients.length) return null;
     if (appointment.clientId) {
@@ -210,6 +340,13 @@ function BookingPage() {
     setTeamFilter('custom');
   };
 
+  const focusTeamMember = (name) => {
+    if (!name) return;
+    setSelectedTeamMembers([name]);
+    setTeamFilter('custom');
+    setTeamMenuOpen(false);
+  };
+
   const selectAllMembers = () => {
     setSelectedTeamMembers(teamMembers.map((m) => m.name));
     setTeamFilter('all');
@@ -231,14 +368,23 @@ function BookingPage() {
     );
     const ids = teamMembers
       .filter((member) => selectedNames.has(String(member?.name || '').trim().toLowerCase()))
-      .map((member) => String(member?.id || '').trim())
+      .flatMap((member) => getMemberIdentityIds(member))
       .filter(Boolean);
     return new Set(ids);
   }, [selectedTeamMembers, teamMembers]);
+  const hasTeamCalendarAccess = hasTeamAccess || teamMembers.length > 1;
+
+  useEffect(() => {
+    if (teamMembers.length <= 1) {
+      setTeamFilter('custom');
+      return;
+    }
+    setTeamFilter(selectedTeamMembers.length === teamMembers.length ? 'all' : 'custom');
+  }, [selectedTeamMembers, teamMembers.length]);
 
   const visibleAppointments = useMemo(() => {
     // Solo accounts should always see all appointments in their own calendar.
-    if (!hasTeamAccess) {
+    if (!hasTeamCalendarAccess) {
       return appointments;
     }
     if (!selectedTeamMembers.length) return appointments;
@@ -267,7 +413,7 @@ function BookingPage() {
     });
   }, [
     appointments,
-    hasTeamAccess,
+    hasTeamCalendarAccess,
     primaryCalendarOwner,
     selectedTeamMemberIds,
     selectedTeamMembers,
@@ -320,8 +466,101 @@ function BookingPage() {
     return teamOnDutyLabel;
   })();
 
+  const currentUserTeamMember = useMemo(() => {
+    const safeSessionUid = String(sessionUid || '').trim();
+    if (!safeSessionUid) return null;
+    const match = teamMembers.find((member) => getMemberIdentityIds(member).includes(safeSessionUid));
+    if (match) return match;
+    return String(ownerEntry?.id || '').trim() === safeSessionUid ? ownerEntry : null;
+  }, [ownerEntry, sessionUid, teamMembers]);
+
+  const selectedSummaryMember =
+    selectedTeamMembers.length === 1
+      ? teamMembers.find((member) => member.name === selectedTeamMembers[0]) || currentUserTeamMember
+      : null;
+
+  const isEntireTeamSelected =
+    teamMembers.length > 0 && selectedTeamMembers.length === teamMembers.length;
+  const isTeamOnDutySelected = selectedTeamMembers.length === 0;
+  const isCurrentUserSelected = Boolean(
+    currentUserTeamMember &&
+      selectedTeamMembers.length === 1 &&
+      selectedTeamMembers[0] === currentUserTeamMember.name
+  );
+
+  const formatTeamMemberLabel = useCallback(
+    (member) => {
+      if (!member?.name) return t('booking.calendar.memberFallback', 'Medarbejder');
+      const safeSessionUid = String(sessionUid || '').trim();
+      const isCurrentUser =
+        safeSessionUid && getMemberIdentityIds(member).includes(safeSessionUid);
+      return isCurrentUser
+        ? `${member.name} (${t('booking.calendar.you', 'Dig')})`
+        : member.name;
+    },
+    [sessionUid, t]
+  );
+
+  const renderTeamMemberAvatar = useCallback((member, extraClass = '') => {
+    const avatarClassName = ['avatar', 'avatar-small', 'team-filter-avatar', extraClass]
+      .filter(Boolean)
+      .join(' ');
+    if (member?.avatarUrl) {
+      return (
+        <span className={avatarClassName}>
+          <img src={member.avatarUrl} alt={member.name || ''} />
+        </span>
+      );
+    }
+    return (
+      <span
+        className={avatarClassName}
+        style={{ backgroundColor: member?.avatarColor || '#0ea5e9' }}
+      >
+        {member?.avatarText || getInitials(member?.name)}
+      </span>
+    );
+  }, []);
+
+  const selectedSummaryLabel = selectedSummaryMember
+    ? formatTeamMemberLabel(selectedSummaryMember)
+    : selectedLabel;
+
   const isMultiTeam = selectedTeamMembers.length > 1;
-  const hourHeight = isMultiTeam ? 44 : HOUR_HEIGHT;
+  const isTeamWeekView = currentView === 'week' && isMultiTeam;
+  const visibleTeamWeekRows = Math.min(
+    Math.max(selectedTeamMembers.length || 1, 1),
+    MAX_VISIBLE_TEAM_WEEK_MEMBERS
+  );
+  const teamWeekAvailableHeight = Math.max(
+    TEAM_WEEK_MIN_GRID_HEIGHT,
+    (calendarViewportHeight > 0
+      ? calendarViewportHeight - TEAM_WEEK_CONTAINER_PADDING
+      : viewportHeight - TEAM_WEEK_VIEWPORT_OFFSET)
+  );
+  const teamWeekBodyHeight = Math.max(
+    VISIBLE_HOURS * TEAM_WEEK_MIN_HOUR_HEIGHT,
+    teamWeekAvailableHeight - TEAM_WEEK_HEADER_HEIGHT
+  );
+  const teamWeekHourHeight = Math.max(
+    TEAM_WEEK_MIN_HOUR_HEIGHT,
+    teamWeekBodyHeight / visibleTeamWeekRows / VISIBLE_HOURS
+  );
+  const teamWeekRowHeight = teamWeekHourHeight * VISIBLE_HOURS;
+  const teamWeekBodyMaxHeight = teamWeekRowHeight * visibleTeamWeekRows;
+  const teamWeekSummarySlotCount = Math.max(
+    1,
+    Math.floor(
+      (teamWeekRowHeight - TEAM_WEEK_SUMMARY_VERTICAL_PADDING + TEAM_WEEK_SUMMARY_ITEM_GAP) /
+        (TEAM_WEEK_SUMMARY_ITEM_HEIGHT + TEAM_WEEK_SUMMARY_ITEM_GAP)
+    )
+  );
+  const hourHeight =
+    isTeamWeekView
+      ? teamWeekHourHeight
+      : isMultiTeam
+      ? 44
+      : HOUR_HEIGHT;
   const singleTeamMember =
     selectedTeamMembers.length === 1
       ? teamMembers.find((member) => member.name === selectedTeamMembers[0]) || {
@@ -332,27 +571,55 @@ function BookingPage() {
         }
       : null;
 
-  const mapTeamDoc = (docSnap) => {
-    const data = docSnap.data() || {};
-    const name =
-      (typeof data.name === 'string' && data.name.trim()) ||
-      `${data.firstName || ''}${data.lastName ? ` ${data.lastName}` : ''}`.trim() ||
-      t('booking.calendar.memberFallback', 'Medarbejder');
-    const avatarText =
-      (typeof data.avatarText === 'string' && data.avatarText.trim()) ||
-      name.charAt(0).toUpperCase() ||
-      'S';
-    return {
-      id: docSnap.id,
-      name,
-      email: data.email || '',
-      phone: data.phone || '',
-      avatarUrl: data.avatarUrl || '',
-      avatarColor: data.calendarColor || data.avatarColor || '#0ea5e9',
-      avatarText,
-      role: data.role || '',
+  const mapTeamDoc = useCallback(
+    (docSnap) => mapClinicMemberDoc(docSnap, t('booking.calendar.memberFallback', 'Medarbejder')),
+    [t]
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handleResize = () => setViewportHeight(window.innerHeight);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const element = calendarContainerRef.current;
+    if (!element) return undefined;
+
+    let frameId = 0;
+    const updateHeight = () => {
+      const nextHeight =
+        calendarContainerRef.current?.clientHeight ||
+        calendarContainerRef.current?.getBoundingClientRect?.().height ||
+        0;
+      setCalendarViewportHeight((prev) =>
+        Math.abs(prev - nextHeight) < 1 ? prev : nextHeight
+      );
     };
-  };
+    const scheduleUpdate = () => {
+      if (frameId) window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(updateHeight);
+    };
+
+    scheduleUpdate();
+    window.addEventListener('resize', scheduleUpdate);
+
+    let resizeObserver = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        scheduleUpdate();
+      });
+      resizeObserver.observe(element);
+    }
+
+    return () => {
+      window.removeEventListener('resize', scheduleUpdate);
+      if (frameId) window.cancelAnimationFrame(frameId);
+      if (resizeObserver) resizeObserver.disconnect();
+    };
+  }, [currentView, selectedTeamMembers.length]);
 
   useEffect(() => {
     setTeamMembers([ownerEntry]);
@@ -360,7 +627,7 @@ function BookingPage() {
   }, [ownerEntry]);
 
   useEffect(() => {
-    if (!user?.uid || !hasTeamAccess) {
+    if (!user?.uid || !activeClinicId) {
       setTeamMembers([ownerEntry]);
       setSelectedTeamMembers([ownerEntry.name]);
       setTeamFilter('custom');
@@ -368,24 +635,39 @@ function BookingPage() {
       return;
     }
 
-    const ref = collection(db, 'users', user.uid, 'team');
-    const unsubscribe = onSnapshot(
+    let unsubscribePrimary = () => {};
+
+    const applyMembers = (loadedMembers) => {
+      const hasOwnerOption = loadedMembers.some((member) =>
+        isOwnerMemberForUid(member, workspaceUid || sessionUid)
+      );
+      const membersWithOwner = dedupeClinicMembers(
+        hasOwnerOption ? loadedMembers : [ownerEntry, ...loadedMembers]
+      );
+      const resolvedMembers = membersWithOwner.length ? membersWithOwner : [ownerEntry];
+      setTeamMembers(resolvedMembers);
+
+      setSelectedTeamMembers((prev) => {
+        const validNames = resolvedMembers.map((m) => m.name);
+        const filtered = prev.filter((n) => validNames.includes(n));
+        if (filtered.length > 0) return filtered;
+        if (resolvedMembers.length > 1) {
+          return resolvedMembers.map((member) => member.name);
+        }
+        return [resolvedMembers[0]?.name || ownerEntry.name];
+      });
+
+      if (resolvedMembers.length === 1) {
+        setTeamFilter('custom');
+      }
+    };
+
+    const ref = collection(db, 'clinics', activeClinicId, 'members');
+    unsubscribePrimary = onSnapshot(
       ref,
       (snap) => {
-        const loaded = snap.docs.map(mapTeamDoc);
-        const membersWithOwner = loaded.length ? loaded : [ownerEntry];
-        setTeamMembers(membersWithOwner);
-
-        setSelectedTeamMembers((prev) => {
-          const validNames = membersWithOwner.map((m) => m.name);
-          const filtered = prev.filter((n) => validNames.includes(n));
-          if (filtered.length > 0) return filtered;
-          return [membersWithOwner[0]?.name || ownerEntry.name];
-        });
-
-        if (membersWithOwner.length === 1) {
-          setTeamFilter('custom');
-        }
+        const loaded = dedupeClinicMembers(snap.docs.map(mapTeamDoc));
+        applyMembers(loaded);
       },
       (error) => {
         console.error('[BookingPage] Failed to load team members', error);
@@ -396,12 +678,15 @@ function BookingPage() {
       }
     );
 
-    return () => unsubscribe();
-  }, [hasTeamAccess, ownerEntry, t, user?.uid]);
+    return () => {
+      unsubscribePrimary();
+    };
+  }, [activeClinicId, mapTeamDoc, ownerEntry, sessionUid, workspaceUid]);
 
   useEffect(() => {
     if (!user?.uid) {
       setHasTeamAccess(false);
+      setActiveClinicId(null);
       setSelectedTeamMembers([
         teamMembers[0]?.name || t('booking.topbar.defaultUser', 'Selma bruger'),
       ]);
@@ -414,15 +699,35 @@ function BookingPage() {
       ref,
       (snap) => {
         const data = snap.exists() ? snap.data() : null;
-        const teamAllowed = data?.accountType === 'team' || data?.hasTeam === true;
+        const resolvedClinicId = String(data?.activeClinicId || '').trim() || null;
+        const teamAllowed =
+          data?.accountType === 'team' ||
+          data?.hasTeam === true ||
+          data?.role === 'member' ||
+          data?.role === 'owner' ||
+          Boolean(resolvedClinicId);
         setHasTeamAccess(teamAllowed);
+        setActiveClinicId(resolvedClinicId);
         if (typeof data?.photoURL === 'string') {
           setProfilePhotoUrl(data.photoURL);
         } else {
           setProfilePhotoUrl(user.photoURL || '');
         }
 
-        if (!teamAllowed) {
+        if (!resolvedClinicId && user?.uid) {
+          void resolveUserWorkspace(user.uid)
+            .then((workspace) => {
+              if (!workspace?.clinicId) return;
+              setActiveClinicId(workspace.clinicId);
+              setHasTeamAccess(true);
+            })
+            .catch((workspaceError) => {
+              console.error('[BookingPage] Failed to resolve workspace context', workspaceError);
+            });
+        }
+
+        const hasLoadedTeamMembers = teamMembers.length > 1;
+        if (!teamAllowed && !hasLoadedTeamMembers) {
           const fallbackName =
             data?.fullName ||
             data?.clinicName ||
@@ -437,12 +742,13 @@ function BookingPage() {
           setTeamMenuOpen(false);
         } else if (selectedTeamMembers.length === 0) {
           setSelectedTeamMembers(teamMembers.map((m) => m.name));
-          setTeamFilter('all');
+          setTeamFilter(teamMembers.length > 1 ? 'all' : 'custom');
         }
       },
       (err) => {
         console.error('[BookingPage] Failed to load account type', err);
         setHasTeamAccess(false);
+        setActiveClinicId(null);
         setProfilePhotoUrl(user?.photoURL || '');
         setSelectedTeamMembers([
           teamMembers[0]?.name || t('booking.topbar.defaultUser', 'Selma bruger'),
@@ -453,7 +759,16 @@ function BookingPage() {
     );
 
     return () => unsubscribe();
-  }, [selectedTeamMembers.length, t, teamMembers, user?.displayName, user?.email, user?.photoURL, user?.uid]);
+  }, [
+    selectedTeamMembers.length,
+    sessionUid,
+    t,
+    teamMembers,
+    user?.displayName,
+    user?.email,
+    user?.photoURL,
+    user?.uid,
+  ]);
 
   const dayNameFormatter = useMemo(
     () => new Intl.DateTimeFormat(locale, { weekday: 'short' }),
@@ -468,6 +783,52 @@ function BookingPage() {
       }),
     [locale]
   );
+  const closeTeamWeekOverflow = useCallback(() => {
+    setTeamWeekOverflow(null);
+  }, []);
+  const openTeamWeekOverflow = useCallback(
+    (event, { appointments, dayDate, dayKey, memberName }) => {
+      if (!Array.isArray(appointments) || appointments.length === 0) return;
+      const rect = event.currentTarget.getBoundingClientRect();
+      const viewportWidth =
+        typeof window !== 'undefined' ? window.innerWidth : TEAM_WEEK_OVERFLOW_PANEL_WIDTH + 24;
+      const viewportHeightValue =
+        typeof window !== 'undefined' ? window.innerHeight : viewportHeight;
+      const panelWidth = Math.min(
+        viewportWidth - 24,
+        TEAM_WEEK_OVERFLOW_PANEL_WIDTH,
+        Math.max(280, rect.width + 32)
+      );
+      const left = Math.max(12, Math.min(rect.left, viewportWidth - panelWidth - 12));
+      const maxTop = Math.max(12, viewportHeightValue - TEAM_WEEK_OVERFLOW_PANEL_HEIGHT - 12);
+      const top = Math.max(12, Math.min(rect.bottom + 10, maxTop));
+
+      setTeamWeekOverflow((prev) => {
+        if (
+          prev?.memberName === memberName &&
+          prev?.dayKey === dayKey
+        ) {
+          return null;
+        }
+
+        return {
+          memberName,
+          dayKey,
+          dayLabel: toolbarDayFormatter.format(dayDate),
+          appointments,
+          top,
+          left,
+          width: panelWidth,
+        };
+      });
+    },
+    [
+      TEAM_WEEK_OVERFLOW_PANEL_HEIGHT,
+      TEAM_WEEK_OVERFLOW_PANEL_WIDTH,
+      toolbarDayFormatter,
+      viewportHeight,
+    ]
+  );
   const slotDayFormatter = useMemo(
     () =>
       new Intl.DateTimeFormat(locale, {
@@ -477,6 +838,37 @@ function BookingPage() {
       }),
     [locale]
   );
+
+  useEffect(() => {
+    closeTeamWeekOverflow();
+  }, [calendarAddMode, closeTeamWeekOverflow, currentDate, currentView, selectedTeamMembers]);
+
+  useEffect(() => {
+    if (!teamWeekOverflow) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (
+        teamWeekOverflowRef.current &&
+        !teamWeekOverflowRef.current.contains(event.target)
+      ) {
+        closeTeamWeekOverflow();
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        closeTeamWeekOverflow();
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [closeTeamWeekOverflow, teamWeekOverflow]);
   const toolbarMonthFormatter = useMemo(
     () => new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }),
     [locale]
@@ -791,6 +1183,15 @@ function BookingPage() {
     return appointment.title || appointment.client || appointmentFallback;
   };
 
+  const getCompactAppointmentTitle = (appointment) => {
+    if (!appointment) return appointmentFallback;
+    const clientLabel = String(appointment.client || '').trim();
+    if (clientLabel) return clientLabel;
+    const titleLabel = String(appointment.title || '').trim();
+    if (titleLabel) return titleLabel;
+    return getServiceLabel(appointment);
+  };
+
   const groupDayEvents = (dayEvents) => {
     const groups = {};
     dayEvents.forEach((ev) => {
@@ -974,6 +1375,7 @@ function BookingPage() {
   const handleRefresh = () => {
     setNow(new Date());
     setCurrentDate((prev) => new Date(prev));
+    setRefreshSpinTick((prev) => prev + 1);
   };
 
   const resetCalendarAddState = () => {
@@ -1167,6 +1569,16 @@ function BookingPage() {
       (selectedTeamMembers.length === 1
         ? selectedTeamMembers[0]
         : teamMembers[0]?.name || ownerEntry.name);
+    const ownerMember =
+      (selectedSlot.ownerId &&
+        teamMembers.find(
+          (member) =>
+            String(member?.id || '').trim() === String(selectedSlot.ownerId || '').trim() ||
+            String(member?.memberUid || '').trim() === String(selectedSlot.ownerId || '').trim()
+        )) ||
+      teamMembers.find((member) => String(member?.name || '').trim() === String(ownerName || '').trim()) ||
+      null;
+    const ownerId = getMemberPrimaryId(ownerMember) || sessionUid || null;
 
     const extraServices = additionalServices.map((service) => ({
       id: service.id,
@@ -1180,6 +1592,7 @@ function BookingPage() {
     const payload = {
       title: selectedClient?.navn || selectedService.navn || appointmentFallback,
       calendarOwner: ownerName,
+      calendarOwnerId: ownerId,
       client: selectedClient?.navn || '',
       clientId: selectedClient?.id || null,
       clientEmail: selectedClient?.email || '',
@@ -1307,7 +1720,7 @@ function BookingPage() {
   const calendarWeeks = useMemo(() => getCalendarWeeks(), [currentDate]);
 
   const handleCreateAppointment = async (appointment) => {
-    if (!user?.uid) {
+    if (!sessionUid || (!activeClinicId && !workspaceUid)) {
       console.error('[BookingPage] Cannot create appointment: user not logged in');
       return;
     }
@@ -1315,7 +1728,9 @@ function BookingPage() {
     const items = Array.isArray(appointment) ? appointment : [appointment];
 
     try {
-      const appointmentsCollection = collection(db, 'users', user.uid, 'appointments');
+      const appointmentsCollection = activeClinicId
+        ? collection(db, 'clinics', activeClinicId, 'appointments')
+        : collection(db, 'users', workspaceUid, 'appointments');
 
       const normalizeParticipant = (p) => {
         if (!p) return null;
@@ -1396,7 +1811,15 @@ function BookingPage() {
           appt.ownerName ||
           (selectedTeamMembers.length === 1 ? selectedTeamMembers[0] : teamMembers[0]?.name) ||
           ownerEntry.name;
-        const selectedOwnerId = appt.calendarOwnerId || null;
+        const selectedOwnerId =
+          appt.calendarOwnerId ||
+          getMemberPrimaryId(
+            teamMembers.find(
+              (member) => String(member?.name || '').trim() === String(selectedOwnerName || '').trim()
+            )
+          ) ||
+          sessionUid ||
+          null;
         const createdAtLocal = new Date();
         const referenceNumber = reserveReferenceNumber(
           appt.client || title || appt.service || '',
@@ -1404,10 +1827,13 @@ function BookingPage() {
         );
 
         const payload = {
-          therapistId: user.uid,
+          clinicId: activeClinicId || null,
+          therapistId: sessionUid,
+          createdByUid: sessionUid,
           referenceNumber,
           calendarOwner: selectedOwnerName,
           calendarOwnerId: selectedOwnerId,
+          assignedToUid: selectedOwnerId,
           title,
           client: isForloeb ? title : appt.client || title,
           clientId: isForloeb ? null : appt.clientId || null,
@@ -1415,6 +1841,7 @@ function BookingPage() {
           clientPhone: isForloeb ? '' : appt.clientPhone || '',
           service: appt.service || '',
           serviceId: appt.serviceId || null,
+          forloebId: appt.forloebId || null,
           serviceType,
           serviceDuration: appt.serviceDuration || '',
           servicePrice:
@@ -1445,6 +1872,13 @@ function BookingPage() {
           startTime: appt.startTime,
           endDate: appt.endDate,
           endTime: appt.endTime,
+          recurrenceGroupId: appt.recurrenceGroupId || null,
+          recurrenceIndex:
+            typeof appt.recurrenceIndex === 'number' ? appt.recurrenceIndex : null,
+          recurrenceCount:
+            typeof appt.recurrenceCount === 'number' ? appt.recurrenceCount : null,
+          recurrenceAnchorDate: appt.recurrenceAnchorDate || appt.startDate || '',
+          isRecurringSeries: appt.isRecurringSeries === true,
           status: 'booked',
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -1507,10 +1941,28 @@ function BookingPage() {
           clientPhone: payload.clientPhone,
           service: payload.service,
           serviceId: payload.serviceId,
+          forloebId: payload.forloebId,
           serviceType: 'forloeb',
           serviceDuration: payload.serviceDuration,
           servicePrice: payload.servicePrice,
           servicePriceInclVat: payload.servicePriceInclVat,
+          recurrenceGroupId: payload.recurrenceGroupId || primaryData.recurrenceGroupId || null,
+          recurrenceIndex:
+            typeof payload.recurrenceIndex === 'number'
+              ? payload.recurrenceIndex
+              : typeof primaryData.recurrenceIndex === 'number'
+              ? primaryData.recurrenceIndex
+              : null,
+          recurrenceCount:
+            typeof payload.recurrenceCount === 'number'
+              ? payload.recurrenceCount
+              : typeof primaryData.recurrenceCount === 'number'
+              ? primaryData.recurrenceCount
+              : null,
+          recurrenceAnchorDate:
+            payload.recurrenceAnchorDate || primaryData.recurrenceAnchorDate || payload.startDate,
+          isRecurringSeries:
+            payload.isRecurringSeries === true || primaryData.isRecurringSeries === true,
           participants: mergedParticipants,
           notes: payload.notes || primaryData.notes || '',
           color: payload.color || primaryData.color || null,
@@ -1548,7 +2000,7 @@ function BookingPage() {
   };
 
   const handleUpdateAppointment = async (appointment) => {
-    if (!user?.uid || !appointment?.id) {
+    if ((!activeClinicId && !workspaceUid) || !appointment?.id) {
       console.error('[BookingPage] Cannot update appointment: missing user or appointment id');
       return;
     }
@@ -1567,11 +2019,25 @@ function BookingPage() {
         (selectedTeamMembers.length === 1
           ? selectedTeamMembers[0]
           : teamMembers[0]?.name || null);
-      const docRef = doc(db, 'users', user.uid, 'appointments', appointment.id);
+      const calendarOwnerId =
+        appointment.calendarOwnerId ||
+        getMemberPrimaryId(
+          teamMembers.find(
+            (member) => String(member?.name || '').trim() === String(calendarOwner || '').trim()
+          )
+        ) ||
+        null;
+      const docRef = activeClinicId
+        ? doc(db, 'clinics', activeClinicId, 'appointments', appointment.id)
+        : doc(db, 'users', workspaceUid, 'appointments', appointment.id);
 
       await updateDoc(docRef, {
+        clinicId: activeClinicId || null,
+        createdByUid: appointment.createdByUid || sessionUid || null,
         title,
         calendarOwner,
+        calendarOwnerId,
+        assignedToUid: calendarOwnerId,
         referenceNumber:
           appointment.referenceNumber ||
           buildAppointmentReference({
@@ -1623,13 +2089,23 @@ function BookingPage() {
   };
 
   const handleDeleteAppointment = async (appointment) => {
-    if (!user?.uid || !appointment?.id) {
+    if ((!activeClinicId && !workspaceUid) || !appointment?.id) {
       console.error('[BookingPage] Cannot delete appointment – missing user or appointment id');
       return;
     }
 
     try {
-      const appointmentsCollection = collection(db, 'users', user.uid, 'appointments');
+      const appointmentsCollection = activeClinicId
+        ? collection(db, 'clinics', activeClinicId, 'appointments')
+        : collection(db, 'users', workspaceUid, 'appointments');
+      const cancellationsCollection = activeClinicId
+        ? collection(db, 'clinics', activeClinicId, 'appointmentCancellations')
+        : collection(
+            db,
+            'users',
+            workspaceUid,
+            'appointmentCancellations'
+          );
       const isForloeb =
         deriveServiceType(appointment) === 'forloeb' ||
         (typeof appointment.serviceId === 'string' && appointment.serviceId.startsWith('forloeb:'));
@@ -1651,13 +2127,28 @@ function BookingPage() {
         const q = query(appointmentsCollection, ...filters);
         const snap = await getDocs(q);
         const batch = writeBatch(db);
-        snap.forEach((d) => batch.delete(d.ref));
+        snap.forEach((d) => {
+          const cancellationRef = doc(cancellationsCollection);
+          batch.set(cancellationRef, buildCancellationPayload({ id: d.id, ...(d.data() || {}) }));
+          batch.delete(d.ref);
+        });
         await batch.commit();
-        console.log('[BookingPage] Deleted forløb series', appointment.serviceId, 'count:', snap.size);
+        console.log(
+          '[BookingPage] Cancelled forløb series',
+          appointment.serviceId,
+          'count:',
+          snap.size
+        );
       } else {
-        const ref = doc(db, 'users', user.uid, 'appointments', appointment.id);
-        await deleteDoc(ref);
-        console.log('[BookingPage] Deleted appointment', appointment.id);
+        const ref = activeClinicId
+          ? doc(db, 'clinics', activeClinicId, 'appointments', appointment.id)
+          : doc(db, 'users', workspaceUid, 'appointments', appointment.id);
+        const cancellationRef = doc(cancellationsCollection);
+        const batch = writeBatch(db);
+        batch.set(cancellationRef, buildCancellationPayload(appointment));
+        batch.delete(ref);
+        await batch.commit();
+        console.log('[BookingPage] Cancelled appointment', appointment.id);
       }
 
       setSelectedAppointment(null);
@@ -1672,6 +2163,7 @@ function BookingPage() {
   };
 
   const handleAppointmentClick = (appointment) => {
+    closeTeamWeekOverflow();
     if (calendarAddMode) {
       setCalendarAddMode(false);
       resetCalendarAddState();
@@ -2244,9 +2736,11 @@ function BookingPage() {
                               eventTimeTooltip.show(event, group.start, group.end || group.start)
                             }
                             onMouseLeave={eventTimeTooltip.hide}
+                            onClick={() => handleAppointmentClick(first)}
                           >
                             <div
                               className="time-grid-event-resize-handle resize-handle-top"
+                              onClick={(e) => e.stopPropagation()}
                               onMouseDown={(e) =>
                                 startResizeEvent(
                                   e,
@@ -2270,7 +2764,6 @@ function BookingPage() {
                                   group.end || group.start
                                 )
                               }
-                              onClick={() => handleAppointmentClick(first)}
                             >
                               <span className="time-grid-event-time">
                                 {getServiceLabel(first)}
@@ -2297,6 +2790,7 @@ function BookingPage() {
 
                             <div
                               className="time-grid-event-resize-handle resize-handle-bottom"
+                              onClick={(e) => e.stopPropagation()}
                               onMouseDown={(e) =>
                                 startResizeEvent(
                                   e,
@@ -2335,6 +2829,72 @@ function BookingPage() {
       .sort(
         (a, b) => (a.startDateObj?.getTime?.() || 0) - (b.startDateObj?.getTime?.() || 0)
       );
+
+    const shouldUseCompactWeekSummary =
+      isTeamWeekView && !calendarAddMode && !dragState;
+
+    if (shouldUseCompactWeekSummary) {
+      const totalSlots = teamWeekSummarySlotCount;
+      const visibleSlotCount =
+        dayEvents.length > totalSlots ? Math.max(1, totalSlots - 1) : totalSlots;
+      const visibleEvents = dayEvents.slice(0, visibleSlotCount);
+      const hiddenCount = Math.max(0, dayEvents.length - visibleEvents.length);
+      const isOverflowOpen =
+        teamWeekOverflow?.memberName === memberName && teamWeekOverflow?.dayKey === dayKey;
+
+      return (
+        <div className="time-grid-day-body team-week-summary-body">
+          <div className="team-week-summary-list">
+            {visibleEvents.map((appointment) => {
+              const { startDate, endDate } = parseAppointmentDateTimes(appointment);
+              const summaryTime = startDate ? formatTime(startDate) : '';
+              const summaryTitle = getCompactAppointmentTitle(appointment);
+
+              return (
+                <button
+                  key={appointment.id}
+                  type="button"
+                  className={`team-week-summary-event service-type-${deriveServiceType(appointment)}`}
+                  title={summaryTitle}
+                  style={{
+                    ...(appointment.color ? getSoftColorStyle(appointment.color) : {}),
+                  }}
+                  onClick={() => handleAppointmentClick(appointment)}
+                  onMouseEnter={(event) =>
+                    eventTimeTooltip.show(event, startDate, endDate || startDate)
+                  }
+                  onMouseMove={(event) =>
+                    eventTimeTooltip.show(event, startDate, endDate || startDate)
+                  }
+                  onMouseLeave={eventTimeTooltip.hide}
+                >
+                  <span className="team-week-summary-time">{summaryTime}</span>
+                  <span className="team-week-summary-title">{summaryTitle}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {hiddenCount > 0 && (
+            <button
+              type="button"
+              className={`team-week-summary-more ${isOverflowOpen ? 'open' : ''}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                openTeamWeekOverflow(event, {
+                  appointments: dayEvents,
+                  dayDate,
+                  dayKey,
+                  memberName,
+                });
+              }}
+            >
+              +{hiddenCount} {t('booking.calendar.more', 'mere')}
+            </button>
+          )}
+        </div>
+      );
+    }
 
     const groupedEvents = groupDayEvents(dayEvents);
     const isHoverMatch =
@@ -2523,9 +3083,12 @@ function BookingPage() {
     const gridStyle = {
       '--members-count': membersToShow.length,
       '--days-count': daysToRender.length,
-      '--hour-height': `${hourHeight}px`,
+      '--hour-height': `${teamWeekHourHeight}px`,
       '--visible-hours': VISIBLE_HOURS,
-      '--time-grid-height': `${VISIBLE_HOURS * hourHeight}px`,
+      '--time-grid-height': `${teamWeekRowHeight}px`,
+      '--team-week-grid-height': `${teamWeekAvailableHeight}px`,
+      '--team-week-row-height': `${teamWeekRowHeight}px`,
+      '--team-week-body-max-height': `${teamWeekBodyMaxHeight}px`,
       minWidth: `${110 + daysToRender.length * 150}px`,
     };
 
@@ -2564,7 +3127,13 @@ function BookingPage() {
         <div className="team-week-body">
           {membersToShow.map((member) => (
             <div key={member.name} className="team-week-row">
-              <div className="team-week-member-cell">
+              <button
+                type="button"
+                className="team-week-member-cell"
+                onClick={() => focusTeamMember(member.name)}
+                title={`Vis kun ${member.name}`}
+                aria-label={`Vis kun ${member.name}`}
+              >
                 <span
                   className="team-calendar-avatar"
                   style={{ backgroundColor: member.avatarColor || '#0ea5e9' }}
@@ -2576,7 +3145,7 @@ function BookingPage() {
                   )}
                 </span>
                 <span className="team-week-member-name">{member.name}</span>
-              </div>
+              </button>
               {daysToRender.map((day) => {
                 const dayKey = formatDateKey(day);
                 const isToday = isSameDate(day, now);
@@ -2595,6 +3164,66 @@ function BookingPage() {
             </div>
           ))}
         </div>
+
+        {teamWeekOverflow && (
+          <div
+            ref={teamWeekOverflowRef}
+            className="team-week-overflow-popover"
+            style={{
+              top: `${teamWeekOverflow.top}px`,
+              left: `${teamWeekOverflow.left}px`,
+              width: `${teamWeekOverflow.width}px`,
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="team-week-overflow-header">
+              <div className="team-week-overflow-heading">
+                <div className="team-week-overflow-title">{teamWeekOverflow.dayLabel}</div>
+                <div className="team-week-overflow-subtitle">
+                  {teamWeekOverflow.memberName}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="team-week-overflow-close"
+                onClick={closeTeamWeekOverflow}
+                aria-label={t('booking.calendar.close', 'Luk')}
+              >
+                <X className="team-week-overflow-close-icon" />
+              </button>
+            </div>
+
+            <div className="team-week-overflow-list">
+              {teamWeekOverflow.appointments.map((appointment) => {
+                const { startDate, endDate } = parseAppointmentDateTimes(appointment);
+                const summaryTime = startDate ? formatTime(startDate) : '';
+                const summaryTitle = getCompactAppointmentTitle(appointment);
+
+                return (
+                  <button
+                    key={appointment.id}
+                    type="button"
+                    className={`team-week-overflow-item service-type-${deriveServiceType(appointment)}`}
+                    style={{
+                      ...(appointment.color ? getSoftColorStyle(appointment.color) : {}),
+                    }}
+                    onClick={() => handleAppointmentClick(appointment)}
+                    onMouseEnter={(event) =>
+                      eventTimeTooltip.show(event, startDate, endDate || startDate)
+                    }
+                    onMouseMove={(event) =>
+                      eventTimeTooltip.show(event, startDate, endDate || startDate)
+                    }
+                    onMouseLeave={eventTimeTooltip.hide}
+                  >
+                    <span className="team-week-summary-time">{summaryTime}</span>
+                    <span className="team-week-summary-title">{summaryTitle}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -2676,22 +3305,97 @@ function BookingPage() {
                       <ChevronRight className="toolbar-icon" />
                     </button>
                   </div>
-                  {hasTeamAccess ? (
+                  {hasTeamCalendarAccess ? (
                     <div className="team-filter-wrapper" ref={teamMenuRef}>
                       <button
                         type="button"
-                        className="team-filter-trigger"
+                        className={`team-filter-trigger ${teamMenuOpen ? 'open' : ''}`}
                         onClick={() => setTeamMenuOpen((open) => !open)}
+                        aria-expanded={teamMenuOpen}
+                        aria-haspopup="menu"
                       >
                         <span className="team-filter-label">{selectedLabel}</span>
                         <ChevronDown className={`team-filter-caret ${teamMenuOpen ? 'open' : ''}`} />
                       </button>
                       {teamMenuOpen && (
                         <div className="team-filter-menu">
+                          <div className="team-filter-current-card">
+                            <div className="team-filter-current-visual">
+                              {selectedSummaryMember ? (
+                                renderTeamMemberAvatar(selectedSummaryMember, 'team-filter-avatar-large')
+                              ) : (
+                                <span className="team-filter-current-icon">
+                                  <Users className="team-filter-current-icon-svg" />
+                                </span>
+                              )}
+                            </div>
+                            <div className="team-filter-current-content">
+                              <span className="team-filter-current-title">{selectedSummaryLabel}</span>
+                            </div>
+                          </div>
+
+                          <div className="team-filter-quick-list">
+                            <button
+                              type="button"
+                              className={`team-filter-quick-action ${
+                                isTeamOnDutySelected ? 'active' : ''
+                              }`}
+                              onClick={() => {
+                                clearMembers();
+                                setTeamMenuOpen(false);
+                              }}
+                            >
+                              <span className="team-filter-current-icon">
+                                <Users className="team-filter-current-icon-svg" />
+                              </span>
+                              <span className="team-filter-quick-label">{teamOnDutyLabel}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className={`team-filter-quick-action ${
+                                isEntireTeamSelected ? 'active' : ''
+                              }`}
+                              onClick={() => {
+                                selectAllMembers();
+                                setTeamMenuOpen(false);
+                              }}
+                            >
+                              <span className="team-filter-current-icon">
+                                <Users className="team-filter-current-icon-svg" />
+                              </span>
+                              <span className="team-filter-quick-label">{entireTeamLabel}</span>
+                            </button>
+
+                            {currentUserTeamMember ? (
+                              <button
+                                type="button"
+                                className={`team-filter-quick-action ${
+                                  isCurrentUserSelected ? 'active' : ''
+                                }`}
+                                onClick={() => focusTeamMember(currentUserTeamMember.name)}
+                              >
+                                {renderTeamMemberAvatar(currentUserTeamMember)}
+                                <span className="team-filter-quick-label">
+                                  {formatTeamMemberLabel(currentUserTeamMember)}
+                                </span>
+                              </button>
+                            ) : null}
+                          </div>
+
+                          <div className="team-filter-divider" />
+
                           <div className="team-filter-section header">
                             <span className="section-title">
                               {t('booking.calendar.members', 'Medarbejdere')}
                             </span>
+                            <button
+                              type="button"
+                              className="clear-link"
+                              onClick={clearMembers}
+                            >
+                              {t('booking.calendar.clearAll', 'Ryd alle')}
+                            </button>
                           </div>
 
                           <div className="team-filter-list">
@@ -2704,8 +3408,13 @@ function BookingPage() {
                                   className={`team-filter-member ${checked ? 'selected' : ''}`}
                                   onClick={() => toggleMember(member.name)}
                                 >
-                                  <span className="checkmark">{checked ? '✔' : ''}</span>
-                                <span className="team-filter-name small-text">{member.name}</span>
+                                  <span className={`checkmark ${checked ? 'selected' : ''}`}>
+                                    {checked ? <Check className="checkmark-icon" /> : null}
+                                  </span>
+                                  {renderTeamMemberAvatar(member)}
+                                  <span className="team-filter-name">
+                                    {formatTeamMemberLabel(member)}
+                                  </span>
                                 </button>
                               );
                             })}
@@ -2732,7 +3441,12 @@ function BookingPage() {
                     aria-label={t('booking.calendar.refresh', 'Opdater')}
                     onClick={handleRefresh}
                   >
-                    <RefreshCw className="toolbar-icon" />
+                    <RefreshCw
+                      key={refreshSpinTick}
+                      className={`toolbar-icon ${
+                        refreshSpinTick > 0 ? 'toolbar-icon-refresh-spin' : ''
+                      }`}
+                    />
                   </button>
                   <div
                     className="toolbar-view-toggle"
@@ -2806,7 +3520,12 @@ function BookingPage() {
             <>
               {/* Main Calendar Area */}
               <div className="booking-main">
-                <div className={`calendar-container ${isMultiTeam ? 'calendar-compact' : ''}`}>
+                <div
+                  ref={calendarContainerRef}
+                  className={`calendar-container ${isMultiTeam ? 'calendar-compact' : ''} ${
+                    isTeamWeekView ? 'calendar-team-week-view' : ''
+                  }`}
+                >
                   {currentView === 'month'
                     ? renderMonthView()
                     : isMultiTeam
@@ -3081,7 +3800,7 @@ function BookingPage() {
 
               {/* Journal or Appointment Form */}
               {derivedSelectedClient ? (
-                <div className="appointment-form-wrapper">
+                <div className="appointment-form-wrapper appointment-form-wrapper--journal">
                   <Journal
                     selectedClient={derivedSelectedClient}
                     selectedAppointment={selectedAppointment}
@@ -3099,12 +3818,12 @@ function BookingPage() {
                   />
                 </div>
               ) : showAppointmentForm && (
-                <div className="appointment-form-wrapper">
+                    <div className="appointment-form-wrapper">
                   <AppointmentForm
                     initialAppointment={editingAppointment || nextAppointmentTemplate || null}
                     mode={editingAppointment ? 'edit' : 'create'}
                     teamMembers={teamMembers}
-                    hasTeamAccess={hasTeamAccess}
+                    hasTeamAccess={hasTeamCalendarAccess}
                     defaultOwnerName={ownerEntry.name}
                     onClose={() => {
                       setShowAppointmentForm(false);

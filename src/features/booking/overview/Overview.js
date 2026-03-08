@@ -1,10 +1,11 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import "./Overview.css";
 import { BookingSidebarLayout } from "../../../components/ui/BookingSidebarLayout";
-import { Activity, BarChart3, CalendarDays, Users } from "lucide-react";
+import { Activity, BarChart3, CalendarDays, MoreHorizontal, Users } from "lucide-react";
 import { useAuth } from "../../../AuthContext";
 import { useLanguage } from "../../../LanguageContext";
 import useAppointments from "../../../hooks/useAppointments";
+import useAppointmentCancellations from "../../../hooks/useAppointmentCancellations";
 import useSales from "../../../hooks/useSales";
 import { formatServiceDuration } from "../../../utils/serviceLabels";
 
@@ -59,6 +60,16 @@ const formatDateKey = (date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
     date.getDate()
   ).padStart(2, "0")}`;
+
+const parseDateKey = (value) => {
+  if (!value) return null;
+  const parts = String(value).split("-");
+  if (parts.length !== 3) return null;
+  const [year, month, day] = parts.map((part) => Number(part));
+  if (!year || !month || !day) return null;
+  const parsed = new Date(year, month - 1, day);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
 
 const toNiceMax = (value) => {
   if (!value || value <= 0) return 3000;
@@ -119,30 +130,41 @@ const normalizeStatus = (status) => {
 };
 
 const ChartSvg = ({ width, height, children }) => (
-  <svg viewBox={`0 0 ${width} ${height}`} className="overview-chart-svg">
+  <svg
+    viewBox={`0 0 ${width} ${height}`}
+    preserveAspectRatio="none"
+    className="overview-chart-svg"
+  >
     {children}
   </svg>
 );
 
 function Overview() {
-  const { user } = useAuth();
+  const { workspaceUid, activeClinicId } = useAuth();
+  const sharedScopeId = activeClinicId || workspaceUid || null;
   const { t, locale } = useLanguage();
   const {
     appointments,
     loading: appointmentsLoading,
     error: appointmentsError,
-  } = useAppointments(user?.uid || null);
+  } = useAppointments(sharedScopeId);
+  const {
+    cancellations: appointmentCancellations,
+    loading: cancellationsLoading,
+    error: cancellationsError,
+  } = useAppointmentCancellations(sharedScopeId, { maxItems: 500 });
   const {
     sales,
     loading: salesLoading,
     error: salesError,
-  } = useSales(user?.uid || null, { status: "completed" });
+  } = useSales(sharedScopeId, { status: "completed" });
 
   // State for period selection for both cards
   const [salesPeriod, setSalesPeriod] = useState("7"); // "7" or "30"
   const [appointmentsPeriod, setAppointmentsPeriod] = useState("7"); // "7" or "30"
   const [showSalesDropdown, setShowSalesDropdown] = useState(false);
   const [showAppointmentsDropdown, setShowAppointmentsDropdown] = useState(false);
+  const [now, setNow] = useState(() => new Date());
   
   const salesDropdownRef = useRef(null);
   const appointmentsDropdownRef = useRef(null);
@@ -226,7 +248,15 @@ function Overview() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const today = useMemo(() => new Date(), []);
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setNow(new Date());
+    }, 60 * 1000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  const today = now;
   const todayStart = startOfDay(today);
   const todayEnd = endOfDay(today);
   const tomorrowStart = startOfDay(addDays(todayStart, 1));
@@ -264,6 +294,10 @@ function Overview() {
   const appointmentsToday = useMemo(() => {
     return appointmentEntries.filter(({ date }) => date >= todayStart && date <= todayEnd);
   }, [appointmentEntries, todayStart, todayEnd]);
+
+  const appointmentsTodayUpcoming = useMemo(() => {
+    return appointmentEntries.filter(({ date }) => date >= now && date <= todayEnd);
+  }, [appointmentEntries, now, todayEnd]);
 
   const appointmentsUpcoming = useMemo(() => {
     return appointmentEntries
@@ -333,13 +367,13 @@ function Overview() {
     const innerHeight = height - padding.top - padding.bottom;
     const maxValue = toNiceMax(Math.max(...salesSeries, ...appointmentSeries, 0));
     const safeMax = maxValue || 1;
-    const stepX = salesSeries.length > 1 ? innerWidth / (salesSeries.length - 1) : 0;
+    const slotWidth = salesSeries.length > 0 ? innerWidth / salesSeries.length : innerWidth;
 
     const buildPoints = (series) =>
       series.map((value, index) => {
         const ratio = safeMax === 0 ? 0 : value / safeMax;
         return {
-          x: padding.left + index * stepX,
+          x: padding.left + index * slotWidth + slotWidth / 2,
           y: padding.top + (1 - ratio) * innerHeight,
         };
       });
@@ -363,7 +397,7 @@ function Overview() {
       padding,
       innerWidth,
       innerHeight,
-      stepX,
+      slotWidth,
       ticks,
       salesPoints,
       appointmentPoints,
@@ -385,6 +419,21 @@ function Overview() {
       });
   }, [lastSalesDates, salesPeriod, weekdayShortFormatter]);
 
+  const deletedCancellationsByDate = useMemo(() => {
+    const map = new Map();
+    appointmentCancellations.forEach((entry) => {
+      const key = entry.scheduledDateKey || (entry.scheduledAtDate ? formatDateKey(entry.scheduledAtDate) : "");
+      if (!key) return;
+      const day = parseDateKey(key);
+      if (!day) return;
+      const dayStart = startOfDay(day);
+      if (dayStart < tomorrowStart || dayStart > nextAppointmentsEnd) return;
+      const current = map.get(key) || 0;
+      map.set(key, current + 1);
+    });
+    return map;
+  }, [appointmentCancellations, nextAppointmentsEnd, tomorrowStart]);
+
   const upcomingStatusByDate = useMemo(() => {
     const map = new Map();
     nextAppointmentsDates.forEach((date) => {
@@ -398,8 +447,13 @@ function Overview() {
       if (group === "confirmed") entry.confirmed += 1;
       if (group === "cancelled") entry.cancelled += 1;
     });
+    deletedCancellationsByDate.forEach((count, key) => {
+      const entry = map.get(key);
+      if (!entry) return;
+      entry.cancelled += count;
+    });
     return map;
-  }, [appointmentsUpcoming, nextAppointmentsDates]);
+  }, [appointmentsUpcoming, deletedCancellationsByDate, nextAppointmentsDates]);
 
   const confirmedSeries = useMemo(
     () => nextAppointmentsDates.map((date) => upcomingStatusByDate.get(formatDateKey(date))?.confirmed || 0),
@@ -500,7 +554,11 @@ function Overview() {
     return salesToday.reduce((sum, sale) => sum + (sale.totals?.total ?? 0), 0);
   }, [salesToday]);
 
-  const todayAppointments = [...appointmentsToday].sort((a, b) => a.date - b.date).slice(0, 4);
+  const todayAppointments = [...appointmentsTodayUpcoming]
+    .sort((a, b) => a.date - b.date)
+    .slice(0, 4);
+  const hasNoUpcomingAppointmentsToday =
+    todayAppointments.length === 0 && appointmentsToday.length > 0;
   const pastAppointments = appointmentsPast.slice(0, 5);
 
   const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -597,7 +655,7 @@ function Overview() {
       ? "—"
       : String(confirmedSeries.reduce((sum, value) => sum + value, 0));
   const upcomingCancelledLabel =
-    appointmentsLoading || appointmentsError
+    appointmentsLoading || appointmentsError || cancellationsLoading || cancellationsError
       ? "—"
       : String(cancelledSeries.reduce((sum, value) => sum + value, 0));
   const calendarToken = "{calendar}";
@@ -641,7 +699,7 @@ function Overview() {
                   aria-label={t("booking.overview.actions.more", "Flere muligheder")}
                   onClick={() => setShowSalesDropdown(!showSalesDropdown)}
                 >
-                  <span>...</span>
+                  <MoreHorizontal />
                 </button>
                 {showSalesDropdown && (
                   <div className="overview-dropdown">
@@ -715,7 +773,8 @@ function Overview() {
                     {lineChartLabelEntries.map((entry) => {
                       const x =
                         lineChartConfig.padding.left +
-                        entry.index * lineChartConfig.stepX;
+                        entry.index * lineChartConfig.slotWidth +
+                        lineChartConfig.slotWidth / 2;
                       return (
                         <line
                           key={`line-vertical-${entry.index}`}
@@ -802,7 +861,7 @@ function Overview() {
                   aria-label={t("booking.overview.actions.more", "Flere muligheder")}
                   onClick={() => setShowAppointmentsDropdown(!showAppointmentsDropdown)}
                 >
-                  <span>...</span>
+                  <MoreHorizontal />
                 </button>
                 {showAppointmentsDropdown && (
                   <div className="overview-dropdown">
@@ -846,8 +905,8 @@ function Overview() {
                 </span>
               </div>
             </div>
-            <div className="overview-chart">
-              <div className="overview-chart-axis">
+            <div className="overview-chart overview-chart--count">
+              <div className="overview-chart-axis overview-chart-axis--count">
                 {barChartConfig.ticks.map((tick, index) => (
                   <span key={`bar-tick-${index}`}>{tick}</span>
                 ))}
@@ -1063,14 +1122,27 @@ function Overview() {
                 <div className="overview-empty-icon">
                   <CalendarDays size={28} />
                 </div>
-                <h4>{t("booking.overview.today.emptyTitle", "Ingen aftaler i dag")}</h4>
-                <p>
-                  {emptyTodayPrefix}
-                  <span className="overview-link">
-                    {t("booking.overview.today.calendarLink", "kalender")}
-                  </span>
-                  {emptyTodaySuffix}
-                </p>
+                <h4>
+                  {hasNoUpcomingAppointmentsToday
+                    ? t("booking.overview.today.noMoreTitle", "Ingen flere aftaler i dag")
+                    : t("booking.overview.today.emptyTitle", "Ingen aftaler i dag")}
+                </h4>
+                {hasNoUpcomingAppointmentsToday ? (
+                  <p>
+                    {t(
+                      "booking.overview.today.noMoreSubtitle",
+                      "Dagens tidligere aftaler er allerede passeret."
+                    )}
+                  </p>
+                ) : (
+                  <p>
+                    {emptyTodayPrefix}
+                    <span className="overview-link">
+                      {t("booking.overview.today.calendarLink", "kalender")}
+                    </span>
+                    {emptyTodaySuffix}
+                  </p>
+                )}
               </div>
             ) : (
               <div className="overview-mini-list">

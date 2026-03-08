@@ -17,8 +17,12 @@
 .indlæg-note-style-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   margin: 0;
+  padding: 3px;
+  border: 1px solid #d9e2ee;
+  border-radius: 10px;
+  background: #f8fafd;
 }
 
 .indlæg-note-style-controls--header {
@@ -27,11 +31,11 @@
 }
 
 .indlæg-note-style-btn {
-  padding: 6px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 999px;
-  background: #ffffff;
-  color: #111827;
+  padding: 7px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #334155;
   font-size: 13px;
   font-weight: 600;
   line-height: 1.2;
@@ -40,14 +44,14 @@
 }
 
 .indlæg-note-style-btn:hover {
-  background: #f9fafb;
-  border-color: #9ca3af;
+  background: #eef3fa;
+  border-color: #d1dbe8;
 }
 
 .indlæg-note-style-btn.is-active {
-  background: #111827;
-  border-color: #111827;
-  color: #ffffff;
+  background: #ffffff;
+  border-color: #c8d4e3;
+  color: #0f172a;
 }
 
 .indlæg-note-style-btn--bold {
@@ -249,7 +253,15 @@
   flex: 1;
   min-height: 0;
   z-index: 5;
-  background-color: var(--bg-surface);
+  --indlaeg-card-bg: #ffffff;
+  --indlaeg-card-border: #dbe4ef;
+  --indlaeg-card-border-strong: #c6d3e4;
+  --indlaeg-text-strong: #0f172a;
+  --indlaeg-text-muted: #64748b;
+  --indlaeg-primary: #1d4ed8;
+  --indlaeg-primary-hover: #1e40af;
+  --indlaeg-card-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+  background: linear-gradient(180deg, #f7f9fc 0%, #f2f6fb 100%);
   color: var(--text-primary);
   display: flex;
   flex-direction: column;
@@ -463,20 +475,39 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  background-color: #f9fafb;
-  border-radius: 6px;
+  padding: 9px 13px;
+  border: 1px solid var(--indlaeg-card-border-strong);
+  background: #ffffff;
+  border-radius: 10px;
   font-size: 13px;
   font-weight: 600;
-  color: #111827;
+  color: var(--indlaeg-text-strong);
   cursor: pointer;
-  transition: background-color 0.2s, border-color 0.2s;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .indlæg-action-btn:hover {
-  background-color: #eef2ff;
-  border-color: #c7d2fe;
+  background: #f8fafd;
+  border-color: #b8c8dd;
+}
+
+.indlæg-action-btn--primary {
+  background: var(--indlaeg-primary);
+  border-color: var(--indlaeg-primary);
+  color: #ffffff;
+}
+
+.indlæg-action-btn--primary:hover {
+  background: var(--indlaeg-primary-hover);
+  border-color: var(--indlaeg-primary-hover);
+}
+
+.indlæg-action-btn:disabled,
+.indlæg-action-btn--primary:disabled {
+  background: #e2e8f0;
+  border-color: #d1d9e6;
+  color: #94a3b8;
+  cursor: not-allowed;
 }
 
 .indlæg-action-icon {
@@ -509,17 +540,17 @@
   justify-content: center;
   width: 36px;
   height: 36px;
-  border: 1px solid #d1d5db;
+  border: 1px solid #d1d9e6;
   background-color: #ffffff;
-  border-radius: 50%;
+  border-radius: 10px;
   font-size: 16px;
   cursor: pointer;
   transition: background-color 0.2s, border-color 0.2s;
 }
 
 .indlæg-close-btn:hover {
-  background-color: #fef2f2;
-  border-color: #fecdd3;
+  background-color: #f8fafd;
+  border-color: #bcc9da;
 }
 
 .indlæg-container.in-fullwidth {
@@ -1025,28 +1056,31 @@
 .indlæg-mikrofon-btn {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
   padding: 10px 14px;
-  border: 1px solid rgba(17, 24, 39, 0.08);
-  background: linear-gradient(180deg, #111827, #0b1220);
+  border: 1px solid #0f172a;
+  background: #0f172a;
   color: #ffffff;
-  border-radius: 9999px;
-  font-size: 13px;
+  border-radius: 10px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.18s ease, filter 0.18s ease;
-  box-shadow: 0 10px 22px rgba(17, 24, 39, 0.18);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  box-shadow: none;
 }
 
 .indlæg-mikrofon-btn:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.05);
+  background: #1e293b;
+  border-color: #1e293b;
 }
 
 .indlæg-mikrofon-btn.active {
-  border-color: rgba(239, 68, 68, 0.35);
-  background: linear-gradient(180deg, #991b1b, #7f1d1d);
-  box-shadow: 0 14px 28px rgba(239, 68, 68, 0.22);
+  border-color: #b91c1c;
+  background: #b91c1c;
+  box-shadow: none;
 }
 
 .indlæg-mikrofon-icon {
@@ -1123,7 +1157,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 4px 20px 24px;
+  padding: 14px 24px 28px;
   overflow: visible;
   min-height: 0;
   position: relative;
@@ -1141,7 +1175,7 @@
 
 .indlæg-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr) minmax(0, 1fr);
+  grid-template-columns: minmax(260px, 0.95fr) minmax(0, 3fr) minmax(290px, 1.05fr);
   gap: 16px;
   align-items: stretch;
 }
@@ -1156,7 +1190,18 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
+}
+
+.indlæg-left-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.indlæg-left-top > .indlæg-card {
+  flex: 1;
+  min-width: 0;
 }
 
 .indlæg-main {
@@ -1165,7 +1210,7 @@
 
 .indlæg-sidePanel {
   position: sticky;
-  top: 16px;
+  top: 20px;
   align-self: start;
   min-width: 0;
   display: flex;
@@ -1735,10 +1780,10 @@
 }
 
 .indlæg-card {
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  background: var(--bg-surface);
-  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
+  border: 1px solid var(--indlaeg-card-border);
+  border-radius: 14px;
+  background: var(--indlaeg-card-bg);
+  box-shadow: var(--indlaeg-card-shadow);
   overflow: hidden;
 }
 
@@ -1753,7 +1798,11 @@
 .indlæg-mode-options {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+}
+
+.indlæg-mode-hint {
+  margin-top: 6px;
 }
 
 .indlæg-mode-gradient-active {
@@ -1765,30 +1814,26 @@
 .indlæg-mode-option {
   width: 100%;
   text-align: left;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--indlaeg-card-border);
   border-radius: 10px;
-  padding: 12px 14px;
-  background: var(--bg-surface);
+  padding: 11px 12px;
+  background: #f8fafd;
   font: inherit;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--indlaeg-text-strong);
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease,
-    transform 0.1s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .indlæg-mode-option:hover {
-  background: #f8fafc;
-  border-color: #c7d2fe;
-}
-
-.indlæg-mode-option:active {
-  transform: translateY(1px);
+  background: #f1f5f9;
+  border-color: var(--indlaeg-card-border-strong);
 }
 
 .indlæg-mode-option.active {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1e3a8a;
 }
 
 .indlæg-card-header {
@@ -1796,11 +1841,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border-subtle);
-  border-left: 1px solid var(--border-subtle);
-  border-right: 1px solid var(--border-subtle);
-  background: linear-gradient(180deg, rgba(59, 130, 246, 0.05), rgba(59, 130, 246, 0));
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--indlaeg-card-border);
+  background: #ffffff;
 }
 
 .indlæg-card-header-actions {
@@ -1811,7 +1854,7 @@
 
 .indlæg-card--journal .indlæg-card-header--journal {
   background: #ffffff;
-  border-bottom: none;
+  border-bottom: 1px solid var(--indlaeg-card-border);
   padding: 16px 18px;
   min-height: 68px;
 }
@@ -1819,7 +1862,7 @@
 .indlæg-card--journal .indlæg-card-title {
   font-size: 18px;
   font-weight: 800;
-  color: #111827;
+  color: var(--indlaeg-text-strong);
 }
 
 .indlæg-card--journal {
@@ -1883,12 +1926,10 @@
 }
 
 .indlæg-card-body {
-  padding: 12px 14px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  border-left: 1px solid #e5e7eb;
-  border-right: 1px solid #e5e7eb;
 }
 
 .indlæg-note-area {
@@ -1904,7 +1945,10 @@
   max-height: none;
   overflow: auto;
   margin-bottom: 0;
-  border-top: 1px solid #e5e7eb;
+  border: 1px solid var(--indlaeg-card-border);
+  border-radius: 12px;
+  padding: 16px;
+  background: #ffffff;
 }
 
 .indlæg-card-actions {
@@ -2228,52 +2272,61 @@
 
 .indlæg-status-pill {
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   padding: 4px 8px;
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  border: 1px solid #d7deea;
+  background: #f8fafc;
   color: #475569;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  text-transform: none;
+  letter-spacing: 0.01em;
 }
 
 .indlæg-status-pill--listening {
-  background: rgba(34, 197, 94, 0.18);
-  color: #15803d;
+  background: #ecfdf3;
+  border-color: #b7e8ca;
+  color: #166534;
 }
 
 .indlæg-status-pill--requesting-mic {
-  background: rgba(59, 130, 246, 0.16);
+  background: #eff6ff;
+  border-color: #bfdbfe;
   color: #1d4ed8;
 }
 
 .indlæg-status-pill--config {
-  background: rgba(56, 189, 248, 0.18);
+  background: #ecfeff;
+  border-color: #bae6fd;
   color: #0e7490;
 }
 
 .indlæg-status-pill--connecting {
-  background: rgba(59, 130, 246, 0.18);
+  background: #eff6ff;
+  border-color: #bfdbfe;
   color: #1d4ed8;
 }
 
 .indlæg-status-pill--flushing {
-  background: rgba(234, 179, 8, 0.18);
-  color: #a16207;
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
 }
 
 .indlæg-status-pill--error {
-  background: rgba(239, 68, 68, 0.18);
+  background: #fef2f2;
+  border-color: #fecaca;
   color: #b91c1c;
 }
 
 .indlæg-status-pill--idle {
-  background: rgba(148, 163, 184, 0.2);
+  background: #f8fafc;
+  border-color: #d7deea;
   color: #475569;
 }
 
 .indlæg-status-pill--ended {
-  background: rgba(148, 163, 184, 0.28);
+  background: #f1f5f9;
+  border-color: #d7deea;
   color: #475569;
 }
 
@@ -2611,16 +2664,18 @@
 .indlæg-save-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 10px 20px;
-  border: none;
-  background-color: #3b82f6;
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid var(--indlaeg-primary);
+  background-color: var(--indlaeg-primary);
   color: #ffffff;
-  border-radius: 6px;
+  border-radius: 10px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .indlæg-save-btn--inline {
@@ -2630,12 +2685,38 @@
 }
 
 .indlæg-save-btn:hover {
-  background-color: #2563eb;
+  background-color: var(--indlaeg-primary-hover);
+  border-color: var(--indlaeg-primary-hover);
 }
 .indlæg-save-btn:disabled {
-  background-color: #93c5fd;
+  background-color: #cbd5e1;
+  border-color: #cbd5e1;
+  color: #f8fafc;
   cursor: not-allowed;
-  opacity: 0.7;
+  opacity: 1;
+}
+
+.indlæg-selma-plain-btn {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--indlaeg-card-border-strong);
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--indlaeg-text-strong);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.indlæg-selma-plain-btn:hover {
+  background: #f8fafc;
+  border-color: #b8c8dd;
+}
+
+.indlæg-selma-plain-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .indlæg-save-icon {

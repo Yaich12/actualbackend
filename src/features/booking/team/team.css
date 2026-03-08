@@ -74,6 +74,12 @@
   box-shadow: 0 12px 30px rgba(17, 24, 39, 0.25);
 }
 
+.team-btn.danger {
+  background: #fff;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
 .team-btn.small {
   padding: 8px 12px;
   font-weight: 500;
@@ -100,7 +106,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  background: #f8fafc;
+  background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   margin-bottom: 14px;
@@ -116,10 +122,69 @@
   font-weight: 700;
 }
 
+.team-login-banner {
+  margin-bottom: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.team-login-banner-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e3a8a;
+  margin-bottom: 6px;
+}
+
+.team-login-banner-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  font-size: 13px;
+  color: #1e3a8a;
+}
+
+.team-login-banner-row code {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #dbeafe;
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+.team-login-banner-actions {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.team-login-email-status {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.team-login-email-status.success {
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+.team-login-email-status.warning {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+}
+
 .team-search {
   display: flex;
   align-items: center;
-  gap: 10px;
   flex: 1;
   padding: 10px 12px;
   border: 1px solid #e2e8f0;
@@ -159,10 +224,10 @@
 
 .team-row {
   display: grid;
-  grid-template-columns: 60px 2fr 2fr 1.5fr 140px;
+  grid-template-columns: minmax(280px, 2fr) minmax(260px, 1.6fr) 160px;
   align-items: center;
-  padding: 12px 14px;
-  gap: 8px;
+  padding: 14px 16px;
+  gap: 12px;
   border-bottom: 1px solid #e5e7eb;
 }
 
@@ -171,16 +236,19 @@
   font-weight: 600;
 }
 
+.team-row:last-child {
+  border-bottom: none;
+}
+
+.team-row:not(.head):hover {
+  background: #f8fafc;
+}
+
 .team-cell {
   display: flex;
   align-items: center;
   gap: 10px;
   font-size: 14px;
-}
-
-.team-cell.checkbox input {
-  width: 16px;
-  height: 16px;
 }
 
 .name .avatar {
@@ -221,20 +289,29 @@
 .contact-link {
   color: #4f46e5;
   font-weight: 500;
+  text-decoration: none;
+}
+
+.contact-link:hover {
+  text-decoration: underline;
 }
 
 .contact-phone {
   color: #0f172a;
 }
 
-.rating-text {
-  color: #6b7280;
+.contact-muted {
+  color: #94a3b8;
   font-size: 13px;
+}
+
+.team-cell.actions {
+  justify-content: flex-end;
 }
 
 @media (max-width: 1024px) {
   .team-row {
-    grid-template-columns: 40px 2fr 2fr 1fr 100px;
+    grid-template-columns: minmax(200px, 1.8fr) minmax(180px, 1.4fr) 120px;
   }
 }
 
@@ -249,6 +326,11 @@
   .team-row {
     grid-template-columns: 1fr;
     align-items: flex-start;
+    gap: 10px;
+  }
+
+  .team-row.head {
+    display: none;
   }
 
   .team-cell {
@@ -375,6 +457,17 @@
 .team-add-section-subtitle {
   font-size: 13px;
   color: #6b7280;
+}
+
+.team-login-hint {
+  margin: 6px 0 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .team-add-avatar {

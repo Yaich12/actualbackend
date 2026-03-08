@@ -161,18 +161,12 @@
 .booking-page .search-bar-services {
   display: flex;
   align-items: center;
-  gap: 8px;
   padding: 10px 12px;
   background-color: #ffffff;
   border: 1px solid #d1d5db;
   border-radius: 10px;
   width: 260px;
   margin: 0;
-}
-
-.booking-page .search-icon-small {
-  font-size: 16px;
-  color: #6b7280;
 }
 
 .booking-page .search-input-services {
@@ -213,7 +207,7 @@
 .booking-page .service-item {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   padding: 16px 24px;
   border-bottom: 1px solid #e5e7eb;
   cursor: pointer;
@@ -226,20 +220,6 @@
 
 .booking-page .service-item:last-child {
   border-bottom: none;
-}
-
-.booking-page .service-checkbox {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-}
-
-.booking-page .service-checkbox input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-  accent-color: #3b82f6;
 }
 
 .booking-page .service-name {

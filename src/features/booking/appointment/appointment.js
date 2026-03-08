@@ -24,6 +24,9 @@ const getAutoEndTime = (startTime, timeSlots) => {
   return timeSlots[timeSlots.length - 1];
 };
 
+const createRecurrenceGroupId = () =>
+  `forloeb-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
 function AppointmentForm({
   onClose,
   onCreate,
@@ -212,6 +215,7 @@ function AppointmentForm({
     if (!anchor) return [basePayload];
     const anchorWeekday = anchor.getDay(); // 0 = Sun
     const daysInt = selectedDays.map((d) => parseInt(d, 10));
+    const recurrenceGroupId = createRecurrenceGroupId();
     const results = [];
     for (let w = 0; w < weeksCount; w += 1) {
       daysInt.forEach((weekday) => {
@@ -222,10 +226,22 @@ function AppointmentForm({
           ...basePayload,
           startDate: formatDateStr(dateObj),
           endDate: formatDateStr(dateObj),
+          recurrenceGroupId,
+          isRecurringSeries: true,
         });
       });
     }
-    return results;
+    const sortedResults = results.sort((left, right) => {
+      const leftTime = parseDateStr(left.startDate)?.getTime() || 0;
+      const rightTime = parseDateStr(right.startDate)?.getTime() || 0;
+      return leftTime - rightTime;
+    });
+    return sortedResults.map((item, index) => ({
+      ...item,
+      recurrenceIndex: index,
+      recurrenceCount: sortedResults.length,
+      recurrenceAnchorDate: sortedResults[0]?.startDate || item.startDate,
+    }));
   };
 
   const startDateNativeValue = useMemo(() => {

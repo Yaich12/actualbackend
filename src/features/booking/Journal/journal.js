@@ -19,7 +19,7 @@ import { getAuth } from 'firebase/auth';
 import { db } from '../../../firebase';
 import { useAuth } from '../../../AuthContext';
 import { Button as MovingBorderButton } from '../../../components/ui/moving-border';
-import { Trash2 } from 'lucide-react';
+import { CalendarDays, Clock3, Trash2, X } from 'lucide-react';
 import { useLanguage } from '../../../LanguageContext';
 
 function Journal({
@@ -31,6 +31,24 @@ function Journal({
   onEditAppointment,
   onDeleteAppointment,
 }) {
+  function parseDateValue(dateStr) {
+    if (!dateStr) return null;
+    let dd;
+    let mm;
+    let yyyy;
+    if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+      [dd, mm, yyyy] = dateStr.split('-').map(Number);
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      [yyyy, mm, dd] = dateStr.split('-').map(Number);
+    } else {
+      const parsed = new Date(dateStr);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return parsed;
+    }
+    const candidate = new Date(yyyy, (mm || 1) - 1, dd || 1);
+    return Number.isNaN(candidate.getTime()) ? null : candidate;
+  }
+
   const [showHistory, setShowHistory] = useState(false);
   const [journalEntryCount, setJournalEntryCount] = useState(null);
   const [appointmentEntry, setAppointmentEntry] = useState(null);
@@ -43,23 +61,19 @@ function Journal({
   const [suggestError, setSuggestError] = useState('');
   const { services: savedServices } = useUserServices();
   const { clients } = useUserClients();
-  const { user } = useAuth();
+  const { user, workspaceUid, activeClinicId } = useAuth();
+  const clinicId = `${activeClinicId || ''}`.trim();
   const { t, locale } = useLanguage();
 
   useEffect(() => {
-    if (!user || !selectedClient?.id) {
+    if ((!clinicId && !workspaceUid) || !selectedClient?.id) {
       setJournalEntryCount(null);
       return () => {};
     }
 
-    const entriesRef = collection(
-      db,
-      'users',
-      user.uid,
-      'clients',
-      selectedClient.id,
-      'journalEntries'
-    );
+    const entriesRef = clinicId
+      ? collection(db, 'clinics', clinicId, 'clients', selectedClient.id, 'journalEntries')
+      : collection(db, 'users', workspaceUid, 'clients', selectedClient.id, 'journalEntries');
 
     const unsubscribe = onSnapshot(
       entriesRef,
@@ -68,23 +82,18 @@ function Journal({
     );
 
     return () => unsubscribe();
-  }, [user, selectedClient?.id]);
+  }, [clinicId, selectedClient?.id, workspaceUid]);
 
   useEffect(() => {
-    if (!user?.uid || !selectedClient?.id || !selectedAppointment?.id) {
+    if ((!clinicId && !workspaceUid) || !selectedClient?.id || !selectedAppointment?.id) {
       setAppointmentEntry(null);
       return () => {};
     }
 
     setAppointmentEntry(null);
-    const entriesRef = collection(
-      db,
-      'users',
-      user.uid,
-      'clients',
-      selectedClient.id,
-      'journalEntries'
-    );
+    const entriesRef = clinicId
+      ? collection(db, 'clinics', clinicId, 'clients', selectedClient.id, 'journalEntries')
+      : collection(db, 'users', workspaceUid, 'clients', selectedClient.id, 'journalEntries');
     const entriesQuery = query(
       entriesRef,
       where('appointmentId', '==', selectedAppointment.id),
@@ -111,7 +120,7 @@ function Journal({
     );
 
     return () => unsubscribe();
-  }, [user?.uid, selectedClient?.id, selectedClient?.navn, selectedAppointment?.id]);
+  }, [clinicId, selectedClient?.id, selectedClient?.navn, selectedAppointment?.id, workspaceUid]);
 
   const client = selectedClient;
 
@@ -169,14 +178,6 @@ function Journal({
     return timeStr;
   };
 
-  // Format price
-  const formatPrice = (price) => {
-    return new Intl.NumberFormat(locale || 'da-DK', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(price || 0);
-  };
-
   // Calculate end time (assuming 1 hour duration if not specified)
   const getEndTime = (startTime) => {
     if (!startTime) return '';
@@ -190,6 +191,12 @@ function Journal({
     selectedAppointment &&
     (selectedAppointment.serviceType === 'forloeb' ||
       (typeof selectedAppointment.serviceId === 'string' && selectedAppointment.serviceId.startsWith('forloeb:')));
+
+  const appointmentDateLabel = selectedAppointment ? formatDate(selectedAppointment.startDate) : '';
+  const appointmentTimeRangeLabel = selectedAppointment
+    ? `${formatTime(selectedAppointment.startTime)} ${t('booking.journalPanel.timeTo', 'to')} ${getEndTime(selectedAppointment.startTime)}`
+    : '';
+  const appointmentServiceLabel = appointmentService?.navn || selectedAppointment?.service || '';
 
   const currentGroupName = useMemo(() => {
     if (!isForloeb) return '';
@@ -249,7 +256,9 @@ function Journal({
     try {
       // 1) Rename the forløb definition (if we have a doc id)
       if (forloebDocId) {
-        const forloebRef = doc(db, 'users', user.uid, 'forloeb', forloebDocId);
+        const forloebRef = clinicId
+          ? doc(db, 'clinics', clinicId, 'forloeb', forloebDocId)
+          : doc(db, 'users', workspaceUid, 'forloeb', forloebDocId);
         await updateDoc(forloebRef, {
           name: nextName,
           updatedAt: serverTimestamp(),
@@ -257,7 +266,9 @@ function Journal({
       }
 
       // 2) Update all appointments in this forløb so calendar + details reflect the new name
-      const apptRef = collection(db, 'users', user.uid, 'appointments');
+      const apptRef = clinicId
+        ? collection(db, 'clinics', clinicId, 'appointments')
+        : collection(db, 'users', workspaceUid, 'appointments');
       const q = query(apptRef, where('serviceId', '==', selectedAppointment.serviceId));
       const snap = await getDocs(q);
 
@@ -554,24 +565,6 @@ function Journal({
     }
   };
 
-  const parseDateValue = (dateStr) => {
-    if (!dateStr) return null;
-    let dd;
-    let mm;
-    let yyyy;
-    if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
-      [dd, mm, yyyy] = dateStr.split('-').map(Number);
-    } else if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      [yyyy, mm, dd] = dateStr.split('-').map(Number);
-    } else {
-      const parsed = new Date(dateStr);
-      if (Number.isNaN(parsed.getTime())) return null;
-      return parsed;
-    }
-    const candidate = new Date(yyyy, (mm || 1) - 1, dd || 1);
-    return Number.isNaN(candidate.getTime()) ? null : candidate;
-  };
-
   // NOTE: Early returns must come AFTER all hooks to satisfy rules-of-hooks.
   if (!selectedClient) {
     return (
@@ -661,7 +654,14 @@ function Journal({
             </h2>
           </div>
           <div className="journal-header-actions">
-            <button className="journal-close-btn" onClick={onClose}>✕</button>
+            <button
+              type="button"
+              className="journal-close-btn"
+              onClick={onClose}
+              aria-label={t('booking.journalPanel.closePanel', 'Luk panel')}
+            >
+              <X size={18} />
+            </button>
           </div>
         </div>
         {isForloeb && groupNameError && (
@@ -676,17 +676,44 @@ function Journal({
         {/* Date and service info */}
         {selectedAppointment && (
           <div className="journal-section">
-            <div className="journal-appointment-date">
-              {formatDate(selectedAppointment.startDate)}, {formatTime(selectedAppointment.startTime)}{' '}
-              {t('booking.journalPanel.timeTo', 'to')} {getEndTime(selectedAppointment.startTime)}
+            <div className="journal-appointment-meta-combined">
+              <div className="journal-appointment-meta-pane">
+                <span className="journal-appointment-meta-icon">
+                  <CalendarDays size={15} aria-hidden="true" />
+                </span>
+                <div className="journal-appointment-meta-text">
+                  <span className="journal-appointment-meta-label">
+                    {t('booking.journalPanel.dateLabel', 'Dato')}
+                  </span>
+                  <span className="journal-appointment-meta-value journal-appointment-meta-value--date">
+                    {appointmentDateLabel}
+                  </span>
+                </div>
+              </div>
+              <span className="journal-appointment-meta-divider" aria-hidden="true" />
+              <div className="journal-appointment-meta-pane">
+                <span className="journal-appointment-meta-icon">
+                  <Clock3 size={15} aria-hidden="true" />
+                </span>
+                <div className="journal-appointment-meta-text">
+                  <span className="journal-appointment-meta-label">
+                    {t('booking.journalPanel.timeLabel', 'Tid')}
+                  </span>
+                  <span className="journal-appointment-meta-value journal-appointment-meta-value--time">
+                    {appointmentTimeRangeLabel}
+                  </span>
+                </div>
+              </div>
             </div>
             {!isForloeb && appointmentService && (
               <>
-                <div className="journal-appointment-service">
-                  {appointmentService.navn}
-                </div>
-                <div className="journal-appointment-price">
-                  {t('booking.services.price.currency', 'DKK')} {formatPrice(appointmentService.pris)}
+                <div className="journal-appointment-fact">
+                  <span className="journal-appointment-fact-label">
+                    {t('booking.journalPanel.serviceLabel', 'Ydelse')}
+                  </span>
+                  <span className="journal-appointment-fact-value">
+                    {appointmentServiceLabel}
+                  </span>
                 </div>
                 {additionalServices.length > 0 && (
                   <div className="journal-appointment-services">
@@ -698,11 +725,9 @@ function Journal({
                         <span className="journal-appointment-service-name">
                           {service.navn || t('booking.journalPanel.extraServiceFallback', 'Add-on service')}
                         </span>
-                        <span className="journal-appointment-service-meta">
-                          {typeof service.pris === 'number'
-                            ? `${t('booking.services.price.currency', 'DKK')} ${formatPrice(service.pris)}`
-                            : '—'}
-                        </span>
+                        {service.varighed ? (
+                          <span className="journal-appointment-service-meta">{service.varighed}</span>
+                        ) : null}
                       </div>
                     ))}
                   </div>
@@ -799,8 +824,8 @@ function Journal({
                     if (!selectedAppointment || !onDeleteAppointment) return;
                     const confirmed = window.confirm(
                       t(
-                        'booking.journalPanel.confirmDelete',
-                        'Are you sure you want to delete this appointment? This cannot be undone.'
+                        'booking.journalPanel.confirmCancel',
+                        'Er du sikker på, at du vil aflyse denne aftale?'
                       )
                     );
                     if (confirmed) {
@@ -809,7 +834,7 @@ function Journal({
                   }}
                 >
                   <Trash2 className="journal-delete-icon" size={16} aria-hidden="true" />
-                  {t('booking.journalPanel.deleteAppointment', 'Delete appointment')}
+                  {t('booking.journalPanel.cancelAppointment', 'Aflys aftale')}
                 </button>
               </div>
               {suggestError && (

@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { db } from "../firebase";
+import { useAuth } from "../AuthContext";
+import { deriveLegacyOwnerUid, migrateLegacyCollectionToClinic } from "../utils/workspaceContext";
+
+const normalizeId = (value) => `${value || ""}`.trim();
 
 const resolveDate = (value) => {
   if (!value) return null;
@@ -55,6 +59,9 @@ const mapSaleDoc = (doc) => {
   return {
     id: doc.id,
     status: data.status || "pending",
+    paymentStatus: data.paymentStatus || data.status || "pending",
+    paymentId:
+      data.paymentId || data.stripePaymentIntentId || data.stripeChargeId || null,
     appointmentId: data.appointmentId || null,
     appointmentRef:
       data.appointmentRef ||
@@ -73,6 +80,14 @@ const mapSaleDoc = (doc) => {
     paymentMethod: data.paymentMethod || data.paymentType || "",
     employeeId: data.employeeId || null,
     employeeName: data.employeeName || data.employee || "",
+    stripeCheckoutSessionId: data.stripeCheckoutSessionId || null,
+    stripePaymentIntentId: data.stripePaymentIntentId || null,
+    stripeChargeId: data.stripeChargeId || null,
+    receiptNumber: data.receiptNumber || null,
+    receiptPdfPath: data.receiptPdfPath || null,
+    receiptEmailStatus: data.receiptEmailStatus || "not_sent",
+    receiptSentAt: data.receiptSentAt || null,
+    receiptSentAtDate: resolveDate(data.receiptSentAt),
     completedAt: data.completedAt || null,
     completedAtDate,
     createdAt: data.createdAt || null,
@@ -95,14 +110,17 @@ const matchesStatus = (saleStatus, filterStatus) => {
   return normalizedSale === normalizedFilter;
 };
 
-const useSales = (userId, options = {}) => {
+const useSales = (scopeId, options = {}) => {
+  const { sessionUid, userDoc, activeClinicId, workspaceUid } = useAuth();
   const { status } = options;
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const clinicId = normalizeId(activeClinicId || userDoc?.activeClinicId || userDoc?.clinicId || "");
+  const legacyOwnerUid = deriveLegacyOwnerUid(userDoc, workspaceUid || scopeId || sessionUid || "");
 
   useEffect(() => {
-    if (!userId) {
+    if (!clinicId && !legacyOwnerUid) {
       setSales([]);
       setLoading(false);
       setError(null);
@@ -112,29 +130,76 @@ const useSales = (userId, options = {}) => {
     setLoading(true);
     setError(null);
 
-    const salesRef = collection(db, "users", userId, "sales");
-    const salesQuery = query(salesRef, orderBy("completedAt", "desc"));
-
-    const unsubscribe = onSnapshot(
-      salesQuery,
-      (snapshot) => {
-        const mapped = snapshot.docs.map(mapSaleDoc);
-        const filtered = status
-          ? mapped.filter((sale) => matchesStatus(sale.status, status))
-          : mapped;
-        setSales(filtered);
-        setLoading(false);
-      },
-      (snapshotError) => {
-        console.error("[useSales] snapshot error:", snapshotError);
-        setError(snapshotError);
-        setSales([]);
-        setLoading(false);
+    let unsubscribe = () => {};
+    let cancelled = false;
+    const setUnsubscribe = (nextUnsubscribe) => {
+      let stopped = false;
+      unsubscribe = () => {
+        if (stopped) return;
+        stopped = true;
+        nextUnsubscribe();
+      };
+    };
+    const attachListener = async () => {
+      let salesRef = null;
+      if (clinicId) {
+        if (legacyOwnerUid) {
+          try {
+            await migrateLegacyCollectionToClinic({
+              clinicId,
+              legacyOwnerUid,
+              collectionName: "sales",
+              transformDoc: ({ data }) => ({
+                clinicId,
+                createdByUid: data.createdByUid || data.employeeId || sessionUid || null,
+              }),
+            });
+          } catch (migrationError) {
+            console.error("[useSales] legacy migration failed:", migrationError);
+          }
+        }
+        if (cancelled) return;
+        salesRef = collection(db, "clinics", clinicId, "sales");
+      } else {
+        if (cancelled) return;
+        salesRef = collection(db, "users", legacyOwnerUid, "sales");
       }
-    );
+      const salesQuery = query(salesRef, orderBy("completedAt", "desc"));
 
-    return () => unsubscribe();
-  }, [userId, status]);
+      if (cancelled) return;
+      const stop = onSnapshot(
+        salesQuery,
+        (snapshot) => {
+          if (cancelled) return;
+          const mapped = snapshot.docs.map(mapSaleDoc);
+          const filtered = status
+            ? mapped.filter((sale) => matchesStatus(sale.status, status))
+            : mapped;
+          setSales(filtered);
+          setLoading(false);
+        },
+        (snapshotError) => {
+          if (cancelled) return;
+          console.error("[useSales] snapshot error:", snapshotError);
+          setError(snapshotError);
+          setSales([]);
+          setLoading(false);
+        }
+      );
+      if (cancelled) {
+        stop();
+        return;
+      }
+      setUnsubscribe(stop);
+    };
+
+    void attachListener();
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [clinicId, legacyOwnerUid, sessionUid, status]);
 
   return { sales, loading, error };
 };

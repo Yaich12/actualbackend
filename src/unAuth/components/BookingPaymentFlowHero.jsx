@@ -7,10 +7,15 @@ function BookingPaymentFlowHero() {
   const { t } = useLanguage();
   const [isActive, setIsActive] = useState(false);
   const totalAmount = 500;
-  const feeAmount = 10;
-  const netAmount = totalAmount - feeAmount;
+  const feeRatePercent = 1.5;
+  const fixedFee = 1.8;
+  const feeAmount = Number((((totalAmount * feeRatePercent) / 100) + fixedFee).toFixed(2));
+  const netAmount = Number((totalAmount - feeAmount).toFixed(2));
   const currency = "kr";
-  const percent = Math.round((feeAmount / totalAmount) * 100);
+  const percent =
+    feeRatePercent % 1 === 0 ? feeRatePercent.toFixed(0) : feeRatePercent.toFixed(1);
+  const fixedFeeLabel =
+    fixedFee % 1 === 0 ? fixedFee.toFixed(0) : fixedFee.toFixed(1);
 
   const formatMoney = (value) => `${value.toFixed(2)} ${currency}`;
   const interpolate = (template, variables) =>
@@ -106,9 +111,10 @@ function BookingPaymentFlowHero() {
               {interpolate(t("features.websiteBuilder.paymentFlow.description"), {
                 amount: totalAmount.toFixed(0),
                 currency,
-                fee: feeAmount.toFixed(0),
-                percent: String(percent),
-                net: netAmount.toFixed(0),
+                fee: feeAmount.toFixed(2),
+                percent,
+                fixedFee: fixedFeeLabel,
+                net: netAmount.toFixed(2),
               })}
             </p>
             <div className="flow-hero__scenario-inline">
@@ -128,8 +134,9 @@ function BookingPaymentFlowHero() {
                   {interpolate(
                     t("features.websiteBuilder.paymentFlow.stats.selmaFee"),
                     {
-                      percent: String(percent),
-                      fee: feeAmount.toFixed(0),
+                      percent,
+                      fixedFee: fixedFeeLabel,
+                      fee: feeAmount.toFixed(2),
                       currency,
                     }
                   )}
@@ -139,7 +146,7 @@ function BookingPaymentFlowHero() {
                 <div className="flow-hero__stat-label">
                   {interpolate(
                     t("features.websiteBuilder.paymentFlow.stats.clinicReceives"),
-                    { net: netAmount.toFixed(0), currency }
+                    { net: netAmount.toFixed(2), currency }
                   )}
                 </div>
               </div>
@@ -265,8 +272,9 @@ function BookingPaymentFlowHero() {
                               {interpolate(
                                 t("features.websiteBuilder.paymentFlow.feeBadge.title"),
                                 {
-                                  percent: String(percent),
-                                  fee: feeAmount.toFixed(0),
+                                  percent,
+                                  fixedFee: fixedFeeLabel,
+                                  fee: feeAmount.toFixed(2),
                                   currency,
                                 }
                               )}
@@ -345,7 +353,16 @@ function BookingPaymentFlowHero() {
                         <span>{formatMoney(netAmount)}</span>
                       </div>
                       <div className="flow-receipt__row flow-receipt__row--fee">
-                          <span>Selma+ transaktionsgebyr</span>
+                        <span>
+                          {interpolate(
+                            t("features.websiteBuilder.paymentFlow.labels.fee"),
+                            {
+                              percent,
+                              fixedFee: fixedFeeLabel,
+                              currency,
+                            }
+                          )}
+                        </span>
                         <span>{formatMoney(feeAmount)}</span>
                       </div>
                       <div className="flow-receipt__row flow-receipt__row--total">

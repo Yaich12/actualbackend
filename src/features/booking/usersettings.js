@@ -10,6 +10,11 @@ import { useLanguage } from '../../LanguageContext';
 import { updateProfile } from 'firebase/auth';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import {
+  dedupeClinicMembers,
+  isOwnerMemberForUid,
+  mapClinicMemberDoc,
+} from './team/clinicMembers';
+import {
   WORK_HOURS_DAYS,
   buildWorkHoursExceptionsPayload,
   buildWorkHoursPayload,
@@ -21,10 +26,6 @@ import {
   resolveWorkHoursExceptions,
 } from '../../utils/workHours';
 import { CORTI_LANGS, getCortiLanguageLabel } from '../../utils/cortiLanguages';
-
-const THEME_STORAGE_KEY = 'selma_theme_mode';
-const NIGHT_START_HOUR = 18; // 18:00
-const NIGHT_END_HOUR = 5;    // 05:00
 
 const CURRENCY_OPTIONS = [
   { value: 'DKK', label: 'DKK' },
@@ -77,33 +78,38 @@ const resolveWorkHourExceptionPreviews = (data) =>
     })
   );
 
+const reorderSelectOptions = (options, selectedValue, valueKey = 'value') => {
+  const selected = String(selectedValue ?? '').trim();
+  if (!selected) return options;
+  const selectedOption = options.find(
+    (option) => String(option?.[valueKey] ?? '').trim() === selected
+  );
+  if (!selectedOption) return options;
+  return [
+    selectedOption,
+    ...options.filter((option) => String(option?.[valueKey] ?? '').trim() !== selected),
+  ];
+};
+
 const mapTeamDocToScheduleMember = (docSnap, fallbackLabel) => {
-  const data = docSnap.data() || {};
-  const name =
-    (typeof data.name === 'string' && data.name.trim()) ||
-    `${data.firstName || ''}${data.lastName ? ` ${data.lastName}` : ''}`.trim() ||
-    fallbackLabel;
-  const memberUid =
-    (typeof data.memberUid === 'string' && data.memberUid.trim()) ||
-    (typeof data.uid === 'string' && data.uid.trim()) ||
-    '';
+  const member = mapClinicMemberDoc(docSnap, fallbackLabel);
   return {
-    id: docSnap.id,
-    name,
-    memberUid: memberUid || null,
-    isOwner: data.isOwner === true,
+    id: member.id,
+    name: member.name,
+    memberUid: member.memberUid || null,
+    isOwner: member.isOwner === true,
   };
 };
 
 function UserSettings() {
-  const { user, updateUserProfile } = useAuth();
+  const { user, updateUserProfile, activeClinicId: authClinicId } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { language, preferredLanguage, setPreferredLanguage, languageOptions, t } = useLanguage();
   const resolveSectionFromPath = () => 'profile';
   const [activeSection, setActiveSection] = useState(() =>
     resolveSectionFromPath(location.pathname)
-  ); // profile | account | booking | workHours | appearance | language | ai
+  ); // profile | account | booking | workHours | language | ai
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [clinicName, setClinicName] = useState('');
@@ -112,13 +118,13 @@ function UserSettings() {
   const [website, setWebsite] = useState('');
   const [category, setCategory] = useState('');
   const [address, setAddress] = useState('');
+  const [cvr, setCvr] = useState('');
   const [currency, setCurrency] = useState('');
   const [photoURL, setPhotoURL] = useState('');
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState('');
   const [removeAvatar, setRemoveAvatar] = useState(false);
   const [workHours, setWorkHours] = useState(() => createDefaultWorkHours());
-  const [colorMode, setColorMode] = useState('system');
   const [audioRetention, setAudioRetention] = useState('30d');
   const [transcriptRetention, setTranscriptRetention] = useState('30d');
   const [agentCommsRetention, setAgentCommsRetention] = useState('30d');
@@ -134,6 +140,7 @@ function UserSettings() {
   );
   const [showWorkHoursExceptionsPreview, setShowWorkHoursExceptionsPreview] = useState(false);
   const [hasTeamAccess, setHasTeamAccess] = useState(false);
+  const [activeClinicId, setActiveClinicId] = useState('');
   const [scheduleMembers, setScheduleMembers] = useState([]);
   const [selectedScheduleMemberId, setSelectedScheduleMemberId] = useState('');
   const [isScheduleLoading, setIsScheduleLoading] = useState(false);
@@ -159,13 +166,6 @@ function UserSettings() {
     [resolvedBookingUrl]
   );
   const bookingIsActive = Boolean(activeBookingUrl);
-  const activeBookingStatusMessage = bookingIsActive
-    ? t(
-        'settings.publicBooking.success',
-        'Booking page is active: {url}',
-        { url: resolvedBookingAbsoluteUrl || resolvedBookingUrl }
-      )
-    : '';
   const ownerScheduleMember = useMemo(() => {
     const ownerId = user?.uid || '';
     const fallbackName =
@@ -262,25 +262,12 @@ function UserSettings() {
     []
   );
 
-  const applyTheme = (mode) => {
-    let resolvedMode = mode;
-
-    if (mode === 'system') {
-      const hour = new Date().getHours();
-      const isNight = hour >= NIGHT_START_HOUR || hour < NIGHT_END_HOUR;
-      resolvedMode = isNight ? 'dark' : 'light';
-    }
-
-    document.documentElement.setAttribute('data-theme', resolvedMode);
-  };
-
   useEffect(() => {
-    const storedMode = localStorage.getItem(THEME_STORAGE_KEY);
-    if (storedMode === 'light' || storedMode === 'dark' || storedMode === 'system') {
-      setColorMode(storedMode);
-      applyTheme(storedMode);
-    } else {
-      applyTheme('system');
+    document.documentElement.setAttribute('data-theme', 'light');
+    try {
+      localStorage.removeItem('selma_theme_mode');
+    } catch (_error) {
+      // Ignore storage failures.
     }
   }, []);
 
@@ -293,26 +280,59 @@ function UserSettings() {
         const snap = await getDoc(ref);
         if (snap.exists()) {
           const data = snap.data();
-          const teamAllowed = data?.accountType === 'team' || data?.hasTeam === true;
+          const resolvedClinicId = String(data?.activeClinicId || authClinicId || '').trim();
+          const teamAllowed =
+            data?.accountType === 'team' ||
+            data?.hasTeam === true ||
+            data?.role === 'member' ||
+            data?.role === 'owner' ||
+            Boolean(resolvedClinicId);
+          let clinicSettingsData = null;
+          if (resolvedClinicId) {
+            try {
+              const clinicSettingsSnap = await getDoc(
+                doc(db, 'clinics', resolvedClinicId, 'settings', 'general')
+              );
+              clinicSettingsData = clinicSettingsSnap.exists()
+                ? clinicSettingsSnap.data() || {}
+                : null;
+            } catch (clinicSettingsError) {
+              console.error('[UserSettings] Failed to load clinic settings', clinicSettingsError);
+            }
+          }
           setHasTeamAccess(teamAllowed);
+          setActiveClinicId(resolvedClinicId);
           setSettingsSnapshot(data.settings || {});
           setFullName(data.displayName || user.displayName || '');
           setEmail(data.email || user.email || '');
-          setClinicName(data.clinicName || '');
-          setPublicClinicName(data.publicClinicName || data.clinicName || '');
-          setPublicClinicSlug(data.publicClinicSlug || '');
-          setWebsite(data.website || '');
+          setClinicName(clinicSettingsData?.clinicName || data.clinicName || '');
+          setPublicClinicName(
+            clinicSettingsData?.publicClinicName ||
+              data.publicClinicName ||
+              clinicSettingsData?.clinicName ||
+              data.clinicName ||
+              ''
+          );
+          setPublicClinicSlug(clinicSettingsData?.publicClinicSlug || data.publicClinicSlug || '');
+          setWebsite(clinicSettingsData?.website || data.website || '');
           setPhotoURL(data.photoURL || user.photoURL || '');
           setAvatarPreviewUrl('');
           setAvatarFile(null);
           setRemoveAvatar(false);
           const loadedCategory =
+            (Array.isArray(clinicSettingsData?.categories) && clinicSettingsData.categories[0]) ||
             (Array.isArray(data.categories) && data.categories[0]) ||
             data.category ||
             '';
           setCategory(loadedCategory || '');
-          setAddress(data.address || '');
+          setAddress(clinicSettingsData?.address || data.address || '');
+          setCvr(
+            String(clinicSettingsData?.cvr || data.cvr || data.CVR || '')
+              .replace(/\D+/g, '')
+              .slice(0, 8)
+          );
           const loadedCurrency =
+            (typeof clinicSettingsData?.currency === 'string' && clinicSettingsData.currency.trim()) ||
             (typeof data.currency === 'string' && data.currency.trim()) ||
             (typeof data.settings?.currency === 'string' && data.settings.currency.trim()) ||
             '';
@@ -324,13 +344,9 @@ function UserSettings() {
               ? data.settings.dictationLanguage.trim()
               : 'auto';
           setDictationLanguage(storedDictationLanguage);
-          if (data.themeMode === 'light' || data.themeMode === 'dark' || data.themeMode === 'system') {
-            setColorMode(data.themeMode);
-            applyTheme(data.themeMode);
-            localStorage.setItem(THEME_STORAGE_KEY, data.themeMode);
-          }
         } else {
           setHasTeamAccess(false);
+          setActiveClinicId(String(authClinicId || '').trim());
           setSettingsSnapshot({});
           setFullName(user.displayName || '');
           setEmail(user.email || '');
@@ -344,6 +360,7 @@ function UserSettings() {
           setRemoveAvatar(false);
           setCategory('');
           setAddress('');
+          setCvr('');
           setCurrency('');
           setWorkHours(createDefaultWorkHours());
           setWorkHoursExceptionPreviews([]);
@@ -352,11 +369,12 @@ function UserSettings() {
       } catch (error) {
         console.error('[UserSettings] Failed to load profile', error);
         setHasTeamAccess(false);
+        setActiveClinicId('');
       }
     };
 
     loadProfile();
-  }, [user]);
+  }, [authClinicId, user]);
 
   useEffect(() => {
     if (!ownerScheduleMember.id) {
@@ -383,19 +401,20 @@ function UserSettings() {
   }, [hasTeamAccess, ownerScheduleMember]);
 
   useEffect(() => {
-    if (!user?.uid || !hasTeamAccess) {
+    if (!user?.uid || !hasTeamAccess || !activeClinicId) {
       return undefined;
     }
 
-    const teamRef = collection(db, 'users', user.uid, 'team');
+    const teamRef = collection(db, 'clinics', activeClinicId, 'members');
     const unsubscribe = onSnapshot(
       teamRef,
       (snap) => {
         const fallbackLabel = t('settings.publicBooking.scheduleMemberFallback', 'Behandler');
-        const loaded = snap.docs.map((docSnap) => mapTeamDocToScheduleMember(docSnap, fallbackLabel));
+        const loaded = dedupeClinicMembers(
+          snap.docs.map((docSnap) => mapTeamDocToScheduleMember(docSnap, fallbackLabel))
+        );
         const hasOwnerOption = loaded.some(
-          (member) =>
-            member.id === user.uid || member.memberUid === user.uid || member.isOwner === true
+          (member) => isOwnerMemberForUid(member, user.uid)
         );
 
         let nextMembers = loaded;
@@ -439,12 +458,13 @@ function UserSettings() {
     );
 
     return () => unsubscribe();
-  }, [hasTeamAccess, ownerScheduleMember, t, user?.uid]);
+  }, [activeClinicId, hasTeamAccess, ownerScheduleMember, t, user?.uid]);
 
   useEffect(() => {
     const selectedMemberId = selectedScheduleMember?.id || '';
     const selectedMemberUid = selectedScheduleMember?.memberUid || '';
     if (!user?.uid || !selectedMemberId) return;
+    if (selectedMemberId !== user.uid && !activeClinicId) return;
 
     let isCancelled = false;
     const loadSelectedSchedule = async () => {
@@ -453,37 +473,37 @@ function UserSettings() {
       try {
         let sourceData = {};
 
-        if (selectedMemberId === user.uid) {
+        if (selectedMemberId === user.uid || selectedMemberUid === user.uid) {
           const ownerSnap = await getDoc(doc(db, 'users', user.uid));
-          sourceData = ownerSnap.exists() ? ownerSnap.data() || {} : {};
-        } else {
-          const teamSnap = await getDoc(doc(db, 'users', user.uid, 'team', selectedMemberId));
-          const teamData = teamSnap.exists() ? teamSnap.data() || {} : {};
-          sourceData = teamData;
+          const ownerData = ownerSnap.exists() ? ownerSnap.data() || {} : {};
+          sourceData = ownerData;
 
-          const hasTeamHours = Boolean(
-            teamData?.workHours && typeof teamData.workHours === 'object'
-          );
-          const hasTeamExceptions = Array.isArray(teamData?.workHoursExceptions);
-          const linkedMemberUid = String(
-            teamData?.memberUid || teamData?.uid || selectedMemberUid || ''
-          ).trim();
-
-          if ((!hasTeamHours || !hasTeamExceptions) && linkedMemberUid && linkedMemberUid !== user.uid) {
-            const linkedUserSnap = await getDoc(doc(db, 'users', linkedMemberUid));
-            if (linkedUserSnap.exists()) {
-              const linkedUserData = linkedUserSnap.data() || {};
-              sourceData = {
-                ...linkedUserData,
-                ...teamData,
-                workHours: hasTeamHours ? teamData.workHours : linkedUserData.workHours,
-                workHoursExceptions: hasTeamExceptions
-                  ? teamData.workHoursExceptions
-                  : linkedUserData.workHoursExceptions,
-                workingHours: teamData.workingHours || linkedUserData.workingHours,
-              };
+          if (activeClinicId) {
+            try {
+              const ownerMemberSnap = await getDoc(
+                doc(db, 'clinics', activeClinicId, 'members', user.uid)
+              );
+              if (ownerMemberSnap.exists()) {
+                const ownerMemberData = ownerMemberSnap.data() || {};
+                sourceData = {
+                  ...ownerData,
+                  ...ownerMemberData,
+                  workHours: ownerMemberData.workHours || ownerData.workHours,
+                  workHoursExceptions:
+                    ownerMemberData.workHoursExceptions || ownerData.workHoursExceptions,
+                  workingHours: ownerMemberData.workingHours || ownerData.workingHours,
+                };
+              }
+            } catch (ownerMemberError) {
+              console.error('[UserSettings] Failed to load clinic owner schedule', ownerMemberError);
             }
           }
+        } else {
+          const teamSnap = await getDoc(
+            doc(db, 'clinics', activeClinicId, 'members', selectedMemberId)
+          );
+          const teamData = teamSnap.exists() ? teamSnap.data() || {} : {};
+          sourceData = teamData;
         }
 
         if (!isCancelled) {
@@ -508,7 +528,7 @@ function UserSettings() {
     return () => {
       isCancelled = true;
     };
-  }, [selectedScheduleMember?.id, selectedScheduleMember?.memberUid, user?.uid]);
+  }, [activeClinicId, selectedScheduleMember?.id, selectedScheduleMember?.memberUid, user?.uid]);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -557,11 +577,6 @@ function UserSettings() {
   };
 
   useEffect(() => {
-    applyTheme(colorMode);
-    localStorage.setItem(THEME_STORAGE_KEY, colorMode);
-  }, [colorMode]);
-
-  useEffect(() => {
     if (location.pathname.startsWith('/settings/transfer')) {
       navigate('/booking/settings', { replace: true });
     }
@@ -582,16 +597,6 @@ function UserSettings() {
     };
   }, [avatarPreviewUrl]);
 
-  useEffect(() => {
-    if (colorMode !== 'system') return;
-
-    const update = () => applyTheme('system');
-    update();
-    const intervalId = setInterval(update, 5 * 60 * 1000);
-
-    return () => clearInterval(intervalId);
-  }, [colorMode]);
-
   const handleSaveProfile = async () => {
     if (!user) return;
     if (hasWorkHoursErrors || hasWorkHoursExceptionErrors) {
@@ -602,11 +607,18 @@ function UserSettings() {
       const isBookingTeamScheduleSave =
         activeSection === 'booking' &&
         hasTeamAccess &&
+        activeClinicId &&
         selectedScheduleMemberId &&
         selectedScheduleMemberId !== user.uid;
 
       if (isBookingTeamScheduleSave) {
-        const teamMemberRef = doc(db, 'users', user.uid, 'team', selectedScheduleMemberId);
+        const teamMemberRef = doc(
+          db,
+          'clinics',
+          activeClinicId,
+          'members',
+          selectedScheduleMemberId
+        );
         await setDoc(
           teamMemberRef,
           {
@@ -620,6 +632,7 @@ function UserSettings() {
       }
 
       const jobTitleForSave = category || '';
+      const normalizedCvr = String(cvr || '').replace(/\D+/g, '').slice(0, 8);
       const ref = doc(db, 'users', user.uid);
 
       let resolvedPhotoURL = photoURL || '';
@@ -656,14 +669,10 @@ function UserSettings() {
       }
 
       const updatePayload = {
-        themeMode: colorMode,
+        themeMode: 'light',
         displayName: fullName,
         photoURL: resolvedPhotoURL || null,
         jobTitle: jobTitleForSave,
-        clinicName,
-        website,
-        categories: category ? [category] : [],
-        address,
         workHours: buildWorkHoursPayload(workHours),
         workHoursExceptions: buildWorkHoursExceptionsPayload(workHoursExceptionPreviews),
         preferredLanguage: preferredLanguage || language,
@@ -676,6 +685,41 @@ function UserSettings() {
 
       if (currency) {
         updatePayload.currency = currency;
+      }
+
+      if (activeClinicId) {
+        await Promise.all([
+          setDoc(
+            doc(db, 'clinics', activeClinicId, 'settings', 'general'),
+            {
+              clinicName: clinicName || '',
+              website: website || '',
+              categories: category ? [category] : [],
+              address: address || '',
+              cvr: normalizedCvr,
+              currency: currency || '',
+              publicClinicSlug: publicClinicSlug || '',
+              publicClinicName: publicClinicName || clinicName || '',
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          ),
+          setDoc(
+            doc(db, 'clinics', activeClinicId),
+            {
+              name: clinicName || '',
+              clinicName: clinicName || '',
+              website: website || '',
+              address: address || '',
+              cvr: normalizedCvr,
+              currency: currency || '',
+              publicClinicSlug: publicClinicSlug || '',
+              publicClinicName: publicClinicName || clinicName || '',
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          ),
+        ]);
       }
 
       await setDoc(ref, updatePayload, { merge: true });
@@ -719,11 +763,24 @@ function UserSettings() {
     setSlugStatus(null);
 
     try {
+      let clinicOwnerUid = user.uid;
+      if (activeClinicId) {
+        try {
+          const clinicSnap = await getDoc(doc(db, 'clinics', activeClinicId));
+          if (clinicSnap.exists()) {
+            const clinicData = clinicSnap.data() || {};
+            clinicOwnerUid = String(clinicData?.ownerUid || clinicOwnerUid).trim() || clinicOwnerUid;
+          }
+        } catch (clinicOwnerError) {
+          console.error('[UserSettings] Failed to resolve clinic owner for public slug', clinicOwnerError);
+        }
+      }
+
       const clinicRef = doc(db, 'publicClinics', sanitizedSlug);
       const clinicSnap = await getDoc(clinicRef);
       if (clinicSnap.exists()) {
         const data = clinicSnap.data() || {};
-        if (data.ownerUid && data.ownerUid !== user.uid) {
+        if (data.ownerUid && data.ownerUid !== clinicOwnerUid) {
           setSlugStatus({
             tone: 'error',
             message: t('settings.publicBooking.errors.slugTaken', 'Slug er optaget. Prøv en anden.'),
@@ -733,7 +790,8 @@ function UserSettings() {
       }
 
       const clinicPayload = {
-        ownerUid: user.uid,
+        ownerUid: clinicOwnerUid,
+        clinicId: activeClinicId || null,
         clinicSlug: sanitizedSlug,
         clinicName: nameValue,
         isActive: true,
@@ -759,6 +817,21 @@ function UserSettings() {
         },
         { merge: true }
       );
+
+      if (activeClinicId) {
+        await setDoc(
+          doc(db, 'clinics', activeClinicId, 'settings', 'general'),
+          {
+            clinicSlug: sanitizedSlug,
+            publicClinicSlug: sanitizedSlug,
+            clinicName: nameValue,
+            publicClinicName: nameValue,
+            website: generatedUrl,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }
 
       const refreshedUserSnap = await getDoc(doc(db, 'users', user.uid));
       if (refreshedUserSnap.exists()) {
@@ -811,17 +884,6 @@ function UserSettings() {
     if (!resolvedBookingAbsoluteUrl || typeof window === 'undefined') return;
     window.open(resolvedBookingAbsoluteUrl, '_blank', 'noopener,noreferrer');
   };
-
-  const renderThemeCard = (mode, label, previewClass) => (
-    <button
-      type="button"
-      className={`theme-card ${previewClass} ${colorMode === mode ? 'selected' : ''}`}
-      onClick={() => setColorMode(mode)}
-    >
-      <div className="theme-card-preview" />
-      <span className="theme-card-label">{label}</span>
-    </button>
-  );
 
   const updateWorkHoursField = (dayKey, field, value) => {
     setWorkHours((prev) => ({
@@ -881,15 +943,25 @@ function UserSettings() {
     );
   };
 
+  const isExpandedSettingsSection =
+    activeSection === 'booking' ||
+    activeSection === 'profile' ||
+    activeSection === 'language' ||
+    activeSection === 'ai';
+
   return (
     <BookingSidebarLayout>
       <div className="booking-page">
         <div className="booking-content">
           {/* Main Content */}
           <div className="usersettings-main">
-          <div className="usersettings-page">
-            <div className="usersettings-card">
-              <div className="usersettings-layout">
+          <div className={`usersettings-page ${isExpandedSettingsSection ? 'usersettings-page-expanded' : ''}`}>
+            <div className={`usersettings-card ${isExpandedSettingsSection ? 'usersettings-card-expanded' : ''}`}>
+              <div
+                className={`usersettings-layout ${
+                  isExpandedSettingsSection ? 'usersettings-layout-expanded' : ''
+                }`}
+              >
                 <aside className="usersettings-nav">
                   <button
                     type="button"
@@ -924,57 +996,81 @@ function UserSettings() {
                 <main className="usersettings-panel">
                   {activeSection === 'profile' && (
                     <>
-                      <div className="usersettings-profile-fields">
-                        <div className="usersettings-section">
-                          <label className="usersettings-label">
-                            {t('settings.profile.fullName', 'Fulde navn')}
-                          </label>
-                          <input
-                            className="usersettings-input"
-                            value={fullName}
-                            onChange={(e) => setFullName(e.target.value)}
-                            placeholder={t(
-                              'settings.profile.fullNamePlaceholder',
-                              'Indtast dit fulde navn'
-                            )}
-                          />
-                        </div>
+                      <div className="usersettings-content-shell">
+                        <section className="usersettings-surface-card">
+                          <div className="usersettings-section-head">
+                            <h3 className="usersettings-section-title">
+                              {t('settings.profile.title', 'Redigere din virksomhedsoplysninger')}
+                            </h3>
+                          </div>
+                          <div className="usersettings-profile-grid">
+                            <div className="usersettings-section">
+                              <label className="usersettings-label">
+                                {t('settings.profile.fullName', 'Fulde navn')}
+                              </label>
+                              <input
+                                className="usersettings-input"
+                                value={fullName}
+                                onChange={(e) => setFullName(e.target.value)}
+                                placeholder={t(
+                                  'settings.profile.fullNamePlaceholder',
+                                  'Indtast dit fulde navn'
+                                )}
+                              />
+                            </div>
 
-                        <div className="usersettings-section">
-                          <label className="usersettings-label">
-                            {t('settings.profile.email', 'E-mail')}
-                          </label>
-                          <input className="usersettings-input" value={email} readOnly />
-                        </div>
+                            <div className="usersettings-section">
+                              <label className="usersettings-label">
+                                {t('settings.profile.email', 'E-mail')}
+                              </label>
+                              <input className="usersettings-input" value={email} readOnly />
+                            </div>
 
-                        <div className="usersettings-section">
-                          <label className="usersettings-label">
-                            {t('settings.profile.clinicName', 'Kliniknavn')}
-                          </label>
-                          <input
-                            className="usersettings-input"
-                            value={clinicName}
-                            onChange={(e) => setClinicName(e.target.value)}
-                            placeholder={t(
-                              'settings.profile.clinicPlaceholder',
-                              'Angiv navnet på klinikken'
-                            )}
-                          />
-                        </div>
+                            <div className="usersettings-section">
+                              <label className="usersettings-label">
+                                {t('settings.profile.clinicName', 'Kliniknavn')}
+                              </label>
+                              <input
+                                className="usersettings-input"
+                                value={clinicName}
+                                onChange={(e) => setClinicName(e.target.value)}
+                                placeholder={t(
+                                  'settings.profile.clinicPlaceholder',
+                                  'Angiv navnet på klinikken'
+                                )}
+                              />
+                            </div>
 
-                        <div className="usersettings-section">
-                          <label className="usersettings-label">
-                            {t('settings.account.address', 'Adresse')}
-                          </label>
-                          <input
-                            className="usersettings-input"
-                            value={address}
-                            onChange={(e) => setAddress(e.target.value)}
-                            placeholder={t('settings.account.addressPlaceholder', 'Indtast adresse')}
-                          />
-                        </div>
+                            <div className="usersettings-section">
+                              <label className="usersettings-label">
+                                {t('settings.profile.cvr', 'CVR')}
+                              </label>
+                              <input
+                                className="usersettings-input"
+                                value={cvr}
+                                onChange={(e) =>
+                                  setCvr(e.target.value.replace(/\D+/g, '').slice(0, 8))
+                                }
+                                inputMode="numeric"
+                                maxLength={8}
+                                placeholder={t('settings.profile.cvrPlaceholder', 'Indtast CVR-nummer')}
+                              />
+                            </div>
+
+                            <div className="usersettings-section usersettings-section-span-full">
+                              <label className="usersettings-label">
+                                {t('settings.account.address', 'Adresse')}
+                              </label>
+                              <input
+                                className="usersettings-input"
+                                value={address}
+                                onChange={(e) => setAddress(e.target.value)}
+                                placeholder={t('settings.account.addressPlaceholder', 'Indtast adresse')}
+                              />
+                            </div>
+                          </div>
+                        </section>
                       </div>
-
                     </>
                   )}
 
@@ -1017,16 +1113,30 @@ function UserSettings() {
                             <label className="usersettings-label">
                               {t('settings.publicBooking.publicLinkLabel', 'Offentlig bookingside URL')}
                             </label>
-                            <input
-                              className="usersettings-input"
-                              value={resolvedBookingAbsoluteUrl}
-                              readOnly
-                              placeholder={t(
-                                'settings.publicBooking.urlPlaceholder',
-                                '{baseUrl}/book/your-clinic',
-                                { baseUrl: PUBLIC_BOOKING_BASE_URL }
-                              )}
-                            />
+                            <div className="usersettings-booking-link-row">
+                              <input
+                                className="usersettings-input"
+                                value={resolvedBookingAbsoluteUrl}
+                                readOnly
+                                placeholder={t(
+                                  'settings.publicBooking.urlPlaceholder',
+                                  '{baseUrl}/book/your-clinic',
+                                  { baseUrl: PUBLIC_BOOKING_BASE_URL }
+                                )}
+                              />
+                              <button
+                                type="button"
+                                className="usersettings-claim-btn usersettings-claim-btn-primary usersettings-booking-activate-btn"
+                                onClick={handleClaimSlug}
+                                disabled={isClaimingSlug || !clinicName.trim()}
+                              >
+                                {isClaimingSlug
+                                  ? t('settings.publicBooking.claiming', 'Aktiverer...')
+                                  : bookingIsActive
+                                    ? t('settings.publicBooking.update', 'Opdater bookingside')
+                                    : t('settings.publicBooking.activate', 'Aktiver bookingside')}
+                              </button>
+                            </div>
                             <div className="usersettings-booking-link-actions">
                               <button
                                 type="button"
@@ -1046,26 +1156,9 @@ function UserSettings() {
                               >
                                 {t('settings.publicBooking.openPage', 'Åbn side')}
                               </button>
-                              <button
-                                type="button"
-                                className="usersettings-claim-btn usersettings-claim-btn-primary"
-                                onClick={handleClaimSlug}
-                                disabled={isClaimingSlug || !clinicName.trim()}
-                              >
-                                {isClaimingSlug
-                                  ? t('settings.publicBooking.claiming', 'Aktiverer...')
-                                  : bookingIsActive
-                                    ? t('settings.publicBooking.update', 'Opdater bookingside')
-                                    : t('settings.publicBooking.activate', 'Aktiver bookingside')}
-                              </button>
                             </div>
                           </div>
 
-                          {bookingIsActive ? (
-                            <div className="usersettings-status success">
-                              {activeBookingStatusMessage}
-                            </div>
-                          ) : null}
                           {slugStatus?.tone === 'error' && slugStatus?.message ? (
                             <div className="usersettings-status error">{slugStatus.message}</div>
                           ) : null}
@@ -1503,174 +1596,181 @@ function UserSettings() {
                     </>
                   )}
 
-                  {activeSection === 'appearance' && (
-                    <>
-                      <div className="usersettings-header">
-                        <div className="usersettings-title">
-                          {t('settings.appearance.title', 'Appearance')}
-                        </div>
-                        <div className="usersettings-subtitle">
-                          {t('settings.appearance.subtitle', 'Vælg hvordan Selma skal se ud')}
-                        </div>
-                      </div>
-
-                      <div className="usersettings-theme-grid">
-                        {renderThemeCard('light', t('settings.appearance.light', 'Light'), 'theme-light')}
-                        {renderThemeCard('system', t('settings.appearance.system', 'Match system'), 'theme-system')}
-                        {renderThemeCard('dark', t('settings.appearance.dark', 'Dark'), 'theme-dark')}
-                      </div>
-                    </>
-                  )}
-
                   {activeSection === 'language' && (
                     <>
-                      <div className="usersettings-header">
-                        <div className="usersettings-title">
-                          {t('settings.language.title', 'Sprog')}
-                        </div>
-                      </div>
+                      <div className="usersettings-content-shell">
+                        <section className="usersettings-surface-card">
+                          <div className="usersettings-section-head">
+                            <h3 className="usersettings-section-title">
+                              {t('settings.language.title', 'Sprog')}
+                            </h3>
+                            <p className="usersettings-section-description">
+                              {t(
+                                'settings.language.description',
+                                'Vælg standardsprog, dikteringssprog og valuta for din klinik.'
+                              )}
+                            </p>
+                          </div>
 
-                      <div className="usersettings-profile-fields">
-                        <div className="usersettings-section">
-                          <label className="usersettings-label">
-                            {t('settings.language.label', 'Foretrukket sprog')}
-                          </label>
-                          <select
-                            className="usersettings-input"
-                            value={language}
-                            onChange={(e) => {
-                              void setPreferredLanguage(e.target.value, { persist: false });
-                            }}
-                          >
-                            {languageOptions.map((option) => (
-                              <option key={option.code} value={option.code}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="usersettings-section">
-                          <label className="usersettings-label">
-                            {t('settings.language.dictationLabel', 'Dictation language')}
-                          </label>
-                          <select
-                            className="usersettings-input"
-                            value={dictationLanguage}
-                            onChange={(e) => setDictationLanguage(e.target.value)}
-                          >
-                            <option value="auto">
-                              {t('settings.language.dictationAuto', 'Auto (recommended)')}
-                            </option>
-                            {dictationLanguageOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="usersettings-section">
-                          <label className="usersettings-label">
-                            {t('settings.currency.label', 'Valuta')}
-                          </label>
-                          <select
-                            className="usersettings-input"
-                            value={currency}
-                            onChange={(e) => setCurrency(e.target.value)}
-                          >
-                            <option value="">
-                              {t('settings.currency.placeholder', 'Vælg valuta')}
-                            </option>
-                            {CURRENCY_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                          <div className="usersettings-settings-grid">
+                            <div className="usersettings-option-card">
+                              <label className="usersettings-label">
+                                {t('settings.language.label', 'Foretrukket sprog')}
+                              </label>
+                              <select
+                                className="usersettings-input usersettings-select"
+                                value={language}
+                                onChange={(e) => {
+                                  void setPreferredLanguage(e.target.value, { persist: false });
+                                }}
+                              >
+                                {reorderSelectOptions(languageOptions, language, 'code').map((option) => (
+                                  <option key={option.code} value={option.code}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="usersettings-option-card">
+                              <label className="usersettings-label">
+                                {t('settings.language.dictationLabel', 'Dictation language')}
+                              </label>
+                              <select
+                                className="usersettings-input usersettings-select"
+                                value={dictationLanguage}
+                                onChange={(e) => setDictationLanguage(e.target.value)}
+                              >
+                                {reorderSelectOptions(
+                                  [
+                                    {
+                                      value: 'auto',
+                                      label: t('settings.language.dictationAuto', 'Auto (recommended)'),
+                                    },
+                                    ...dictationLanguageOptions,
+                                  ],
+                                  dictationLanguage
+                                ).map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="usersettings-option-card">
+                              <label className="usersettings-label">
+                                {t('settings.currency.label', 'Valuta')}
+                              </label>
+                              <select
+                                className="usersettings-input usersettings-select"
+                                value={currency}
+                                onChange={(e) => setCurrency(e.target.value)}
+                              >
+                                <option value="" disabled hidden>
+                                  {t('settings.currency.placeholder', 'Vælg valuta')}
+                                </option>
+                                {reorderSelectOptions(CURRENCY_OPTIONS, currency).map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        </section>
                       </div>
                     </>
                   )}
 
                   {activeSection === 'ai' && (
                     <>
-                      <div className="usersettings-header">
-                        <div className="usersettings-title">
-                          {t('settings.ai.title', 'AI indstillinger')}
-                        </div>
-                      </div>
+                      <div className="usersettings-content-shell">
+                        <section className="usersettings-surface-card">
+                          <div className="usersettings-section-head">
+                            <h3 className="usersettings-section-title">
+                              {t('settings.ai.title', 'AI indstillinger')}
+                            </h3>
+                            <p className="usersettings-section-description">
+                              {t(
+                                'settings.ai.description',
+                                'Administrer hvor længe lyd, transkription og AI-genereret kommunikation gemmes.'
+                              )}
+                            </p>
+                          </div>
 
-                      <div className="usersettings-profile-fields">
-                        <div className="usersettings-section">
-                          <label className="usersettings-label">
-                            {t('settings.ai.audio.title', 'Lydoptagelse')}
-                          </label>
-                          <p className="usersettings-subtitle">
-                            {t(
-                              'settings.ai.audio.description',
-                              'Selve lyden som optaget af mikrofonen. Lydfilen kan være hjælpsom, hvis vi efterfølgende skal ind og høre efter, om der er bestemte ord, udtaler eller dialekter vi misforstår.'
-                            )}
-                          </p>
-                          <select
-                            className="usersettings-input"
-                            value={audioRetention}
-                            onChange={(e) => setAudioRetention(e.target.value)}
-                          >
-                            <option value="immediate">
-                              {t('settings.ai.retention.immediate', 'Slet med det samme')}
-                            </option>
-                            <option value="30d">
-                              {t('settings.ai.retention.30d', 'Gem 30 dage')}
-                            </option>
-                          </select>
-                        </div>
+                          <div className="usersettings-ai-grid">
+                            <div className="usersettings-ai-card">
+                              <label className="usersettings-label">
+                                {t('settings.ai.audio.title', 'Lydoptagelse')}
+                              </label>
+                              <p className="usersettings-subtitle">
+                                {t(
+                                  'settings.ai.audio.description',
+                                  'Den originale lydoptagelse fra sessionen. Bruges til kvalitetssikring og fejlfinding ved uklarheder i ord, udtale eller dialekt.'
+                                )}
+                              </p>
+                              <select
+                                className="usersettings-input usersettings-select"
+                                value={audioRetention}
+                                onChange={(e) => setAudioRetention(e.target.value)}
+                              >
+                                <option value="immediate">
+                                  {t('settings.ai.retention.immediate', 'Slet med det samme')}
+                                </option>
+                                <option value="30d">
+                                  {t('settings.ai.retention.30d', 'Gem 30 dage')}
+                                </option>
+                              </select>
+                            </div>
 
-                        <div className="usersettings-section">
-                          <label className="usersettings-label">
-                            {t('settings.ai.transcript.title', 'Transkription')}
-                          </label>
-                          <p className="usersettings-subtitle">
-                            {t(
-                              'settings.ai.transcript.description',
-                              'Tekstudgaven af hvad systemet har "hørt". Vi har brug for transkriptionen, hvis vi skal hjælpe dig med "redningsforsøg", hvis en optagelse afbrydes, eller hvis der opstår andre tekniske problemer.'
-                            )}
-                          </p>
-                          <select
-                            className="usersettings-input"
-                            value={transcriptRetention}
-                            onChange={(e) => setTranscriptRetention(e.target.value)}
-                          >
-                            <option value="immediate">
-                              {t('settings.ai.retention.immediate', 'Slet med det samme')}
-                            </option>
-                            <option value="30d">
-                              {t('settings.ai.retention.30d', 'Gem 30 dage')}
-                            </option>
-                          </select>
-                        </div>
+                            <div className="usersettings-ai-card">
+                              <label className="usersettings-label">
+                                {t('settings.ai.transcript.title', 'Transkription')}
+                              </label>
+                              <p className="usersettings-subtitle">
+                                {t(
+                                  'settings.ai.transcript.description',
+                                  'Tekstversionen af lydoptagelsen. Bruges til gendannelse og teknisk support, hvis en optagelse afbrydes eller der opstår fejl.'
+                                )}
+                              </p>
+                              <select
+                                className="usersettings-input usersettings-select"
+                                value={transcriptRetention}
+                                onChange={(e) => setTranscriptRetention(e.target.value)}
+                              >
+                                <option value="immediate">
+                                  {t('settings.ai.retention.immediate', 'Slet med det samme')}
+                                </option>
+                                <option value="30d">
+                                  {t('settings.ai.retention.30d', 'Gem 30 dage')}
+                                </option>
+                              </select>
+                            </div>
 
-                        <div className="usersettings-section">
-                          <label className="usersettings-label">
-                            {t('settings.ai.agentComms.title', 'AI-genereret kommunikation')}
-                          </label>
-                          <p className="usersettings-subtitle">
-                            {t(
-                              'settings.ai.agentComms.description',
-                              'Tekst og svar der bliver genereret i dialogen med vores AI-agenter (fx forslag til journalnotat, opsummeringer og anbefalinger). Gemning kan være nyttig, hvis du vil kunne genfinde tidligere samtaler, dokumentere beslutningsgrundlag eller fortsætte et igangværende forløb.'
-                            )}
-                          </p>
-                          <select
-                            className="usersettings-input"
-                            value={agentCommsRetention}
-                            onChange={(e) => setAgentCommsRetention(e.target.value)}
-                          >
-                            <option value="immediate">
-                              {t('settings.ai.retention.immediate', 'Slet med det samme')}
-                            </option>
-                            <option value="30d">
-                              {t('settings.ai.retention.30d', 'Gem 30 dage')}
-                            </option>
-                          </select>
-                        </div>
+                            <div className="usersettings-ai-card">
+                              <label className="usersettings-label">
+                                {t('settings.ai.agentComms.title', 'AI-genereret kommunikation')}
+                              </label>
+                              <p className="usersettings-subtitle">
+                                {t(
+                                  'settings.ai.agentComms.description',
+                                  'Tekst og svar der bliver genereret i dialogen med vores AI-agenter (fx forslag til journalnotat, opsummeringer og anbefalinger). Gemning kan være nyttig, hvis du vil kunne genfinde tidligere samtaler, dokumentere beslutningsgrundlag eller fortsætte et igangværende forløb.'
+                                )}
+                              </p>
+                              <select
+                                className="usersettings-input usersettings-select"
+                                value={agentCommsRetention}
+                                onChange={(e) => setAgentCommsRetention(e.target.value)}
+                              >
+                                <option value="immediate">
+                                  {t('settings.ai.retention.immediate', 'Slet med det samme')}
+                                </option>
+                                <option value="30d">
+                                  {t('settings.ai.retention.30d', 'Gem 30 dage')}
+                                </option>
+                              </select>
+                            </div>
+                          </div>
+                        </section>
                       </div>
                     </>
                   )}

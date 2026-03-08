@@ -16,6 +16,7 @@ const agentRegistryRoutes = require('./routes/agentRegistryRoutes');
 const rehabAgentRoutes = require('./routes/rehabAgentRoutes');
 const { router: stripeRouter, webhookHandler } = require('./routes/stripeRoutes');
 const { router: billingRouter } = require('./routes/billingRoutes');
+const { router: teamRouter } = require('./routes/teamRoutes');
 const { verifyFirebaseToken } = require('./server/middleware/verifyFirebaseToken');
 const { createCortiTranscribeWss } = require('./ws/cortiTranscribeProxy');
 const { createFactsStreamWss } = require('./ws/factsStreamProxy');
@@ -125,6 +126,7 @@ app.use('/api', (req, res, next) => {
 app.use('/api/corti', cortiRoutes);
 app.use('/api/agents/rehab', rehabAgentRoutes);
 app.use('/api/agents', agentRegistryRoutes);
+app.use('/api/team', teamRouter);
 const execFileAsync = util.promisify(execFile);
 let ffmpegMissingLogged = false;
 

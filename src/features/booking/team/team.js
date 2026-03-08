@@ -1,26 +1,36 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayout';
-import { useAuth } from '../../../AuthContext';
-import { db } from '../../../firebase';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { deleteApp, initializeApp } from 'firebase/app';
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
-  updateDoc,
 } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, getAuth, signOut as signOutAuth } from 'firebase/auth';
+import { useNavigate } from 'react-router-dom';
+import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayout';
+import { useAuth } from '../../../AuthContext';
+import { auth, db } from '../../../firebase';
+import { getIdToken } from '../../../utils/auth';
+import { resolveUserWorkspace } from '../../../utils/employeeWorkspace';
+import { buildApiUrl } from '../../../utils/runtimeUrls';
+import {
+  buildBaseUsername,
+  buildTeamLoginEmail,
+  generateUniqueSummerPassword,
+  normalizeTeamLoginUsername,
+  withUsernameSuffix,
+} from '../../../utils/teamLogin';
 import './team.css';
 
 const navSections = [
   {
     heading: 'Personligt',
-    items: [
-      { key: 'Profil', label: 'Profil' },
-    ],
+    items: [{ key: 'Profil', label: 'Profil' }],
   },
 ];
 
@@ -59,15 +69,26 @@ const resolveTimestamp = (value) => {
   return null;
 };
 
-const mapDocToMember = (docSnap) => {
+const mapDocToMember = (docSnap, options = {}) => {
+  const ownerUid = `${options.ownerUid || ''}`.trim();
+  const ownerName = `${options.ownerName || ''}`.trim();
   const data = docSnap.data() || {};
   const role = `${data.role || ''}`.trim().toLowerCase() === 'owner' || data.isOwner === true
     ? 'owner'
     : 'member';
-  const name =
+  const rawName =
     (typeof data.name === 'string' && data.name.trim()) ||
     `${data.firstName || ''}${data.lastName ? ` ${data.lastName}` : ''}`.trim() ||
     'Medarbejder';
+  const isOwnerRecord =
+    role === 'owner' || `${docSnap.id || ''}`.trim() === ownerUid || `${data.memberUid || ''}`.trim() === ownerUid;
+  const name =
+    isOwnerRecord &&
+    ownerName &&
+    rawName.trim().toLowerCase() === 'medarbejder' &&
+    ownerName.toLowerCase() !== 'medarbejder'
+      ? ownerName
+      : rawName;
   const avatarText =
     (typeof data.avatarText === 'string' && data.avatarText.trim()) ||
     name.charAt(0).toUpperCase() ||
@@ -79,7 +100,8 @@ const mapDocToMember = (docSnap) => {
     name,
     firstName: data.firstName || '',
     lastName: data.lastName || '',
-    email: data.email || '',
+    email: data.contactEmail || data.email || '',
+    authEmail: data.email || data.authEmail || '',
     phone: data.phone || '',
     phoneCountry: data.phoneCountry || '+45',
     phoneLocal: data.phoneLocal || '',
@@ -89,10 +111,176 @@ const mapDocToMember = (docSnap) => {
     avatarText,
     avatarUrl: data.avatarUrl || '',
     isOwner: role === 'owner',
-    memberUid: data.memberUid || null,
+    memberUid: data.memberUid || docSnap.id || null,
     role,
     createdAtMs,
+    loginUsername: data.loginUsername || '',
+    loginPasswordHash: data.loginPasswordHash || '',
+    loginEnabled: data.loginEnabled === true,
   };
+};
+
+const provisionMemberAuthAccount = async ({ email, password }) => {
+  const options = auth?.app?.options;
+  if (!options) {
+    throw new Error('Firebase auth config missing.');
+  }
+
+  const appName = `team-provision-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  const secondaryApp = initializeApp(options, appName);
+  const secondaryAuth = getAuth(secondaryApp);
+
+  try {
+    const credential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+    await signOutAuth(secondaryAuth);
+    return credential;
+  } finally {
+    await deleteApp(secondaryApp).catch(() => {});
+  }
+};
+
+const parseJsonSafely = async (response) => {
+  try {
+    return await response.json();
+  } catch (_error) {
+    return null;
+  }
+};
+
+const sendMemberLoginByEmail = async ({
+  clinicId,
+  memberUid,
+  memberName,
+  username,
+  password,
+  contactEmail,
+}) => {
+  const recipient = `${contactEmail || ''}`.trim();
+  if (!recipient) {
+    return {
+      sent: false,
+      to: '',
+      error: 'Kontakt-email mangler, så login kunne ikke sendes.',
+    };
+  }
+
+  try {
+    const token = await getIdToken();
+    const response = await fetch(buildApiUrl('/api/team/send-member-login'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        clinicId,
+        memberUid,
+        memberName,
+        username,
+        password,
+        contactEmail: recipient,
+      }),
+    });
+    const payload = await parseJsonSafely(response);
+    if (!response.ok) {
+      return {
+        sent: false,
+        to: '',
+        error: payload?.error || 'Kunne ikke sende login-oplysninger via e-mail.',
+      };
+    }
+    return {
+      sent: payload?.sent === true,
+      to: payload?.to || recipient,
+      error: payload?.error || null,
+    };
+  } catch (error) {
+    return {
+      sent: false,
+      to: '',
+      error: error?.message || 'Uventet fejl ved afsendelse af e-mail.',
+    };
+  }
+};
+
+const provisionMemberAuthAccountViaApi = async ({
+  clinicId,
+  authEmail,
+  password,
+  memberName,
+}) => {
+  const token = await getIdToken();
+  const response = await fetch(buildApiUrl('/api/team/provision-member-auth'), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      clinicId,
+      authEmail,
+      password,
+      memberName,
+    }),
+  });
+
+  const payload = await parseJsonSafely(response);
+  if (!response.ok) {
+    const err = new Error(payload?.error || 'Kunne ikke oprette medarbejder-login.');
+    err.code = payload?.code || payload?.errorCode || `http-${response.status}`;
+    throw err;
+  }
+
+  return {
+    uid: `${payload?.uid || ''}`.trim(),
+    email: `${payload?.email || authEmail || ''}`.trim(),
+  };
+};
+
+const removeTeamMemberViaApi = async ({ clinicId, memberUid }) => {
+  const safeClinicId = `${clinicId || ''}`.trim();
+  const safeMemberUid = `${memberUid || ''}`.trim();
+  if (!safeClinicId || !safeMemberUid) {
+    throw new Error('Mangler klinik-id eller medarbejder-id.');
+  }
+
+  const token = await getIdToken();
+  const response = await fetch(buildApiUrl('/api/team/remove-member'), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      clinicId: safeClinicId,
+      memberUid: safeMemberUid,
+    }),
+  });
+
+  const payload = await parseJsonSafely(response);
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Kunne ikke fjerne medarbejderen.');
+  }
+};
+
+const toSubmitErrorMessage = (error) => {
+  const code = `${error?.code || ''}`.toLowerCase();
+  if (code === 'permission-denied' || code.includes('permission')) {
+    return 'Du har ikke adgang til at oprette medarbejdere i denne klinik.';
+  }
+  if (code.includes('operation-not-allowed')) {
+    return 'Email/password-login er ikke aktiveret i Firebase Auth.';
+  }
+  if (code.includes('invalid-email')) {
+    return 'Det auto-genererede login kunne ikke oprettes (ugyldig e-mail).';
+  }
+  if (code.includes('weak-password') || code.includes('invalid-password')) {
+    return 'Auto-genereret adgangskode blev afvist. Prøv igen.';
+  }
+  if (typeof error?.message === 'string' && error.message.trim()) {
+    return error.message.trim();
+  }
+  return 'Kunne ikke tilføje medarbejderen. Prøv igen.';
 };
 
 function TeamMemberForm({ onClose, onSubmit, mode = 'create', initialValues }) {
@@ -109,7 +297,7 @@ function TeamMemberForm({ onClose, onSubmit, mode = 'create', initialValues }) {
     calendarColor: initialValues?.calendarColor || colorOptions[0],
   }));
 
-  const isValid = form.firstName.trim().length > 0 && form.email.trim().length > 3;
+  const isValid = form.firstName.trim().length > 0;
 
   const handleSubmit = async () => {
     if (!isValid || isSubmitting) return;
@@ -119,7 +307,7 @@ function TeamMemberForm({ onClose, onSubmit, mode = 'create', initialValues }) {
       await onSubmit(form);
     } catch (error) {
       console.error('[Team] Failed to save team member', error);
-      setSubmitError('Kunne ikke gemme medarbejderen. Prøv igen.');
+      setSubmitError(toSubmitErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -158,9 +346,7 @@ function TeamMemberForm({ onClose, onSubmit, mode = 'create', initialValues }) {
                     onClick={() => setActiveNav(item.key)}
                   >
                     <span>{item.label}</span>
-                    {typeof item.count === 'number' ? (
-                      <span className="team-add-nav-count">{item.count}</span>
-                    ) : null}
+                    {typeof item.count === 'number' ? <span className="team-add-nav-count">{item.count}</span> : null}
                   </button>
                 ))}
               </div>
@@ -173,6 +359,12 @@ function TeamMemberForm({ onClose, onSubmit, mode = 'create', initialValues }) {
             <div className="team-add-section-title">Profil</div>
             <div className="team-add-section-subtitle">Administrer dit teammedlems personlige profil</div>
           </div>
+
+          {mode === 'create' ? (
+            <div className="team-login-hint">
+              Brugernavn og adgangskode oprettes automatisk ved tilføj.
+            </div>
+          ) : null}
 
           <div className="team-add-avatar">
             <div className="team-add-avatar-circle" style={{ borderColor: form.calendarColor }}>
@@ -202,9 +394,7 @@ function TeamMemberForm({ onClose, onSubmit, mode = 'create', initialValues }) {
             </div>
 
             <div className="team-field">
-              <label>
-                E-mail <span className="required">*</span>
-              </label>
+              <label>E-mail (kontakt)</label>
               <input
                 type="email"
                 value={form.email}
@@ -268,10 +458,13 @@ function TeamMemberForm({ onClose, onSubmit, mode = 'create', initialValues }) {
 
 function TeamPage() {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
-  const [teamAccessLoading, setTeamAccessLoading] = useState(true);
-  const [hasTeamAccess, setHasTeamAccess] = useState(false);
+  const { user, userDoc, loading, workspaceUid } = useAuth();
+  const sessionUid = user?.uid || null;
+  const ownerUid = `${workspaceUid || sessionUid || ''}`.trim();
+  const isWorkspaceOwner = Boolean(sessionUid && ownerUid && sessionUid === ownerUid);
+
   const [activeClinicId, setActiveClinicId] = useState(null);
+  const [clinicName, setClinicName] = useState('Klinik');
 
   const [members, setMembers] = useState([]);
   const [membersLoading, setMembersLoading] = useState(true);
@@ -281,53 +474,114 @@ function TeamPage() {
 
   const [formMode, setFormMode] = useState(null); // null | 'create' | 'edit'
   const [editingMember, setEditingMember] = useState(null);
+  const [generatedCredentials, setGeneratedCredentials] = useState(null);
+  const [removingMemberId, setRemovingMemberId] = useState('');
   const seedAttemptedRef = useRef(false);
+
+  const ensureClinicDocument = useCallback(
+    async (clinicId) => {
+      const resolvedClinicId = `${clinicId || ''}`.trim();
+      if (!resolvedClinicId) return null;
+      if (!isWorkspaceOwner) {
+        return resolvedClinicId;
+      }
+
+      try {
+        const clinicRef = doc(db, 'clinics', resolvedClinicId);
+        const clinicSnap = await getDoc(clinicRef);
+        if (!clinicSnap.exists()) {
+          const fallbackName =
+            `${userDoc?.clinicName || user?.displayName || user?.email || ''}`.trim() || 'Klinik';
+          await setDoc(
+            clinicRef,
+            {
+              ownerUid: sessionUid,
+              clinicType: userDoc?.accountType === 'team' ? 'team' : 'solo',
+              name: fallbackName,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+        }
+
+        await setDoc(
+          doc(db, 'users', sessionUid),
+          {
+            activeClinicId: resolvedClinicId,
+            clinicId: resolvedClinicId,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      } catch (error) {
+        console.error('[TeamPage] Failed to ensure clinic document', error);
+      }
+
+      return resolvedClinicId;
+    },
+    [
+      isWorkspaceOwner,
+      sessionUid,
+      user?.displayName,
+      user?.email,
+      userDoc?.accountType,
+      userDoc?.clinicName,
+    ]
+  );
 
   useEffect(() => {
     if (loading) return;
-    if (!user?.uid) {
+    if (!sessionUid) {
       navigate('/signup', { replace: true });
       return;
     }
 
-    let unsub = () => {};
-    setTeamAccessLoading(true);
-
-    unsub = onSnapshot(
-      doc(db, 'users', user.uid),
+    const unsubscribe = onSnapshot(
+      doc(db, 'users', sessionUid),
       (snap) => {
         const data = snap.exists() ? snap.data() : null;
         const resolvedClinicId = `${data?.activeClinicId || ''}`.trim() || null;
-        const allowed =
-          data?.accountType === 'team' || data?.hasTeam === true || data?.role === 'member';
         setActiveClinicId(resolvedClinicId);
-        if (process.env.NODE_ENV !== 'production') {
-          console.info('[TeamPage] user clinic context', {
-            uid: user.uid,
-            activeClinicId: resolvedClinicId,
-            allowed,
+        if (!resolvedClinicId) {
+          void resolveUserWorkspace(sessionUid).catch((workspaceError) => {
+            console.error('[TeamPage] Failed to resolve workspace', workspaceError);
           });
-        }
-        setHasTeamAccess(allowed);
-        setTeamAccessLoading(false);
-        if (!allowed || !resolvedClinicId) {
-          navigate('/booking', { replace: true });
         }
       },
       (err) => {
         console.error('[TeamPage] Failed to load account type', err);
-        setHasTeamAccess(false);
         setActiveClinicId(null);
-        setTeamAccessLoading(false);
-        navigate('/booking', { replace: true });
       }
     );
 
-    return () => unsub();
-  }, [loading, navigate, user?.uid]);
+    return () => unsubscribe();
+  }, [loading, navigate, sessionUid]);
 
   useEffect(() => {
-    if (teamAccessLoading || !hasTeamAccess || !user?.uid || !activeClinicId) {
+    if (!activeClinicId) {
+      setClinicName(userDoc?.clinicName || 'Klinik');
+      return;
+    }
+
+    const unsubscribe = onSnapshot(
+      doc(db, 'clinics', activeClinicId),
+      (snap) => {
+        const data = snap.exists() ? snap.data() : null;
+        const resolved =
+          `${data?.name || data?.clinicName || userDoc?.clinicName || ''}`.trim() || 'Klinik';
+        setClinicName(resolved);
+      },
+      () => {
+        setClinicName(userDoc?.clinicName || 'Klinik');
+      }
+    );
+
+    return () => unsubscribe();
+  }, [activeClinicId, userDoc?.clinicName]);
+
+  useEffect(() => {
+    if (!sessionUid || !activeClinicId) {
       setMembers([]);
       setMembersLoading(false);
       setMembersError('');
@@ -338,81 +592,131 @@ function TeamPage() {
     setMembersError('');
     seedAttemptedRef.current = false;
 
-    const membersRef = collection(db, 'clinics', activeClinicId, 'members');
-    const source = query(membersRef, orderBy('createdAt', 'asc'));
-    if (process.env.NODE_ENV !== 'production') {
-      console.info('[TeamPage] loading members from clinic', {
-        uid: user.uid,
-        clinicId: activeClinicId,
-      });
-    }
+    const ownerUidFromWorkspace = workspaceUid || sessionUid;
+    let unsubscribePrimary = () => {};
+    let cancelled = false;
 
-    const unsubscribe = onSnapshot(
-      source,
-      async (snapshot) => {
-        const loadedMembers = snapshot.docs.map(mapDocToMember);
-        setMembers(loadedMembers);
-        setMembersLoading(false);
+    const startSubscription = async () => {
+      const resolvedClinicId = await ensureClinicDocument(activeClinicId);
+      if (cancelled || !resolvedClinicId) {
+        return;
+      }
 
-        if (!seedAttemptedRef.current) {
-          const hasOwner = snapshot.docs.some((docSnap) => {
-            const docData = docSnap.data();
-            return docSnap.id === user.uid || docData?.memberUid === user.uid || docData?.isOwner === true;
+      const membersRef = collection(db, 'clinics', resolvedClinicId, 'members');
+      const source = query(membersRef, orderBy('createdAt', 'asc'));
+
+      unsubscribePrimary = onSnapshot(
+        source,
+        async (snapshot) => {
+          if (cancelled) return;
+          const ownerDoc = snapshot.docs.find((docSnap) => {
+            const data = docSnap.data() || {};
+            return (
+              docSnap.id === ownerUidFromWorkspace ||
+              `${data.memberUid || ''}`.trim() === ownerUidFromWorkspace ||
+              `${data.role || ''}`.trim().toLowerCase() === 'owner' ||
+              data.isOwner === true
+            );
           });
+          const ownerData = ownerDoc?.data() || {};
+          const ownerDisplayName =
+            `${ownerData.name || ownerData.displayName || ''}`.trim() ||
+            (isWorkspaceOwner ? `${user?.displayName || user?.email || ''}`.trim() : 'Ejer');
 
-          if (!hasOwner) {
-            seedAttemptedRef.current = true;
-            const displayName = user.displayName || '';
-            const [firstName, ...rest] = displayName.split(' ').filter(Boolean);
-            const lastName = rest.join(' ');
-            const name = displayName || user.email || 'Medarbejder';
-            const avatarText = name.charAt(0).toUpperCase() || 'S';
-            const ownerPayload = {
-              name,
-              firstName: firstName || '',
-              lastName,
-              email: user.email || '',
-              phone: '',
-              phoneCountry: '+45',
-              phoneLocal: '',
-              country: 'Danmark',
-              calendarColor: '#7c3aed',
-              avatarColor: '#7c3aed',
-              avatarText,
-              role: 'owner',
-              memberUid: user.uid,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            };
+          const loadedMembers = snapshot.docs.map((docSnap) =>
+            mapDocToMember(docSnap, {
+              ownerUid: ownerUidFromWorkspace,
+              ownerName: ownerDisplayName,
+            })
+          );
+          setMembers(loadedMembers);
+          setMembersLoading(false);
+          setMembersError('');
 
-            try {
-              await setDoc(doc(db, 'clinics', activeClinicId, 'members', user.uid), ownerPayload, {
-                merge: true,
-              });
-              // Legacy mirror to keep old readers working during migration.
-              await setDoc(doc(db, 'users', user.uid, 'team', user.uid), ownerPayload, { merge: true });
-            } catch (error) {
-              console.error('[TeamPage] Failed to seed owner team member', error);
+          if (!seedAttemptedRef.current && isWorkspaceOwner && ownerUidFromWorkspace) {
+            const hasOwner = snapshot.docs.some((docSnap) => {
+              const docData = docSnap.data();
+              return (
+                docSnap.id === ownerUidFromWorkspace ||
+                docData?.memberUid === ownerUidFromWorkspace ||
+                docData?.isOwner === true
+              );
+            });
+
+            if (!hasOwner) {
+              seedAttemptedRef.current = true;
+              const displayName = user?.displayName || '';
+              const [firstName, ...rest] = displayName.split(' ').filter(Boolean);
+              const lastName = rest.join(' ');
+              const name = displayName || user?.email || 'Medarbejder';
+              const avatarText = name.charAt(0).toUpperCase() || 'S';
+              const ownerPayload = {
+                name,
+                firstName: firstName || '',
+                lastName,
+                email: user?.email || '',
+                contactEmail: user?.email || '',
+                phone: '',
+                phoneCountry: '+45',
+                phoneLocal: '',
+                country: 'Danmark',
+                calendarColor: '#7c3aed',
+                avatarColor: '#7c3aed',
+                avatarText,
+                role: 'owner',
+                isOwner: true,
+                memberUid: ownerUidFromWorkspace,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              };
+
+              try {
+                await setDoc(doc(db, 'clinics', resolvedClinicId, 'members', ownerUidFromWorkspace), ownerPayload, {
+                  merge: true,
+                });
+              } catch (error) {
+                console.error('[TeamPage] Failed to seed owner team member', error);
+              }
             }
           }
+        },
+        (error) => {
+          if (cancelled) return;
+          console.error('[TeamPage] Error loading members', error);
+          setMembers([]);
+          setMembersLoading(false);
+          setMembersError('Kunne ikke hente medarbejdere. Prøv igen senere.');
         }
-      },
-      (error) => {
-        console.error('[TeamPage] Error loading members', error);
-        setMembers([]);
-        setMembersLoading(false);
-        setMembersError('Kunne ikke hente medarbejdere. Prøv igen senere.');
-      }
-    );
+      );
+    };
 
-    return () => unsubscribe();
-  }, [activeClinicId, hasTeamAccess, teamAccessLoading, user?.displayName, user?.email, user?.uid]);
+    void startSubscription();
+
+    return () => {
+      cancelled = true;
+      unsubscribePrimary();
+    };
+  }, [
+    activeClinicId,
+    ensureClinicDocument,
+    isWorkspaceOwner,
+    sessionUid,
+    user?.displayName,
+    user?.email,
+    workspaceUid,
+  ]);
 
   const filteredMembers = useMemo(() => {
     const term = search.trim().toLowerCase();
     const base = term
-      ? members.filter((m) => (m.name || '').toLowerCase().includes(term) || (m.email || '').toLowerCase().includes(term))
+      ? members.filter(
+          (m) =>
+            (m.name || '').toLowerCase().includes(term) ||
+            (m.email || '').toLowerCase().includes(term) ||
+            (m.loginUsername || '').toLowerCase().includes(term)
+        )
       : members.slice();
+
     if (sortMode === 'newest') {
       return base
         .map((member, index) => ({ member, index }))
@@ -426,6 +730,7 @@ function TeamPage() {
         })
         .map(({ member }) => member);
     }
+
     if (sortMode === 'ownerTop') {
       return base
         .map((member, index) => ({ member, index }))
@@ -439,16 +744,19 @@ function TeamPage() {
         })
         .map(({ member }) => member);
     }
+
     return base;
   }, [members, search, sortMode]);
 
   const openCreate = () => {
     setEditingMember(null);
+    setGeneratedCredentials(null);
     setFormMode('create');
   };
 
   const openEdit = (member) => {
     setEditingMember(member);
+    setGeneratedCredentials(null);
     setFormMode('edit');
   };
 
@@ -458,17 +766,101 @@ function TeamPage() {
   };
 
   const handleCreateMember = async (form) => {
-    if (!user?.uid || !activeClinicId) return;
+    if (!sessionUid || !ownerUid) return;
+    const targetClinicId = `${activeClinicId || ''}`.trim();
+    if (!targetClinicId) {
+      throw new Error('Mangler klinik-id.');
+    }
+
+    await ensureClinicDocument(targetClinicId);
+
     const name = `${form.firstName}${form.lastName ? ` ${form.lastName}` : ''}`.trim();
     const initials = (form.firstName?.charAt(0) || '?').toUpperCase();
     const phoneComplete = form.phone ? `${form.phoneCountry} ${form.phone}`.trim() : '';
-    const memberRef = doc(collection(db, 'clinics', activeClinicId, 'members'));
 
-    const payload = {
+    const usedClinicUsernames = new Set(
+      members
+        .map((member) => normalizeTeamLoginUsername(member.loginUsername || ''))
+        .filter(Boolean)
+    );
+    const usedPasswordHashes = new Set(
+      members
+        .map((member) => String(member.loginPasswordHash || '').trim())
+        .filter(Boolean)
+    );
+
+    const { password, hash: passwordHash } = generateUniqueSummerPassword({
+      usedHashes: usedPasswordHashes,
+    });
+
+    const baseUsername = buildBaseUsername({
+      clinicName,
+      firstName: form.firstName,
+      lastName: form.lastName,
+      fallbackName: name,
+    });
+
+    let allocatedUsername = '';
+    let allocatedAuthEmail = '';
+    let memberUid = '';
+
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const candidate = withUsernameSuffix(baseUsername, attempt === 0 ? 0 : attempt);
+      if (usedClinicUsernames.has(candidate)) {
+        continue;
+      }
+
+      const authEmail = buildTeamLoginEmail(candidate);
+      if (!authEmail) {
+        continue;
+      }
+
+      try {
+        const credential = await provisionMemberAuthAccount({
+          email: authEmail,
+          password,
+        });
+        allocatedUsername = candidate;
+        allocatedAuthEmail = authEmail;
+        memberUid = credential?.user?.uid || '';
+        break;
+      } catch (error) {
+        if (error?.code === 'auth/email-already-in-use') {
+          usedClinicUsernames.add(candidate);
+          continue;
+        }
+        try {
+          const provisioned = await provisionMemberAuthAccountViaApi({
+            clinicId: targetClinicId,
+            authEmail,
+            password,
+            memberName: name || candidate,
+          });
+          allocatedUsername = candidate;
+          allocatedAuthEmail = provisioned.email || authEmail;
+          memberUid = provisioned.uid;
+          break;
+        } catch (apiError) {
+          const apiCode = `${apiError?.code || ''}`.toLowerCase();
+          if (apiCode.includes('email-already-exists')) {
+            usedClinicUsernames.add(candidate);
+            continue;
+          }
+          throw apiError;
+        }
+      }
+    }
+
+    if (!memberUid || !allocatedUsername || !allocatedAuthEmail) {
+      throw new Error('Kunne ikke generere et unikt brugernavn.');
+    }
+
+    const memberPayload = {
       name,
       firstName: form.firstName,
       lastName: form.lastName,
-      email: form.email,
+      email: allocatedAuthEmail,
+      contactEmail: form.email || '',
       phone: phoneComplete,
       phoneCountry: form.phoneCountry,
       phoneLocal: form.phone,
@@ -477,18 +869,64 @@ function TeamPage() {
       avatarColor: form.calendarColor,
       avatarText: initials,
       role: 'member',
+      isOwner: false,
+      memberUid,
+      uid: memberUid,
+      loginUsername: allocatedUsername,
+      loginPasswordHash: passwordHash,
+      loginEnabled: true,
+      loginGeneratedByUid: sessionUid,
+      loginGeneratedAt: serverTimestamp(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
 
-    await setDoc(memberRef, payload, { merge: true });
-    // Legacy mirror to keep old readers working during migration.
-    await setDoc(doc(db, 'users', user.uid, 'team', memberRef.id), payload, { merge: true });
+    try {
+      await setDoc(doc(db, 'clinics', targetClinicId, 'members', memberUid), memberPayload, {
+        merge: true,
+      });
+    } catch (error) {
+      console.error('[TeamPage] Failed to write member into clinic members', error);
+      throw error || new Error('Kunne ikke gemme medarbejderen.');
+    }
+
+    try {
+      await setDoc(
+        doc(db, 'users', ownerUid),
+        {
+          hasTeam: true,
+          activeClinicId: targetClinicId,
+          clinicId: targetClinicId,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      console.error('[TeamPage] Failed to update owner team metadata', error);
+    }
+
+    const emailDelivery = await sendMemberLoginByEmail({
+      clinicId: targetClinicId,
+      memberUid,
+      memberName: name || allocatedUsername,
+      username: allocatedUsername,
+      password,
+      contactEmail: form.email || '',
+    });
+
+    setGeneratedCredentials({
+      memberName: name || allocatedUsername,
+      username: allocatedUsername,
+      password,
+      emailDelivery,
+    });
+
     closeForm();
   };
 
   const handleUpdateMember = async (memberId, form) => {
-    if (!user?.uid || !memberId || !activeClinicId) return;
+    if (!memberId || !activeClinicId || !ownerUid) return;
+
     const name = `${form.firstName}${form.lastName ? ` ${form.lastName}` : ''}`.trim();
     const initials = (form.firstName?.charAt(0) || '?').toUpperCase();
     const phoneComplete = form.phone ? `${form.phoneCountry} ${form.phone}`.trim() : '';
@@ -497,7 +935,7 @@ function TeamPage() {
       name,
       firstName: form.firstName,
       lastName: form.lastName,
-      email: form.email,
+      contactEmail: form.email,
       phone: phoneComplete,
       phoneCountry: form.phoneCountry,
       phoneLocal: form.phone,
@@ -507,10 +945,49 @@ function TeamPage() {
       avatarText: initials,
       updatedAt: serverTimestamp(),
     };
-    await updateDoc(doc(db, 'clinics', activeClinicId, 'members', memberId), payload);
-    // Legacy mirror to keep old readers working during migration.
-    await setDoc(doc(db, 'users', user.uid, 'team', memberId), payload, { merge: true });
+
+    await setDoc(doc(db, 'clinics', activeClinicId, 'members', memberId), payload, { merge: true });
+
     closeForm();
+  };
+
+  const handleRemoveMember = async (member) => {
+    if (!member || member.isOwner) return;
+    const targetClinicId = `${activeClinicId || ''}`.trim();
+    const targetMemberUid = `${member.memberUid || member.id || ''}`.trim();
+    if (!targetClinicId || !targetMemberUid) {
+      setMembersError('Kunne ikke identificere medarbejderen.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Er du sikker på, at du vil fjerne ${member.name || 'denne medarbejder'} fra klinikken?`
+    );
+    if (!confirmed) return;
+
+    setRemovingMemberId(member.id);
+    setMembersError('');
+    try {
+      await removeTeamMemberViaApi({
+        clinicId: targetClinicId,
+        memberUid: targetMemberUid,
+      });
+    } catch (error) {
+      console.error('[TeamPage] Failed to remove member', error);
+      setMembersError(error?.message || 'Kunne ikke fjerne medarbejderen.');
+    } finally {
+      setRemovingMemberId('');
+    }
+  };
+
+  const copyLatestCredentials = async () => {
+    if (!generatedCredentials || !navigator?.clipboard) return;
+    const content = `Brugernavn: ${generatedCredentials.username}\nAdgangskode: ${generatedCredentials.password}`;
+    try {
+      await navigator.clipboard.writeText(content);
+    } catch (error) {
+      console.error('[TeamPage] Failed to copy credentials', error);
+    }
   };
 
   if (formMode) {
@@ -555,38 +1032,68 @@ function TeamPage() {
           </div>
         </div>
 
+        {generatedCredentials ? (
+          <div className="team-login-banner">
+            <div className="team-login-banner-title">Nyt medarbejder-login er klar</div>
+            <div className="team-login-banner-row">
+              <span>Medarbejder: {generatedCredentials.memberName}</span>
+              <span>
+                Brugernavn: <code>{generatedCredentials.username}</code>
+              </span>
+              <span>
+                Adgangskode: <code>{generatedCredentials.password}</code>
+              </span>
+            </div>
+            {generatedCredentials.emailDelivery ? (
+              <div
+                className={`team-login-email-status ${
+                  generatedCredentials.emailDelivery.sent ? 'success' : 'warning'
+                }`}
+              >
+                {generatedCredentials.emailDelivery.sent
+                  ? `Login-oplysninger er sendt til ${generatedCredentials.emailDelivery.to || 'medarbejderens e-mail'}.`
+                  : `Login-oplysninger blev ikke sendt på e-mail. ${generatedCredentials.emailDelivery.error || ''}`}
+              </div>
+            ) : null}
+            <div className="team-login-banner-actions">
+              <button type="button" className="team-btn ghost small" onClick={copyLatestCredentials}>
+                Kopiér login
+              </button>
+              <button
+                type="button"
+                className="team-btn ghost small"
+                onClick={() => setGeneratedCredentials(null)}
+              >
+                Skjul
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {membersError ? <div className="team-error-banner">{membersError}</div> : null}
 
         <div className="team-controls">
           <div className="team-search">
-            <span>🔍</span>
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Søg i medarbejdere" />
           </div>
           <div className="team-controls-right">
             <select className="team-select" value={sortMode} onChange={(e) => setSortMode(e.target.value)}>
               <option value="custom">Tilpasset ordre</option>
               <option value="newest">Nyeste tilføjet</option>
-              <option value="ownerTop">OG øverst</option>
+              <option value="ownerTop">Ejer øverst</option>
             </select>
           </div>
         </div>
 
         <div className="team-table">
           <div className="team-row head">
-            <div className="team-cell checkbox">
-              <input type="checkbox" disabled />
-            </div>
             <div className="team-cell">Navn</div>
             <div className="team-cell">Kontakt</div>
-            <div className="team-cell">Bedømmelse</div>
-            <div className="team-cell">Handling…</div>
+            <div className="team-cell actions">Handlinger</div>
           </div>
 
           {filteredMembers.map((member) => (
             <div key={member.id} className="team-row">
-              <div className="team-cell checkbox">
-                <input type="checkbox" />
-              </div>
               <div className="team-cell name">
                 <span className="avatar" style={{ background: member.avatarColor || '#0ea5e9' }}>
                   {member.avatarUrl ? <img src={member.avatarUrl} alt={member.name} /> : member.avatarText}
@@ -598,17 +1105,35 @@ function TeamPage() {
               </div>
               <div className="team-cell">
                 <div className="name-info">
-                  <span className="contact-link">{member.email}</span>
-                  <span className="contact-phone">{member.phone}</span>
+                  {member.email ? (
+                    <a className="contact-link" href={`mailto:${member.email}`}>
+                      {member.email}
+                    </a>
+                  ) : (
+                    <span className="contact-muted">Ingen e-mail</span>
+                  )}
+                  {member.phone ? <span className="contact-phone">{member.phone}</span> : null}
+                  {member.loginUsername ? (
+                    <span className="contact-muted">
+                      Login: <strong>{member.loginUsername}</strong>
+                    </span>
+                  ) : null}
                 </div>
               </div>
-              <div className="team-cell">
-                <span className="rating-text">Ingen anmeldelser endnu</span>
-              </div>
-              <div className="team-cell">
+              <div className="team-cell actions">
                 <button type="button" className="team-btn ghost small" onClick={() => openEdit(member)}>
                   Rediger
                 </button>
+                {!member.isOwner ? (
+                  <button
+                    type="button"
+                    className="team-btn danger small"
+                    onClick={() => handleRemoveMember(member)}
+                    disabled={removingMemberId === member.id}
+                  >
+                    {removingMemberId === member.id ? 'Fjerner…' : 'Fjern'}
+                  </button>
+                ) : null}
               </div>
             </div>
           ))}

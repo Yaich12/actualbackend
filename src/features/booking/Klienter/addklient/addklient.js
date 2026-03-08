@@ -68,6 +68,89 @@ const splitNameParts = (value) => {
   };
 };
 
+const normalizeDigits = (value) =>
+  typeof value === 'string' ? value.replace(/\D/g, '') : '';
+
+const isValidDateParts = (day, month, year) => {
+  if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) {
+    return false;
+  }
+  if (month < 1 || month > 12 || day < 1) {
+    return false;
+  }
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+};
+
+const resolveCprBirthYear = (yy, serialFirstDigit) => {
+  const currentYear = new Date().getFullYear();
+  const serial = Number(serialFirstDigit);
+
+  if (!Number.isInteger(serial)) {
+    const year2000 = 2000 + yy;
+    return year2000 <= currentYear ? year2000 : 1900 + yy;
+  }
+
+  if (serial >= 0 && serial <= 3) {
+    return 1900 + yy;
+  }
+
+  if (serial === 4 || serial === 9) {
+    if (yy <= 36) {
+      const year2000 = 2000 + yy;
+      return year2000 <= currentYear ? year2000 : 1900 + yy;
+    }
+    return 1900 + yy;
+  }
+
+  if (serial >= 5 && serial <= 8) {
+    if (yy <= 57) {
+      const year2000 = 2000 + yy;
+      return year2000 <= currentYear ? year2000 : 1800 + yy;
+    }
+    return 1800 + yy;
+  }
+
+  const year2000 = 2000 + yy;
+  return year2000 <= currentYear ? year2000 : 1900 + yy;
+};
+
+const extractBirthFieldsFromCpr = (value) => {
+  const digits = normalizeDigits(value);
+  if (digits.length < 6) {
+    return null;
+  }
+
+  const dayText = digits.slice(0, 2);
+  const monthText = digits.slice(2, 4);
+  const yearText = digits.slice(4, 6);
+
+  const day = Number(dayText);
+  const month = Number(monthText);
+  const year = Number(yearText);
+
+  if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) {
+    return null;
+  }
+
+  const serialFirstDigit = digits.length >= 7 ? digits[6] : undefined;
+  const fullYear = resolveCprBirthYear(year, serialFirstDigit);
+
+  if (!isValidDateParts(day, month, fullYear)) {
+    return null;
+  }
+
+  return {
+    foedselsdag: `${dayText}-${monthText}`,
+    foedselsaar: String(fullYear),
+  };
+};
+
 const getInitialFormData = (mode, initialClient) => {
   const base = {
     navn: '',
@@ -149,7 +232,8 @@ function AddKlient({
   const [saveError, setSaveError] = useState('');
   const [foedselsdagPlaceholder, setFoedselsdagPlaceholder] = useState('DD-MM');
   const [foedselsaarPlaceholder, setFoedselsaarPlaceholder] = useState('YYYY');
-  const { user } = useAuth();
+  const { user, workspaceUid, activeClinicId } = useAuth();
+  const clinicId = `${activeClinicId || ''}`.trim();
   const isDev = process.env.NODE_ENV !== 'production';
 
   // Google Maps / Places
@@ -186,6 +270,37 @@ function AddKlient({
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+
+    if (name === 'cpr') {
+      const normalizedCpr = normalizeDigits(value);
+      const derivedBirthFields = extractBirthFieldsFromCpr(value);
+
+      setFormData((prev) => ({
+        ...prev,
+        cpr: value,
+        ...(derivedBirthFields
+          ? {
+              foedselsdag: derivedBirthFields.foedselsdag,
+              foedselsaar: derivedBirthFields.foedselsaar,
+            }
+          : normalizedCpr.length < 6
+          ? {
+              foedselsdag: '',
+              foedselsaar: '',
+            }
+          : {}),
+      }));
+
+      if (derivedBirthFields) {
+        setFoedselsdagPlaceholder('');
+        setFoedselsaarPlaceholder('');
+      } else if (normalizedCpr.length < 6) {
+        setFoedselsdagPlaceholder('DD-MM');
+        setFoedselsaarPlaceholder('YYYY');
+      }
+
+      return;
+    }
     
     // Handle placeholder fade for birth date fields
     if (name === 'foedselsdag') {
@@ -278,7 +393,7 @@ function AddKlient({
       return;
     }
 
-    if (!user?.uid || !clientId) {
+    if ((!clinicId && !workspaceUid) || !clientId) {
       setSaveError('Manglende klient-id – kunne ikke hente klientens oplysninger.');
       setIsLoadingClientensOplysninger(false);
       return;
@@ -291,7 +406,9 @@ function AddKlient({
       setSaveError('');
 
       try {
-        const clientRef = doc(db, 'users', user.uid, 'clients', clientId);
+        const clientRef = clinicId
+          ? doc(db, 'clinics', clinicId, 'clients', clientId)
+          : doc(db, 'users', workspaceUid, 'clients', clientId);
         const snapshot = await getDoc(clientRef);
 
         if (!snapshot.exists()) {
@@ -383,7 +500,7 @@ function AddKlient({
     return () => {
       cancelled = true;
     };
-  }, [clientId, mode, user?.uid, editView]);
+  }, [clinicId, clientId, editView, mode, workspaceUid]);
 
   // Når bruger vælger adresse fra Google-forslag
   const handlePlaceChanged = () => {
@@ -431,7 +548,7 @@ function AddKlient({
       return;
     }
 
-    if (!user) {
+    if (!user || (!clinicId && !workspaceUid)) {
       setSaveError('Du skal være logget ind for at gemme en klient.');
       return;
     }
@@ -454,7 +571,9 @@ function AddKlient({
           return;
         }
 
-        const clientRef = doc(db, 'users', user.uid, 'clients', clientId);
+        const clientRef = clinicId
+          ? doc(db, 'clinics', clinicId, 'clients', clientId)
+          : doc(db, 'users', workspaceUid, 'clients', clientId);
 
         if (editView === 'personal') {
           // Save personal information
@@ -534,9 +653,11 @@ function AddKlient({
         paaroerende2Land: paaroerende2LandValue,
         paaroerende2: paaroerende2Value,
         paaroerende2Komplet: paaroerende2Value ? `${paaroerende2LandValue} ${paaroerende2Value}` : '',
-        ownerUid: user.uid,
+        clinicId: clinicId || null,
+        ownerUid: workspaceUid || null,
         ownerEmail: user.email ?? null,
         ownerIdentifier,
+        createdByUid: user.uid || null,
         status: formData.status || 'Aktiv',
         clientensoplysninger: {
           kundekilde: kundekilde || '',
@@ -551,13 +672,17 @@ function AddKlient({
       };
 
       if (mode === 'create') {
-        const clientsCollection = collection(db, 'users', user.uid, 'clients');
-        const clientPath = `users/${user.uid}/clients`;
+        const clientsCollection = clinicId
+          ? collection(db, 'clinics', clinicId, 'clients')
+          : collection(db, 'users', workspaceUid, 'clients');
+        const clientPath = clinicId
+          ? `clinics/${clinicId}/clients`
+          : `users/${workspaceUid}/clients`;
         const docRef = await addDoc(clientsCollection, clientPayload);
         if (isDev) {
           console.log('[AddKlient] Created client', {
             path: clientPath,
-            uid: user.uid,
+            uid: clinicId || workspaceUid,
             clientId: docRef.id,
           });
         }
@@ -586,8 +711,12 @@ function AddKlient({
       console.error('Failed to save client data:', error);
       if (isDev) {
         console.error('[AddKlient] Client creation failed', {
-          path: user?.uid ? `users/${user.uid}/clients` : 'unknown',
-          uid: user?.uid || 'unknown',
+          path: clinicId
+            ? `clinics/${clinicId}/clients`
+            : workspaceUid
+            ? `users/${workspaceUid}/clients`
+            : 'unknown',
+          uid: clinicId || workspaceUid || 'unknown',
           errorCode: error?.code || 'unknown',
         });
       }
@@ -602,14 +731,16 @@ function AddKlient({
   };
 
   const handleDelete = async () => {
-    if (!user?.uid || !clientId) return;
+    if ((!clinicId && !workspaceUid) || !clientId) return;
     const confirmed = window.confirm(
       'Er du sikker på, at du vil slette denne klient? Dette kan ikke fortrydes.'
     );
     if (!confirmed) return;
 
     try {
-      const clientRef = doc(db, 'users', user.uid, 'clients', clientId);
+      const clientRef = clinicId
+        ? doc(db, 'clinics', clinicId, 'clients', clientId)
+        : doc(db, 'users', workspaceUid, 'clients', clientId);
       await deleteDoc(clientRef);
       if (typeof onDelete === 'function') {
         onDelete(clientId);
@@ -994,30 +1125,6 @@ function AddKlient({
                   </div>
                 </div>
 
-                <div className="addklient-section">
-                  <div className="addklient-section-header">
-                    <h4>Yderligere oplysninger</h4>
-                    <p>Administer din kundes oplysninger.</p>
-                  </div>
-                  <div className="addklient-form-grid">
-                    <div className="addklient-field">
-                      <label htmlFor="kundekilde">Kundekilde</label>
-                      <select
-                        id="kundekilde"
-                        name="kundekilde"
-                        value={formData.kundekilde}
-                        onChange={handleChange}
-                        className="addklient-select"
-                        disabled={isFormDisabled}
-                      >
-                      <option value="">Vælg en mulighed</option>
-                      <option value="Online Booking">Online Booking</option>
-                      <option value="Læge">Læge</option>
-                      <option value="Ind fra gaden">Ind fra gaden</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </form>

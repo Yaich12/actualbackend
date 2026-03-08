@@ -7,9 +7,11 @@ import { useUserClients } from '../Klienter/hooks/useUserClients';
 import { BarChart3, CalendarDays, Users, Activity, AlertTriangle } from 'lucide-react';
 
 function StatistikPage() {
-  const { user } = useAuth();
+  const { workspaceUid, activeClinicId } = useAuth();
   const { t, locale } = useLanguage();
-  const { appointments = [], loading, error } = useAppointments(user?.uid || null);
+  const { appointments = [], loading, error } = useAppointments(
+    activeClinicId || workspaceUid || null
+  );
   const { clients = [] } = useUserClients();
   const [period, setPeriod] = useState('week'); // 'today' | 'week' | 'month' | 'year' | 'all'
 

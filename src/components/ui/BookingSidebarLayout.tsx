@@ -80,7 +80,6 @@ const formatBadgeCount = (count: number) => (count > 99 ? "99+" : String(count))
 export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
   const [open, setOpen] = useState(true);
   const [clinicName, setClinicName] = useState("");
-  const [hasTeamAccess, setHasTeamAccess] = useState(false);
   const [profilePhotoUrl, setProfilePhotoUrl] = useState<string>("");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [userMenuView, setUserMenuView] = useState<"overview" | "notifications">("overview");
@@ -92,12 +91,12 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, signOutUser } = useAuth();
+  const { user, signOutUser, activeClinicId, workspaceUid } = useAuth();
   const { t, language, languageOptions, locale } = useLanguage();
   const {
     appointments = [],
     loading: appointmentsLoading,
-  } = useAppointments(user?.uid || null);
+  } = useAppointments(activeClinicId || workspaceUid || null);
   const { services: userServices = [] } = useUserServices();
   const userName =
     user?.displayName || user?.email || t("booking.topbar.defaultUser", "Selma bruger");
@@ -249,43 +248,67 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
   useEffect(() => {
     if (!user?.uid) {
       setClinicName("");
-      setHasTeamAccess(false);
+      setProfilePhotoUrl("");
       return;
     }
 
-    const ref = doc(db, "users", user.uid);
-    const unsubscribe = onSnapshot(
-      ref,
+    const userRef = doc(db, "users", user.uid);
+    const unsubscribeUser = onSnapshot(
+      userRef,
       (snap) => {
         if (!snap.exists()) {
-          setClinicName("");
-          setHasTeamAccess(false);
           setProfilePhotoUrl("");
           return;
         }
         const data = snap.data();
-        if (typeof data?.clinicName === "string") {
-          setClinicName(data.clinicName);
-        } else {
-          setClinicName("");
-        }
         if (typeof data?.photoURL === "string") {
           setProfilePhotoUrl(data.photoURL);
         } else {
           setProfilePhotoUrl(user?.photoURL || "");
         }
-        setHasTeamAccess(data?.accountType === "team" || data?.hasTeam === true);
       },
       (err) => {
-        console.error("[BookingSidebarLayout] Failed to load clinic name", err);
-        setClinicName("");
-        setHasTeamAccess(false);
+        console.error("[BookingSidebarLayout] Failed to load user profile", err);
         setProfilePhotoUrl(user?.photoURL || "");
       }
     );
 
-    return () => unsubscribe();
-  }, [user?.photoURL, user?.uid]);
+    let unsubscribeClinic = () => {};
+    if (activeClinicId) {
+      const clinicRef = doc(db, "clinics", activeClinicId, "settings", "general");
+      unsubscribeClinic = onSnapshot(
+        clinicRef,
+        (snap) => {
+          const data = snap.exists() ? snap.data() || {} : {};
+          if (typeof data?.clinicName === "string" && data.clinicName.trim()) {
+            setClinicName(data.clinicName.trim());
+            return;
+          }
+          setClinicName("");
+        },
+        (err) => {
+          console.error("[BookingSidebarLayout] Failed to load clinic settings", err);
+          setClinicName("");
+        }
+      );
+    } else {
+      setClinicName("");
+    }
+
+    return () => {
+      unsubscribeUser();
+      unsubscribeClinic();
+    };
+  }, [activeClinicId, user?.photoURL, user?.uid]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", "light");
+    try {
+      localStorage.removeItem("selma_theme_mode");
+    } catch (_error) {
+      // Ignore storage errors in private browsing contexts.
+    }
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -372,7 +395,14 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
       setNotificationError("");
       setApprovingNotificationIds((prev) => [...prev, appointmentId]);
       try {
-        const ref = doc(db, "users", user.uid, "appointments", appointmentId);
+        const ref = activeClinicId
+          ? doc(db, "clinics", activeClinicId, "appointments", appointmentId)
+          : workspaceUid
+            ? doc(db, "users", workspaceUid, "appointments", appointmentId)
+            : null;
+        if (!ref) {
+          throw new Error("Missing workspace scope for appointment update");
+        }
         const payload: Record<string, unknown> = {
           notificationAcknowledged: true,
           notificationAcknowledgedAt: serverTimestamp(),
@@ -391,7 +421,7 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
         setApprovingNotificationIds((prev) => prev.filter((id) => id !== appointmentId));
       }
     },
-    [approvingNotificationIds, t, user?.uid]
+    [activeClinicId, approvingNotificationIds, t, user?.uid, workspaceUid]
   );
 
   const handleMarkPaymentNotificationRead = React.useCallback(
@@ -441,15 +471,11 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
       href: "/booking/fakturaer",
       icon: <FileText className="h-5 w-5 flex-shrink-0" />,
     },
-    ...(hasTeamAccess
-      ? [
-          {
-            label: t("booking.sidebar.team", "Team"),
-            href: "/booking/team",
-            icon: <Users className="h-5 w-5 flex-shrink-0" />,
-          },
-        ]
-      : []),
+    {
+      label: t("booking.sidebar.team", "Team"),
+      href: "/booking/team",
+      icon: <Users className="h-5 w-5 flex-shrink-0" />,
+    },
     {
       label: t("booking.sidebar.settings", "Indstillinger"),
       href: "/booking/settings",

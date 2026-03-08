@@ -31,6 +31,7 @@ console.log(`[deploy] Firebase project: ${projectId}`);
 const skipBuild = process.env.SKIP_BUILD === '1';
 const skipFunctions = process.env.SKIP_FUNCTIONS === '1';
 const skipHosting = process.env.SKIP_HOSTING === '1';
+const skipFirestore = process.env.SKIP_FIRESTORE === '1';
 
 const run = (label, command, args) => {
   console.log(`\n[deploy] ${label}`);
@@ -64,6 +65,17 @@ if (skipFunctions) {
     'deploy',
     '--only',
     'functions:python_functions',
+  ]);
+}
+
+if (skipFirestore) {
+  console.log('[deploy] SKIP_FIRESTORE=1 -> skipping Firestore deploy.');
+} else {
+  run('Deploying Firestore rules/indexes', 'npx', [
+    'firebase-tools@latest',
+    'deploy',
+    '--only',
+    'firestore',
   ]);
 }
 

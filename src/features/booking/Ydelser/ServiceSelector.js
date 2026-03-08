@@ -5,6 +5,15 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import { useLanguage } from '../../../LanguageContext';
 import { formatServiceDuration } from '../../../utils/serviceLabels';
+import { migrateLegacyCollectionToClinic } from '../../../utils/workspaceContext';
+
+const normalizeProgramPrice = (value) => {
+  if (value === '' || value === null || value === undefined) return null;
+  const normalized = typeof value === 'string' ? value.replace(',', '.').trim() : value;
+  if (normalized === '') return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 function ServiceSelector({
   value,
@@ -14,7 +23,8 @@ function ServiceSelector({
   onServicesChange,
 }) {
   const { services, loading, error } = useUserServices();
-  const { user } = useAuth();
+  const { workspaceUid, activeClinicId } = useAuth();
+  const clinicId = `${activeClinicId || ''}`.trim();
   const { t, locale } = useLanguage();
   const resolvedPlaceholder =
     placeholder || t('booking.services.selector.placeholder', 'Ingen ydelse valgt');
@@ -30,18 +40,37 @@ function ServiceSelector({
   useEffect(() => {
     let cancelled = false;
     const loadForloeb = async () => {
-      if (!user?.uid) {
+      if (!clinicId && !workspaceUid) {
         setForloeb([]);
         return;
       }
       setForloebLoading(true);
       setForloebError(null);
       try {
-        const ref = collection(db, 'users', user.uid, 'forloeb');
+        if (clinicId && workspaceUid) {
+          try {
+            await migrateLegacyCollectionToClinic({
+              clinicId,
+              legacyOwnerUid: workspaceUid,
+              collectionName: 'forloeb',
+              transformDoc: ({ data }) => ({
+                clinicId,
+                createdByUid: data.createdByUid || data.therapistId || null,
+              }),
+            });
+          } catch (migrationError) {
+            console.error('[ServiceSelector] forløb migration error', migrationError);
+          }
+        }
+
+        const ref = clinicId
+          ? collection(db, 'clinics', clinicId, 'forloeb')
+          : collection(db, 'users', workspaceUid, 'forloeb');
         const snap = await getDocs(ref);
         if (cancelled) return;
         const mapped = snap.docs.map((d) => {
           const data = d.data();
+          const packagePrice = normalizeProgramPrice(data.packagePrice);
           return {
             id: `forloeb:${d.id}`,
             forloebId: d.id,
@@ -54,12 +83,9 @@ function ServiceSelector({
               : t('booking.programs.weeksCount', '{count} uger', {
                   count: data.weeks || '?',
                 }),
-            pris:
-              typeof data.pricePerSession === 'number'
-                ? data.pricePerSession
-                : typeof data.packagePrice === 'number'
-                ? data.packagePrice
-                : null,
+            pris: packagePrice,
+            prisInklMoms: packagePrice,
+            packagePrice,
             format: data.format,
             setting: data.setting,
           };
@@ -78,7 +104,7 @@ function ServiceSelector({
     return () => {
       cancelled = true;
     };
-  }, [user?.uid]);
+  }, [clinicId, t, workspaceUid]);
 
   const combinedItems = useMemo(() => {
     const svc = (services || []).map((s) => ({ ...s, type: 'service' }));

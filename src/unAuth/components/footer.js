@@ -7,6 +7,24 @@ const SELMA_LINKEDIN_URL = 'https://www.linkedin.com/company/selmaplus/';
 
 function Footer() {
   const { t } = useLanguage();
+  const landingLinks = [
+    { key: 'hero', href: '#hero' },
+    { key: 'platform', href: '#parallax-demo' },
+    { key: 'workflow', href: '#scroll-parallax' },
+    { key: 'about', href: '#about' },
+    { key: 'stats', href: '#stats' },
+    { key: 'pricing', href: '#pricing' },
+  ];
+  const featureLinks = [
+    { key: 'transcription', href: '/transcription-factsr#factsr-section' },
+    { key: 'copilot', href: '/selma-copilot' },
+    { key: 'website', href: '/website-builder#booking-flow' },
+  ];
+  const aboutLinks = [
+    { key: 'company', href: '#about' },
+    { key: 'pricing', href: '#pricing' },
+    { key: 'linkedin', href: SELMA_LINKEDIN_URL, external: true },
+  ];
 
   return (
     <footer className="footer">
@@ -15,46 +33,41 @@ function Footer() {
       <div className="footer-links">
         <div className="footer-links-container">
           <div className="footer-column">
-            <h3 className="footer-column-title">{t('landing.footer.columns.product.title')}</h3>
+            <h3 className="footer-column-title">{t('landing.footer.columns.landing.title')}</h3>
             <ul className="footer-column-list">
-              <li><a href="#daily">{t('landing.footer.columns.product.items.daily')}</a></li>
-              <li><a href="#monitoring">{t('landing.footer.columns.product.items.monitoring')}</a></li>
-              <li><a href="#mentor">{t('landing.footer.columns.product.items.mentor')}</a></li>
-              <li><a href="#clinical-buddy">{t('landing.footer.columns.product.items.clinicalBuddy')}</a></li>
-              <li><a href="#time-creator">{t('landing.footer.columns.product.items.timeCreator')}</a></li>
-              <li><a href="#events">{t('landing.footer.columns.product.items.events')}</a></li>
+              {landingLinks.map((link) => (
+                <li key={link.key}>
+                  <a href={link.href}>{t(`landing.footer.columns.landing.items.${link.key}`)}</a>
+                </li>
+              ))}
             </ul>
           </div>
 
           <div className="footer-column">
-            <h3 className="footer-column-title">{t('landing.footer.columns.markets.title')}</h3>
+            <h3 className="footer-column-title">{t('landing.footer.columns.features.title')}</h3>
             <ul className="footer-column-list">
-              <li><a href="#eu">{t('landing.footer.columns.markets.items.eu')}</a></li>
-              <li><a href="#denmark">{t('landing.footer.columns.markets.items.denmark')}</a></li>
-              <li><a href="#uk">{t('landing.footer.columns.markets.items.uk')}</a></li>
-            </ul>
-          </div>
-
-          <div className="footer-column">
-            <h3 className="footer-column-title">{t('landing.footer.columns.solutions.title')}</h3>
-            <ul className="footer-column-list">
-              <li><a href="#clinical">{t('landing.footer.columns.solutions.items.clinical')}</a></li>
-              <li><a href="#consultations">{t('landing.footer.columns.solutions.items.consultations')}</a></li>
-              <li><a href="#more">{t('landing.footer.columns.solutions.items.more')}</a></li>
+              {featureLinks.map((link) => (
+                <li key={link.key}>
+                  <a href={link.href}>{t(`landing.footer.columns.features.items.${link.key}`)}</a>
+                </li>
+              ))}
             </ul>
           </div>
 
           <div className="footer-column">
             <h3 className="footer-column-title">{t('landing.footer.columns.about.title')}</h3>
             <ul className="footer-column-list">
-              <li><a href="#cases">{t('landing.footer.columns.about.items.cases')}</a></li>
-              <li><a href="#company">{t('landing.footer.columns.about.items.company')}</a></li>
-              <li>
-                <a href={SELMA_LINKEDIN_URL} target="_blank" rel="noopener noreferrer">
-                  {t('landing.footer.columns.about.items.linkedin')}
-                </a>
-              </li>
-              <li><a href="#privacy">{t('landing.footer.columns.about.items.privacy')}</a></li>
+              {aboutLinks.map((link) => (
+                <li key={link.key}>
+                  <a
+                    href={link.href}
+                    target={link.external ? '_blank' : undefined}
+                    rel={link.external ? 'noopener noreferrer' : undefined}
+                  >
+                    {t(`landing.footer.columns.about.items.${link.key}`)}
+                  </a>
+                </li>
+              ))}
             </ul>
           </div>
         </div>

@@ -47,6 +47,13 @@ const run = (label, command, args, { capture = false } = {}) => {
   return result.stdout || '';
 };
 
+run('Deploying Firestore rules/indexes', 'npx', [
+  'firebase-tools@latest',
+  'deploy',
+  '--only',
+  'firestore',
+]);
+
 const apiDeploy = spawnSync('npm', ['run', 'deploy:api'], { stdio: 'inherit', env: process.env });
 if (apiDeploy.error) {
   console.error('[deploy:live] Failed to run deploy:api:', apiDeploy.error?.message || apiDeploy.error);

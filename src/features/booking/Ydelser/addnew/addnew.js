@@ -16,9 +16,9 @@ const DEFAULT_FORM_VALUES = {
 };
 
 const COLOR_OPTIONS = [
-  { value: '#F59E0B', key: 'booking.services.colors.amber', fallback: 'Rav / Amber' },
-  { value: '#06B6D4', key: 'booking.services.colors.teal', fallback: 'Turkis / Teal' },
-  { value: '#3B82F6', key: 'booking.services.colors.softBlue', fallback: 'Blød blå' },
+  { value: '#F59E0B', key: 'booking.services.colors.amber', fallback: 'Rav' },
+  { value: '#06B6D4', key: 'booking.services.colors.teal', fallback: 'Turkis' },
+  { value: '#3B82F6', key: 'booking.services.colors.softBlue', fallback: 'Blå' },
   { value: '#8B5CF6', key: 'booking.services.colors.violet', fallback: 'Violet' },
   { value: '#EF4444', key: 'booking.services.colors.red', fallback: 'Rød' },
   { value: '#EC4899', key: 'booking.services.colors.pink', fallback: 'Lyserød' },
@@ -65,13 +65,16 @@ function AddNewServiceModal({
   const [formValues, setFormValues] = useState(DEFAULT_FORM_VALUES);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const { user } = useAuth();
+  const { user, workspaceUid, activeClinicId } = useAuth();
+  const clinicId = `${activeClinicId || ''}`.trim();
   const { t } = useLanguage();
   const durationOptions = getServiceDurationOptions(t);
   const colorOptions = COLOR_OPTIONS.map((option) => ({
     ...option,
     label: t(option.key, option.fallback),
   }));
+  const selectedColor =
+    colorOptions.find((option) => option.value === formValues.color) || colorOptions[0];
 
   useEffect(() => {
     if (!isOpen) return;
@@ -119,7 +122,7 @@ function AddNewServiceModal({
       return;
     }
 
-    if (!user) {
+    if (!user || (!clinicId && !workspaceUid)) {
       setSaveError(
         t('booking.services.addNew.errors.notLoggedIn', 'Du skal være logget ind for at gemme en ydelse.')
       );
@@ -131,7 +134,10 @@ function AddNewServiceModal({
 
     try {
       const nowIso = new Date().toISOString();
-      const ownerIdentifier = deriveUserIdentifier(user);
+      const ownerIdentifier = deriveUserIdentifier({
+        ...user,
+        uid: workspaceUid,
+      });
       const priceParsed = parseFloat(
         (formValues.price || '').toString().replace(',', '.')
       );
@@ -142,14 +148,18 @@ function AddNewServiceModal({
         price,
         priceInclVat: price,
         includeVat: false,
-        ownerUid: user.uid,
+        clinicId: clinicId || null,
+        ownerUid: workspaceUid,
         ownerEmail: user.email ?? null,
         ownerIdentifier,
+        createdByUid: user.uid || null,
         createdAtIso: nowIso,
       };
 
       if (mode === 'edit' && serviceId) {
-        const serviceRef = doc(db, 'users', user.uid, 'services', serviceId);
+        const serviceRef = clinicId
+          ? doc(db, 'clinics', clinicId, 'services', serviceId)
+          : doc(db, 'users', workspaceUid, 'services', serviceId);
         await updateDoc(serviceRef, {
           ...payload,
           updatedAt: serverTimestamp(),
@@ -168,7 +178,9 @@ function AddNewServiceModal({
           });
         }
       } else {
-        const servicesCollection = collection(db, 'users', user.uid, 'services');
+        const servicesCollection = clinicId
+          ? collection(db, 'clinics', clinicId, 'services')
+          : collection(db, 'users', workspaceUid, 'services');
         const docRef = await addDoc(servicesCollection, {
           ...payload,
           createdAt: serverTimestamp(),
@@ -212,7 +224,9 @@ function AddNewServiceModal({
     if (!confirmed) return;
 
     try {
-      const serviceRef = doc(db, 'users', user.uid, 'services', serviceId);
+      const serviceRef = clinicId
+        ? doc(db, 'clinics', clinicId, 'services', serviceId)
+        : doc(db, 'users', workspaceUid, 'services', serviceId);
       await deleteDoc(serviceRef);
       if (onSubmit) {
         onSubmit({ id: serviceId, deleted: true });
@@ -299,17 +313,28 @@ function AddNewServiceModal({
               <label htmlFor="service-color">
                 {t('booking.services.addNew.fields.color.label', 'Farve')}
               </label>
-              <select
-                id="service-color"
-                value={formValues.color}
-                onChange={handleChange('color')}
-              >
-                {colorOptions.map((color) => (
-                  <option key={color.value} value={color.value}>
-                    {color.label}
-                  </option>
-                ))}
-              </select>
+              <div className="addnew-color-select-wrap">
+                <select
+                  id="service-color"
+                  value={formValues.color}
+                  onChange={handleChange('color')}
+                >
+                  {colorOptions.map((color) => (
+                    <option key={color.value} value={color.value}>
+                      {color.label}
+                    </option>
+                  ))}
+                </select>
+                {selectedColor && (
+                  <div className="addnew-color-preview" aria-hidden="true">
+                    <span
+                      className="addnew-color-dot"
+                      style={{ backgroundColor: selectedColor.value }}
+                    />
+                    <span>{selectedColor.label}</span>
+                  </div>
+                )}
+              </div>
               <p className="addnew-color-hint">
                 {t(
                   'booking.services.addNew.fields.color.hint',

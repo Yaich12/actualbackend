@@ -217,18 +217,12 @@
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background-color: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  max-width: 300px;
+  padding: 8px 14px;
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  max-width: 320px;
   margin-left: auto;
-}
-
-.search-icon-small {
-  font-size: 16px;
-  color: #6b7280;
 }
 
 .search-input-large {
@@ -287,27 +281,6 @@
   white-space: nowrap;
 }
 
-.clients-table th.sortable {
-  cursor: pointer;
-  user-select: none;
-  transition: background-color 0.2s;
-}
-
-.clients-table th.sortable:hover {
-  background-color: #f3f4f6;
-}
-
-.sort-arrow {
-  margin-left: 6px;
-  color: #3b82f6;
-  font-size: 12px;
-}
-
-.checkbox-col {
-  width: 40px;
-  text-align: center;
-}
-
 .clients-table td {
   padding: 12px 16px;
   border-bottom: 1px solid #e5e7eb;
@@ -345,14 +318,6 @@
 .status-badge.inaktiv {
   background-color: #f3f4f6;
   color: #6b7280;
-}
-
-/* Checkbox styling */
-.clients-table input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-  accent-color: #3b82f6;
 }
 
 /* Client Action Menu */

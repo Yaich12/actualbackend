@@ -68,18 +68,34 @@ if (!firebaseConfigured && !shouldUseEmulators) {
   );
 }
 
-const resolveAuthDomain = ({ useFallback, projectId, envAuthDomain }) => {
-  const trimmed = typeof envAuthDomain === "string" ? envAuthDomain.trim() : "";
-  if (useFallback) {
-    return trimmed || "localhost";
+const normalizeAuthDomain = (value) => {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (!trimmed) {
+    return "";
   }
-  if (trimmed && trimmed.endsWith(".firebaseapp.com")) {
-    return trimmed;
+
+  try {
+    const withProtocol = /^[a-z][a-z\d+\-.]*:\/\//i.test(trimmed)
+      ? trimmed
+      : `https://${trimmed}`;
+    return new URL(withProtocol).host;
+  } catch {
+    return "";
+  }
+};
+
+const resolveAuthDomain = ({ useFallback, projectId, envAuthDomain }) => {
+  const normalizedEnvDomain = normalizeAuthDomain(envAuthDomain);
+  if (useFallback) {
+    return normalizedEnvDomain || "localhost";
+  }
+  if (normalizedEnvDomain) {
+    return normalizedEnvDomain;
   }
   if (projectId) {
     return `${projectId}.firebaseapp.com`;
   }
-  return trimmed || "localhost";
+  return "localhost";
 };
 
 const resolvedProjectId = process.env.REACT_APP_PROJECT_ID || "demo-project";
@@ -90,15 +106,13 @@ const resolvedAuthDomain = resolveAuthDomain({
 });
 
 if (
-  !effectiveUseFallbackConfig &&
   process.env.REACT_APP_AUTH_DOMAIN &&
-  !process.env.REACT_APP_AUTH_DOMAIN.trim().endsWith(".firebaseapp.com")
+  !normalizeAuthDomain(process.env.REACT_APP_AUTH_DOMAIN)
 ) {
   // eslint-disable-next-line no-console
   console.warn(
-    "[Firebase] REACT_APP_AUTH_DOMAIN is not a firebaseapp.com domain. Using",
-    resolvedAuthDomain,
-    "instead."
+    "[Firebase] Invalid REACT_APP_AUTH_DOMAIN. Falling back to",
+    resolvedAuthDomain
   );
 }
 

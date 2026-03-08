@@ -143,8 +143,8 @@ export default function AppointmentDetailDrawer({
   onClose,
   onOpenPayment,
 }: AppointmentDetailDrawerProps) {
-  const { user } = useAuth();
-  const { appointments, loading, error } = useAppointments(user?.uid || null);
+  const { workspaceUid, activeClinicId } = useAuth();
+  const { appointments, loading, error } = useAppointments(activeClinicId || workspaceUid || null);
   const { services } = useUserServices();
 
   useEffect(() => {

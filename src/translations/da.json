@@ -28,23 +28,24 @@
         "websitePlaceholder": "www.ditwebsted.com"
       },
       "categories": {
-        "title": "Vælg den mulighed der passer bedst til din virksomhed",
+        "title": "Vælg den profession der passer bedst til din virksomhed",
         "subtitle": "Du kan ændre dette senere",
         "hint": "{count}/{max} valgt",
         "options": [
-          "Physiotherapist",
-          "Osteopath",
-          "Chiropractor"
+          "Fysioterapeut",
+          "Osteopat",
+          "Kiropraktor"
         ]
       },
       "accountType": {
-        "title": "Vælg kontotype",
+        "title": "Vælg størrelse",
         "subtitle": "Dette hjælper os med at konfigurere din konto korrekt",
         "solo": "Jeg er selvstændig",
         "team": "Jeg har et team"
       },
       "teamSize": {
-        "title": "Hvor mange medarbejdere har du",
+        "title": "Hvor mange er i",
+        "subtitle": "Det er muligt at tilføje flere senere hen",
         "options": [
           "2-5 personer",
           "6-10 personer",
@@ -60,8 +61,8 @@
         ]
       },
       "address": {
-        "title": "Angiv din virksomheds fysiske placering",
-        "subtitle": "Tilføj din primære virksomhedsplacering, så kunderne nemt kan finde dig. Du kan tilføje flere steder senere.",
+        "title": "Angiv virksomhedens adresse",
+        "subtitle": "Adresse bruges til fakturering, betaling og opsætning af bookingsystemet til jeres/ din praksis",
         "label": "Hvor har din virksomheds adresse?",
         "placeholder": "Indtast adresse"
       },
@@ -254,8 +255,15 @@
       "participants": "Deltagere",
       "viewJournal": "Se journal",
       "openNote": "Åben notat",
-      "createEntry": "Opret indlæg",
+      "createEntry": "Opret notat",
+      "closePanel": "Luk panel",
+      "dateLabel": "Dato",
+      "timeLabel": "Tid",
+      "serviceLabel": "Ydelse",
+      "priceLabel": "Pris",
       "createNextAppointment": "Opret næste aftale",
+      "cancelAppointment": "Aflys aftale",
+      "confirmCancel": "Er du sikker på, at du vil aflyse denne aftale?",
       "deleteAppointment": "Slet aftale",
       "confirmDelete": "Er du sikker på, at du vil slette denne aftale? Dette kan ikke fortrydes.",
       "suggestedNoteTitle": "AI-forslag til næste tid",
@@ -362,9 +370,9 @@
         "120m": "2 timer"
       },
       "colors": {
-        "amber": "Rav / Amber",
-        "teal": "Turkis / Teal",
-        "softBlue": "Blød blå",
+        "amber": "Rav",
+        "teal": "Turkis",
+        "softBlue": "Blå",
         "violet": "Violet",
         "red": "Rød",
         "pink": "Lyserød"
@@ -515,7 +523,9 @@
         "sessionPrice": "Pris pr. session ({currency})",
         "packagePrice": "Pakkepris for hele forløbet ({currency})",
         "hint": "Du kan udfylde begge felter og vælge i faktureringen, hvad du bruger i praksis.",
-        "estimate": "Estimeret omsætning pr. deltager ved sessionpris:"
+        "estimate": "Estimeret omsætning pr. deltager ved sessionpris:",
+        "packageHint": "Denne pris bruges i salg/fakturering, når klienten faktureres for hele forløbet.",
+        "packageSummary": "Pakkepris for forløbet:"
       },
       "actions": {
         "saving": "Gemmer...",
@@ -692,7 +702,7 @@
       "language": "Sprog"
     },
     "profile": {
-      "title": "Rediger din onlineprofil",
+      "title": "Redigere din virksomhedsoplysninger",
       "avatarTitle": "Din avatar",
       "avatarSubtitle": "Opdater din avatar til din professionelle profil.",
       "changePhoto": "Skift billede",
@@ -701,7 +711,9 @@
       "fullNamePlaceholder": "Indtast dit fulde navn",
       "email": "E-mail",
       "clinicName": "Kliniknavn",
-      "clinicPlaceholder": "Angiv navnet på klinikken"
+      "clinicPlaceholder": "Angiv navnet på klinikken",
+      "cvr": "CVR",
+      "cvrPlaceholder": "Indtast CVR-nummer"
     },
     "account": {
       "title": "Kontoopsætning",
@@ -721,6 +733,7 @@
     },
     "language": {
       "title": "Sprog",
+      "description": "Vælg standardsprog, dikteringssprog og valuta for din klinik.",
       "label": "Foretrukket sprog",
       "dictationLabel": "Dikteringssprog",
       "dictationAuto": "Auto (anbefalet)"
@@ -797,9 +810,10 @@
     },
     "ai": {
       "title": "AI indstillinger",
+      "description": "Administrer hvor længe lyd, transkription og AI-genereret kommunikation gemmes.",
       "audio": {
         "title": "Lydoptagelse",
-        "description": "Selve lyden som optaget af mikrofonen. Lydfilen kan være hjælpsom, hvis vi efterfølgende skal ind og høre efter, om der er bestemte ord, udtaler eller dialekter vi misforstår."
+        "description": "Den originale lydoptagelse fra sessionen. Bruges til kvalitetssikring og fejlfinding ved uklarheder i ord, udtale eller dialekt."
       },
       "retention": {
         "immediate": "Slet med det samme",
@@ -807,7 +821,7 @@
       },
       "transcript": {
         "title": "Transkription",
-        "description": "Tekstudgaven af hvad systemet har \"hørt\". Vi har brug for transkriptionen, hvis vi skal hjælpe dig med \"redningsforsøg\", hvis en optagelse afbrydes, eller hvis der opstår andre tekniske problemer."
+        "description": "Tekstversionen af lydoptagelsen. Bruges til gendannelse og teknisk support, hvis en optagelse afbrydes eller der opstår fejl."
       },
       "agentComms": {
         "title": "AI-genereret kommunikation",

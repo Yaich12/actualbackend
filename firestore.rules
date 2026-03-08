@@ -21,34 +21,59 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/clinics/$(clinicId)/members/$(request.auth.uid));
     }
 
-    /**
-     * Main data model in this app:
-     * users/{userId}/...
-     *
-     * Examples used in code:
-     * - users/{userId}                      (profile)
-     * - users/{userId}/clients/{clientId}
-     * - users/{userId}/clients/{clientId}/journalEntries/{entryId}
-     * - users/{userId}/appointments/{appointmentId}
-     * - users/{userId}/services/{serviceId}
-     * - users/{userId}/forloeb/{forloebId}
-     */
-    match /users/{userId} {
-      allow read, write: if isOwner(userId);
+    function userActiveClinicId(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data.activeClinicId;
+    }
 
-      // All nested subcollections under the user are also owner-only.
+    function isWorkspaceOwnerUser(userId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(userId))
+        && userActiveClinicId(userId) != null
+        && exists(/databases/$(database)/documents/clinics/$(userActiveClinicId(userId)))
+        && get(/databases/$(database)/documents/clinics/$(userActiveClinicId(userId))).data.ownerUid == userId;
+    }
+
+    function isWorkspaceMemberForOwner(userId) {
+      return isSignedIn()
+        && isWorkspaceOwnerUser(userId)
+        && exists(/databases/$(database)/documents/clinics/$(userActiveClinicId(userId))/members/$(request.auth.uid));
+    }
+
+    function canManagePublicClinic(clinicId, ownerUid) {
+      return clinicId != null
+        && exists(/databases/$(database)/documents/clinics/$(clinicId))
+        && (isClinicOwner(clinicId) || isClinicMember(clinicId))
+        && get(/databases/$(database)/documents/clinics/$(clinicId)).data.ownerUid == ownerUid;
+    }
+
+    // Personal profile data (per-user, not shared clinic workspace data).
+    match /users/{userId} {
+      allow read, write: if isOwner(userId) || isWorkspaceMemberForOwner(userId);
+
+      // Personal nested data remains per-user.
       match /{document=**} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if isOwner(userId) || isWorkspaceMemberForOwner(userId);
       }
     }
 
     match /publicClinics/{clinicSlug} {
-      allow read: if resource.data.isActive == true;
+      allow get: if isSignedIn() || (resource != null && resource.data.isActive == true);
+      allow list: if false;
       allow create: if isSignedIn()
-        && request.resource.data.ownerUid == request.auth.uid;
+        && (
+          (request.resource.data.clinicId == null && request.resource.data.ownerUid == request.auth.uid)
+          || canManagePublicClinic(
+            request.resource.data.clinicId,
+            request.resource.data.ownerUid
+          )
+        );
       allow update: if isSignedIn()
-        && resource.data.ownerUid == request.auth.uid
-        && request.resource.data.ownerUid == resource.data.ownerUid;
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.clinicId == resource.data.clinicId
+        && (
+          (resource.data.clinicId == null && resource.data.ownerUid == request.auth.uid)
+          || canManagePublicClinic(resource.data.clinicId, resource.data.ownerUid)
+        );
       allow delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
@@ -56,12 +81,18 @@ service cloud.firestore {
       allow read: if isClinicOwner(clinicId) || isClinicMember(clinicId);
       allow create: if isSignedIn()
         && request.resource.data.ownerUid == request.auth.uid;
-      allow update: if isClinicOwner(clinicId);
+      allow update: if isClinicOwner(clinicId) || isClinicMember(clinicId);
       allow delete: if false;
 
       match /members/{memberUid} {
         allow read: if isClinicOwner(clinicId) || isClinicMember(clinicId);
-        allow create, update, delete: if isClinicOwner(clinicId);
+        allow create, update, delete: if isClinicOwner(clinicId) || isClinicMember(clinicId);
+      }
+
+      // Shared clinic workspace data:
+      // appointments, clients, services, sales, settings, etc.
+      match /{document=**} {
+        allow read, write: if isClinicOwner(clinicId) || isClinicMember(clinicId);
       }
     }
 

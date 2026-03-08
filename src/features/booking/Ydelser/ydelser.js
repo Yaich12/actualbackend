@@ -1,9 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import '../bookingpage.css';
 import './ydelser.css';
 import { BookingSidebarLayout } from '../../../components/ui/BookingSidebarLayout';
 import AddNewServiceModal from './addnew/addnew';
-import { useAuth } from '../../../AuthContext';
 import { useLanguage } from '../../../LanguageContext';
 import { useUserServices } from './hooks/useUserServices';
 import { ChevronDown } from 'lucide-react';
@@ -32,30 +31,12 @@ const normalizeService = (stored = {}) => {
 };
 
 function Ydelser() {
-  const { user } = useAuth();
   const { t, locale } = useLanguage();
   const { services: remoteServices, loading: isLoadingServices, error: servicesLoadError } = useUserServices();
   const [searchQuery, setSearchQuery] = useState('');
   const [serviceList, setServiceList] = useState([]);
-  const [selectedServices, setSelectedServices] = useState([]);
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [editingService, setEditingService] = useState(null);
-
-  const handleSelectAll = (e) => {
-    if (e.target.checked) {
-      setSelectedServices(serviceList.map(s => s.id));
-    } else {
-      setSelectedServices([]);
-    }
-  };
-
-  const handleSelectService = (serviceId) => {
-    setSelectedServices(prev => 
-      prev.includes(serviceId)
-        ? prev.filter(id => id !== serviceId)
-        : [...prev, serviceId]
-    );
-  };
 
   const filteredServices = serviceList.filter(service =>
     service.navn.toLowerCase().includes(searchQuery.toLowerCase())
@@ -66,14 +47,6 @@ function Ydelser() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }).format(price);
-  };
-
-  const handleAddNewService = (serviceData) => {
-    const normalized = normalizeService(serviceData || {});
-    setServiceList((prev) => {
-      const withoutDuplicate = prev.filter((service) => service.id !== normalized.id);
-      return [normalized, ...withoutDuplicate];
-    });
   };
 
   const openCreateService = () => {
@@ -113,43 +86,7 @@ function Ydelser() {
 
   useEffect(() => {
     setServiceList(remoteServices);
-    setSelectedServices((prevSelected) =>
-      prevSelected.filter((serviceId) =>
-        remoteServices.some((service) => service.id === serviceId)
-      )
-    );
   }, [remoteServices]);
-
-  const userIdentity = useMemo(() => {
-    if (!user) {
-      return {
-        name: t('booking.calendar.notLoggedIn', 'Ikke logget ind'),
-        email: t('booking.calendar.loginToContinue', 'Log ind for at fortsætte'),
-        initials: '?',
-        photoURL: null,
-      };
-    }
-
-    const name =
-      user.displayName ||
-      user.email ||
-      t('booking.topbar.defaultUser', 'Selma bruger');
-    const email = user.email || '—';
-    const initialsSource = (user.displayName || user.email || '?').trim();
-    const initials = initialsSource
-      .split(/\s+/)
-      .map((part) => part[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase();
-
-    return {
-      name,
-      email,
-      initials,
-      photoURL: user.photoURL || null,
-    };
-  }, [user]);
 
   return (
     <BookingSidebarLayout>
@@ -177,7 +114,6 @@ function Ydelser() {
           {/* Selection Bar (kun søgning) */}
           <div className="selection-bar">
             <div className="search-bar-services">
-              <span className="search-icon-small">🔍</span>
               <input 
                 type="text" 
                 placeholder={t('booking.services.search.placeholder', 'Søg')}
@@ -206,22 +142,8 @@ function Ydelser() {
               <div 
                 key={service.id} 
                 className="service-item"
-                onClick={() => handleSelectService(service.id)}
+                onClick={() => openEditService(service)}
               >
-                <div className="service-checkbox">
-                  <input 
-                    type="checkbox" 
-                    checked={false}
-                    readOnly
-                    onChange={() => openEditService(service)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <span
-                    className="service-color-dot"
-                    style={{ backgroundColor: service.color || '#3B82F6' }}
-                    aria-hidden="true"
-                  />
-                </div>
                 <div className="service-name">{service.navn}</div>
                 <div className="service-duration">
                   {formatServiceDuration(service.varighed, t) || service.varighed}

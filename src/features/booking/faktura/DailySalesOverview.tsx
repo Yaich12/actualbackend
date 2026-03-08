@@ -203,8 +203,8 @@ const buildPaymentRows = (sales: any[]) => {
 };
 
 export default function DailySalesOverview() {
-  const { user } = useAuth();
-  const { sales, loading, error } = useSales(user?.uid || null, {
+  const { workspaceUid, activeClinicId } = useAuth();
+  const { sales, loading, error } = useSales(activeClinicId || workspaceUid || null, {
     status: "completed",
   });
   const { services } = useUserServices();
@@ -328,15 +328,10 @@ export default function DailySalesOverview() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Daglige salg</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Se, filtrer og eksportér dagens transaktioner og
-            kontanttransaktioner.
+            Se og filtrer dagens transaktioner og kontanttransaktioner.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button type="button" className="toolbar-pill">
-            Eksportér
-            <ChevronDown className="toolbar-caret" />
-          </button>
+        <div className="flex items-center">
           <button
             type="button"
             className="toolbar-pill toolbar-primary"

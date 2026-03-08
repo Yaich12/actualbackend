@@ -2,12 +2,17 @@ import { useEffect, useState } from 'react';
 import { getApp } from 'firebase/app';
 import {
   collection,
+  getDocs,
+  limit,
   onSnapshot,
-  orderBy,
   query,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { buildAppointmentReference } from '../utils/appointmentReference';
+import { useAuth } from '../AuthContext';
+import { deriveLegacyOwnerUid, migrateLegacyCollectionToClinic } from '../utils/workspaceContext';
+
+const normalizeId = (value) => `${value || ''}`.trim();
 
 const toDateValue = (value) => {
   if (!value) return null;
@@ -42,6 +47,35 @@ const deriveDatePartsFromValue = (value) => {
     startDate: `${day}-${month}-${year}`,
     startTime: `${hours}:${minutes}`,
   };
+};
+
+const getAppointmentSortTime = (appointment) => {
+  const directStart =
+    toDateValue(appointment?.start) ||
+    toDateValue(appointment?.startIso);
+  if (directStart) {
+    return directStart.getTime();
+  }
+
+  const startDate = String(appointment?.startDate || '').trim();
+  const startTime = String(appointment?.startTime || '').trim();
+  if (startDate && startTime) {
+    const [left = '', middle = '', right = ''] = startDate.split('-').map((part) => part.trim());
+    const [hours = '0', minutes = '0'] = startTime.split(':').map((part) => part.trim());
+    const values = [left, middle, right, hours, minutes].map((part) => Number(part));
+    if (values.every((value) => Number.isFinite(value))) {
+      let [day, month, year, hour, minute] = values;
+      if (day > 31) {
+        [year, month, day] = [day, month, year];
+      }
+      const parsed = new Date(year, month - 1, day, hour, minute);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.getTime();
+      }
+    }
+  }
+
+  return 0;
 };
 
 /**
@@ -86,7 +120,17 @@ const mapAppointmentDoc = (doc) => {
   return {
     id: doc.id,
     referenceNumber: storedReference || fallbackReference,
+    clinicId: data.clinicId || null,
+    assignedToUid:
+      data.assignedToUid ||
+      data.calendarOwnerId ||
+      data.staffUid ||
+      data.staffId ||
+      data.therapistId ||
+      null,
+    createdByUid: data.createdByUid || data.createdBy || null,
     staffUid:
+      data.assignedToUid ||
       data.staffUid ||
       data.calendarOwnerId ||
       data.staffId ||
@@ -117,6 +161,8 @@ const mapAppointmentDoc = (doc) => {
     phone: data.phone || data.clientPhone || data.telefonKomplet || data.telefon || '',
     service: data.service || '',
     serviceId: data.serviceId ?? null,
+    forloebId: data.forloebId ?? null,
+    serviceType: data.serviceType || data.type || '',
     serviceDuration: data.serviceDuration || '',
     servicePrice:
       typeof data.servicePrice === 'number' ? data.servicePrice : null,
@@ -148,26 +194,36 @@ const mapAppointmentDoc = (doc) => {
     notificationAcknowledgedAt:
       data.notificationAcknowledgedAt || data.notificationSeenAt || null,
     participants: Array.isArray(data.participants) ? data.participants : [],
+    recurrenceGroupId: data.recurrenceGroupId || null,
+    recurrenceIndex:
+      typeof data.recurrenceIndex === 'number' ? data.recurrenceIndex : null,
+    recurrenceCount:
+      typeof data.recurrenceCount === 'number' ? data.recurrenceCount : null,
+    recurrenceAnchorDate: data.recurrenceAnchorDate || '',
+    isRecurringSeries: data.isRecurringSeries === true,
     color: data.color || null,
   };
 };
 
 /**
- * Subscribe to appointments for a specific therapist.
- * Reads from: users/{therapistId}/appointments
+ * Subscribe to appointments in the active clinic workspace.
+ * Reads from: clinics/{clinicId}/appointments
+ * Legacy fallback: users/{ownerUid}/appointments
  * Appointments are ordered by start time ascending.
  *
- * @param {string|null} therapistId - The UID of the therapist (user.uid)
+ * @param {string|null} scopeId - Optional legacy scope identifier
  * @returns {{ appointments: Array, loading: boolean, error: Error|null }}
  */
-const useAppointments = (therapistId) => {
+const useAppointments = (scopeId) => {
+  const { sessionUid, userDoc, activeClinicId, workspaceUid } = useAuth();
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const clinicId = normalizeId(activeClinicId || userDoc?.activeClinicId || userDoc?.clinicId || '');
+  const legacyOwnerUid = deriveLegacyOwnerUid(userDoc, workspaceUid || scopeId || sessionUid || '');
 
   useEffect(() => {
-    // If no therapistId is provided, don't subscribe
-    if (!therapistId) {
+    if (!clinicId && !legacyOwnerUid) {
       setAppointments([]);
       setLoading(false);
       setError(null);
@@ -177,38 +233,136 @@ const useAppointments = (therapistId) => {
     setLoading(true);
     setError(null);
 
-    // Collection path: users/{therapistId}/appointments
-    const appointmentsRef = collection(db, 'users', therapistId, 'appointments');
-    const appointmentsQuery = query(appointmentsRef, orderBy('start', 'asc'));
-
     const projectId = getApp().options?.projectId || 'unknown-project';
-    console.log(
-      '[useAppointments] projectId=%s path=users/%s/appointments',
-      projectId,
-      therapistId
-    );
+    let unsubscribe = () => {};
+    let cancelled = false;
+    const setUnsubscribe = (nextUnsubscribe) => {
+      let stopped = false;
+      unsubscribe = () => {
+        if (stopped) return;
+        stopped = true;
+        nextUnsubscribe();
+      };
+    };
 
-    const unsubscribe = onSnapshot(
-      appointmentsQuery,
-      (snapshot) => {
-        const nextAppointments = snapshot.docs.map(mapAppointmentDoc);
-        console.log('[useAppointments] received appointments:', nextAppointments.length);
-        setAppointments(nextAppointments);
-        setLoading(false);
-      },
-      (snapshotError) => {
-        console.error('[useAppointments] snapshot error:', snapshotError);
-        setError(snapshotError);
+    const attachListener = async () => {
+      const candidates = [];
+      if (clinicId) {
+        if (legacyOwnerUid) {
+          try {
+            await migrateLegacyCollectionToClinic({
+              clinicId,
+              legacyOwnerUid,
+              collectionName: 'appointments',
+              transformDoc: ({ data }) => {
+                const assignedToUid =
+                  data.assignedToUid ||
+                  data.calendarOwnerId ||
+                  data.staffUid ||
+                  data.staffId ||
+                  data.therapistId ||
+                  null;
+                const createdByUid = data.createdByUid || data.createdBy || data.therapistId || sessionUid || null;
+                return {
+                  clinicId,
+                  assignedToUid,
+                  createdByUid,
+                };
+              },
+            });
+          } catch (migrationError) {
+            console.error('[useAppointments] legacy migration failed:', migrationError);
+          }
+        }
+        if (cancelled) return;
+        candidates.push({
+          source: 'clinic',
+          pathLabel: `clinics/${clinicId}/appointments`,
+          ref: collection(db, 'clinics', clinicId, 'appointments'),
+        });
+      }
+      if (legacyOwnerUid) {
+        if (cancelled) return;
+        candidates.push({
+          source: 'legacy',
+          pathLabel: `users/${legacyOwnerUid}/appointments`,
+          ref: collection(db, 'users', legacyOwnerUid, 'appointments'),
+        });
+      }
+
+      if (candidates.length === 0) {
         setAppointments([]);
         setLoading(false);
+        setError(null);
+        return;
       }
-    );
+
+      let selectedCandidate = null;
+      for (const candidate of candidates) {
+        if (cancelled) return;
+        try {
+          // Preflight read to avoid listen/unlisten races that can trigger SDK assertions.
+          // eslint-disable-next-line no-await-in-loop
+          await getDocs(query(candidate.ref, limit(1)));
+          if (cancelled) return;
+          selectedCandidate = candidate;
+          break;
+        } catch (probeError) {
+          console.warn('[useAppointments] probe failed for candidate', candidate, probeError);
+        }
+      }
+
+      if (!selectedCandidate) {
+        selectedCandidate = candidates[0];
+      }
+
+      console.log(
+        '[useAppointments] projectId=%s path=%s source=%s',
+        projectId,
+        selectedCandidate.pathLabel,
+        selectedCandidate.source
+      );
+
+      if (cancelled) return;
+      const stop = onSnapshot(
+        selectedCandidate.ref,
+        (snapshot) => {
+          if (cancelled) return;
+          const nextAppointments = snapshot.docs
+            .map(mapAppointmentDoc)
+            .sort((left, right) => getAppointmentSortTime(left) - getAppointmentSortTime(right));
+          console.log(
+            '[useAppointments] received appointments: %s from %s',
+            nextAppointments.length,
+            selectedCandidate.pathLabel
+          );
+          setAppointments(nextAppointments);
+          setLoading(false);
+          setError(null);
+        },
+        (snapshotError) => {
+          if (cancelled) return;
+          console.error('[useAppointments] snapshot error:', snapshotError, selectedCandidate);
+          setError(snapshotError);
+          setAppointments([]);
+          setLoading(false);
+        }
+      );
+      if (cancelled) {
+        stop();
+        return;
+      }
+      setUnsubscribe(stop);
+    };
+
+    void attachListener();
 
     return () => {
+      cancelled = true;
       console.log('[useAppointments] unsubscribing');
       unsubscribe();
     };
-  }, [therapistId]);
+  }, [clinicId, legacyOwnerUid, sessionUid]);
 
   return { appointments, loading, error };
 };
