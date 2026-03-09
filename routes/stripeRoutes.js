@@ -807,6 +807,7 @@ const mapPendingSaleToStripeMetadata = (payload = {}) => ({
   clinicId: payload.accountId || '',
   accountId: payload.accountId || '',
   ownerUid: payload.ownerUid || '',
+  notificationRecipientUid: payload.notificationRecipientUid || '',
   patientId: payload.customerId || '',
   therapistId: payload.employeeId || '',
   employeeId: payload.employeeId || '',
@@ -835,6 +836,7 @@ const persistPendingSale = async ({
       status: 'created',
       accountId,
       ownerUid: payload.ownerUid,
+      notificationRecipientUid: payload.notificationRecipientUid || payload.ownerUid || null,
       employeeId: payload.employeeId,
       employeeName: payload.employeeName,
       stripeConnectAccountId,
@@ -865,6 +867,7 @@ const persistPendingSale = async ({
     {
       accountId,
       ownerUid: payload.ownerUid || null,
+      notificationRecipientUid: payload.notificationRecipientUid || payload.ownerUid || null,
       stripeConnectAccountId: stripeConnectAccountId || null,
       checkoutSessionId: session.id,
       pendingSalePath: pendingRef.path,
@@ -906,6 +909,8 @@ const toSalePayloadFromPending = ({ pendingData, session, connectedAccountId }) 
     status: 'completed',
     paymentStatus: 'paid',
     paymentId: stripePaymentIntentId || null,
+    createdByUid:
+      pendingData?.notificationRecipientUid || session?.metadata?.notificationRecipientUid || pendingData?.ownerUid || null,
     appointmentId: pendingData?.appointmentId || null,
     appointmentRef: pendingData?.appointmentRef || null,
     customerId: pendingData?.customer?.id || null,
@@ -925,7 +930,7 @@ const toSalePayloadFromPending = ({ pendingData, session, connectedAccountId }) 
       pendingData?.employeeName ||
       session?.metadata?.employeeName ||
       pendingData?.ownerUid ||
-      'Medarbejder',
+      'Behandler',
     location: pendingData?.location || '',
     stripeCheckoutSessionId: session?.id || null,
     stripePaymentIntentId,
@@ -966,6 +971,7 @@ const resolveConnectSaleClinicName = async ({ accountId, ownerUid }) => {
 const upsertConnectSaleInAppNotification = async ({
   db,
   ownerUid,
+  notificationRecipientUid,
   sessionId,
   saleId,
   accountId,
@@ -975,10 +981,11 @@ const upsertConnectSaleInAppNotification = async ({
   amountLabel,
   currency,
 }) => {
-  if (!ownerUid || !sessionId) return false;
+  const recipientUid = `${notificationRecipientUid || ownerUid || ''}`.trim();
+  if (!recipientUid || !sessionId) return false;
   const notificationRef = db
     .collection('users')
-    .doc(ownerUid)
+    .doc(recipientUid)
     .collection('notifications')
     .doc(`payment_${sessionId}`);
 
@@ -995,6 +1002,8 @@ const upsertConnectSaleInAppNotification = async ({
       customerName: customerName || '',
       amountLabel,
       currency: `${currency || STRIPE_CONNECT_DEFAULT_CURRENCY}`.toLowerCase(),
+      notificationRecipientUid: recipientUid,
+      ownerUid: ownerUid || null,
       actionPath: '/booking/fakturaer/salg',
       readAt: null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1014,6 +1023,7 @@ const runConnectSalePostProcessing = async ({
   saleId,
   accountId,
   ownerUid,
+  notificationRecipientUid = null,
   clinicId,
 }) => {
   const sessionId = `${session?.id || ''}`.trim();
@@ -1030,6 +1040,7 @@ const runConnectSalePostProcessing = async ({
       const created = await upsertConnectSaleInAppNotification({
         db,
         ownerUid,
+        notificationRecipientUid,
         sessionId,
         saleId,
         accountId,
@@ -1164,6 +1175,8 @@ const upsertSaleFromCheckoutSession = async ({ session, connectedAccountId = nul
   const lookupRef = fetchPendingSaleLookupRef(sessionId);
   const pendingSnap = await pendingRef.get();
   const pendingData = pendingSnap.exists ? pendingSnap.data() || {} : {};
+  const notificationRecipientUid =
+    `${pendingData?.notificationRecipientUid || metadata?.notificationRecipientUid || ownerUid}`.trim() || null;
   if (pendingData?.status === 'processed' && pendingData?.saleId) {
     await runConnectSalePostProcessing({
       db,
@@ -1173,6 +1186,7 @@ const upsertSaleFromCheckoutSession = async ({ session, connectedAccountId = nul
       saleId: pendingData.saleId,
       accountId,
       ownerUid,
+      notificationRecipientUid,
       clinicId: `${clinicIdFromMeta || pendingData?.accountId || accountId || ''}`.trim() || null,
     });
     return;
@@ -1252,6 +1266,7 @@ const upsertSaleFromCheckoutSession = async ({ session, connectedAccountId = nul
     saleId: saleRef.id,
     accountId,
     ownerUid,
+    notificationRecipientUid,
     clinicId,
   });
 };
@@ -1765,14 +1780,16 @@ router.post('/connect/create-sale-checkout-session', verifyFirebaseToken, async 
     }
 
     const ownerUid = uid;
+    const notificationRecipientUid = uid;
     const employeeId = `${req.body?.employeeId || uid}`.trim() || uid;
     const employeeName =
       `${req.body?.employeeName || displayName || userDoc.displayName || userDoc.email || ''}`.trim() ||
-      'Medarbejder';
+      'Behandler';
 
     const pendingSalePayload = {
       accountId: resolvedAccountId,
       ownerUid,
+      notificationRecipientUid,
       employeeId,
       employeeName,
       appointmentId,

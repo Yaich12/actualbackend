@@ -77,6 +77,43 @@ const toDateValue = (value: any): Date | null => {
 
 const formatBadgeCount = (count: number) => (count > 99 ? "99+" : String(count));
 
+const normalizeIdentityValue = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
+
+const buildIdentitySet = (values: unknown[]) =>
+  new Set(values.map((value) => normalizeIdentityValue(value)).filter(Boolean));
+
+const appointmentTargetsCurrentUser = (appointment: any, userIdentitySet: Set<string>) => {
+  if (!appointment || !userIdentitySet.size) return false;
+
+  const ownerIdValues = [
+    appointment?.assignedToUid,
+    appointment?.calendarOwnerId,
+    appointment?.staffUid,
+    appointment?.therapistId,
+  ]
+    .map((value) => normalizeIdentityValue(value))
+    .filter(Boolean);
+
+  if (ownerIdValues.some((value) => userIdentitySet.has(value))) {
+    return true;
+  }
+
+  const ownerNameValues = [
+    appointment?.calendarOwner,
+    appointment?.staffName,
+    appointment?.employeeName,
+    appointment?.teamMember,
+    appointment?.assignedTo,
+  ]
+    .map((value) => normalizeIdentityValue(value))
+    .filter(Boolean);
+
+  return ownerNameValues.some((value) => userIdentitySet.has(value));
+};
+
 export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
   const [open, setOpen] = useState(true);
   const [clinicName, setClinicName] = useState("");
@@ -91,7 +128,7 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, signOutUser, activeClinicId, workspaceUid } = useAuth();
+  const { user, userDoc, signOutUser, activeClinicId, workspaceUid } = useAuth();
   const { t, language, languageOptions, locale } = useLanguage();
   const {
     appointments = [],
@@ -108,6 +145,19 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
     const match = languageOptions.find((option) => option.code === language);
     return match?.label || language.toUpperCase();
   }, [language, languageOptions]);
+  const currentUserIdentitySet = useMemo(
+    () =>
+      buildIdentitySet([
+        user?.uid,
+        user?.displayName,
+        user?.email,
+        userDoc?.displayName,
+        userDoc?.fullName,
+        userDoc?.name,
+        userDoc?.email,
+      ]),
+    [user?.displayName, user?.email, user?.uid, userDoc?.displayName, userDoc?.email, userDoc?.fullName, userDoc?.name]
+  );
   const isCatalogRoute =
     location.pathname.startsWith("/booking/ydelser") ||
     location.pathname.startsWith("/booking/forloeb") ||
@@ -120,17 +170,19 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
       .filter((appointment) => {
         const status = String(appointment?.status || "").toLowerCase();
         const source = String(appointment?.source || "").toLowerCase();
-        const createdBy = String(appointment?.createdBy || "").trim();
         const acknowledged =
           Boolean(appointment?.notificationAcknowledged) ||
           Boolean(appointment?.notificationAcknowledgedAt);
-        const isExternalSource =
+        const isPublicBookingSource =
           source.includes("publicbooking") ||
           source.includes("public_booking") ||
-          source.includes("public");
-        const isCreatedByOther = Boolean(user?.uid && createdBy && createdBy !== user.uid);
-        const isExternalBooking = status === "requested" || isExternalSource || isCreatedByOther;
-        return isExternalBooking && !acknowledged;
+          source === "public";
+        const isPublicBooking = status === "requested" || isPublicBookingSource;
+        return (
+          isPublicBooking &&
+          !acknowledged &&
+          appointmentTargetsCurrentUser(appointment, currentUserIdentitySet)
+        );
       })
       .map((appointment) => {
         const start = toDateValue(appointment?.start || appointment?.startIso);
@@ -186,7 +238,7 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
     });
 
     return items;
-  }, [appointments, t, user?.uid, userServices]);
+  }, [appointments, currentUserIdentitySet, t, userServices]);
   const notificationFeed = useMemo(() => {
     const paymentItems = paymentNotifications.map((notification) => ({
       id: notification.id,
@@ -847,23 +899,12 @@ export function BookingSidebarLayout({ children }: BookingSidebarLayoutProps) {
                           ? "text-slate-900"
                           : "text-white group-hover/sidebar:text-white"),
                     });
-                    const shouldShowSettingsBadge =
-                      link.href === "/booking/settings" && unreadNotificationCount > 0;
                     return (
                       <SidebarLink
                         key={link.href}
                         link={{
                           ...link,
-                          icon: shouldShowSettingsBadge ? (
-                            <span className="booking-sidebar-icon-badge-wrap">
-                              {iconNode}
-                              <span className="booking-sidebar-icon-badge">
-                                {unreadNotificationCountLabel}
-                              </span>
-                            </span>
-                          ) : (
-                            iconNode
-                          ),
+                          icon: iconNode,
                         }}
                         className={cn(
                           "rounded-xl px-2 text-base font-semibold",

@@ -160,10 +160,6 @@ const getInitialFormData = (mode, initialClient) => {
     email: '',
     telefon: '',
     telefonLand: '+45',
-    paaroerende1: '',
-    paaroerende1Land: '+45',
-    paaroerende2: '',
-    paaroerende2Land: '+45',
     adresse: '',
     adresse2: '',
     postnummer: '',
@@ -192,10 +188,6 @@ const getInitialFormData = (mode, initialClient) => {
       email: initialClient.email || '',
       telefon: telefonUdenLand || '',
       telefonLand,
-      paaroerende1: initialClient.paaroerende1 || '',
-      paaroerende1Land: initialClient.paaroerende1Land || '+45',
-      paaroerende2: initialClient.paaroerende2 || '',
-      paaroerende2Land: initialClient.paaroerende2Land || '+45',
       adresse: initialClient.adresse || '',
       adresse2: initialClient.adresse2 || '',
       postnummer: initialClient.postnummer || '',
@@ -427,19 +419,7 @@ function AddKlient({
           const telefonUdenLand = telefonValue.startsWith(telefonLand)
             ? telefonValue.slice(telefonLand.length).trim().replace(/^\s+/, '')
             : telefonValue;
-          
-          const paaroerende1Land = data.paaroerende1Land || '+45';
-          const paaroerende1Value = data.paaroerende1 || '';
-          const paaroerende1UdenLand = paaroerende1Value.startsWith(paaroerende1Land)
-            ? paaroerende1Value.slice(paaroerende1Land.length).trim().replace(/^\s+/, '')
-            : paaroerende1Value;
-          
-          const paaroerende2Land = data.paaroerende2Land || '+45';
-          const paaroerende2Value = data.paaroerende2 || '';
-          const paaroerende2UdenLand = paaroerende2Value.startsWith(paaroerende2Land)
-            ? paaroerende2Value.slice(paaroerende2Land.length).trim().replace(/^\s+/, '')
-            : paaroerende2Value;
-          
+
           // Split name into first and last name if not already split
           const nameParts = splitNameParts(data.navn || '');
 
@@ -451,10 +431,6 @@ function AddKlient({
             email: data.email || '',
             telefon: telefonUdenLand || '',
             telefonLand,
-            paaroerende1: paaroerende1UdenLand || '',
-            paaroerende1Land,
-            paaroerende2: paaroerende2UdenLand || '',
-            paaroerende2Land,
             adresse: data.adresse || '',
             adresse2: data.adresse2 || '',
             postnummer: data.postnummer || '',
@@ -577,13 +553,9 @@ function AddKlient({
 
         if (editView === 'personal') {
           // Save personal information
-          const { telefonLand, telefon, paaroerende1Land, paaroerende1, paaroerende2Land, paaroerende2, land, kundekilde, ...restFormData } = normalizedFormData;
+          const { telefonLand, telefon, land, kundekilde, ...restFormData } = normalizedFormData;
           const telefonLandValue = (telefonLand || '+45').trim();
           const telefonValue = (telefon || '').trim();
-          const paaroerende1LandValue = (paaroerende1Land || '+45').trim();
-          const paaroerende1Value = (paaroerende1 || '').trim();
-          const paaroerende2LandValue = (paaroerende2Land || '+45').trim();
-          const paaroerende2Value = (paaroerende2 || '').trim();
 
           await updateDoc(clientRef, {
             ...restFormData,
@@ -591,12 +563,6 @@ function AddKlient({
             telefonLand: telefonLandValue,
             telefon: telefonValue,
             telefonKomplet: telefonValue ? `${telefonLandValue} ${telefonValue}` : '',
-            paaroerende1Land: paaroerende1LandValue,
-            paaroerende1: paaroerende1Value,
-            paaroerende1Komplet: paaroerende1Value ? `${paaroerende1LandValue} ${paaroerende1Value}` : '',
-            paaroerende2Land: paaroerende2LandValue,
-            paaroerende2: paaroerende2Value,
-            paaroerende2Komplet: paaroerende2Value ? `${paaroerende2LandValue} ${paaroerende2Value}` : '',
             status: formData.status || 'Aktiv',
             'clientensoplysninger.kundekilde': kundekilde || '',
             updatedAt: serverTimestamp(),
@@ -633,13 +599,9 @@ function AddKlient({
 
       const nowIso = new Date().toISOString();
       const ownerIdentifier = deriveUserIdentifier(user);
-      const { telefonLand, telefon, paaroerende1Land, paaroerende1, paaroerende2Land, paaroerende2, land, kundekilde, ...restFormData } = normalizedFormData;
+      const { telefonLand, telefon, land, kundekilde, ...restFormData } = normalizedFormData;
       const telefonLandValue = (telefonLand || '+45').trim();
       const telefonValue = (telefon || '').trim();
-      const paaroerende1LandValue = (paaroerende1Land || '+45').trim();
-      const paaroerende1Value = (paaroerende1 || '').trim();
-      const paaroerende2LandValue = (paaroerende2Land || '+45').trim();
-      const paaroerende2Value = (paaroerende2 || '').trim();
 
       const clientPayload = {
         ...restFormData,
@@ -647,12 +609,6 @@ function AddKlient({
         telefonLand: telefonLandValue,
         telefon: telefonValue,
         telefonKomplet: telefonValue ? `${telefonLandValue} ${telefonValue}` : '',
-        paaroerende1Land: paaroerende1LandValue,
-        paaroerende1: paaroerende1Value,
-        paaroerende1Komplet: paaroerende1Value ? `${paaroerende1LandValue} ${paaroerende1Value}` : '',
-        paaroerende2Land: paaroerende2LandValue,
-        paaroerende2: paaroerende2Value,
-        paaroerende2Komplet: paaroerende2Value ? `${paaroerende2LandValue} ${paaroerende2Value}` : '',
         clinicId: clinicId || null,
         ownerUid: workspaceUid || null,
         ownerEmail: user.email ?? null,
@@ -903,63 +859,6 @@ function AddKlient({
                         id="telefon"
                         name="telefon"
                         value={formData.telefon}
-                        onChange={handleChange}
-                        className="addklient-input addklient-phone-input"
-                        placeholder="f.eks. +1234 567 890"
-                        disabled={isFormDisabled}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="addklient-form-grid">
-                  <div className="addklient-field">
-                    <label htmlFor="paaroerende1">Pårørende (valgfrit)</label>
-                    <div className="addklient-phone-group">
-                      <select
-                        name="paaroerende1Land"
-                        value={formData.paaroerende1Land}
-                        onChange={handleChange}
-                        className="addklient-phone-country"
-                        disabled={isFormDisabled}
-                      >
-                        <option value="+45">+45</option>
-                        <option value="+46">+46</option>
-                        <option value="+47">+47</option>
-                        <option value="+358">+358</option>
-                      </select>
-                      <input
-                        type="tel"
-                        id="paaroerende1"
-                        name="paaroerende1"
-                        value={formData.paaroerende1}
-                        onChange={handleChange}
-                        className="addklient-input addklient-phone-input"
-                        placeholder="f.eks. +1234 567 890"
-                        disabled={isFormDisabled}
-                      />
-                    </div>
-                  </div>
-                  <div className="addklient-field">
-                    <label htmlFor="paaroerende2">Pårørende (valgfrit)</label>
-                    <div className="addklient-phone-group">
-                      <select
-                        name="paaroerende2Land"
-                        value={formData.paaroerende2Land}
-                        onChange={handleChange}
-                        className="addklient-phone-country"
-                        disabled={isFormDisabled}
-                      >
-                        <option value="+45">+45</option>
-                        <option value="+46">+46</option>
-                        <option value="+47">+47</option>
-                        <option value="+358">+358</option>
-                      </select>
-                      <input
-                        type="tel"
-                        id="paaroerende2"
-                        name="paaroerende2"
-                        value={formData.paaroerende2}
                         onChange={handleChange}
                         className="addklient-input addklient-phone-input"
                         placeholder="f.eks. +1234 567 890"

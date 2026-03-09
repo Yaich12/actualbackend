@@ -369,7 +369,7 @@ export const TRANSLATIONS = {
           eyebrow: "Visuelt overblik",
           title: "Planlæg teamet uden excel",
           description:
-            "Se tilgængelighed og belastning på tværs af medarbejdere.",
+            "Se tilgængelighed og belastning på tværs af behandlere.",
           bullets: [
             "Træk-og-slip-planlægning",
             "Se belastning pr. behandler",
@@ -474,7 +474,7 @@ export const TRANSLATIONS = {
           eyebrow: "Team",
           title: "Hold styr på klinikken",
           description:
-            "Planlæg medarbejdere, rum og ressourcer uden regneark.",
+            "Planlæg behandlere, rum og ressourcer uden regneark.",
           bullets: [
             "Planlæg vagter og rum",
             "Fælles kalender for hele teamet",
@@ -1236,14 +1236,14 @@ export const TRANSLATIONS = {
         methodLabel: "Login metode",
         methodEmail: "Email",
         methodPhone: "Telefon",
-        methodEmployee: "Medarbejder",
+        methodEmployee: "Behandler",
         phoneLabel: "Telefon",
         phonePlaceholder: "+45 12 34 56 78",
         phoneHelper: "Du modtager en SMS-kode. Standardtakster kan gælde.",
         usernameLabel: "Brugernavn",
         usernamePlaceholder: "Indtast dit brugernavn",
         employeeHelper:
-          "Vælg Medarbejder og log ind med det brugernavn, klinikken har oprettet til dig.",
+          "Vælg Behandler og log ind med det brugernavn, klinikken har oprettet til dig.",
         sendCode: "Send kode",
         smsCodeLabel: "Verifikationskode",
         smsCodePlaceholder: "6 cifre",
@@ -1288,7 +1288,7 @@ export const TRANSLATIONS = {
         codeExpired: "Koden er udløbet. Send en ny kode.",
         phoneLoginFailed: "Kunne ikke logge ind med telefon.",
         employeeUsernameRequired: "Indtast dit brugernavn.",
-        employeeLoginFailed: "Kunne ikke logge ind som medarbejder.",
+        employeeLoginFailed: "Kunne ikke logge ind som behandler.",
         signupFieldsRequired: "Indtast email, kodeord og bekræft kodeord.",
         passwordMismatch: "Kodeordene matcher ikke.",
         providerMismatch:

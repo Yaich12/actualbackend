@@ -49,7 +49,7 @@ const datePresetOptions = [
   { id: "next30", label: "Næste 30 dage" },
 ] as const;
 
-const defaultEmployeeFilter = "Alle medarbejdere";
+const defaultEmployeeFilter = "Alle behandlere";
 
 type DrawerTab = (typeof tabs)[number]["id"];
 
@@ -380,8 +380,8 @@ export default function AddNowDrawer({
   const [paymentInfo, setPaymentInfo] = useState("");
   const [completedSale, setCompletedSale] = useState<any>(null);
 
-  const ownerFallbackName = user?.displayName || user?.email || "Medarbejder";
-  const employeeName = user?.displayName || user?.email || "Medarbejder";
+  const ownerFallbackName = user?.displayName || user?.email || "Behandler";
+  const employeeName = user?.displayName || user?.email || "Behandler";
   const connectStatus = stripeConnectStatus?.connect || null;
   const isConnectReady = Boolean(connectStatus?.onboardingComplete);
   const teamMemberById = useMemo(() => {
@@ -464,14 +464,14 @@ export default function AddNowDrawer({
       (snapshot) => {
         const normalizedOwnerFallback = normalizeMemberName(ownerFallbackName);
         const loaded = dedupeClinicMembers(
-          snapshot.docs.map((docSnap) => mapClinicMemberDoc(docSnap, "Medarbejder"))
+          snapshot.docs.map((docSnap) => mapClinicMemberDoc(docSnap, "Behandler"))
         )
           .map((member) => ({
             id: member.id,
             name:
               String(member.id || "").trim() === String(sessionUid || "").trim() &&
-              normalizeMemberName(member.name).toLowerCase() === "medarbejder" &&
-              normalizedOwnerFallback.toLowerCase() !== "medarbejder"
+              normalizeMemberName(member.name).toLowerCase() === "behandler" &&
+              normalizedOwnerFallback.toLowerCase() !== "behandler"
                 ? normalizedOwnerFallback
                 : normalizeMemberName(member.name),
           }))
@@ -1695,7 +1695,7 @@ export default function AddNowDrawer({
                 </div>
 
                 <div className="mt-10">
-                  <p className="text-xl font-semibold text-slate-900">Medarbejder</p>
+                  <p className="text-xl font-semibold text-slate-900">Behandler</p>
                   <div className="relative mt-4" ref={employeeMenuRef}>
                     <button
                       type="button"

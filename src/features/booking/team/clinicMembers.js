@@ -8,6 +8,11 @@ const normalizeEmail = (value) => normalizeWhitespace(value).toLowerCase();
 const normalizePhone = (value) =>
   normalizeWhitespace(value).replace(/[^\d+]/g, '');
 
+const isGenericPractitionerLabel = (value) => {
+  const normalized = normalizeWhitespace(value).toLowerCase();
+  return normalized === 'medarbejder' || normalized === 'behandler';
+};
+
 const resolveRole = (data) => {
   const rawRole = normalizeWhitespace(data?.role).toLowerCase();
   const isOwner = data?.isOwner === true || rawRole === 'owner';
@@ -29,14 +34,19 @@ const buildIdentityKey = (member) => {
   return '';
 };
 
-export const mapClinicMemberDoc = (docSnap, fallbackLabel = 'Medarbejder') => {
+export const mapClinicMemberDoc = (docSnap, fallbackLabel = 'Behandler') => {
   const data = docSnap.data() || {};
   const { role, isOwner } = resolveRole(data);
+  const preferredFullName =
+    normalizeWhitespace(data?.displayName) ||
+    normalizeWhitespace(data?.fullName) ||
+    normalizeWhitespace(`${data?.firstName || ''} ${data?.lastName || ''}`);
+  const explicitName = normalizeWhitespace(data?.name);
   const name =
-    normalizeWhitespace(data?.name) ||
-    normalizeWhitespace(`${data?.firstName || ''} ${data?.lastName || ''}`) ||
+    preferredFullName ||
+    (explicitName && !isGenericPractitionerLabel(explicitName) ? explicitName : '') ||
     normalizeWhitespace(fallbackLabel) ||
-    'Medarbejder';
+    'Behandler';
 
   const avatarText =
     normalizeWhitespace(data?.avatarText) ||

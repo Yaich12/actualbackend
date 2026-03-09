@@ -155,11 +155,11 @@
       "add": "Tilføj",
       "entireTeam": "Hele teamet",
       "teamOnDuty": "Team på arbejde",
-      "members": "Medarbejdere",
+      "members": "Behandlere",
       "clearAll": "Ryd alle",
       "appointment": "Aftale",
       "program": "Forløb",
-      "memberFallback": "Medarbejder",
+      "memberFallback": "Behandler",
       "you": "Dig",
       "notLoggedIn": "Ikke logget ind",
       "loginToContinue": "Log ind for at fortsætte",
@@ -636,9 +636,9 @@
         "empty": "Ingen data endnu."
       },
       "topStaff": {
-        "title": "Topmedarbejder",
+        "title": "Topbehandler",
         "columns": {
-          "staff": "Medarbejder"
+          "staff": "Behandler"
         }
       },
       "footer": {

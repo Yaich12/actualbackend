@@ -1222,12 +1222,12 @@ function Overview() {
 
           <div className="overview-card">
             <div className="overview-card-header">
-              <h3>{t("booking.overview.topStaff.title", "Topmedarbejder")}</h3>
+              <h3>{t("booking.overview.topStaff.title", "Topbehandler")}</h3>
             </div>
             <table className="overview-table">
               <thead>
                 <tr>
-                  <th>{t("booking.overview.topStaff.columns.staff", "Medarbejder")}</th>
+                  <th>{t("booking.overview.topStaff.columns.staff", "Behandler")}</th>
                   <th>{t("booking.overview.columns.thisMonth", "Denne måned")}</th>
                   <th>{t("booking.overview.columns.lastMonth", "Sidste måned")}</th>
                 </tr>

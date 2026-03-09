@@ -1206,7 +1206,7 @@ router.post('/provision-member-auth', async (req, res) => {
     const requester = requesterSnap.data() || {};
     const requesterRole = `${requester.role || ''}`.trim().toLowerCase();
     if (requesterRole === 'member') {
-      return res.status(403).json({ error: 'Kun klinikejeren kan oprette medarbejder-login.', code: 'forbidden' });
+      return res.status(403).json({ error: 'Kun klinikejeren kan oprette behandler-login.', code: 'forbidden' });
     }
 
     const requesterClinicId = `${requester.activeClinicId || requester.clinicId || ''}`.trim();
@@ -1300,13 +1300,13 @@ router.post('/send-member-login', async (req, res) => {
     const memberRef = db.collection('clinics').doc(clinicId).collection('members').doc(memberUid);
     const memberSnap = await memberRef.get();
     if (!memberSnap.exists) {
-      return res.status(404).json({ error: 'Medarbejder ikke fundet i klinikken.' });
+      return res.status(404).json({ error: 'Behandler ikke fundet i klinikken.' });
     }
 
     const memberData = memberSnap.data() || {};
     const storedUsername = `${memberData.loginUsername || ''}`.trim().toLowerCase();
     if (storedUsername && storedUsername !== username.toLowerCase()) {
-      return res.status(409).json({ error: 'Login-oplysninger matcher ikke medarbejderen.' });
+      return res.status(409).json({ error: 'Login-oplysninger matcher ikke behandleren.' });
     }
 
     const recipient = providedRecipient || normalizeEmail(memberData.contactEmail || memberData.email || '');
@@ -1325,11 +1325,11 @@ router.post('/send-member-login', async (req, res) => {
       memberNameInput,
       memberData.name,
       `${memberData.firstName || ''} ${memberData.lastName || ''}`.trim(),
-      'medarbejder'
+      'behandler'
     );
     const loginUrl = `${resolveBaseUrl(req)}/signup`;
 
-    const subject = `Dit medarbejder-login til ${clinicName}`;
+    const subject = `Dit behandler-login til ${clinicName}`;
     const text = [
       `Hej ${memberName},`,
       '',
@@ -1343,7 +1343,7 @@ router.post('/send-member-login', async (req, res) => {
     ].join('\n');
     const html = `
 <div style="font-family:Arial,sans-serif;color:#0f172a;line-height:1.5;max-width:560px;margin:0 auto;">
-  <h2 style="margin:0 0 12px;">Dit medarbejder-login</h2>
+  <h2 style="margin:0 0 12px;">Dit behandler-login</h2>
   <p style="margin:0 0 12px;">Hej ${escapeHtml(memberName)},</p>
   <p style="margin:0 0 12px;">Her er dit login til <strong>${escapeHtml(clinicName)}</strong>.</p>
   <div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;background:#f8fafc;">
@@ -1423,7 +1423,7 @@ router.post('/remove-member', async (req, res) => {
     const requester = requesterSnap.data() || {};
     const requesterRole = normalizeRole(requester.role);
     if (requesterRole === 'member') {
-      return res.status(403).json({ error: 'Kun klinikejeren kan fjerne medarbejdere.' });
+      return res.status(403).json({ error: 'Kun klinikejeren kan fjerne behandlere.' });
     }
 
     const requesterClinicId = normalizeUid(requester.activeClinicId || requester.clinicId);
@@ -1432,7 +1432,7 @@ router.post('/remove-member', async (req, res) => {
       return res.status(400).json({ error: 'Klinik-id mangler.' });
     }
     if (clinicIdInput && requesterClinicId && clinicIdInput !== requesterClinicId) {
-      return res.status(403).json({ error: 'Du kan kun fjerne medarbejdere i din aktive klinik.' });
+      return res.status(403).json({ error: 'Du kan kun fjerne behandlere i din aktive klinik.' });
     }
 
     const clinicRef = db.collection('clinics').doc(clinicId);
@@ -1443,7 +1443,7 @@ router.post('/remove-member', async (req, res) => {
     const clinicData = clinicSnap.data() || {};
     const ownerUid = normalizeUid(clinicData.ownerUid);
     if (!ownerUid || ownerUid !== requesterUid) {
-      return res.status(403).json({ error: 'Kun klinikejeren kan fjerne medarbejdere.' });
+      return res.status(403).json({ error: 'Kun klinikejeren kan fjerne behandlere.' });
     }
     if (memberUid === ownerUid) {
       return res.status(400).json({ error: 'Du kan ikke fjerne klinikejeren.' });
@@ -1469,7 +1469,7 @@ router.post('/remove-member', async (req, res) => {
     }
 
     if (!memberDocSnap.exists) {
-      return res.status(404).json({ error: 'Medarbejder ikke fundet i klinikken.' });
+      return res.status(404).json({ error: 'Behandler ikke fundet i klinikken.' });
     }
 
     const memberData = memberDocSnap.data() || {};

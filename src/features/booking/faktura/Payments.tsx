@@ -150,7 +150,7 @@ const presetOptions = [
 ];
 
 const defaultLocationFilter = "Alle placeringer";
-const defaultEmployeeFilter = "Alle medarbejdere";
+const defaultEmployeeFilter = "Alle behandlere";
 const defaultTypeFilter = "Alle typer";
 const defaultVoucherFilter = "Ekskluder voucher redemptions";
 const defaultDepositFilter = "Ekskluder deposit redemptions";
@@ -1251,7 +1251,7 @@ export default function Payments() {
                 </div>
 
                 <div className="relative">
-                  <p className="text-sm font-semibold text-slate-700">Medarbejder</p>
+                  <p className="text-sm font-semibold text-slate-700">Behandler</p>
                   <button
                     type="button"
                     onClick={() => {
@@ -1478,7 +1478,7 @@ export default function Payments() {
                   <th className="px-4 py-3 text-left">Placering</th>
                   <th className="px-4 py-3 text-left">Ref nr</th>
                   <th className="px-4 py-3 text-left">Kunde</th>
-                  <th className="px-4 py-3 text-left">Medarbejder</th>
+                  <th className="px-4 py-3 text-left">Behandler</th>
                   <th className="px-4 py-3 text-left">Type</th>
                   <th className="px-4 py-3 text-left">Metode</th>
                   <th className="px-4 py-3 text-right">Muligheder</th>

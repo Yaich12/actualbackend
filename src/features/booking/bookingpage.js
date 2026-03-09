@@ -356,8 +356,45 @@ function BookingPage() {
   const teamOnDutyLabel = t('booking.calendar.teamOnDuty', 'Team på arbejde');
   const primaryCalendarOwner = teamMembers[0]?.name || entireTeamLabel;
 
-  const getAppointmentOwner = (appointment) =>
-    appointment?.calendarOwner || appointment?.ownerName || primaryCalendarOwner;
+  const getAppointmentOwner = useCallback(
+    (appointment) => appointment?.calendarOwner || appointment?.ownerName || primaryCalendarOwner,
+    [primaryCalendarOwner]
+  );
+
+  const appointmentMatchesMember = useCallback(
+    (appointment, member) => {
+      if (!appointment || !member) return false;
+
+      const memberName = normalizeValue(member?.name);
+      const memberIds = new Set(getMemberIdentityIds(member));
+      const appointmentOwnerName = normalizeValue(
+        appointment?.calendarOwner || appointment?.ownerName || ''
+      );
+      const appointmentOwnerId = String(
+        appointment?.calendarOwnerId ||
+          appointment?.assignedToUid ||
+          appointment?.staffUid ||
+          appointment?.therapistId ||
+          ''
+      ).trim();
+
+      if (appointmentOwnerId && memberIds.has(appointmentOwnerId)) {
+        return true;
+      }
+
+      if (appointmentOwnerName && memberName && appointmentOwnerName === memberName) {
+        return true;
+      }
+
+      if (!appointmentOwnerName && !appointmentOwnerId) {
+        const fallbackOwnerName = normalizeValue(getAppointmentOwner(appointment));
+        return Boolean(fallbackOwnerName && memberName && fallbackOwnerName === memberName);
+      }
+
+      return false;
+    },
+    [getAppointmentOwner]
+  );
 
   const selectedTeamMemberIds = useMemo(() => {
     if (!selectedTeamMembers.length || !teamMembers.length) {
@@ -490,7 +527,7 @@ function BookingPage() {
 
   const formatTeamMemberLabel = useCallback(
     (member) => {
-      if (!member?.name) return t('booking.calendar.memberFallback', 'Medarbejder');
+      if (!member?.name) return t('booking.calendar.memberFallback', 'Behandler');
       const safeSessionUid = String(sessionUid || '').trim();
       const isCurrentUser =
         safeSessionUid && getMemberIdentityIds(member).includes(safeSessionUid);
@@ -572,7 +609,7 @@ function BookingPage() {
       : null;
 
   const mapTeamDoc = useCallback(
-    (docSnap) => mapClinicMemberDoc(docSnap, t('booking.calendar.memberFallback', 'Medarbejder')),
+    (docSnap) => mapClinicMemberDoc(docSnap, t('booking.calendar.memberFallback', 'Behandler')),
     [t]
   );
 
@@ -2823,8 +2860,9 @@ function BookingPage() {
   };
 
   const renderTeamEvents = ({ memberName, dayKey, dayDate, nowTopPercent, showNowLine }) => {
+    const memberMeta = getMemberMeta(memberName);
     const dayEvents = (appointmentsByDay[dayKey] || [])
-      .filter((appointment) => getAppointmentOwner(appointment) === memberName)
+      .filter((appointment) => appointmentMatchesMember(appointment, memberMeta))
       .slice()
       .sort(
         (a, b) => (a.startDateObj?.getTime?.() || 0) - (b.startDateObj?.getTime?.() || 0)
@@ -3387,7 +3425,7 @@ function BookingPage() {
 
                           <div className="team-filter-section header">
                             <span className="section-title">
-                              {t('booking.calendar.members', 'Medarbejdere')}
+                              {t('booking.calendar.members', 'Behandlere')}
                             </span>
                             <button
                               type="button"
@@ -3559,12 +3597,6 @@ function BookingPage() {
                         <span className="calendar-add-customer-text">
                           <span className="calendar-add-customer-title">
                             {t('booking.calendar.addCustomer', 'Tilføj kunde')}
-                          </span>
-                          <span className="calendar-add-customer-note">
-                            {t(
-                              'booking.calendar.addCustomerNote',
-                              'Efterlad feltet tomt til drop-in'
-                            )}
                           </span>
                         </span>
                       </button>

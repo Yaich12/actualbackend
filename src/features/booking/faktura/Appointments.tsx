@@ -45,7 +45,7 @@ const statusClasses = (status: string) => {
   return "bg-slate-100 text-slate-600";
 };
 
-const defaultEmployeeFilter = "Alle medarbejdere";
+const defaultEmployeeFilter = "Alle behandlere";
 const defaultStatusFilter = "Alle statuser";
 
 const statusOptions = [
@@ -1161,7 +1161,7 @@ export default function Appointments() {
                     type="button"
                     onClick={handleRemoveEmployeeFilter}
                     className="text-indigo-400 hover:text-indigo-600"
-                    aria-label="Fjern medarbejderfilter"
+                    aria-label="Fjern behandlerfilter"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -1212,7 +1212,7 @@ export default function Appointments() {
 
               <div className="mt-6 space-y-5">
                 <div className="relative">
-                  <p className="text-sm font-semibold text-slate-700">Medarbejder</p>
+                  <p className="text-sm font-semibold text-slate-700">Behandler</p>
                   <button
                     type="button"
                     onClick={() => {
@@ -1369,7 +1369,7 @@ export default function Appointments() {
                       <ArrowUpDown className="h-3 w-3" />
                     </span>
                   </th>
-                  <th className="px-4 py-3 text-left">Medarbejder</th>
+                  <th className="px-4 py-3 text-left">Behandler</th>
                   <th className="px-4 py-3 text-right">Pris</th>
                   <th className="px-4 py-3 text-left">Status</th>
                 </tr>

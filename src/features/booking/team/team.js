@@ -69,6 +69,11 @@ const resolveTimestamp = (value) => {
   return null;
 };
 
+const isGenericPractitionerLabel = (value) => {
+  const normalized = `${value || ''}`.trim().toLowerCase();
+  return normalized === 'medarbejder' || normalized === 'behandler';
+};
+
 const mapDocToMember = (docSnap, options = {}) => {
   const ownerUid = `${options.ownerUid || ''}`.trim();
   const ownerName = `${options.ownerName || ''}`.trim();
@@ -76,17 +81,23 @@ const mapDocToMember = (docSnap, options = {}) => {
   const role = `${data.role || ''}`.trim().toLowerCase() === 'owner' || data.isOwner === true
     ? 'owner'
     : 'member';
+  const preferredFullName =
+    (typeof data.displayName === 'string' && data.displayName.trim()) ||
+    (typeof data.fullName === 'string' && data.fullName.trim()) ||
+    `${data.firstName || ''}${data.lastName ? ` ${data.lastName}` : ''}`.trim();
   const rawName =
-    (typeof data.name === 'string' && data.name.trim()) ||
-    `${data.firstName || ''}${data.lastName ? ` ${data.lastName}` : ''}`.trim() ||
-    'Medarbejder';
+    preferredFullName ||
+    ((typeof data.name === 'string' && data.name.trim() && !isGenericPractitionerLabel(data.name))
+      ? data.name.trim()
+      : '') ||
+    'Behandler';
   const isOwnerRecord =
     role === 'owner' || `${docSnap.id || ''}`.trim() === ownerUid || `${data.memberUid || ''}`.trim() === ownerUid;
   const name =
     isOwnerRecord &&
     ownerName &&
-    rawName.trim().toLowerCase() === 'medarbejder' &&
-    ownerName.toLowerCase() !== 'medarbejder'
+    isGenericPractitionerLabel(rawName) &&
+    !isGenericPractitionerLabel(ownerName)
       ? ownerName
       : rawName;
   const avatarText =
@@ -226,7 +237,7 @@ const provisionMemberAuthAccountViaApi = async ({
 
   const payload = await parseJsonSafely(response);
   if (!response.ok) {
-    const err = new Error(payload?.error || 'Kunne ikke oprette medarbejder-login.');
+    const err = new Error(payload?.error || 'Kunne ikke oprette behandler-login.');
     err.code = payload?.code || payload?.errorCode || `http-${response.status}`;
     throw err;
   }
@@ -241,7 +252,7 @@ const removeTeamMemberViaApi = async ({ clinicId, memberUid }) => {
   const safeClinicId = `${clinicId || ''}`.trim();
   const safeMemberUid = `${memberUid || ''}`.trim();
   if (!safeClinicId || !safeMemberUid) {
-    throw new Error('Mangler klinik-id eller medarbejder-id.');
+    throw new Error('Mangler klinik-id eller behandler-id.');
   }
 
   const token = await getIdToken();
@@ -259,14 +270,14 @@ const removeTeamMemberViaApi = async ({ clinicId, memberUid }) => {
 
   const payload = await parseJsonSafely(response);
   if (!response.ok) {
-    throw new Error(payload?.error || 'Kunne ikke fjerne medarbejderen.');
+    throw new Error(payload?.error || 'Kunne ikke fjerne behandleren.');
   }
 };
 
 const toSubmitErrorMessage = (error) => {
   const code = `${error?.code || ''}`.toLowerCase();
   if (code === 'permission-denied' || code.includes('permission')) {
-    return 'Du har ikke adgang til at oprette medarbejdere i denne klinik.';
+    return 'Du har ikke adgang til at oprette behandlere i denne klinik.';
   }
   if (code.includes('operation-not-allowed')) {
     return 'Email/password-login er ikke aktiveret i Firebase Auth.';
@@ -280,7 +291,7 @@ const toSubmitErrorMessage = (error) => {
   if (typeof error?.message === 'string' && error.message.trim()) {
     return error.message.trim();
   }
-  return 'Kunne ikke tilføje medarbejderen. Prøv igen.';
+  return 'Kunne ikke tilføje behandleren. Prøv igen.';
 };
 
 function TeamMemberForm({ onClose, onSubmit, mode = 'create', initialValues }) {
@@ -329,7 +340,7 @@ function TeamMemberForm({ onClose, onSubmit, mode = 'create', initialValues }) {
         </button>
       </div>
 
-      <h1 className="team-add-title">{mode === 'edit' ? 'Rediger medarbejder' : 'Tilføj medarbejder'}</h1>
+      <h1 className="team-add-title">{mode === 'edit' ? 'Rediger behandler' : 'Tilføj behandler'}</h1>
       {submitError ? <div className="team-add-error">{submitError}</div> : null}
 
       <div className="team-add-grid">
@@ -648,7 +659,7 @@ function TeamPage() {
               const displayName = user?.displayName || '';
               const [firstName, ...rest] = displayName.split(' ').filter(Boolean);
               const lastName = rest.join(' ');
-              const name = displayName || user?.email || 'Medarbejder';
+              const name = displayName || user?.email || 'Behandler';
               const avatarText = name.charAt(0).toUpperCase() || 'S';
               const ownerPayload = {
                 name,
@@ -685,7 +696,7 @@ function TeamPage() {
           console.error('[TeamPage] Error loading members', error);
           setMembers([]);
           setMembersLoading(false);
-          setMembersError('Kunne ikke hente medarbejdere. Prøv igen senere.');
+          setMembersError('Kunne ikke hente behandlere. Prøv igen senere.');
         }
       );
     };
@@ -887,7 +898,7 @@ function TeamPage() {
       });
     } catch (error) {
       console.error('[TeamPage] Failed to write member into clinic members', error);
-      throw error || new Error('Kunne ikke gemme medarbejderen.');
+      throw error || new Error('Kunne ikke gemme behandleren.');
     }
 
     try {
@@ -956,12 +967,12 @@ function TeamPage() {
     const targetClinicId = `${activeClinicId || ''}`.trim();
     const targetMemberUid = `${member.memberUid || member.id || ''}`.trim();
     if (!targetClinicId || !targetMemberUid) {
-      setMembersError('Kunne ikke identificere medarbejderen.');
+      setMembersError('Kunne ikke identificere behandleren.');
       return;
     }
 
     const confirmed = window.confirm(
-      `Er du sikker på, at du vil fjerne ${member.name || 'denne medarbejder'} fra klinikken?`
+      `Er du sikker på, at du vil fjerne ${member.name || 'denne behandler'} fra klinikken?`
     );
     if (!confirmed) return;
 
@@ -974,7 +985,7 @@ function TeamPage() {
       });
     } catch (error) {
       console.error('[TeamPage] Failed to remove member', error);
-      setMembersError(error?.message || 'Kunne ikke fjerne medarbejderen.');
+      setMembersError(error?.message || 'Kunne ikke fjerne behandleren.');
     } finally {
       setRemovingMemberId('');
     }
@@ -1022,7 +1033,7 @@ function TeamPage() {
       <div className="team-page">
         <div className="team-header">
           <div className="team-title">
-            Medarbejdere <span className="team-count">{filteredMembers.length}</span>
+            Behandlere <span className="team-count">{filteredMembers.length}</span>
             {membersLoading ? <span className="team-loading-pill">Henter…</span> : null}
           </div>
           <div className="team-actions">
@@ -1034,9 +1045,9 @@ function TeamPage() {
 
         {generatedCredentials ? (
           <div className="team-login-banner">
-            <div className="team-login-banner-title">Nyt medarbejder-login er klar</div>
+            <div className="team-login-banner-title">Nyt behandler-login er klar</div>
             <div className="team-login-banner-row">
-              <span>Medarbejder: {generatedCredentials.memberName}</span>
+              <span>Behandler: {generatedCredentials.memberName}</span>
               <span>
                 Brugernavn: <code>{generatedCredentials.username}</code>
               </span>
@@ -1051,7 +1062,7 @@ function TeamPage() {
                 }`}
               >
                 {generatedCredentials.emailDelivery.sent
-                  ? `Login-oplysninger er sendt til ${generatedCredentials.emailDelivery.to || 'medarbejderens e-mail'}.`
+                  ? `Login-oplysninger er sendt til ${generatedCredentials.emailDelivery.to || 'behandlerens e-mail'}.`
                   : `Login-oplysninger blev ikke sendt på e-mail. ${generatedCredentials.emailDelivery.error || ''}`}
               </div>
             ) : null}
@@ -1074,7 +1085,7 @@ function TeamPage() {
 
         <div className="team-controls">
           <div className="team-search">
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Søg i medarbejdere" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Søg i behandlere" />
           </div>
           <div className="team-controls-right">
             <select className="team-select" value={sortMode} onChange={(e) => setSortMode(e.target.value)}>
@@ -1100,7 +1111,7 @@ function TeamPage() {
                 </span>
                 <span className="name-info">
                   <span className="name-text">{member.name}</span>
-                  <span className="name-role">{member.isOwner ? 'Ejer' : 'Medarbejder'}</span>
+                  <span className="name-role">{member.isOwner ? 'Ejer' : 'Behandler'}</span>
                 </span>
               </div>
               <div className="team-cell">
